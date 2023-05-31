@@ -4,7 +4,7 @@ meta_pkgs <- c()  # e.g., tidyverse, tidymodels, ...
 renv::install(meta_pkgs)
 
 prj_pkgs <- c(
-  "dplyr", "glue", "here", "readr", "readxl", "stringi", "stringr",
+  "dplyr", "glue", "readr", "readxl", "stringi", "stringr",
   "usethis", "utils"
 )
 renv::install(prj_pkgs)
@@ -19,7 +19,7 @@ purrr::walk(gh_prj_pkgs, ~{
 
 dev_pkgs <- c(
   "devtools", "testthat", "checkmate", "tidyverse", "withr", "fs",
-  "here", "glue", "rmarkdown", "knitr", "lintr", "spelling", "covr"
+  "glue", "rmarkdown", "knitr", "lintr", "spelling", "covr"
 )
 renv::install(dev_pkgs)
 purrr::walk(dev_pkgs, usethis::use_package, type = "Suggests")
