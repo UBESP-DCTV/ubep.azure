@@ -1,6 +1,6 @@
 Package: ubep.azure
 Title: Ubep Utilities to Azure services
-Version: 0.2.0.9000
+Version: 0.2.1
 Authors@R: c(
     person("Corrado", "Lanera", , "corrado.lanera@ubep.unipd.it", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0520-7428")),
