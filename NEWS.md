@@ -1,3 +1,3 @@
-# ubep.azure 0.0.0.9000
+# ubep.azure (development version)
 
 * Added standard basic support for package development.
