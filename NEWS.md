@@ -1,4 +1,4 @@
-# ubep.azure (development version)
+# ubep.azure 0.2.1
 
 * Fix verbosity of `read_cvs`
 * Considered `ubep.unipd.it` the default domain, pass it to functions explicitly is no more necessary.
