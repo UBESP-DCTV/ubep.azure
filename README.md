@@ -11,6 +11,7 @@ status](https://www.r-pkg.org/badges/version/ubep.azure)](https://CRAN.R-project
 [![R-CMD-check-main](https://github.com/UBESP-DCTV/ubep.azure/actions/workflows/R-CMD-check-main.yaml/badge.svg)](https://github.com/UBESP-DCTV/ubep.azure/actions/workflows/R-CMD-check-main.yaml)
 [![Codecov test
 coverage](https://codecov.io/gh/UBESP-DCTV/ubep.azure/branch/main/graph/badge.svg)](https://app.codecov.io/gh/UBESP-DCTV/ubep.azure?branch=main)
+[![lint](https://github.com/UBESP-DCTV/ubep.azure/actions/workflows/lint.yaml/badge.svg)](https://github.com/UBESP-DCTV/ubep.azure/actions/workflows/lint.yaml)
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
