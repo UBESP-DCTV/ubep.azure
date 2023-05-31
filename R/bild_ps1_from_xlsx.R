@@ -57,9 +57,8 @@ build_ps1_from_xlsx <- function(file = file.choose()) {
 
   if (stringr::str_detect(file, "\\.xlsx?$")) excel2csv(file, out_dir)
 
-  ps1_create_bulk_users(
-    "ubep.unipd.it", paste(server, ps_name, sep = "/")
-  )
+  ps1_create_bulk_users(ps_name, out_dir)
+
   usethis::ui_done("PS scripts created.")
 
   ps_file <- file.path(out_dir, paste0(ps_name, ".ps1"))
