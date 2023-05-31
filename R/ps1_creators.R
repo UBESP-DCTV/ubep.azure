@@ -17,7 +17,7 @@ ps1_create_bulk_users <- function(
 
   file_log <- file.path(out_dir, "logImportUsers.csv")
 
-  users <- readr::read_csv(file_input)
+  users <- readr::read_csv(file_input, show_col_types = FALSE)
   output <- sink(file_output)
   log <- file_log
 

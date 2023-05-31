@@ -1,6 +1,7 @@
 # ubep.azure (development version)
 
-* Considered `ubep.unipd.it` the default domain, pass it to functions explicitely is no more necessary.
+* Fix verbosity of `read_cvs`
+* Considered `ubep.unipd.it` the default domain, pass it to functions explicitly is no more necessary.
 * Removed `here()` from project detecting path systems; now the files are
   created in the correct folder depending on their location and not on the r script project running the procedures.
 
