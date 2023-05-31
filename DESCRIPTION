@@ -15,13 +15,21 @@ Description: Wrappers to common tasks on Azure executed at the Unit of
     Biostatistics Epidemiology and Public Health (UBEP) of the University
     of Padova.
 License: MIT + file LICENSE
+Imports: 
+    dplyr,
+    glue,
+    here,
+    readr,
+    readxl,
+    stringi,
+    stringr,
+    usethis,
+    utils
 Suggests: 
     checkmate,
     covr,
     devtools,
     fs,
-    glue,
-    here,
     knitr,
     lintr,
     rmarkdown,

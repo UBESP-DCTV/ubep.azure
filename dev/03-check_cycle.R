@@ -8,5 +8,7 @@ lintr::lint_package()
 ## CTRL + SHIFT + E: run all CRAN tests
 
 
-use_version()
-use_dev_version()
+if (FALSE) {
+  use_version()
+  use_dev_version()
+}

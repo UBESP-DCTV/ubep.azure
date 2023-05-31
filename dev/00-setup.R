@@ -44,6 +44,8 @@ usethis::use_github_actions_badge("lint.yaml")
 
 usethis::git_vaccinate()
 
+usethis::use_pkgdown()
+
 
 renv::upgrade()
 renv::update()
