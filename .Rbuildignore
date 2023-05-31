@@ -7,3 +7,5 @@
 ^\.github$
 ^CODE_OF_CONDUCT\.md$
 ^codecov\.yml$
+^.lintr$
+^dev$

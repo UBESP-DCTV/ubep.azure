@@ -1,5 +1,6 @@
+usethis::use_tidy_description()
 spelling::spell_check_package()
-## spelling::update_wordlist()
+spelling::update_wordlist()
 lintr::lint_package()
 
 ## CTRL + SHIFT + D: update project documentation

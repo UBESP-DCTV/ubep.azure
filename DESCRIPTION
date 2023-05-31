@@ -1,25 +1,36 @@
 Package: ubep.azure
 Title: Ubep Utilities to Azure services
 Version: 0.0.0.9000
-Authors@R: 
-    c(
+Authors@R: c(
     person("Corrado", "Lanera", , "corrado.lanera@ubep.unipd.it", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0520-7428")),
-    person("Cinzia Anna Maria", "Papappicco", , "cinziaannamaria.papappicco@ubep.unipd.it", role = c("aut"),
+    person("Cinzia Anna Maria", "Papappicco", , "cinziaannamaria.papappicco@ubep.unipd.it", role = "aut",
            comment = c(ORCID = "0000-0002-9396-5025")),
-    person("Marco", "Ghidina", , "marco.ghidina@zetaresearch.com", role = c("ctb"),
+    person("Marco", "Ghidina", , "marco.ghidina@zetaresearch.com", role = "ctb",
            comment = c(ORCID = "0000-0003-3111-162X")),
-    person("Dario", "Gregori", , "dario.gregori@ubep.unipd.it", role = c("ctb"),
+    person("Dario", "Gregori", , "dario.gregori@ubep.unipd.it", role = "ctb",
            comment = c(ORCID = "0000-0001-7906-0580"))
-    )
-Description: Wrappers to common tasks on Azure executed at the Unit of Biostatistics Epidemiology and Public Health (UBEP) of the University of Padova.
+  )
+Description: Wrappers to common tasks on Azure executed at the Unit of
+    Biostatistics Epidemiology and Public Health (UBEP) of the University
+    of Padova.
 License: MIT + file LICENSE
+Suggests: 
+    checkmate,
+    covr,
+    devtools,
+    fs,
+    glue,
+    here,
+    knitr,
+    lintr,
+    rmarkdown,
+    spelling,
+    testthat (>= 3.0.0),
+    tidyverse,
+    withr
+Config/testthat/edition: 3
 Encoding: UTF-8
+Language: en-US
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
-Suggests: 
-    covr,
-    spelling,
-    testthat (>= 3.0.0)
-Config/testthat/edition: 3
-Language: en-US
