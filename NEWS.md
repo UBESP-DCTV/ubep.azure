@@ -1,4 +1,6 @@
-# ubep.azure (development version)
+# ubep.azure (development
+
+* Setup pkgdown for documentation website
 
 # ubep.azure 0.1.0
 
