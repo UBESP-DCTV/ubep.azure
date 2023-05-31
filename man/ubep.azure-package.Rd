@@ -4,12 +4,23 @@
 \name{ubep.azure-package}
 \alias{ubep.azure}
 \alias{ubep.azure-package}
-\title{ubep.azure: What the Package Does (One Line, Title Case)}
+\title{ubep.azure: Ubep Utilities to Azure services}
 \description{
-What the package does (one paragraph).
+Wrappers to common tasks on Azure executed at the Unit of Biostatistics Epidemiology and Public Health (UBEP) of the University of Padova.
 }
 \author{
-\strong{Maintainer}: First Last \email{first.last@example.com} (\href{https://orcid.org/YOUR-ORCID-ID}{ORCID})
+\strong{Maintainer}: Corrado Lanera \email{corrado.lanera@ubep.unipd.it} (\href{https://orcid.org/0000-0002-0520-7428}{ORCID})
+
+Authors:
+\itemize{
+  \item Cinzia Anna Maria Papappicco \email{cinziaannamaria.papappicco@ubep.unipd.it} (\href{https://orcid.org/0000-0002-9396-5025}{ORCID})
+}
+
+Other contributors:
+\itemize{
+  \item Marco Ghidina \email{marco.ghidina@zetaresearch.com} (\href{https://orcid.org/0000-0003-3111-162X}{ORCID}) [contributor]
+  \item Dario Gregori \email{dario.gregori@ubep.unipd.it} (\href{https://orcid.org/0000-0001-7906-0580}{ORCID}) [contributor]
+}
 
 }
 \keyword{internal}
