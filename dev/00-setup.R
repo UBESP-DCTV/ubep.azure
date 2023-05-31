@@ -1,11 +1,13 @@
 c(
   "devtools", "testthat", "checkmate", "tidyverse", "withr", "fs",
-  "here", "glue", "rmarkdown", "knitr"
+  "here", "glue", "rmarkdown", "knitr", "lintr"
 ) |>
   install.packages()
 
 renv::status()
 renv::snapshot()
+
+
 
 usethis::use_description()
 usethis::use_readme_rmd()
@@ -20,4 +22,15 @@ usethis::use_mit_license()
 usethis::use_lifecycle_badge("experimental")
 usethis::use_cran_badge()
 
+usethis::use_spell_check()
+spelling::spell_check_package()
+spelling::update_wordlist()
+
+
+
 usethis::use_tidy_github()
+
+lintr::use_lintr()
+usethis::use_github_action_check_release("R-CMD-check-develop.yaml")
+usethis::use_github_action_check_standard("R-CMD-check-main.yaml")
+usethis::use_coverage()
