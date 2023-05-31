@@ -16,4 +16,12 @@ if (interactive()) {
     library(testthat)
     ui_done("Library {ui_value('testthat')} attached.")
   }))
+
+  .use_r_with_test <- function(name) {
+    usethis::use_test(name) |>
+      basename() |>
+      stringr::str_remove("\\.R$") |>
+      usethis::use_r()
+  }
 }
+
