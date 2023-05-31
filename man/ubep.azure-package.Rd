@@ -8,6 +8,13 @@
 \description{
 Wrappers to common tasks on Azure executed at the Unit of Biostatistics Epidemiology and Public Health (UBEP) of the University of Padova.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://ubesp-dctv.github.io/ubep.azure/}
+}
+
+}
 \author{
 \strong{Maintainer}: Corrado Lanera \email{corrado.lanera@ubep.unipd.it} (\href{https://orcid.org/0000-0002-0520-7428}{ORCID})
 
