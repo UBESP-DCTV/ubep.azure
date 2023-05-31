@@ -1,3 +1,5 @@
-# ubep.azure 0.0.0.9000
+# ubep.azure (development version)
 
-* Added a `NEWS.md` file to track changes to the package.
+* Refactoring functions into dedicated files and coherent naming
+* Added (copy-pasted) all the old functions and tests into the project.
+* Added standard basic support for package development.
