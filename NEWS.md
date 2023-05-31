@@ -1,4 +1,4 @@
-# ubep.azure (development
+# ubep.azure (development)
 
 * exported `build_ps1_from_xlsx` that is currently the main interface function to the package utils.
 * Setup pkgdown for documentation website
