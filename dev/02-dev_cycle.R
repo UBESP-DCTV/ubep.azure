@@ -35,8 +35,14 @@ renv::status()
 ## `R/functions.R`, you can create other couple of test/function-script
 ## by running the following lines of code as needed.
 
-usethis::use_r("utils")
-usethis::use_test("utils")
 
-usethis::use_r("functions")
-usethis::use_test("functions")
+
+.use_r_with_test("utils")
+.use_r_with_test("getters")
+.use_r_with_test("composers")
+.use_r_with_test("ps1_creators")
+.use_r_with_test("bild_ps1_from_xlsx")
+
+
+
+
