@@ -23,3 +23,10 @@ You can install the development version of ubep.azure like so:
 # install.packages("remotes")
 remotes::install_github("UBESP-DCTV/ubep.azure")
 ```
+
+## Code of Conduct
+
+Please note that the ubep.azure project is released with a [Contributor
+Code of
+Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html).
+By contributing to this project, you agree to abide by its terms.
