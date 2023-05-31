@@ -3,7 +3,10 @@
 meta_pkgs <- c()  # e.g., tidyverse, tidymodels, ...
 renv::install(meta_pkgs)
 
-prj_pkgs <- c()
+prj_pkgs <- c(
+  "dplyr", "glue", "here", "readr", "readxl", "stringi", "stringr",
+  "usethis", "utils"
+)
 renv::install(prj_pkgs)
 purrr::walk(prj_pkgs, usethis::use_package)
 
@@ -34,3 +37,6 @@ renv::status()
 
 usethis::use_r("utils")
 usethis::use_test("utils")
+
+usethis::use_r("functions")
+usethis::use_test("functions")
