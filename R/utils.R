@@ -12,7 +12,7 @@ excel2csv <- function(file, out_dir) {
   out_name <- basename(file) |>
     stringr::str_replace("\\.xlsx?$", ".csv")
   out_path <- file.path(out_dir, out_name)
-  server <- basename(out_dir)
+  server <- basename(out_dir) # nolint
 
   read_data(file) |>
     readr::write_csv(out_path, na = "")

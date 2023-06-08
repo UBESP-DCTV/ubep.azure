@@ -1,16 +1,25 @@
-ps1_create_bulk_users <- function(domain, file_name_no_extension) {
+ps1_create_bulk_users <- function(
+    file_name_no_extension,
+    out_dir,
+    domain = "ubep.unipd.it"
+) {
 
-  file_input <- paste0("bulkUsers/", file_name_no_extension, ".csv")
-  file_output <- paste0("bulkUsers/", file_name_no_extension, ".ps1")
-  file_delete_users <- paste0(
-    "bulkUsers/",
-    file_name_no_extension, "_deleteUsers.ps1"
+  file_input <- file.path(
+    out_dir,
+    paste0(file_name_no_extension, ".csv")
   )
-  file_log <- paste0("bulkUsers/", "logImportUsers.csv")
 
-  users <- readr::read_csv(here::here(file_input))
-  output <- sink(here::here(file_output))
-  log <- here::here(file_log)
+  file_output <- file_input |>
+    stringr::str_replace("\\.csv$", ".ps1")
+
+  file_delete_users <- file_input |>
+    stringr::str_replace("\\.csv$", "_deleteUsers.ps1")
+
+  file_log <- file.path(out_dir, "logImportUsers.csv")
+
+  users <- readr::read_csv(file_input, show_col_types = FALSE)
+  output <- sink(file_output)
+  log <- file_log
 
 
   paste(
@@ -58,7 +67,11 @@ ps1_create_bulk_users <- function(domain, file_name_no_extension) {
 
   utils::write.table(
     data.frame(
-      user_principal_name_col, name_col, surname_col, email_col, Sys.Date()
+      user_principal_name_col,
+      name_col,
+      surname_col,
+      email_col,
+      Sys.Date()
     ),
     log,
     sep = ",",
@@ -67,7 +80,7 @@ ps1_create_bulk_users <- function(domain, file_name_no_extension) {
     append = TRUE
   )
 
-  output <- sink(here::here(file_delete_users))
+  output <- sink(file_delete_users)
 
   for (i in seq_len(nrow(users))) {
     name <- clean_string(users[i, "Nome"])
