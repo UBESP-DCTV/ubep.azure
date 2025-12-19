@@ -51,8 +51,8 @@ build_ps1_from_xlsx <- function(file = file.choose()) {
     `file must be an excel or csv file` =
       stringr::str_detect(file, "\\.(csv|xlsx?)$"),
 
-    `file must be located inside "mst01", "edc", "edc01", "edc03", "edc04", or "edc05" folder` =
-      server %in% c("mst01", "edc", "edc01", "edc03", "edc04", "edc05")
+    `file must be located inside "mst01", "edc", or an "edcXX" folder` =
+      server %in% c("mst01", "edc", paste0("edc0", 1:9), paste0("edc", 10:99))
   )
 
   if (stringr::str_detect(file, "\\.xlsx?$")) excel2csv(file, out_dir)
