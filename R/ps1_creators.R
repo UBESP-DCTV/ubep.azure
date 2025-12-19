@@ -21,16 +21,16 @@ ps1_create_bulk_users <- function(
   output <- sink(file_output)
   log <- file_log
 
-
+  # --- MODIFICA 1: Nuova sintassi per il profilo password (Hashtable) ---
   paste(
-    paste0(
-      "$PasswordProfile = New-Object ",
-      "-TypeName Microsoft.Open.AzureAD.Model.PasswordProfile"
-    ),
-    "$PasswordProfile.Password = 'P@ssw0rd'\r",
+    "$PasswordProfile = @{",
+    "    Password = 'P@ssw0rd'",
+    "    ForceChangePasswordNextSignIn = $true",
+    "}\r",
     sep = "\r"
   ) |>
     cat(output)
+  # ----------------------------------------------------------------------
 
   user_principal_name_col <- vector()
   name_col <- vector()
@@ -43,16 +43,19 @@ ps1_create_bulk_users <- function(
     job_title <- compose_jobtitle(users, i)
     user_principal_name <- paste0(name, ".", surname, "@", domain)
 
+    # --- MODIFICA 2: New-MgUser invece di New-AzureADUser ---
+    # Nota: PhysicalDeliveryOfficeName diventa OfficeLocation
     sntx <- paste0(
-      "New-AzureADUser -DisplayName \"", name, " ", surname,
-      "\" -PasswordProfile $PasswordProfile `", "\r",
+      "New-MgUser -DisplayName \"", name, " ", surname,
+      "\" -PasswordProfile $PasswordProfile `", "\r",  # <--- NOTA L'ACCENTO GRAVE QUI
       "-UserPrincipalName \"", user_principal_name,
-      "\" -AccountEnabled $true -GivenName \"",
+      "\" -AccountEnabled:$true -GivenName \"",
       name, "\" -Surname \"", surname,
       "\" -MailNickName \"", name, surname, "\"", job_title,
-      " -PhysicalDeliveryOfficeName \"", users[i, "Email"], "\"\r"
+      " -OfficeLocation \"", users[i, "Email"], "\"\r"
     )
     cat(sntx, output, append = TRUE)
+    # --------------------------------------------------------
 
     user_principal_name_col <- append(
       user_principal_name_col,
@@ -87,16 +90,18 @@ ps1_create_bulk_users <- function(
     surname <- clean_string(users[i, "Cognome"])
     user_principal_name <- paste0(name, ".", surname, "@", domain)
 
+    # --- MODIFICA 3: Remove-MgUser invece di Remove-AzureADUser ---
+    # Nota: ObjectId diventa UserId. Aggiunto ErrorAction per sicurezza.
     sntx <- paste0(
-      "Remove-AzureADUser -ObjectId \"", user_principal_name, "\"\r"
+      "Remove-MgUser -UserId \"", user_principal_name, "\" -ErrorAction SilentlyContinue\r"
     )
 
     cat(sntx, output, append = TRUE)
+    # --------------------------------------------------------------
   }
 
   sink()
 }
-
 
 
 
