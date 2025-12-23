@@ -47,7 +47,7 @@ ps1_create_bulk_users <- function(
     # Nota: PhysicalDeliveryOfficeName diventa OfficeLocation
     sntx <- paste0(
       "New-MgUser -DisplayName \"", name, " ", surname,
-      "\" -PasswordProfile $PasswordProfile `", "\r",  # <--- NOTA L'ACCENTO GRAVE QUI
+      "\" -PasswordProfile $PasswordProfile ",
       "-UserPrincipalName \"", user_principal_name,
       "\" -AccountEnabled:$true -GivenName \"",
       name, "\" -Surname \"", surname,
