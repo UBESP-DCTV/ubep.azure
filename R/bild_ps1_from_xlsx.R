@@ -48,14 +48,14 @@ build_ps1_from_xlsx <- function(file = file.choose()) {
     `file must start with "<yyyymmdd>_importUtenti"` =
       stringr::str_detect(file, "importUtenti"),
 
-    `file must be an excel or csv file` =
-      stringr::str_detect(file, "\\.(csv|xlsx?)$"),
+    `file must be an Excel file (.xls/.xlsx)` =
+      stringr::str_detect(file, "\\.xlsx?$"),
 
     `file must be located inside "mst01", "edc", or an "edcXX" folder` =
       server %in% c("mst01", "edc", paste0("edc0", 1:9), paste0("edc", 10:99))
   )
 
-  if (stringr::str_detect(file, "\\.xlsx?$")) excel2csv(file, out_dir)
+  excel2csv(file, out_dir)
 
   ps1_create_bulk_users(ps_name, out_dir)
 

@@ -18,6 +18,16 @@ ps1_create_bulk_users <- function(
   file_log <- file.path(out_dir, "logImportUsers.csv")
 
   users <- readr::read_csv(file_input, show_col_types = FALSE)
+
+  incomplete <- is.na(users[["Nome"]]) | trimws(users[["Nome"]]) == "" |
+    is.na(users[["Cognome"]]) | trimws(users[["Cognome"]]) == ""
+  if (any(incomplete)) {
+    stop(
+      "incomplete identity (missing Nome/Cognome) in row(s): ",
+      paste(which(incomplete), collapse = ", ")
+    )
+  }
+
   output <- sink(file_output)
   log <- file_log
 
