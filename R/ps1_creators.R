@@ -54,8 +54,6 @@ ps1_create_bulk_users <- function(
     job_title <- compose_jobtitle(users, i)
     user_principal_name <- paste0(name, ".", surname, "@", domain)
 
-    # --- MODIFICA 2: New-MgUser invece di New-AzureADUser ---
-    # Nota: PhysicalDeliveryOfficeName diventa OfficeLocation
     sntx <- paste0(
       "New-MgUser -DisplayName \"", name, " ", surname,
       "\" -PasswordProfile $PasswordProfile ",
@@ -66,7 +64,6 @@ ps1_create_bulk_users <- function(
       " -OfficeLocation \"", users[i, "Email"], "\"\r"
     )
     cat(sntx, output, append = TRUE)
-    # --------------------------------------------------------
 
     user_principal_name_col <- append(
       user_principal_name_col,
@@ -92,14 +89,12 @@ ps1_create_bulk_users <- function(
     surname <- clean_string(users[i, "Cognome"])
     user_principal_name <- paste0(name, ".", surname, "@", domain)
 
-    # --- MODIFICA 3: Remove-MgUser invece di Remove-AzureADUser ---
-    # Nota: ObjectId diventa UserId. Aggiunto ErrorAction per sicurezza.
     sntx <- paste0(
-      "Remove-MgUser -UserId \"", user_principal_name, "\" -ErrorAction SilentlyContinue\r"
+      "Remove-MgUser -UserId \"", user_principal_name,
+      "\" -ErrorAction SilentlyContinue\r"
     )
 
     cat(sntx, output, append = TRUE)
-    # --------------------------------------------------------------
   }
 
   sink()
