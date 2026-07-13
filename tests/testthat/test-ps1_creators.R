@@ -40,3 +40,17 @@ test_that("logImportUsers.csv keeps one correct row per user", {
   expect_equal(log[[3]], c("Rossi", "Bianchi", "Verdi"))
   expect_equal(log[[4]], users$Email)
 })
+
+
+test_that("an error during generation does not leave a dangling sink", {
+  dir <- withr::local_tempdir()
+  bad <- data.frame(wrong = 1, columns = 2) # no Nome/Cognome: fails in-loop
+  readr::write_csv(bad, file.path(dir, "batch.csv"))
+
+  before <- sink.number()
+  expect_error(ps1_create_bulk_users("batch", dir))
+  leaked <- sink.number() > before
+  while (sink.number() > before) sink() # cleanup so the runner is not corrupted
+
+  expect_false(leaked)
+})

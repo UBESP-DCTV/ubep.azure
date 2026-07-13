@@ -28,6 +28,9 @@ ps1_create_bulk_users <- function(
     )
   }
 
+  sinks_at_entry <- sink.number()
+  on.exit(while (sink.number() > sinks_at_entry) sink(), add = TRUE)
+
   output <- sink(file_output)
   log <- file_log
 
