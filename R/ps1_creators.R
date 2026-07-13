@@ -33,9 +33,6 @@ ps1_create_bulk_users <- function(
   # ----------------------------------------------------------------------
 
   user_principal_name_col <- vector()
-  name_col <- vector()
-  surname_col <- vector()
-  email_col <- vector()
 
   for (i in seq_len(nrow(users))) {
     name <- clean_string(users[i, "Nome"])
@@ -61,27 +58,18 @@ ps1_create_bulk_users <- function(
       user_principal_name_col,
       user_principal_name
     )
-    name_col <- append(name_col, users[i, "Nome"])
-    surname_col <- append(surname_col, users[i, "Cognome"])
-    email_col <- append(email_col, users[i, "Email"])
   }
 
   sink()
 
-  utils::write.table(
-    data.frame(
-      user_principal_name_col,
-      name_col,
-      surname_col,
-      email_col,
-      Sys.Date()
-    ),
-    log,
-    sep = ",",
-    row.names = TRUE,
-    col.names = FALSE,
-    append = TRUE
+  log_entries <- data.frame(
+    user_principal_name = user_principal_name_col,
+    name = users[["Nome"]],
+    surname = users[["Cognome"]],
+    email = users[["Email"]],
+    date = Sys.Date()
   )
+  readr::write_csv(log_entries, log, append = file.exists(log))
 
   output <- sink(file_delete_users)
 
