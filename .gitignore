@@ -4,3 +4,7 @@
 .Ruserdata
 .Renviron
 docs
+
+# Claude locale
+.claude/settings.local.json
+.claude/**/__pycache__/

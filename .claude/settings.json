@@ -1,0 +1,37 @@
+{
+  "_comment": "Settings locali del progetto. Gli hook globali in ~/.claude/settings.json sono attivi automaticamente. permissions.additionalDirectories pre-configura i --add-dir persistenti per il plugin Claude di Positron — pattern least-privilege: agganciata SOLO la sotto-cartella di progetto del vault (<vault>/progetti/ubep-azure), mai il vault intero. La permission Write sull'inbox del vault consente a /vault-add di scrivere capture al volo senza che _inbox/ sia leggibile. L'ISOLAMENTO VAULT e' enforced a runtime dall'hook PreToolUse vault_isolation.py (sorgente unica in <vault>/.claude/hooks/, referenziato per path assoluto): blocca ogni accesso file dentro il vault fuori dalla propria progetti/ubep-azure (eccetto Write su _inbox/), leggendo lo scope da .claude/vault-isolation.json. Niente deny enumerati: la nascita di nuovi progetti o nuove top-level del vault NON richiede aggiornamenti a questo file. Eccezioni multi-scope: aggiungere il path a .claude/vault-isolation.json (allowed_vault_paths).",
+  "permissions": {
+    "additionalDirectories": [
+      "C:/Users/corra/Unit of Biostatistics Epidemiology and Public Health/IT - RedCap UBEP",
+      "c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure"
+    ],
+    "allow": [
+      "Write(c:/Users/corra/github/cl/obsidian-vault/_inbox/**)",
+      "Bash(Rscript:*)",
+      "Bash(R:*)",
+      "Bash(quarto:*)",
+      "Bash(python:*)",
+      "Bash(uv:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git mv:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"c:/Users/corra/github/cl/obsidian-vault/.claude/hooks/vault_isolation.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
