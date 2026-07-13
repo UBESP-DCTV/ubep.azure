@@ -10,8 +10,8 @@ test_that("get_usr_principalname write correct files", {
   expected <- c(
     "version:v1.0",
     "Member object ID or user principal name [memberObjectIdOrUpn] Required",
-    "GIOVANNI.AGOSTINI@ubep.unipd.it",
-    "JACOPOMARIA.AGOSTINI@ubep.unipd.it"
+    "pinco.pallino@ubep.unipd.it",
+    "ciccio.pasticcio@ubep.unipd.it"
   )
 
   # tests
@@ -28,8 +28,8 @@ test_that("get_usr_principalname works", {
   # evaluation
   actual <- get_usrs_principalname(tmp)
   expected <- c(
-    "GIOVANNI.AGOSTINI@ubep.unipd.it",
-    "JACOPOMARIA.AGOSTINI@ubep.unipd.it"
+    "pinco.pallino@ubep.unipd.it",
+    "ciccio.pasticcio@ubep.unipd.it"
   )
 
   # tests

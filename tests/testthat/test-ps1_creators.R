@@ -77,3 +77,48 @@ test_that("the initial password is parametrizable, no weak literal", {
   ps1_default <- readr::read_lines(file.path(dir, "batch.ps1"))
   expect_false(any(grepl("P@ssw0rd", ps1_default, fixed = TRUE)))
 })
+
+
+test_that("the generated scripts use Microsoft Graph cmdlets and parameters", {
+  dir <- withr::local_tempdir()
+  users <- data.frame(
+    Nome = "Mario", Cognome = "Rossi", Email = "mario.rossi@example.org",
+    Prj1_ID = 1, Prj1_role = "user", Prj1_DAG = "dag1",
+    Prj2_ID = 3, Prj2_role = "boss", Prj2_DAG = "dag3"
+  )
+  readr::write_csv(users, file.path(dir, "batch.csv"), na = "")
+
+  ps1_create_bulk_users("batch", dir, "snapshot-fixed-value-1")
+  create <- paste(
+    readr::read_lines(file.path(dir, "batch.ps1")),
+    collapse = "\n"
+  )
+  del <- paste(
+    readr::read_lines(file.path(dir, "batch_deleteUsers.ps1")),
+    collapse = "\n"
+  )
+
+  # migrated to Microsoft Graph, not the retired AzureAD module
+  expect_match(create, "New-MgUser", fixed = TRUE)
+  expect_no_match(create, "New-AzureADUser", fixed = TRUE)
+  expect_match(create, "$PasswordProfile = @{", fixed = TRUE)
+  expect_match(create, "ForceChangePasswordNextSignIn = $true", fixed = TRUE)
+  expect_match(create, "-AccountEnabled:$true", fixed = TRUE)
+  expect_match(create, "-OfficeLocation", fixed = TRUE)
+  expect_match(
+    create, "-UserPrincipalName \"mario.rossi@ubep.unipd.it\"",
+    fixed = TRUE
+  )
+  # JobTitle encodes project/role/DAG, two projects joined by ';'
+  expect_match(
+    create,
+    "-JobTitle \"Prj,1|role,user|DAG,dag1;Prj,3|role,boss|DAG,dag3\"",
+    fixed = TRUE
+  )
+
+  expect_match(
+    del, "Remove-MgUser -UserId \"mario.rossi@ubep.unipd.it\"",
+    fixed = TRUE
+  )
+  expect_no_match(del, "Remove-AzureADUser", fixed = TRUE)
+})
