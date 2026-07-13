@@ -29,7 +29,9 @@
 #'   build_ps1_from_xlsx()
 #' }
 #'
-build_ps1_from_xlsx <- function(file = file.choose()) {
+build_ps1_from_xlsx <- function(file = file.choose(), pwd) {
+
+  if (missing(pwd) || is.null(pwd)) pwd <- generate_password()
 
   ps_name <- stringr::str_remove(basename(file), "\\.[^\\.]+$")
 
@@ -57,7 +59,7 @@ build_ps1_from_xlsx <- function(file = file.choose()) {
 
   excel2csv(file, out_dir)
 
-  ps1_create_bulk_users(ps_name, out_dir)
+  ps1_create_bulk_users(ps_name, out_dir, pwd)
 
   usethis::ui_done("PS scripts created.")
 

@@ -1,8 +1,11 @@
 ps1_create_bulk_users <- function(
-    file_name_no_extension,
-    out_dir,
-    domain = "ubep.unipd.it"
+  file_name_no_extension,
+  out_dir,
+  pwd,
+  domain = "ubep.unipd.it"
 ) {
+
+  if (missing(pwd) || is.null(pwd)) pwd <- generate_password()
 
   file_input <- file.path(
     out_dir,
@@ -34,16 +37,14 @@ ps1_create_bulk_users <- function(
   output <- sink(file_output)
   log <- file_log
 
-  # --- MODIFICA 1: Nuova sintassi per il profilo password (Hashtable) ---
   paste(
     "$PasswordProfile = @{",
-    "    Password = 'P@ssw0rd'",
+    paste0("    ", "Password", " = '", pwd, "'"),
     "    ForceChangePasswordNextSignIn = $true",
     "}\r",
     sep = "\r"
   ) |>
     cat(output)
-  # ----------------------------------------------------------------------
 
   user_principal_name_col <- vector()
 

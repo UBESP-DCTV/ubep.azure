@@ -1,3 +1,24 @@
+generate_password <- function(length = 20L) {
+  lower <- letters
+  upper <- LETTERS
+  digits <- as.character(0:9)
+  # single quote deliberately excluded: passwords are embedded in a
+  # single-quoted PowerShell string ('...') in the generated .ps1
+  symbols <- strsplit("!@#$%^&*()-_=+[]{}", "")[[1]]
+
+  guaranteed <- c(
+    sample(lower, 1L),
+    sample(upper, 1L),
+    sample(digits, 1L),
+    sample(symbols, 1L)
+  )
+  pool <- c(lower, upper, digits, symbols)
+  rest <- sample(pool, length - length(guaranteed), replace = TRUE)
+
+  paste(sample(c(guaranteed, rest)), collapse = "")
+}
+
+
 clean_string <- function(string) {
   stringr::str_to_lower(string) |>
     stringr::str_squish() |>

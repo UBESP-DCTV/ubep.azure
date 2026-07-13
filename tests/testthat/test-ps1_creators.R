@@ -54,3 +54,26 @@ test_that("an error during generation does not leave a dangling sink", {
 
   expect_false(leaked)
 })
+
+
+test_that("the initial password is parametrizable, no weak literal", {
+  dir <- withr::local_tempdir()
+  users <- data.frame(
+    Nome = "Mario", Cognome = "Rossi", Email = "mario.rossi@example.org",
+    Prj1_ID = NA, Prj1_role = NA, Prj1_DAG = NA,
+    Prj2_ID = NA, Prj2_role = NA, Prj2_DAG = NA
+  )
+  readr::write_csv(users, file.path(dir, "batch.csv"), na = "")
+
+  # an explicit value (3rd positional arg) is used as the initial password
+  sentinel <- "ZZ-marker-value-9x!"
+  ps1_create_bulk_users("batch", dir, sentinel)
+  ps1 <- readr::read_lines(file.path(dir, "batch.ps1"))
+  needle <- paste0("Password", " = '", sentinel, "'")
+  expect_true(any(grepl(needle, ps1, fixed = TRUE)))
+
+  # the default path never emits the old public literal
+  ps1_create_bulk_users("batch", dir)
+  ps1_default <- readr::read_lines(file.path(dir, "batch.ps1"))
+  expect_false(any(grepl("P@ssw0rd", ps1_default, fixed = TRUE)))
+})

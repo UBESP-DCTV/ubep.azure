@@ -15,6 +15,24 @@ test_that("empty rows are cleaned up", {
 })
 
 
+test_that("generate_password is strong and covers all character classes", {
+  pw <- generate_password()
+
+  expect_type(pw, "character")
+  expect_length(pw, 1L)
+  expect_gte(nchar(pw), 16L)
+  expect_match(pw, "[a-z]")
+  expect_match(pw, "[A-Z]")
+  expect_match(pw, "[0-9]")
+  expect_match(pw, "[^a-zA-Z0-9]")
+})
+
+
+test_that("generate_password returns a different value on each call", {
+  expect_false(generate_password() == generate_password())
+})
+
+
 test_that("clean_string work properly", {
   # setup
   space_and_points <- " berto  j.  "
