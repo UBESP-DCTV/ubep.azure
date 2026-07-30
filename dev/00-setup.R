@@ -34,7 +34,6 @@ lintr::use_lintr()
 lintr::lint_package()
 
 
-usethis::use_github_action_check_release("R-CMD-check-develop.yaml")
 usethis::use_github_action_check_standard("R-CMD-check-main.yaml")
 usethis::use_coverage()
 
