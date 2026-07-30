@@ -120,8 +120,10 @@
 <li>
 <strong>Un branch per sotto-progetto, poi <code>main</code>.</strong> Nessun ramo di integrazione intermedio: <code>develop</code> è stato ritirato nel 2026-07 perché non aveva mai contenuto un commit che <code>main</code> non avesse già, e un workflow che non gira mai è il posto dove le action invecchiano fino a rompersi.</li>
 <li>
-<strong>Repo pubblico con CI.</strong> Le GitHub Actions (<code>R-CMD-check</code>, <code>lint</code>, <code>codecov</code>, <code>pkgdown</code>) devono passare: <code><a href="https://devtools.r-lib.org/reference/check.html" class="external-link">devtools::check()</a></code> in locale prima di pushare, non dopo.</li>
-<li>Il push su remote pubblico è il funzionamento normale di questo repo — ma <strong>solo su tua richiesta esplicita</strong>, mai di iniziativa.</li>
+<strong>Repo pubblico con CI.</strong> Le GitHub Actions (<code>R-CMD-check</code>, <code>lint</code>, <code>codecov</code>, <code>pkgdown</code>) devono passare: <code><a href="https://devtools.r-lib.org/reference/check.html" class="external-link">devtools::check()</a></code> in locale prima di consegnare, non dopo.</li>
+<li>
+<strong>Divisione dei ruoli sul remoto, non negoziabile.</strong> Claude <strong>non pusha e non apre pull request</strong>, in nessuna circostanza: committa sul proprio ramo di lavoro, un commit per passaggio logico, aggregando quanto ha senso aggregare. A macro ciclo concluso, Claude <strong>propone</strong> il merge su <code>main</code> e lo esegue solo <strong>dopo approvazione esplicita</strong>. Il push sul remoto lo fa sempre e solo Corrado.</li>
+<li>Corollario: il verde della CI non è verificabile da Claude prima della consegna. Il sostituto è <code><a href="https://devtools.r-lib.org/reference/check.html" class="external-link">devtools::check()</a></code> in locale, più la lettura delle run dopo che Corrado ha pushato.</li>
 <li>Bump di versione in <code>DESCRIPTION</code> + voce in <code>NEWS.md</code> quando la modifica è utente-visibile.</li>
 </ul></div>
 <div class="section level2">
