@@ -9,6 +9,7 @@ executed at the Unit of Biostatistics Epidemiology and Public Health
 You can install the development version of ubep.azure like so:
 
 ``` r
+
 # install.packages("remotes")
 remotes::install_github("UBESP-DCTV/ubep.azure")
 ```
