@@ -81,8 +81,9 @@ Comandi ricorrenti: `devtools::load_all()`, `devtools::document()`, `devtools::t
 
 - Un commit = una modifica logica. Messaggi in italiano, verbo all'imperativo.
 - **Un branch per sotto-progetto, poi `main`.** Nessun ramo di integrazione intermedio: `develop` è stato ritirato nel 2026-07 perché non aveva mai contenuto un commit che `main` non avesse già, e un workflow che non gira mai è il posto dove le action invecchiano fino a rompersi.
-- **Repo pubblico con CI.** Le GitHub Actions (`R-CMD-check`, `lint`, `codecov`, `pkgdown`) devono passare: `devtools::check()` in locale prima di pushare, non dopo.
-- Il push su remote pubblico è il funzionamento normale di questo repo — ma **solo su tua richiesta esplicita**, mai di iniziativa.
+- **Repo pubblico con CI.** Le GitHub Actions (`R-CMD-check`, `lint`, `codecov`, `pkgdown`) devono passare: `devtools::check()` in locale prima di consegnare, non dopo.
+- **Divisione dei ruoli sul remoto, non negoziabile.** Claude **non pusha e non apre pull request**, in nessuna circostanza: committa sul proprio ramo di lavoro, un commit per passaggio logico, aggregando quanto ha senso aggregare. A macro ciclo concluso, Claude **propone** il merge su `main` e lo esegue solo **dopo approvazione esplicita**. Il push sul remoto lo fa sempre e solo Corrado.
+- Corollario: il verde della CI non è verificabile da Claude prima della consegna. Il sostituto è `devtools::check()` in locale, più la lettura delle run dopo che Corrado ha pushato.
 - Bump di versione in `DESCRIPTION` + voce in `NEWS.md` quando la modifica è utente-visibile.
 
 ## Ponte verso il vault
