@@ -85,7 +85,7 @@
 <p>Pacchetto R standard, già popolato — <strong>non</strong> uno scaffold vuoto:</p>
 <pre><code>ubep.azure/
 ├── .claude/            # config locale Claude (permessi, hook isolamento vault)
-├── .github/            # CI: R-CMD-check (main + develop), lint, codecov
+├── .github/            # CI: R-CMD-check, lint, codecov, pkgdown (tutti su main)
 ├── R/                  # sorgenti del pacchetto
 ├── man/                # documentazione generata da roxygen2 (NON editare a mano)
 ├── tests/testthat/     # test (testthat 3rd edition)
@@ -118,7 +118,9 @@
 <h2 id="workflow-git">Workflow git<a class="anchor" aria-label="anchor" href="#workflow-git"></a></h2>
 <ul><li>Un commit = una modifica logica. Messaggi in italiano, verbo all’imperativo.</li>
 <li>
-<strong>Repo pubblico con CI.</strong> Le GitHub Actions (<code>R-CMD-check</code> su <code>main</code> e <code>develop</code>, <code>lint</code>, <code>codecov</code>) devono passare: <code><a href="https://devtools.r-lib.org/reference/check.html" class="external-link">devtools::check()</a></code> in locale prima di pushare, non dopo.</li>
+<strong>Un branch per sotto-progetto, poi <code>main</code>.</strong> Nessun ramo di integrazione intermedio: <code>develop</code> è stato ritirato nel 2026-07 perché non aveva mai contenuto un commit che <code>main</code> non avesse già, e un workflow che non gira mai è il posto dove le action invecchiano fino a rompersi.</li>
+<li>
+<strong>Repo pubblico con CI.</strong> Le GitHub Actions (<code>R-CMD-check</code>, <code>lint</code>, <code>codecov</code>, <code>pkgdown</code>) devono passare: <code><a href="https://devtools.r-lib.org/reference/check.html" class="external-link">devtools::check()</a></code> in locale prima di pushare, non dopo.</li>
 <li>Il push su remote pubblico è il funzionamento normale di questo repo — ma <strong>solo su tua richiesta esplicita</strong>, mai di iniziativa.</li>
 <li>Bump di versione in <code>DESCRIPTION</code> + voce in <code>NEWS.md</code> quando la modifica è utente-visibile.</li>
 </ul></div>

@@ -92,7 +92,7 @@ Pacchetto R standard, già popolato — **non** uno scaffold vuoto:
 
     ubep.azure/
     ├── .claude/            # config locale Claude (permessi, hook isolamento vault)
-    ├── .github/            # CI: R-CMD-check (main + develop), lint, codecov
+    ├── .github/            # CI: R-CMD-check, lint, codecov, pkgdown (tutti su main)
     ├── R/                  # sorgenti del pacchetto
     ├── man/                # documentazione generata da roxygen2 (NON editare a mano)
     ├── tests/testthat/     # test (testthat 3rd edition)
@@ -136,8 +136,13 @@ Comandi ricorrenti:
 
 - Un commit = una modifica logica. Messaggi in italiano, verbo
   all’imperativo.
-- **Repo pubblico con CI.** Le GitHub Actions (`R-CMD-check` su `main` e
-  `develop`, `lint`, `codecov`) devono passare:
+- **Un branch per sotto-progetto, poi `main`.** Nessun ramo di
+  integrazione intermedio: `develop` è stato ritirato nel 2026-07 perché
+  non aveva mai contenuto un commit che `main` non avesse già, e un
+  workflow che non gira mai è il posto dove le action invecchiano fino a
+  rompersi.
+- **Repo pubblico con CI.** Le GitHub Actions (`R-CMD-check`, `lint`,
+  `codecov`, `pkgdown`) devono passare:
   [`devtools::check()`](https://devtools.r-lib.org/reference/check.html)
   in locale prima di pushare, non dopo.
 - Il push su remote pubblico è il funzionamento normale di questo repo —
