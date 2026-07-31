@@ -1,0 +1,18 @@
+{
+  "server": "redcap.example.org",
+  "redcap_version": "14.7.5",
+  "redcap_major": 14,
+  "module_version": "0.3.0",
+  "contract_version": 1,
+  "version_gate": "sotto_minimo",
+  "surface_fingerprint": "b22da40b2bd6",
+  "dry_run": true,
+  "results": [],
+  "summary": [],
+  "errors": [
+    {
+      "code": "TRASPORTO_VERSIONE_SOTTO_MINIMO",
+      "message": "instance major 14 is below the module floor 17"
+    }
+  ]
+}

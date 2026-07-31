@@ -1,0 +1,32 @@
+{
+  "name": "UBEP provisioning",
+  "namespace": "UBEP\\Provisioning",
+  "description": "Canale di autorizzazione: legge e riconcilia i diritti di progetto assegnati dal provisioning UBEP. In questa versione opera in sola lettura.",
+  "authors": [
+    {
+      "name": "Corrado Lanera",
+      "email": "corrado.lanera@ubep.unipd.it",
+      "institution": "UBEP, Universita di Padova"
+    }
+  ],
+  "framework-version": 11,
+  "no-auth-pages": ["api"],
+  "system-settings": [
+    {
+      "key": "shared-secret",
+      "name": "Segreto condiviso, atteso nell'header X-UBEP-Secret",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "ip-allow-list",
+      "name": "Indirizzi IP ammessi, uno per riga",
+      "required": true,
+      "type": "textarea"
+    }
+  ],
+  "compatibility": {
+    "php-version-min": "8.1",
+    "redcap-version-min": "17.0.0"
+  }
+}
