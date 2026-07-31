@@ -3,7 +3,8 @@
   "permissions": {
     "additionalDirectories": [
       "C:/Users/corra/Unit of Biostatistics Epidemiology and Public Health/IT - RedCap UBEP",
-      "c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure"
+      "c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure",
+      "c:/Users/corra/github/cl/obsidian-vault/progetti/update-redcap"
     ],
     "allow": [
       "Write(c:/Users/corra/github/cl/obsidian-vault/_inbox/**)",
