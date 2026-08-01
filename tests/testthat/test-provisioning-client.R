@@ -55,7 +55,9 @@ test_that("the request travels in the body and not in the URL", {
   expect_false(grepl("mario.rossi", captured[["url"]], fixed = TRUE))
   expect_false(grepl("s3cret", captured[["url"]], fixed = TRUE))
   expect_equal(sent[["operation"]], "state")
-  expect_equal(sent[["requests"]][[1]][["username"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(
+    sent[["requests"]][[1]][["username"]], "mario.rossi@ubep.unipd.it"
+  )
   expect_equal(sent[["requests"]][[1]][["project_id"]], 27L)
 })
 
@@ -76,7 +78,7 @@ test_that("an empty pair list asks for the whole instance", {
   sent <- captured[["body"]][["data"]]
 
   # test
-  # The audit mode. `requests` must serialise as an empty array, which is what
+  # The audit mode. `requests` must serialize as an empty array, which is what
   # the module reads as "the whole instance".
   expect_length(sent[["requests"]], 0L)
 })

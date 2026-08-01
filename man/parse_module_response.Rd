@@ -15,7 +15,7 @@ parse_module_response(body, status)
 A list with \code{ok}, \code{errors} and \code{payload}.
 }
 \description{
-Recognises the response by its shape, never by its status code. A module
+Recognizes the response by its shape, never by its status code. A module
 that is installed but disabled answers HTTP 200 with a plain sentence, so a
 client that inferred success from the status would fail inside the JSON
 parser, reporting an error that does not name the cause.

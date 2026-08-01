@@ -24,7 +24,7 @@ provisioning_diff <- function(desired, actual) {
 
   # A JSON null, an absent field and NA all mean "not set"; collapsing them
   # here is what keeps `identical()` a sound test of sameness below.
-  normalise <- function(x) {
+  normalize <- function(x) {
     values <- lapply(fields, function(field) {
       value <- x[[field]]
       if (is.null(value) || length(value) == 0L || is.na(value)) {
@@ -53,8 +53,8 @@ provisioning_diff <- function(desired, actual) {
   rows <- lapply(keys, function(key) {
     want <- desired_by[[key]]
     have <- actual_by[[key]]
-    before <- if (is.null(have)) absent() else normalise(have)
-    after <- if (is.null(want)) absent() else normalise(want)
+    before <- if (is.null(have)) absent() else normalize(have)
+    after <- if (is.null(want)) absent() else normalize(want)
 
     action <- if (is.null(want)) {
       "revocato"

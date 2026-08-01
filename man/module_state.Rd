@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_client.R
 \name{module_state}
 \alias{module_state}
-\title{Read the real authorisation state from one REDCap instance}
+\title{Read the real authorization state from one REDCap instance}
 \usage{
 module_state(server, secret, pairs = list(), registry = tested_fingerprints())
 }

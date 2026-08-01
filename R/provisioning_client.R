@@ -1,4 +1,4 @@
-#' Read the real authorisation state from one REDCap instance
+#' Read the real authorization state from one REDCap instance
 #'
 #' The only function in the package that speaks to a REDCap server. Everything
 #' it returns is re-read state: the channel keeps no local copy, because a copy

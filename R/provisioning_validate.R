@@ -5,7 +5,7 @@
 #' with `oauth2_azure_ad_username_attribute = userPrincipalName`. The address
 #' someone can actually be reached at travels separately, as `contact_email`.
 #'
-#' Normalisation is delegated to `clean_string()`, which already lowercases,
+#' Normalization is delegated to `clean_string()`, which already lowercases,
 #' squishes, turns spaces into dots and transliterates accents to ASCII.
 #'
 #' @param first_name,last_name Person's names, in any casing or accenting.

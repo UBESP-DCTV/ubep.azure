@@ -109,8 +109,8 @@ test_that("a request wanted and present is a noop, and stays one", {
       desired = desired
     )
   )
-  matched <- result[result[["username"]] ==
-    "ciccio.pasticcio@example.org", ]
+  wanted_user <- "ciccio.pasticcio@example.org"
+  matched <- result[result[["username"]] == wanted_user, ]
 
   # test
   # Invariant 4 seen from the audit: what is already right must read as noop,
