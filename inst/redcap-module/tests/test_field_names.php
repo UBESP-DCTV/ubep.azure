@@ -21,12 +21,13 @@ if (class_exists('\UserRights')) {
     $map = \UserRights::getApiUserPrivilegesAttr(false, null);
 
     // getApiUserPrivilegesAttr() mixes identity entries (positional integer
-    // key, API name as value) with remapped entries (API name as key, column
-    // name as value). Either way, addPrivileges()/updatePrivileges() read the
-    // caller's $rights array using the array *value* as the lookup key, so
-    // membership of an API name is in_array() over the values — never
-    // array_key_exists(), which would silently pass against the wrong half
-    // of the pair for every remapped entry, DAG included.
+    // key, API name as value) with remapped entries (column name as key, API
+    // name as value — e.g. 'group_id' => 'data_access_group'). Either way,
+    // addPrivileges()/updatePrivileges() read the caller's $rights array
+    // using the array *value* as the lookup key, so membership of an API name
+    // is in_array() over the values — never array_key_exists(), which checks
+    // the wrong half of the pair for every remapped entry and would fail
+    // this very assertion for DAG, which does work.
     foreach ([FieldNames::DAG, FieldNames::EXPIRATION] as $name) {
         ubep_assert_true(
             in_array($name, $map, true),

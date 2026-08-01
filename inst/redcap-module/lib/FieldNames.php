@@ -15,13 +15,14 @@ namespace UbepProvisioning;
  * getApiUserPrivilegesAttr() returns one array that mixes two shapes: entries
  * with no explicit key (identity fields, where the API name equals the
  * column name) get a positional integer key; the remapped entries carry the
- * API name as the array *key* and the column name as the array *value*.
- * addPrivileges()/updatePrivileges() always read the caller's $rights array
- * using the array *value* as the lookup key, identity or not — so membership
- * of an API name in this map is in_array($name, $map, true), never
- * array_key_exists($name, $map). Getting that backwards is exactly the sort
- * of thing that would have made the conformance test pass against the wrong
- * assumption.
+ * column name as the array *key* and the API name as the array *value* (e.g.
+ * 'group_id' => 'data_access_group' — 'group_id' is the column, checked
+ * on edc10). addPrivileges()/updatePrivileges() always read the caller's
+ * $rights array using the array *value* as the lookup key, identity or not —
+ * so membership of an API name in this map is in_array($name, $map, true),
+ * never array_key_exists($name, $map). Getting that backwards is exactly the
+ * sort of thing that would have made the conformance test pass against the
+ * wrong assumption.
  *
  * DAG and EXPIRATION are asserted this way, inside the one $rights array
  * passed to updatePrivileges(). ROLE is not: 'role_id' does not appear
