@@ -11,6 +11,7 @@
   ],
   "framework-version": 11,
   "no-auth-pages": ["api"],
+  "no-csrf-pages": ["api"],
   "system-settings": [
     {
       "key": "shared-secret",
