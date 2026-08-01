@@ -1,5 +1,27 @@
 # Changelog
 
+## ubep.azure 0.4.0
+
+- Added the REDCap authorization channel, read only in this release. A
+  REDCap External Module lives in `inst/redcap-module/` and answers with
+  the real state of project rights, the instance version, the version
+  gate and a fingerprint of the REDCap surface it depends on. No write
+  path exists yet.
+- Added
+  [`build_redcap_module()`](https://ubesp-dctv.github.io/ubep.azure/reference/build_redcap_module.md),
+  the only exported addition: it packs the module into the archive
+  REDCap expects. The module and this package share a single version
+  number, so the two ends of the endpoint contract cannot drift.
+- The client reads a response by its shape rather than by its status
+  code. A module that is installed but disabled answers HTTP 200 with
+  plain text, so inferring success from the status fails inside the JSON
+  parser with an error that does not name the cause.
+- The surface fingerprint downgrades an instance to untested when it
+  does not match a measured one, even if the version says otherwise. An
+  instance can be in the right major and have a changed surface, which
+  no version comparison can see.
+- Requires R (\>= 4.4).
+
 ## ubep.azure 0.3.0
 
 - Fixed `logImportUsers.csv`: each row now records one user with an

@@ -16,6 +16,9 @@ Useful links:
 
 Authors:
 
+- Corrado Lanera <corrado.lanera@ubep.unipd.it>
+  ([ORCID](https://orcid.org/0000-0002-0520-7428))
+
 - Cinzia Anna Maria Papappicco
   <cinziaannamaria.papappicco@ubep.unipd.it>
   ([ORCID](https://orcid.org/0000-0002-9396-5025))

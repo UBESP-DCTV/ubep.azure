@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -77,6 +77,10 @@
 <strong>Vault = drop-in-only</strong>: per appuntare qualcosa nel vault da questa sessione, usa <code>/vault-add</code> (skill globale). Quella scrive in <code>$OBSIDIAN_VAULT_PATH/_inbox/&lt;slug&gt;-ubep-sharepoint.md</code> con <code>source: ubep-sharepoint</code> automaticamente popolato.</li>
 <li>
 <strong>Credenziali e tenant ID non si committano.</strong> Questo repo è pubblico. App registration, client secret, object ID, tenant ID, liste utenti reali: niente di tutto ciò entra in git, nemmeno negli esempi roxygen o nei test. Usa <code>.Renviron</code> (già in <code>.gitignore</code>) e, nei test, fixture anonime.</li>
+<li>
+<strong>Due cartelle di vault, una primaria e una secondaria.</strong> <code>progetti/ubep-azure</code> è la nostra: lì si scrive di default. <code>progetti/update-redcap</code> è il progetto parallelo dell’aggiornamento del parco (REDCap, PHP, MySQL), agganciato in lettura e scrittura perché quello che succede lì è un input diretto qui — la superficie di REDCap cambia con gli aggiornamenti. Si legge sempre, si scrive <strong>solo</strong> quando il contenuto riguarda gli aggiornamenti; le decisioni di questo sotto-progetto restano nella nostra. Il resto del vault non è accessibile.</li>
+<li>
+<strong>Niente firme di co-authorship nei messaggi di commit.</strong> Nessun trailer <code>Co-Authored-By</code>, nessuna menzione dell’assistente: il messaggio finisce col contenuto. Non vale per le menzioni legittime di Claude come strumento (<code>CLAUDE.md</code>, <code>.claude/</code>, lo scaffold), che sono contenuto del progetto.</li>
 <li>
 <strong>Persone nuove = SEMPRE via <code>_inbox/</code>, mai diretta in <code>risorse/persone/</code></strong>: quando emerge un nominativo nuovo (collega, referente IT, contatto) nel contesto di questo progetto, NON creare una scheda direttamente — <code>risorse/persone/**</code> è fuori scope per design. Crea invece una nota in <code>_inbox/ubep-azure-persona-&lt;nome-kebab&gt;.md</code> con frontmatter <code>type: persona</code>, <code>source: ubep-sharepoint</code>, e tag che identifica il progetto. Sarà poi Corrado, dal vault in Modalità A, a lanciare <code>/note-promote</code> per smistare ogni scheda. Per LINKARE una persona nei testi di questo progetto, usa <code>[[&lt;nome-kebab&gt;]]</code>: se la scheda esiste già in <code>risorse/persone/</code>, Obsidian risolve il link senza che questo repo debba leggere il file.</li>
 </ol></div>

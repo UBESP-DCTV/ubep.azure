@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,14 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.0" id="ubepazure-040">ubep.azure 0.4.0<a class="anchor" aria-label="anchor" href="#ubepazure-040"></a></h2>
+<ul><li>Added the REDCap authorization channel, read only in this release. A REDCap External Module lives in <code>inst/redcap-module/</code> and answers with the real state of project rights, the instance version, the version gate and a fingerprint of the REDCap surface it depends on. No write path exists yet.</li>
+<li>Added <code><a href="../reference/build_redcap_module.html">build_redcap_module()</a></code>, the only exported addition: it packs the module into the archive REDCap expects. The module and this package share a single version number, so the two ends of the endpoint contract cannot drift.</li>
+<li>The client reads a response by its shape rather than by its status code. A module that is installed but disabled answers HTTP 200 with plain text, so inferring success from the status fails inside the JSON parser with an error that does not name the cause.</li>
+<li>The surface fingerprint downgrades an instance to untested when it does not match a measured one, even if the version says otherwise. An instance can be in the right major and have a changed surface, which no version comparison can see.</li>
+<li>Requires R (&gt;= 4.4).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="ubepazure-030">ubep.azure 0.3.0<a class="anchor" aria-label="anchor" href="#ubepazure-030"></a></h2>
 <ul><li>Fixed <code>logImportUsers.csv</code>: each row now records one user with an intact UPN-to-person mapping (previously every row repeated the whole batch and the column count varied with batch size).</li>

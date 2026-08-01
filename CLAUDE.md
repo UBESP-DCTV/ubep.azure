@@ -73,7 +73,21 @@ sole eccezioni sono `<vault>/progetti/ubep-azure/` (workspace nostro) e
     liste utenti reali: niente di tutto ciò entra in git, nemmeno negli
     esempi roxygen o nei test. Usa `.Renviron` (già in `.gitignore`) e,
     nei test, fixture anonime.
-6.  **Persone nuove = SEMPRE via `_inbox/`, mai diretta in
+6.  **Due cartelle di vault, una primaria e una secondaria.**
+    `progetti/ubep-azure` è la nostra: lì si scrive di default.
+    `progetti/update-redcap` è il progetto parallelo dell’aggiornamento
+    del parco (REDCap, PHP, MySQL), agganciato in lettura e scrittura
+    perché quello che succede lì è un input diretto qui — la superficie
+    di REDCap cambia con gli aggiornamenti. Si legge sempre, si scrive
+    **solo** quando il contenuto riguarda gli aggiornamenti; le
+    decisioni di questo sotto-progetto restano nella nostra. Il resto
+    del vault non è accessibile.
+7.  **Niente firme di co-authorship nei messaggi di commit.** Nessun
+    trailer `Co-Authored-By`, nessuna menzione dell’assistente: il
+    messaggio finisce col contenuto. Non vale per le menzioni legittime
+    di Claude come strumento (`CLAUDE.md`, `.claude/`, lo scaffold), che
+    sono contenuto del progetto.
+8.  **Persone nuove = SEMPRE via `_inbox/`, mai diretta in
     `risorse/persone/`**: quando emerge un nominativo nuovo (collega,
     referente IT, contatto) nel contesto di questo progetto, NON creare
     una scheda direttamente — `risorse/persone/**` è fuori scope per
