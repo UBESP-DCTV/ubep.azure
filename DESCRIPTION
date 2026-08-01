@@ -16,9 +16,12 @@ Description: Wrappers to common tasks on Azure executed at the Unit of
     of Padova.
 License: MIT + file LICENSE
 URL: https://ubesp-dctv.github.io/ubep.azure/
-Imports: 
+Depends:
+    R (>= 4.4)
+Imports:
     dplyr,
     glue,
+    jsonlite,
     readr,
     readxl,
     stringi,
@@ -31,7 +34,6 @@ Suggests:
     covr,
     devtools,
     fs,
-    jsonlite,
     knitr,
     lintr,
     rmarkdown,
