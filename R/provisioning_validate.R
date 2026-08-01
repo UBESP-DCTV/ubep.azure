@@ -67,14 +67,65 @@ validate_request <- function(request) {
   expiration <- request[["expiration"]]
   if (!is.null(expiration) && !is.na(expiration)) {
     parsed <- suppressWarnings(as.Date(expiration, format = "%Y-%m-%d"))
-    # REDCap applies `expiration <= TODAY`, so the day written is already out
-    # and today is refused too. The comparison uses the client's date while
-    # REDCap uses the server's, which runs UTC: at most a one-day boundary,
-    # and it errs towards refusing rather than granting.
-    if (is.na(parsed) || parsed <= Sys.Date()) {
+    # A last day of access in the past is refused; today is a valid last day
+    # (the intake conversion below stores it as tomorrow, which is what
+    # REDCap needs to keep access open through today). The comparison uses
+    # the client's date while REDCap uses the server's, which runs UTC: at
+    # most a one-day boundary, and it errs towards refusing rather than
+    # granting.
+    if (is.na(parsed) || parsed < Sys.Date()) {
       errors <- c(errors, "DATO_SCADENZA_NON_VALIDA")
     }
   }
 
   errors
+}
+
+
+#' Convert a last day of access into the value REDCap stores
+#'
+#' REDCap denies access when `expiration <= TODAY`, so the day it holds is
+#' already out. A request that says "access until 31 December" therefore has
+#' to be stored as 1 January. It is a one day error, which is to say the kind
+#' nobody sees until it concerns the last day of a study.
+#'
+#' @param last_day Last day of access, as `YYYY-MM-DD`.
+#'
+#' @return The value to store, as `YYYY-MM-DD`.
+#'
+#' @keywords internal
+to_redcap_expiration <- function(last_day) {
+  if (is.null(last_day) || is.na(last_day)) {
+    return(NULL)
+  }
+
+  as.character(as.Date(last_day, format = "%Y-%m-%d") + 1L)
+}
+
+
+#' Take a request in, validated and normalized, or not at all
+#'
+#' The single door into the pure layer. Validation and the expiration
+#' conversion happen together because separating them would leave a way to
+#' get a valid request that was never converted, and the way to get the
+#' conversion wrong is to forget it.
+#'
+#' From here on every component — the diff, `apply`, `before` and `after` —
+#' speaks the value REDCap stores. The request speaks what a person means.
+#'
+#' @param request A named list, one request as described in the spec.
+#'
+#' @return A list with `errors` and `request`; `request` is `NULL` when
+#'   `errors` is not empty.
+#'
+#' @keywords internal
+intake_request <- function(request) {
+  errors <- validate_request(request)
+  if (length(errors) > 0L) {
+    return(list(errors = errors, request = NULL))
+  }
+
+  request[["expiration"]] <- to_redcap_expiration(request[["expiration"]])
+
+  list(errors = character(), request = request)
 }
