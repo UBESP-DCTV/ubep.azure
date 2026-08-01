@@ -23,12 +23,14 @@ Imports:
     readxl,
     stringi,
     stringr,
-    usethis
+    usethis,
+    withr
 Suggests:
     checkmate,
     covr,
     devtools,
     fs,
+    jsonlite,
     knitr,
     lintr,
     rmarkdown,
