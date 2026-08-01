@@ -1,0 +1,39 @@
+# Tests for the REDCap External Module shipped in inst/redcap-module/.
+# The suite has no external dependencies: it is a plain PHP runner, because the
+# module has to stay installable by copying a directory.
+on:
+  push:
+    branches: [main]
+    paths: ['inst/redcap-module/**']
+  pull_request:
+    paths: ['inst/redcap-module/**']
+
+name: php-module
+
+jobs:
+  php-module:
+    runs-on: ubuntu-latest
+
+    # Both ends of the claim: 8.1 is the minimum config.json declares, 8.3 is
+    # what the fleet actually runs. Testing only the minimum would leave the
+    # deployed version unverified, and only the deployed one would let the
+    # declared minimum rot.
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.3']
+
+    name: php ${{ matrix.php-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+
+      - name: Run module tests
+        run: php inst/redcap-module/tests/run.php
+
+      - name: Check the manifest is valid JSON
+        run: php -r 'json_decode(file_get_contents("inst/redcap-module/config.json"), true, 512, JSON_THROW_ON_ERROR);'
