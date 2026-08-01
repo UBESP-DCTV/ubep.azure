@@ -84,6 +84,58 @@ test_that("an empty pair list asks for the whole instance", {
 })
 
 
+test_that("an instance mounted in a subdirectory is reachable", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  captured <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_state("redcap.example.org/redcap", "s3cret")
+  )
+
+  # test
+  # The fleet is not uniform: measured on 2026-08-01, twelve instances serve
+  # REDCap from the root and two serve it under /redcap/. Without a way to say
+  # so, those two answer 404 and the audit calls them unreachable — "server
+  # down or network" for a server that is up and merely mounted elsewhere.
+  expect_match(
+    captured[["url"]],
+    "https://redcap.example.org/redcap/api/?",
+    fixed = TRUE
+  )
+})
+
+
+test_that("the base is normalised and never downgraded to plain HTTP", {
+  # eval
+  seen <- character()
+  mock <- function(req) {
+    seen <<- c(seen, req[["url"]])
+    httr2::response(status_code = 200L, body = charToRaw("{}"))
+  }
+  httr2::with_mocked_responses(mock, {
+    module_state("a.example.org", "s")
+    module_state("b.example.org/", "s")
+    module_state("https://c.example.org/redcap/", "s")
+    module_state("http://d.example.org", "s")
+  })
+
+  # test
+  # The spec allows TLS only, so a base handed over as http is corrected
+  # rather than honoured.
+  expect_true(all(startsWith(seen, "https://")))
+  expect_true(startsWith(seen[[1]], "https://a.example.org/api/?"))
+  expect_true(startsWith(seen[[2]], "https://b.example.org/api/?"))
+  expect_true(startsWith(seen[[3]], "https://c.example.org/redcap/api/?"))
+  expect_true(startsWith(seen[[4]], "https://d.example.org/api/?"))
+})
+
+
 test_that("the secret never appears in an error message", {
   # eval
   body <- paste0(

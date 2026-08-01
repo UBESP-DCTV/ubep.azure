@@ -11,7 +11,9 @@
 #' module declares its page in `no-csrf-pages` so the POST is not rejected —
 #' see the spec for why CSRF protection does not apply to this endpoint.
 #'
-#' @param server Hostname of the instance.
+#' @param server Hostname of the instance, optionally followed by the path
+#'   REDCap is mounted under, as in `"host.example.org/redcap"`. The fleet is
+#'   not uniform on this point, so the mount cannot be assumed.
 #' @param secret Shared secret, sent as the `X-UBEP-Secret` header.
 #' @param pairs List of (username, project_id) pairs; empty reads the whole
 #'   instance, which is what the audit needs.
@@ -26,8 +28,14 @@ module_state <- function(server,
                          registry = tested_fingerprints()) {
   stopifnot(is.character(server), length(server) == 1L)
 
+  # A scheme is dropped rather than honoured, so a base handed over as http is
+  # corrected instead of silently downgrading the channel: the spec allows TLS
+  # only, and this is the one place that builds the URL.
+  base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", server)
+  base <- sub("/+$", "", base)
+
   url <- paste0(
-    "https://", server,
+    "https://", base,
     "/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"
   )
 

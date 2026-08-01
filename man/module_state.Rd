@@ -7,7 +7,9 @@
 module_state(server, secret, pairs = list(), registry = tested_fingerprints())
 }
 \arguments{
-\item{server}{Hostname of the instance.}
+\item{server}{Hostname of the instance, optionally followed by the path
+REDCap is mounted under, as in \code{"host.example.org/redcap"}. The fleet is
+not uniform on this point, so the mount cannot be assumed.}
 
 \item{secret}{Shared secret, sent as the \code{X-UBEP-Secret} header.}
 

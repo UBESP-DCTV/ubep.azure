@@ -7,7 +7,10 @@
 provisioning_audit(servers, secrets, desired)
 }
 \arguments{
-\item{servers}{Character vector of hostnames.}
+\item{servers}{Character vector of hostnames, each optionally carrying the
+path REDCap is mounted under, as in \code{"host.example.org/redcap"}. Keeping
+the mount inside the same string is what avoids a second vector to hold
+parallel to \code{secrets} and keep aligned by hand.}
 
 \item{secrets}{Named character vector of per-server secrets.}
 

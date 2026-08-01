@@ -12,7 +12,10 @@
 #' learns the set of majors in the fleet for free. That set is what the two
 #' clauses on retiring compatibility branches rest on.
 #'
-#' @param servers Character vector of hostnames.
+#' @param servers Character vector of hostnames, each optionally carrying the
+#'   path REDCap is mounted under, as in `"host.example.org/redcap"`. Keeping
+#'   the mount inside the same string is what avoids a second vector to hold
+#'   parallel to `secrets` and keep aligned by hand.
 #' @param secrets Named character vector of per-server secrets.
 #' @param desired List of validated requests, each carrying the `server` it
 #'   belongs to.
