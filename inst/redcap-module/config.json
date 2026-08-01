@@ -24,6 +24,12 @@
       "name": "Indirizzi IP ammessi, uno per riga",
       "required": true,
       "type": "textarea"
+    },
+    {
+      "key": "test-project-ids",
+      "name": "Progetti di prova su cui la scrittura e' ammessa, uno per riga",
+      "required": true,
+      "type": "textarea"
     }
   ],
   "compatibility": {

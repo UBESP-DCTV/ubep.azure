@@ -67,4 +67,5 @@ test_that("the shipped manifest keeps the page free of both auth and csrf", {
   # entry would look like a routing problem rather than a packaging one.
   expect_equal(manifest[["no-auth-pages"]], "api")
   expect_equal(manifest[["no-csrf-pages"]], "api")
+  expect_true("test-project-ids" %in% manifest[["system-settings"]][["key"]])
 })
