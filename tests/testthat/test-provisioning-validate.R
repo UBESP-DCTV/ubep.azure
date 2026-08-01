@@ -75,18 +75,24 @@ test_that("validate_request only ever returns data codes", {
 
 test_that("intake_request converts the expiration to the REDCap value", {
   # eval
+  # A plain future date, away from the today/yesterday boundary covered
+  # below: relative to Sys.Date() so the fixture never expires.
+  last_day <- Sys.Date() + 30L
   taken <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 27L,
     role_name = "data entry",
-    expiration = "2026-12-31"
+    expiration = as.character(last_day)
   ))
 
   # test
   # The request says the last day of access; REDCap denies from the day it
   # holds, so the value written is the day after.
   expect_equal(taken[["errors"]], character())
-  expect_equal(taken[["request"]][["expiration"]], "2027-01-01")
+  expect_equal(
+    taken[["request"]][["expiration"]],
+    as.character(last_day + 1L)
+  )
 })
 
 

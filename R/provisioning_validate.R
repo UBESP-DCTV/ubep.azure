@@ -91,7 +91,8 @@ validate_request <- function(request) {
 #'
 #' @param last_day Last day of access, as `YYYY-MM-DD`.
 #'
-#' @return The value to store, as `YYYY-MM-DD`.
+#' @return The value to store, as `YYYY-MM-DD`; `NULL` when `last_day` is
+#'   `NULL` or `NA`, i.e. when the request carries no expiration at all.
 #'
 #' @keywords internal
 to_redcap_expiration <- function(last_day) {
@@ -125,6 +126,11 @@ intake_request <- function(request) {
     return(list(errors = errors, request = NULL))
   }
 
+  # When to_redcap_expiration() returns NULL, `[[<-` removes "expiration"
+  # from `request` rather than storing an explicit NULL. Consumers should
+  # test with `is.null(request[["expiration"]])`, not
+  # `"expiration" %in% names(request)`: the former is true either way, the
+  # latter only if the key happens to still be there.
   request[["expiration"]] <- to_redcap_expiration(request[["expiration"]])
 
   list(errors = character(), request = request)

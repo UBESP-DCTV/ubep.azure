@@ -10,7 +10,8 @@ to_redcap_expiration(last_day)
 \item{last_day}{Last day of access, as \code{YYYY-MM-DD}.}
 }
 \value{
-The value to store, as \code{YYYY-MM-DD}.
+The value to store, as \code{YYYY-MM-DD}; \code{NULL} when \code{last_day} is
+\code{NULL} or \code{NA}, i.e. when the request carries no expiration at all.
 }
 \description{
 REDCap denies access when \code{expiration <= TODAY}, so the day it holds is
