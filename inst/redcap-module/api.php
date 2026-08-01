@@ -231,22 +231,25 @@ $plan = $operation === 'apply'
     ? Planner::planApply($requests, $current)
     : Planner::planRevoke($requests, $current);
 
-// The brake runs on every call, dry_run included: a simulation is exactly
-// where a caller previews a batch, and a project outside the test list is
-// the one refusal a preview must not hide -- otherwise the identical body
-// reports success in dry_run and 'errore' the moment dry_run is turned off.
-// Only $plan is checked here, and $plan holds only requests Planner could
-// shape; $malformed joins after, so a null project_id never reaches
-// TestProjects::allows(), which is typed int.
-$allowed = (string) $module->getSystemSetting('test-project-ids');
-foreach ($plan as $index => $entry) {
-    if (!TestProjects::allows($entry['project_id'], $allowed)) {
-        $plan[$index]['outcome'] = 'errore';
-        $plan[$index]['errors'][] = [
-            'code' => 'INTERNO',
-            'message' => 'writes are confined to test projects '
-                . 'in this module version',
-        ];
+// Write-only, per the phase-2 design spec §4 "Il freno" and rollout §10
+// point 1: with the brake active in simulation too, a dry_run over any
+// non-test project would return 'errore' for every entry of that project --
+// not a degraded preview but an impossible one, since "solo dry_run, su
+// tutto" depends on being able to simulate a real batch, production
+// projects included. Only $plan is checked here, and $plan holds only
+// requests Planner could shape; $malformed joins after, so a null
+// project_id never reaches TestProjects::allows(), which is typed int.
+if (!$dryRun) {
+    $allowed = (string) $module->getSystemSetting('test-project-ids');
+    foreach ($plan as $index => $entry) {
+        if (!TestProjects::allows($entry['project_id'], $allowed)) {
+            $plan[$index]['outcome'] = 'errore';
+            $plan[$index]['errors'][] = [
+                'code' => 'INTERNO',
+                'message' => 'writes are confined to test projects '
+                    . 'in this module version',
+            ];
+        }
     }
 }
 
