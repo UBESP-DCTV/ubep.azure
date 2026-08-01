@@ -20,6 +20,7 @@ Useful links:
 
 Authors:
 \itemize{
+  \item Corrado Lanera \email{corrado.lanera@ubep.unipd.it} (\href{https://orcid.org/0000-0002-0520-7428}{ORCID})
   \item Cinzia Anna Maria Papappicco \email{cinziaannamaria.papappicco@ubep.unipd.it} (\href{https://orcid.org/0000-0002-9396-5025}{ORCID})
 }
 
