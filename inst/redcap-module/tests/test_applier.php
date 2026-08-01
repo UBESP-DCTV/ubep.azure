@@ -56,6 +56,21 @@ ubep_assert_same(
     'an absent DAG is asserted as empty'
 );
 
+// the same absent-is-empty rule applies to the other field this array
+// carries, not just the DAG
+$noExpiration = $entry;
+$noExpiration['after']['expiration'] = null;
+$argsNoExpiration = Applier::argumentsFor($noExpiration);
+ubep_assert_true(
+    array_key_exists(FieldNames::EXPIRATION, $argsNoExpiration),
+    'an absent expiration is still asserted'
+);
+ubep_assert_same(
+    '',
+    $argsNoExpiration[FieldNames::EXPIRATION],
+    'an absent expiration is asserted as empty'
+);
+
 // nothing beyond those two fields and the username is ever sent
 $extra = array_diff(
     array_keys($args),
@@ -77,4 +92,9 @@ ubep_assert_same(
     null,
     Applier::writeKindFor('errore'),
     'an entry already in error writes nothing'
+);
+ubep_assert_same(
+    null,
+    Applier::writeKindFor('revocato'),
+    'a revocation never selects a rights write'
 );

@@ -7,7 +7,7 @@ namespace UbepProvisioning;
  * The only component that writes.
  *
  * argumentsFor() is pure and separately tested: building the argument array is
- * where the silent failure lives, because an unrecognised key does not raise —
+ * where the silent failure lives, because an unrecognized key does not raise —
  * it falls to the default branch and becomes 0, denying a permission nobody
  * asked to deny. Keeping it pure is what lets that be tested without REDCap.
  *
@@ -19,9 +19,15 @@ namespace UbepProvisioning;
  * The role does not travel in that array. role_id is not part of the privileges
  * map, so it is asserted by a separate call — UserRights::updateUserRoleMapping,
  * global namespace, same as addPrivileges/updatePrivileges — which wants an
- * identifier, resolved from the role name first via
- * \ExternalModules\ExternalModules::getRoleId(). Two writes, in this order: the
- * rights row must exist before the role can be written onto it.
+ * identifier, resolved from the role name via
+ * \ExternalModules\ExternalModules::getRoleId().
+ *
+ * Three steps, in this order, and the order matters for two different reasons:
+ * the name is resolved *before* either write, so a typo or a renamed role
+ * fails the whole entry cleanly instead of half-applying the rights and
+ * reporting failure; the rights row is then written *before* the role,
+ * because updateUserRoleMapping is an UPDATE and the row a creation writes
+ * has to exist first.
  *
  * Measured on the target REDCap instance (see the phase-2 design spec §4 for
  * which one and when): addPrivileges()/updatePrivileges() take the rights of
@@ -86,6 +92,21 @@ class Applier
                 continue;
             }
 
+            // Resolved before either write touches REDCap: a bad or ambiguous
+            // role name must fail the entry cleanly, not after the rights row
+            // has already been created or updated. Once this step has passed,
+            // the only failure left possible is a write refusal, which cannot
+            // be pre-checked.
+            $resolution = self::resolveRole($entry);
+            if ($resolution['error'] !== null) {
+                $plan[$index] = self::withError(
+                    $entry,
+                    $resolution['error']['code'],
+                    $resolution['error']['message']
+                );
+                continue;
+            }
+
             $args = self::argumentsFor($entry);
             $written = $kind === 'create'
                 ? \UserRights::addPrivileges($entry['project_id'], $args)
@@ -101,71 +122,82 @@ class Applier
             }
 
             // Only after the rights row is known to exist: updateUserRoleMapping
-            // is an UPDATE, so on a creation the role would silently attach to
-            // nothing if tried first.
-            $plan[$index] = self::writeRole($entry);
+            // is an UPDATE, so on a creation the role would attach to nothing if
+            // written first.
+            $written = \UserRights::updateUserRoleMapping(
+                $entry['project_id'],
+                $entry['username'],
+                $resolution['roleId']
+            );
+
+            if ($written === false) {
+                $plan[$index] = self::withError(
+                    $entry,
+                    'INTERNO',
+                    'the role write was refused by REDCap'
+                );
+            }
         }
 
         return $plan;
     }
 
     /**
-     * Resolves after['role_name'] into a role_id and writes it.
+     * Resolves after['role_name'] into a role_id, without writing anything.
      *
      * A role name that does not exist, or that is ambiguous in this project
-     * (REDCap does not enforce uniqueness on role_name, only on
-     * unique_role_name), must not become an uncaught exception: that would be a
-     * PHP fatal at the endpoint, a non-JSON response for the client, and no
-     * report for entries already written earlier in the same batch. Both are
-     * translated into this entry's own error instead.
+     * (REDCap does not enforce uniqueness on role_name — measured, not the
+     * full schema), must not become an uncaught exception: that would be a PHP
+     * fatal at the endpoint, a non-JSON response for the client, and no report
+     * for entries already written earlier in the same batch. Both are
+     * translated into an error shape the caller can attach to the entry
+     * instead, without hardcoding which cause it was: getRoleId() throws for
+     * one reason on the instance this was measured against, but the message
+     * carries the real cause rather than asserting it.
+     *
+     * @return array{roleId: int|null, error: array{code: string, message: string}|null}
      */
-    private static function writeRole(array $entry): array
+    private static function resolveRole(array $entry): array
     {
         $roleName = $entry['after']['role_name'];
-        $roleId = null;
-
-        if ($roleName !== null) {
-            try {
-                $roleId = \ExternalModules\ExternalModules::getRoleId(
-                    $entry['project_id'],
-                    $roleName
-                );
-            } catch (\Throwable $e) {
-                return self::withError(
-                    $entry,
-                    'INTERNO',
-                    "role name '$roleName' is not unique in this project: "
-                        . $e->getMessage()
-                );
-            }
-
-            if ($roleId === null) {
-                return self::withError(
-                    $entry,
-                    'DATO_RUOLO_INESISTENTE',
-                    "role '$roleName' is not defined in this project"
-                );
-            }
+        if ($roleName === null) {
+            // "No role" is itself asserted later, via a null role_id — not
+            // skipped — so there is nothing to resolve here.
+            return ['roleId' => null, 'error' => null];
         }
 
-        // $roleId stays null here for "no role", and updateUserRoleMapping
-        // accepts that: it treats any non-integer role_id as SQL NULL, so the
-        // absence is asserted rather than skipped.
-        $written = \UserRights::updateUserRoleMapping(
-            $entry['project_id'],
-            $entry['username'],
-            $roleId
-        );
-
-        if ($written === false) {
-            return self::withError(
-                $entry,
-                'INTERNO',
-                'the role write was refused by REDCap'
+        try {
+            $roleId = \ExternalModules\ExternalModules::getRoleId(
+                $entry['project_id'],
+                $roleName
             );
+        } catch (\Throwable $e) {
+            return [
+                'roleId' => null,
+                'error' => [
+                    'code' => 'INTERNO',
+                    'message' => "could not resolve role name '$roleName': "
+                        . $e->getMessage(),
+                ],
+            ];
         }
 
-        return $entry;
+        if ($roleId === null) {
+            return [
+                'roleId' => null,
+                'error' => [
+                    'code' => 'DATO_RUOLO_INESISTENTE',
+                    'message' => "role '$roleName' is not defined in this project",
+                ],
+            ];
+        }
+
+        // getRoleId() returns a column value straight out of fetch_assoc(),
+        // whose PHP type the driver does not guarantee to be int. Cast here so
+        // a numeric string never reaches updateUserRoleMapping(), where
+        // isinteger() is strict about type and would silently treat it as "no
+        // role" instead of the id it is.
+        return ['roleId' => (int) $roleId, 'error' => null];
     }
 
     private static function withError(array $entry, string $code, string $message): array
