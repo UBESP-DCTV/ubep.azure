@@ -22,10 +22,9 @@ instance, which is what the audit needs.}
 A list with \code{ok}, \code{errors}, \code{payload} and \code{gate}.
 }
 \description{
-The only function in the package that speaks to a REDCap server. Everything
-it returns is re-read state: the channel keeps no local copy, because a copy
-would only be authoritative if nobody could edit REDCap outside the job,
-which is neither true nor desirable.
+Everything it returns is re-read state: the channel keeps no local copy,
+because a copy would only be authoritative if nobody could edit REDCap
+outside the job, which is neither true nor desirable.
 }
 \details{
 The request travels as a JSON body, not in the query string. Two reasons:

@@ -3,6 +3,7 @@ CMD
 CSRF
 Cinzia
 Codecov
+DAGs
 EDCxx
 Entra
 Hostname
@@ -25,3 +26,4 @@ noop
 pkgdown
 ps
 ubep
+untraced

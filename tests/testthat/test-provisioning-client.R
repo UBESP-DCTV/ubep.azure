@@ -206,3 +206,104 @@ test_that("a disabled module does not produce a gate", {
   expect_equal(result[["errors"]], "TRASPORTO_MODULO_ASSENTE")
   expect_true(is.na(result[["gate"]]))
 })
+
+
+test_that("module_apply sends the operation and defaults to a dry run", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  captured <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L,
+        role_name = "data entry", dag_name = "centro-01",
+        expiration = "2027-01-01"
+      ))
+    )
+  )
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  expect_equal(sent[["operation"]], "apply")
+  expect_true(sent[["dry_run"]])
+  expect_equal(sent[["requests"]][[1]][["role_name"]], "data entry")
+})
+
+
+test_that("a write must be asked for explicitly", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  sent <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      sent <<- req[["body"]][["data"]]
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_apply(
+      "redcap.example.org", "s3cret", requests = list(), dry_run = FALSE
+    )
+  )
+
+  # test
+  # The module writes only on an explicit boolean false, so the client has to
+  # send one rather than omitting the field.
+  expect_false(sent[["dry_run"]])
+  expect_type(sent[["dry_run"]], "logical")
+})
+
+
+test_that("module_revoke carries only the pair", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  sent <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      sent <<- req[["body"]][["data"]]
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_revoke(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L,
+        role_name = "data entry"
+      ))
+    )
+  )
+
+  # test
+  # Revocation is about a pair, not about rights: sending a role would suggest
+  # the call cares which one, and it does not.
+  expect_equal(sent[["operation"]], "revoke")
+  expect_null(sent[["requests"]][[1]][["role_name"]])
+  expect_equal(sent[["requests"]][[1]][["project_id"]], 27L)
+})
+
+
+test_that("all three operations share one base normalisation", {
+  # eval
+  seen <- character()
+  mock <- function(req) {
+    seen <<- c(seen, req[["url"]])
+    httr2::response(status_code = 200L, body = charToRaw("{}"))
+  }
+  httr2::with_mocked_responses(mock, {
+    module_state("host.example.org/redcap", "s")
+    module_apply("host.example.org/redcap", "s", requests = list())
+    module_revoke("host.example.org/redcap", "s", requests = list())
+  })
+
+  # test
+  expect_length(unique(seen), 1L)
+  expect_true(startsWith(seen[[1]], "https://host.example.org/redcap/api/?"))
+})
