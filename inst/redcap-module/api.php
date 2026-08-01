@@ -118,23 +118,65 @@ if ($gate === VersionGate::BELOW) {
 }
 
 $requests = [];
+$malformed = [];
 foreach (($body['requests'] ?? []) as $request) {
     if (isset($request['username'], $request['project_id'])) {
         $requests[] = [
             'username' => (string) $request['username'],
             'project_id' => (int) $request['project_id'],
-            'role_name' => $request['role_name'] ?? null,
-            'dag_name' => $request['dag_name'] ?? null,
-            'expiration' => $request['expiration'] ?? null,
+            // A non-scalar value (an array, say) would flow unchanged into
+            // Planner::shape() and then Applier::flat()'s (string) cast,
+            // which raises a PHP warning that prints ahead of the JSON body
+            // -- headers are already sent and output is unbuffered here --
+            // and breaks the client's parse. Anything not scalar is treated
+            // as absent instead.
+            'role_name' => is_scalar($request['role_name'] ?? null)
+                ? (string) $request['role_name'] : null,
+            'dag_name' => is_scalar($request['dag_name'] ?? null)
+                ? (string) $request['dag_name'] : null,
+            'expiration' => is_scalar($request['expiration'] ?? null)
+                ? (string) $request['expiration'] : null,
         ];
+        continue;
     }
+
+    // isset() is false both for an absent key and for a present null, so
+    // this is the same condition the branch above tests, inverted. Reported
+    // instead of silently dropped: on apply/revoke the response is the
+    // audit trail of a write, and a caller must see every row it asked
+    // about, whether or not the row could be planned -- otherwise a
+    // ten-request revoke with one null project_id comes back as "9
+    // revocato", no error, no ninth row, and no sign the tenth was never
+    // considered. Whatever the request did supply is carried through so the
+    // caller can identify which row this was.
+    $missing = [];
+    if (!isset($request['username'])) {
+        $missing[] = 'username';
+    }
+    if (!isset($request['project_id'])) {
+        $missing[] = 'project_id';
+    }
+    $malformed[] = [
+        'username' => isset($request['username']) && is_scalar($request['username'])
+            ? (string) $request['username'] : null,
+        'project_id' => isset($request['project_id']) && is_scalar($request['project_id'])
+            ? (int) $request['project_id'] : null,
+        'outcome' => 'errore',
+        'before' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
+        'after' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
+        'errors' => [[
+            'code' => 'DATO_UTENTE_NON_VALIDO',
+            'message' => implode(', ', $missing) . ' missing or null',
+        ]],
+    ];
 }
 
+$pairs = array_map(
+    fn($r) => ['username' => $r['username'], 'project_id' => $r['project_id']],
+    $requests
+);
+
 if ($operation === 'state') {
-    $pairs = array_map(
-        fn($r) => ['username' => $r['username'], 'project_id' => $r['project_id']],
-        $requests
-    );
     $response['results'] = StateReader::read($pairs);
     $response['summary'] = ['letti' => count($response['results'])];
     echo json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -157,7 +199,10 @@ if ($operation !== 'apply' && $operation !== 'revoke') {
 // so a write is confined to a single project_id and refused outright before
 // touching anything -- never written and then undone. dry_run stays free to
 // cross projects: it writes nothing, so there is no log partition to lose,
-// and simulating a batch is how one discovers it needs to be split.
+// and simulating a batch is how one discovers it needs to be split. Only
+// well-formed requests are counted: a malformed one contributes no
+// project_id and is reported on its own, below, never written -- so it has
+// nothing to add to, or spoil, this count.
 if (!$dryRun) {
     $projectIds = array_unique(array_map(fn($r) => $r['project_id'], $requests));
     if (count($projectIds) > 1) {
@@ -174,43 +219,64 @@ if (!$dryRun) {
     }
 }
 
-$pairs = array_map(
-    fn($r) => ['username' => $r['username'], 'project_id' => $r['project_id']],
-    $requests
-);
-$current = StateReader::read($pairs);
+// An empty $pairs means "nothing to plan", not "the whole instance" -- that
+// second meaning belongs to StateReader::read() alone, for the state call
+// above. Without the guard, a write with zero usable requests would still
+// full-scan the rights table of a live instance and then discard the
+// result, since Planner iterates $requests, not $current, and $requests is
+// empty either way.
+$current = $pairs === [] ? [] : StateReader::read($pairs);
 
 $plan = $operation === 'apply'
     ? Planner::planApply($requests, $current)
     : Planner::planRevoke($requests, $current);
 
-if (!$dryRun) {
-    $allowed = (string) $module->getSystemSetting('test-project-ids');
-    foreach ($plan as $index => $entry) {
-        if (!TestProjects::allows($entry['project_id'], $allowed)) {
-            $plan[$index]['outcome'] = 'errore';
-            $plan[$index]['errors'][] = [
-                'code' => 'INTERNO',
-                'message' => 'writes are confined to test projects '
-                    . 'in this module version',
-            ];
-        }
+// The brake runs on every call, dry_run included: a simulation is exactly
+// where a caller previews a batch, and a project outside the test list is
+// the one refusal a preview must not hide -- otherwise the identical body
+// reports success in dry_run and 'errore' the moment dry_run is turned off.
+// Only $plan is checked here, and $plan holds only requests Planner could
+// shape; $malformed joins after, so a null project_id never reaches
+// TestProjects::allows(), which is typed int.
+$allowed = (string) $module->getSystemSetting('test-project-ids');
+foreach ($plan as $index => $entry) {
+    if (!TestProjects::allows($entry['project_id'], $allowed)) {
+        $plan[$index]['outcome'] = 'errore';
+        $plan[$index]['errors'][] = [
+            'code' => 'INTERNO',
+            'message' => 'writes are confined to test projects '
+                . 'in this module version',
+        ];
     }
+}
 
+$plan = array_merge($plan, $malformed);
+
+if (!$dryRun) {
     // The full plan goes in, error entries included: both apply() and
     // revoke() skip anything whose outcome is not one they write for
     // (writeKindFor() returns null for 'errore'; revoke() filters on
     // 'revocato'), so there is no separate writable/refused split to keep in
-    // sync by key here.
+    // sync by key here, and the $malformed rows -- 'errore' from the moment
+    // they are built, with no valid pair to write -- need no second guard
+    // either.
     $plan = $operation === 'apply'
         ? Applier::apply($plan)
         : Applier::revoke($plan);
 }
 
-// Counted after the brake and the Applier have rewritten outcomes, or this
-// would report intentions instead of facts and an 'errore' would show as a
-// 'creato'.
-$summary = [];
+// Every key the operation can produce is seeded at zero and counted after
+// the brake and the Applier have rewritten outcomes. Both matter: counting
+// on the plan before rewriting would report intentions instead of facts,
+// and not seeding would leave "summary": [] on an empty plan -- a JSON
+// array where every other response is an object -- and would read as
+// summary$errore == NULL, not 0, on the R side.
+$summary = array_fill_keys(
+    $operation === 'apply'
+        ? ['noop', 'creato', 'aggiornato', 'errore']
+        : ['noop', 'revocato', 'errore'],
+    0
+);
 foreach ($plan as $entry) {
     $summary[$entry['outcome']] = ($summary[$entry['outcome']] ?? 0) + 1;
 }

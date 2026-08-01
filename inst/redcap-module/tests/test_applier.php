@@ -135,3 +135,11 @@ ubep_assert_same(
     $revoked[1],
     'a noop entry is left untouched by revoke()'
 );
+
+// This guard is one-sided on purpose: both fixtures above are non-'revocato'
+// ('errore', 'noop'), so an unconditional `continue` -- or the pre-fix
+// `!== 'noop'` filter with the branches swapped -- would pass these two
+// assertions identically. Nothing here pins that a 'revocato' entry still
+// reaches removePrivileges(): that positive case needs a real write call,
+// and this offline suite has no \UserRights double to receive it, only the
+// live conformance test (phase-2 design spec, §8) exercises that path.
