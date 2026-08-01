@@ -17,7 +17,8 @@ namespace UbepProvisioning;
  * column name) get a positional integer key; the remapped entries carry the
  * column name as the array *key* and the API name as the array *value* (e.g.
  * 'group_id' => 'data_access_group' — 'group_id' is the column, checked
- * on edc10). addPrivileges()/updatePrivileges() always read the caller's
+ * on the target REDCap instance — see the phase-2 design spec §4 for which
+ * one and when). addPrivileges()/updatePrivileges() always read the caller's
  * $rights array using the array *value* as the lookup key, identity or not —
  * so membership of an API name in this map is in_array($name, $map, true),
  * never array_key_exists($name, $map). Getting that backwards is exactly the
