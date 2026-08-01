@@ -215,7 +215,13 @@ class Applier
     public static function revoke(array $plan): array
     {
         foreach ($plan as $index => $entry) {
-            if ($entry['outcome'] === 'noop') {
+            // Filtered on 'revocato', the one outcome that calls for a write
+            // -- not on "anything but noop". TestProjects can mark an
+            // out-of-scope entry 'errore' before Applier ever sees it (see
+            // api.php); a filter on non-noop would let that refusal reach
+            // removePrivileges() the same as a real revocation, deleting the
+            // rights while reporting a refusal.
+            if ($entry['outcome'] !== 'revocato') {
                 continue;
             }
 

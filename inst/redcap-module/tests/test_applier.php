@@ -98,3 +98,40 @@ ubep_assert_same(
     Applier::writeKindFor('revocato'),
     'a revocation never selects a rights write'
 );
+
+// revoke() must filter on 'revocato', not on "anything but noop". The
+// test-project brake marks an out-of-scope entry 'errore' before revoke()
+// ever sees it (see api.php); with the old "!== noop" filter that entry
+// would reach removePrivileges() the same as a real revocation, deleting the
+// rights while the caller is told the write was refused. No \UserRights
+// class exists in this offline suite, so if either entry below were not
+// skipped, this call would fatal here instead of merely failing an
+// assertion.
+$refused = [
+    'username' => 'a@example.org',
+    'project_id' => 27,
+    'outcome' => 'errore',
+    'before' => ['role_name' => 'data entry', 'dag_name' => null,
+                 'expiration' => null],
+    'after' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
+    'errors' => [['code' => 'INTERNO', 'message' => 'out of scope']],
+];
+$untouched = [
+    'username' => 'b@example.org',
+    'project_id' => 27,
+    'outcome' => 'noop',
+    'before' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
+    'after' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
+    'errors' => [],
+];
+$revoked = Applier::revoke([$refused, $untouched]);
+ubep_assert_same(
+    $refused,
+    $revoked[0],
+    'an entry already in error is left untouched by revoke(), not written'
+);
+ubep_assert_same(
+    $untouched,
+    $revoked[1],
+    'a noop entry is left untouched by revoke()'
+);
