@@ -21,6 +21,7 @@ Depends:
 Imports:
     dplyr,
     glue,
+    httr2,
     jsonlite,
     readr,
     readxl,
