@@ -21,13 +21,18 @@ run_conformance_check(
 \item{project_id}{Test project; writes are refused outside the module's
 configured test projects.}
 
-\item{username}{Test account to assert rights for.}
+\item{username}{Test account to assert rights for. Must hold no rights
+in \code{project_id} before the run starts — see the note on step 5 above.}
 
 \item{registry_path}{CSV to record the outcome in. See the note above on
 \code{devtools::load_all()} versus an installed package.}
 }
 \value{
 A list with \code{conforms}, \code{steps} and \code{differences}, invisibly.
+\code{steps} gains a \code{recorded} entry once every other step is green: \code{TRUE}
+once \code{record_conformance()} succeeds, \code{FALSE} if it errors — a failure
+to write the registry must not discard the result of five real writes
+already performed against the instance.
 }
 \description{
 The gate the ceiling policy rests on, and the only thing that earns a
@@ -39,28 +44,38 @@ conformance date. Seven steps, on a designated test project:
 \item apply as a dry run, re-read, and require that nothing changed;
 \item apply for real, one case at a time;
 \item re-read and compare field by field against what was asserted;
-\item revoke, to restore;
-\item re-read and confirm the baseline is back;
+\item revoke;
+\item re-read and compare against the baseline;
 \item record the date, and only if every step was green.
 }
 
 Step 2 is what measures the dry run guarantee instead of asserting it.
 
+Step 5 does not restore anything: a revoke removes rights outright, and
+that equals the baseline read in step 1 only when that baseline was
+already empty. \strong{The designated test account must hold no rights in the
+test project before the run starts.} If it already does, the run
+overwrites them through the five cases and then removes them entirely;
+step 6 will correctly report a failed \code{restored} step, so nothing false
+gets certified, but the account is left with fewer rights than it had —
+that precondition is on the caller, not on this function.
+
 Every write is a network call that can be refused, time out, or hit a
 closed version gate. Its \code{ok} flag is captured and checked before the
-re-read is trusted: a write that failed still leaves the instance
-unchanged, and reading that back as "nothing differs" would blame
-conformance for what is actually a transport failure. When a write
-reports \code{ok = FALSE}, the corresponding step is failed immediately and the
-reported errors are recorded in \code{differences} prefixed \code{TRASPORTO},
-instead of a list of fields — the same vocabulary \code{module_call()} already
-uses for a failure that is not the instance's answer.
+re-read that follows it is trusted, and the re-read itself gets the same
+treatment: a call that failed to answer must not be read as "nothing
+differs", or a transport failure would be filed as a conformance
+failure — or worse, on the final re-read, as a restore nobody actually
+observed. When either a write or the re-read after it reports \code{ok = FALSE}, the corresponding step is failed immediately and the reported
+errors are recorded in \code{differences} prefixed \code{TRASPORTO}, instead of a
+list of fields — the same vocabulary \code{module_call()} already uses for a
+failure that is not the instance's answer.
 
-If the instance itself does not answer — no payload, so no major — the
-run stops after the baseline read: every later step compares against a
-baseline and a major that were never established, so continuing would
-measure nothing and could still send further requests to a server already
-known to be unreachable.
+If the instance itself does not answer the baseline read — no payload,
+so no major — the run stops right there: every later step compares
+against a baseline and a major that were never established, so
+continuing would measure nothing and could still send further requests
+to a server already known to be unreachable.
 
 Run under \code{devtools::load_all()}, \code{registry_path}'s default resolves
 inside the source tree, so a passing run is written where the next task's

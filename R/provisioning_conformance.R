@@ -105,6 +105,34 @@ compare_readback <- function(expected, actual) {
 }
 
 
+#' Build one write request from a case's assertion
+#'
+#' `updatePrivileges` reads whatever keys are present and skips the rest, so
+#' an absent key is different from an asserted absence. Every case in
+#' `conformance_cases()` encodes "clear this field" as an R `NULL`, which is
+#' correct on the expectation side that `compare_readback()` reads, but wrong
+#' on the wire: `utils::modifyList()` drops a `NULL`-valued key instead of
+#' setting it, and even a key that did survive with a `NULL` value would
+#' serialize through `httr2::req_body_json(auto_unbox = TRUE)` as `{}`, not
+#' `""`. So this is the one place a `NULL` in `assert` becomes the explicit
+#' empty string the channel elsewhere asserts an absence as.
+#'
+#' @param username Test account.
+#' @param project_id Test project.
+#' @param assert Named list of fields to assert, as in one case's `assert`.
+#'
+#' @return A named list, one element of the `requests` argument
+#'   `module_apply()` expects.
+#'
+#' @keywords internal
+request_for <- function(username, project_id, assert) {
+  c(
+    list(username = username, project_id = as.integer(project_id)),
+    lapply(assert, function(value) if (is.null(value)) "" else value)
+  )
+}
+
+
 #' Run the conformance check against one instance
 #'
 #' The gate the ceiling policy rests on, and the only thing that earns a
@@ -114,27 +142,38 @@ compare_readback <- function(expected, actual) {
 #' 2. apply as a dry run, re-read, and require that nothing changed;
 #' 3. apply for real, one case at a time;
 #' 4. re-read and compare field by field against what was asserted;
-#' 5. revoke, to restore;
-#' 6. re-read and confirm the baseline is back;
+#' 5. revoke;
+#' 6. re-read and compare against the baseline;
 #' 7. record the date, and only if every step was green.
 #'
 #' Step 2 is what measures the dry run guarantee instead of asserting it.
 #'
+#' Step 5 does not restore anything: a revoke removes rights outright, and
+#' that equals the baseline read in step 1 only when that baseline was
+#' already empty. **The designated test account must hold no rights in the
+#' test project before the run starts.** If it already does, the run
+#' overwrites them through the five cases and then removes them entirely;
+#' step 6 will correctly report a failed `restored` step, so nothing false
+#' gets certified, but the account is left with fewer rights than it had —
+#' that precondition is on the caller, not on this function.
+#'
 #' Every write is a network call that can be refused, time out, or hit a
 #' closed version gate. Its `ok` flag is captured and checked before the
-#' re-read is trusted: a write that failed still leaves the instance
-#' unchanged, and reading that back as "nothing differs" would blame
-#' conformance for what is actually a transport failure. When a write
-#' reports `ok = FALSE`, the corresponding step is failed immediately and the
-#' reported errors are recorded in `differences` prefixed `TRASPORTO`,
-#' instead of a list of fields — the same vocabulary `module_call()` already
-#' uses for a failure that is not the instance's answer.
+#' re-read that follows it is trusted, and the re-read itself gets the same
+#' treatment: a call that failed to answer must not be read as "nothing
+#' differs", or a transport failure would be filed as a conformance
+#' failure — or worse, on the final re-read, as a restore nobody actually
+#' observed. When either a write or the re-read after it reports `ok =
+#' FALSE`, the corresponding step is failed immediately and the reported
+#' errors are recorded in `differences` prefixed `TRASPORTO`, instead of a
+#' list of fields — the same vocabulary `module_call()` already uses for a
+#' failure that is not the instance's answer.
 #'
-#' If the instance itself does not answer — no payload, so no major — the
-#' run stops after the baseline read: every later step compares against a
-#' baseline and a major that were never established, so continuing would
-#' measure nothing and could still send further requests to a server already
-#' known to be unreachable.
+#' If the instance itself does not answer the baseline read — no payload,
+#' so no major — the run stops right there: every later step compares
+#' against a baseline and a major that were never established, so
+#' continuing would measure nothing and could still send further requests
+#' to a server already known to be unreachable.
 #'
 #' Run under `devtools::load_all()`, `registry_path`'s default resolves
 #' inside the source tree, so a passing run is written where the next task's
@@ -149,11 +188,16 @@ compare_readback <- function(expected, actual) {
 #' @param secret Shared secret.
 #' @param project_id Test project; writes are refused outside the module's
 #'   configured test projects.
-#' @param username Test account to assert rights for.
+#' @param username Test account to assert rights for. Must hold no rights
+#'   in `project_id` before the run starts — see the note on step 5 above.
 #' @param registry_path CSV to record the outcome in. See the note above on
 #'   `devtools::load_all()` versus an installed package.
 #'
 #' @return A list with `conforms`, `steps` and `differences`, invisibly.
+#'   `steps` gains a `recorded` entry once every other step is green: `TRUE`
+#'   once `record_conformance()` succeeds, `FALSE` if it errors — a failure
+#'   to write the registry must not discard the result of five real writes
+#'   already performed against the instance.
 #'
 #' @keywords internal
 run_conformance_check <- function(server,
@@ -200,6 +244,25 @@ run_conformance_check <- function(server,
     )
   }
 
+  # A step's comparison depends on a re-read succeeding, not only on the
+  # write before it: if the re-read itself failed to answer, the outcome is
+  # a transport failure, and reading a NULL row as "matches a NULL baseline"
+  # would let an unrelated timeout pass as a restore or as a clean dry run.
+  # `transport` carries the raw failed answer when the re-read failed, NULL
+  # otherwise, so the caller can tell the two causes of `conforms = FALSE`
+  # apart without repeating the `ok` check at every site.
+  reread_and_compare <- function(expected) {
+    state <- read_state()
+    if (!isTRUE(state[["answer"]][["ok"]])) {
+      list(
+        conforms = FALSE, differences = character(),
+        transport = state[["answer"]]
+      )
+    } else {
+      c(compare_readback(expected, state[["row"]]), list(transport = NULL))
+    }
+  }
+
   baseline_state <- read_state()
   baseline <- baseline_state[["row"]]
   major <- baseline_state[["major"]]
@@ -220,16 +283,22 @@ run_conformance_check <- function(server,
   }
 
   first_case <- conformance_cases()[[1]]
-  dry_requests <- list(utils::modifyList(
-    list(username = username, project_id = as.integer(project_id)),
-    first_case[["assert"]]
-  ))
+  dry_requests <- list(
+    request_for(username, project_id, first_case[["assert"]])
+  )
   dry_response <- module_apply(server, secret, dry_requests, dry_run = TRUE)
 
   if (isTRUE(dry_response[["ok"]])) {
-    dry_run_verdict <- compare_readback(baseline, read_state()[["row"]])
+    dry_run_verdict <- reread_and_compare(baseline)
     steps[["dry_run_changed_nothing"]] <- dry_run_verdict[["conforms"]]
-    if (!dry_run_verdict[["conforms"]]) {
+    if (!is.null(dry_run_verdict[["transport"]])) {
+      differences <- c(
+        differences,
+        note_transport(
+          "dry_run_changed_nothing", dry_run_verdict[["transport"]]
+        )
+      )
+    } else if (!dry_run_verdict[["conforms"]]) {
       differences <- c(
         differences,
         note_diff("dry_run_changed_nothing", dry_run_verdict)
@@ -244,10 +313,7 @@ run_conformance_check <- function(server,
   }
 
   for (case in conformance_cases()) {
-    requests <- list(utils::modifyList(
-      list(username = username, project_id = as.integer(project_id)),
-      case[["assert"]]
-    ))
+    requests <- list(request_for(username, project_id, case[["assert"]]))
     apply_response <- module_apply(server, secret, requests, dry_run = FALSE)
 
     if (!isTRUE(apply_response[["ok"]])) {
@@ -259,22 +325,32 @@ run_conformance_check <- function(server,
       next
     }
 
-    verdict <- compare_readback(case[["assert"]], read_state()[["row"]])
+    verdict <- reread_and_compare(case[["assert"]])
     steps[[case[["name"]]]] <- verdict[["conforms"]]
-    if (!verdict[["conforms"]]) {
+    if (!is.null(verdict[["transport"]])) {
+      differences <- c(
+        differences, note_transport(case[["name"]], verdict[["transport"]])
+      )
+    } else if (!verdict[["conforms"]]) {
       differences <- c(differences, note_diff(case[["name"]], verdict))
     }
   }
 
   # Attempted unconditionally: whatever the loop above did to the instance,
-  # revoke is the only step that restores it, so a case failing above must
-  # not skip the cleanup that follows it.
+  # revoke is the only cleanup step, so a case failing above must not skip
+  # it. It does not restore anything it did not find empty — see the
+  # roxygen above.
   revoke_response <- module_revoke(server, secret, pair, dry_run = FALSE)
 
   if (isTRUE(revoke_response[["ok"]])) {
-    restored_verdict <- compare_readback(baseline, read_state()[["row"]])
+    restored_verdict <- reread_and_compare(baseline)
     steps[["restored"]] <- restored_verdict[["conforms"]]
-    if (!restored_verdict[["conforms"]]) {
+    if (!is.null(restored_verdict[["transport"]])) {
+      differences <- c(
+        differences,
+        note_transport("restored", restored_verdict[["transport"]])
+      )
+    } else if (!restored_verdict[["conforms"]]) {
       differences <- c(differences, note_diff("restored", restored_verdict))
     }
   } else {
@@ -284,7 +360,23 @@ run_conformance_check <- function(server,
 
   conforms <- all(unlist(steps))
   if (conforms) {
-    record_conformance(registry_path, major = major, on = Sys.Date())
+    # A failure here (a missing registry row, an unreadable path) must not
+    # discard the result of the five real writes already performed: it is
+    # recorded as its own step instead of being allowed to propagate and
+    # replace the whole return value with a stack trace.
+    record_error <- tryCatch(
+      {
+        record_conformance(registry_path, major = major, on = Sys.Date())
+        NULL
+      },
+      error = function(e) conditionMessage(e)
+    )
+    steps[["recorded"]] <- is.null(record_error)
+    if (!is.null(record_error)) {
+      differences <- c(
+        differences, paste0("recorded: TRASPORTO (", record_error, ")")
+      )
+    }
   }
 
   invisible(list(
@@ -305,6 +397,12 @@ run_conformance_check <- function(server,
 #' add` can see it, while against an installed copy it lands in the
 #' installation library instead and never reaches the repository.
 #'
+#' Raises when `major` matches no row: assigning into a `[` index that is
+#' all `FALSE` is a silent no-op in R, and `write_csv()` would then rewrite
+#' the file unchanged. A run against a major the registry has never heard
+#' of is precisely the case this mechanism exists for, and it must not be
+#' indistinguishable from a run that actually recorded a date.
+#'
 #' @param path Registry CSV.
 #' @param major REDCap major the run covered.
 #' @param on Date of the run.
@@ -314,9 +412,15 @@ run_conformance_check <- function(server,
 #' @keywords internal
 record_conformance <- function(path, major, on) {
   registry <- readr::read_csv(path, show_col_types = FALSE)
-  registry[["conformance_passed_on"]][
-    registry[["redcap_major"]] == major
-  ] <- as.character(on)
+  matched <- registry[["redcap_major"]] == major
+  if (!any(matched)) {
+    stop(
+      "record_conformance(): no row for redcap_major = ", major,
+      " in ", path,
+      call. = FALSE
+    )
+  }
+  registry[["conformance_passed_on"]][matched] <- as.character(on)
   readr::write_csv(registry, path)
 
   invisible(registry)

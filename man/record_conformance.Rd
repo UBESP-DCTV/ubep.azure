@@ -26,5 +26,11 @@ Called with \code{path} defaulted from \code{run_conformance_check()}, so the sa
 caveat applies here: under \code{devtools::load_all()} the default resolves
 inside the source tree and the write lands where the next task's \verb{git add} can see it, while against an installed copy it lands in the
 installation library instead and never reaches the repository.
+
+Raises when \code{major} matches no row: assigning into a \code{[} index that is
+all \code{FALSE} is a silent no-op in R, and \code{write_csv()} would then rewrite
+the file unchanged. A run against a major the registry has never heard
+of is precisely the case this mechanism exists for, and it must not be
+indistinguishable from a run that actually recorded a date.
 }
 \keyword{internal}
