@@ -396,8 +396,14 @@ test_that("the declared fingerprints travel as an array, never as a scalar", {
       declare = "16faf46d5ab1"
     )
   )
-  sent <- jsonlite::toJSON(
-    captured[["body"]][["data"]], auto_unbox = TRUE
+  # The mock intercepts the request before req_body_apply() builds the wire
+  # body, so captured$body$data is still the R list: re-serializing it here
+  # with our own jsonlite::toJSON() would test that re-serialization, not
+  # what httr2::req_body_json(auto_unbox = TRUE) actually sends. req_dry_run()
+  # renders the real bytes offline, without performing the request.
+  sent <- paste(
+    capture.output(httr2::req_dry_run(captured, quiet = FALSE)),
+    collapse = "\n"
   )
 
   # test
@@ -405,11 +411,14 @@ test_that("the declared fingerprints travel as an array, never as a scalar", {
   # vector of length one, and auto_unbox turns those into scalars. The module
   # would then receive "16faf46d5ab1" instead of ["16faf46d5ab1"], and
   # in_array() with a non-array haystack is a fatal TypeError in PHP 8: HTTP
-  # 500, no JSON, and a client that recognises a response by its shape
+  # 500, no JSON, and a client that recognizes a response by its shape
   # reporting the module as absent.
+  # req_dry_run() pretty-prints the body (one key per line, two-space
+  # indent), so the match tolerates whitespace around the bracketed value
+  # instead of requiring it adjacent, which a fixed-string match against the
+  # hand-serialized body did not need to.
   expect_match(
-    as.character(sent), '"tested_fingerprints":["16faf46d5ab1"]',
-    fixed = TRUE
+    sent, '"tested_fingerprints":\\s*\\[\\s*"16faf46d5ab1"\\s*\\]'
   )
   # The direct cause, asserted next to its consequence: auto_unbox unboxes a
   # length-one atomic vector and leaves a list alone, so the type of what
@@ -433,5 +442,13 @@ test_that("an empty declaration still travels as an array", {
   )
 
   # test
+  # expect_length(NULL, 0L) passes, so length alone is not a guard: the
+  # branch this test fears -- "if the list is empty, omit the field" --
+  # would leave it green. Assert instead that the field *exists* and that it
+  # is a list, which is what decides array versus scalar.
+  expect_true(
+    "tested_fingerprints" %in% names(captured[["body"]][["data"]])
+  )
+  expect_type(captured[["body"]][["data"]][["tested_fingerprints"]], "list")
   expect_length(captured[["body"]][["data"]][["tested_fingerprints"]], 0L)
 })

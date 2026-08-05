@@ -117,7 +117,13 @@ certified_fingerprints <- function(registry = tested_fingerprints()) {
   # registry with no conformance anywhere is read back as an all-NA logical
   # column, not a character one.
   dates <- as.character(registry[["conformance_passed_on"]])
-  keep <- !is.na(dates) & dates != ""
+  prints <- as.character(registry[["fingerprint"]])
+  # Not inherited from tested_fingerprints(), which already drops
+  # empty-fingerprint rows: this function takes an arbitrary registry, not
+  # only the one tested_fingerprints() returns, so a raw registry -- exactly
+  # what the conformance run in task 8 will pass -- can carry a dated row
+  # with a blank or missing fingerprint. The invariant has to hold locally.
+  keep <- !is.na(dates) & dates != "" & !is.na(prints) & prints != ""
 
-  as.character(registry[["fingerprint"]][keep])
+  prints[keep]
 }

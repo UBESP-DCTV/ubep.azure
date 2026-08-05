@@ -226,3 +226,21 @@ test_that("a registry with no conformance certifies nothing", {
   expect_length(certified_fingerprints(registry), 0L)
   expect_type(certified_fingerprints(registry), "character")
 })
+
+
+test_that("a dated row with no fingerprint certifies nothing", {
+  # eval
+  # Not reachable through tested_fingerprints(), which already drops
+  # empty-fingerprint rows -- but certified_fingerprints() takes an arbitrary
+  # registry, and a raw one is exactly what a conformance run (task 8) and
+  # its tests will pass.
+  registry <- data.frame(
+    redcap_major = c(17L, 17L),
+    fingerprint = c(NA_character_, ""),
+    conformance_passed_on = c("2026-08-05", "2026-08-05"),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  expect_length(certified_fingerprints(registry), 0L)
+})
