@@ -76,6 +76,17 @@ $dryRun = !(($body['dry_run'] ?? true) === false);
 $version = REDCAP_VERSION;
 $gate = VersionGate::classify($version, UBEP_FLOOR_MAJOR, UBEP_CEILING_MAJOR);
 
+// Above the tested ceiling, `state` and a plain simulation still answer
+// normally -- the inherited version policy only touches a genuine write.
+// VersionGate stays the sole place that compares versions; this reads the
+// verdict already computed above instead of comparing again.
+$forcedToDryRun = $gate === VersionGate::UNTESTED
+    && ($operation === 'apply' || $operation === 'revoke')
+    && !$dryRun;
+if ($forcedToDryRun) {
+    $dryRun = true;
+}
+
 // The map is asked with a null project id on purpose: with a project it
 // returns the base plus that project's feature-conditional fields (a project
 // with randomisation enabled adds three), which would make the fingerprint a
@@ -103,6 +114,19 @@ $response = [
     'summary' => [],
     'errors' => [],
 ];
+
+// Recorded here, not where `$forcedToDryRun` was decided: the operation still
+// runs below -- `state` and diff go through untouched, and a forced write
+// still plans and answers -- this only tells the caller why `dry_run` reads
+// true when the request asked for `false`.
+if ($forcedToDryRun) {
+    $response['errors'][] = [
+        'code' => 'TRASPORTO_VERSIONE_NON_COLLAUDATA',
+        'message' => 'instance major ' . VersionGate::majorOf($version)
+            . ' is above the module ceiling ' . UBEP_CEILING_MAJOR
+            . ': the write was simulated',
+    ];
+}
 
 // Below the floor: refuse everything, reads included. Classified as transport,
 // not data: the request is queued for the next run, not sent back to whoever
