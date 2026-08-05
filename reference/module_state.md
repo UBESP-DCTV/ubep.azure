@@ -1,6 +1,5 @@
 # Read the real authorization state from one REDCap instance
 
-The only function in the package that speaks to a REDCap server.
 Everything it returns is re-read state: the channel keeps no local copy,
 because a copy would only be authoritative if nobody could edit REDCap
 outside the job, which is neither true nor desirable.
@@ -15,7 +14,9 @@ module_state(server, secret, pairs = list(), registry = tested_fingerprints())
 
 - server:
 
-  Hostname of the instance.
+  Hostname of the instance, optionally followed by the path REDCap is
+  mounted under, as in `"host.example.org/redcap"`. The fleet is not
+  uniform on this point, so the mount cannot be assumed.
 
 - secret:
 

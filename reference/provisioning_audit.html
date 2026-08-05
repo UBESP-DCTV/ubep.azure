@@ -13,7 +13,7 @@ expirations that passed without effect."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,7 +55,10 @@ expirations that passed without effect.</p>
 
 
 <dl><dt id="arg-servers">servers<a class="anchor" aria-label="anchor" href="#arg-servers"></a></dt>
-<dd><p>Character vector of hostnames.</p></dd>
+<dd><p>Character vector of hostnames, each optionally carrying the
+path REDCap is mounted under, as in <code>"host.example.org/redcap"</code>. Keeping
+the mount inside the same string is what avoids a second vector to hold
+parallel to <code>secrets</code> and keep aligned by hand.</p></dd>
 
 
 <dt id="arg-secrets">secrets<a class="anchor" aria-label="anchor" href="#arg-secrets"></a></dt>

@@ -1,5 +1,25 @@
 # Changelog
 
+## ubep.azure 0.5.0
+
+- The REDCap authorization channel gained a write path: it can now
+  assert project rights (role, DAG, expiration) on a real instance, and
+  revoke them. Every operation simulates by default; the instance is
+  touched only on an explicit `dry_run: false`.
+- Added a conformance check that certifies a channel against an instance
+  rather than trusting a write’s own report of success: it applies,
+  re-reads what was written, and compares it field by field against what
+  was asserted, before revoking and re-reading again to confirm nothing
+  was left behind. A passed run is recorded by REDCap major.
+- **Writing is confined to the projects listed in the module’s
+  `test-project-ids` setting, and an unconfigured or empty list denies
+  every write.** No wildcard exists to lift this from the REDCap side.
+  The confinement is removed only once a conformance run has been
+  recorded against the instance’s REDCap major — which has not happened
+  yet for any instance. Anyone installing this version expecting to
+  provision production projects will find writes refused, not simulated:
+  this is deliberate, not a bug.
+
 ## ubep.azure 0.4.0
 
 - Added the REDCap authorization channel, read only in this release. A

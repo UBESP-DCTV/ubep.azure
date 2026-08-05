@@ -23,6 +23,7 @@ solo con conferma esplicita.
 
 | Cosa | Path |
 |----|----|
+| Slug del vault (nome del progetto fuori da qui) | `ubep-azure` — la cartella si chiama `ubep.azure`, dal nome del pacchetto R, ma il punto non è ammesso in kebab-case |
 | Nota indice nel vault | [`c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md`](c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md) |
 | Fonte ufficiale (cartella condivisa) | `C:/Users/corra/Unit of Biostatistics Epidemiology and Public Health/IT - RedCap UBEP` |
 | Source label per `vault-add` | `ubep-sharepoint` |

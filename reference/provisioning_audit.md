@@ -15,7 +15,10 @@ provisioning_audit(servers, secrets, desired)
 
 - servers:
 
-  Character vector of hostnames.
+  Character vector of hostnames, each optionally carrying the path
+  REDCap is mounted under, as in `"host.example.org/redcap"`. Keeping
+  the mount inside the same string is what avoids a second vector to
+  hold parallel to `secrets` and keep aligned by hand.
 
 - secrets:
 
