@@ -7,6 +7,7 @@ require_once __DIR__ . '/lib/Auth.php';
 require_once __DIR__ . '/lib/StateReader.php';
 require_once __DIR__ . '/lib/FieldNames.php';
 require_once __DIR__ . '/lib/TestProjects.php';
+require_once __DIR__ . '/lib/TestedSurfaces.php';
 require_once __DIR__ . '/lib/Planner.php';
 require_once __DIR__ . '/lib/Applier.php';
 
@@ -15,10 +16,11 @@ use UbepProvisioning\Auth;
 use UbepProvisioning\Planner;
 use UbepProvisioning\StateReader;
 use UbepProvisioning\Surface;
+use UbepProvisioning\TestedSurfaces;
 use UbepProvisioning\TestProjects;
 use UbepProvisioning\VersionGate;
 
-const UBEP_CONTRACT_VERSION = 1;
+const UBEP_CONTRACT_VERSION = 2;
 const UBEP_FLOOR_MAJOR = 17;
 const UBEP_CEILING_MAJOR = 17;
 
@@ -76,17 +78,6 @@ $dryRun = !(($body['dry_run'] ?? true) === false);
 $version = REDCAP_VERSION;
 $gate = VersionGate::classify($version, UBEP_FLOOR_MAJOR, UBEP_CEILING_MAJOR);
 
-// Above the tested ceiling, `state` and a plain simulation still answer
-// normally -- the inherited version policy only touches a genuine write.
-// VersionGate stays the sole place that compares versions; this reads the
-// verdict already computed above instead of comparing again.
-$forcedToDryRun = $gate === VersionGate::UNTESTED
-    && ($operation === 'apply' || $operation === 'revoke')
-    && !$dryRun;
-if ($forcedToDryRun) {
-    $dryRun = true;
-}
-
 // The map is asked with a null project id on purpose: with a project it
 // returns the base plus that project's feature-conditional fields (a project
 // with randomisation enabled adds three), which would make the fingerprint a
@@ -95,6 +86,24 @@ $fingerprint = Surface::fingerprintFrom(
     Surface::signaturesOf('\\UserRights', Surface::METHODS),
     \UserRights::getApiUserPrivilegesAttr(false, null)
 );
+
+// Two axes, two questions. The gate asks which code path applies; the
+// handshake asks whether that path is still the one the caller tested
+// against. An instance can sit in the right major and have a changed
+// surface, which is the case no version comparison can see -- and the one
+// that arrives with every upgrade inside a major.
+$surfaceUntested = !TestedSurfaces::accepts(
+    $fingerprint,
+    $body['tested_fingerprints'] ?? null
+);
+
+$isWrite = ($operation === 'apply' || $operation === 'revoke') && !$dryRun;
+$forcedByVersion = $gate === VersionGate::UNTESTED && $isWrite;
+$forcedBySurface = $surfaceUntested && $isWrite;
+
+if ($forcedByVersion || $forcedBySurface) {
+    $dryRun = true;
+}
 
 $versionFile = __DIR__ . '/VERSION';
 $moduleVersion = is_readable($versionFile)
@@ -115,15 +124,29 @@ $response = [
     'errors' => [],
 ];
 
-// Recorded here, not where `$forcedToDryRun` was decided: the operation still
-// runs below -- `state` and diff go through untouched, and a forced write
-// still plans and answers -- this only tells the caller why `dry_run` reads
-// true when the request asked for `false`.
-if ($forcedToDryRun) {
+// Recorded here, not where the decision was taken: the operation still runs
+// below -- `state` and diff go through untouched, and a forced write still
+// plans and answers -- this only tells the caller why `dry_run` reads true
+// when the request asked for false.
+//
+// Two entries, never one merged: "instance ahead of the ceiling" and
+// "instance changed underneath us inside the same major" ask for two
+// different actions -- a major qualification with possible new code, versus
+// a measurement and a row in the registry. A single code would make the two
+// diagnoses indistinguishable exactly when they are needed.
+if ($forcedByVersion) {
     $response['errors'][] = [
         'code' => 'TRASPORTO_VERSIONE_NON_COLLAUDATA',
         'message' => 'instance major ' . VersionGate::majorOf($version)
             . ' is above the module ceiling ' . UBEP_CEILING_MAJOR
+            . ': the write was simulated',
+    ];
+}
+if ($forcedBySurface) {
+    $response['errors'][] = [
+        'code' => 'TRASPORTO_SUPERFICIE_NON_COLLAUDATA',
+        'message' => 'surface fingerprint ' . $fingerprint
+            . ' is not among the tested surfaces the caller declared'
             . ': the write was simulated',
     ];
 }

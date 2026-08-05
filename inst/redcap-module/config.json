@@ -1,7 +1,7 @@
 {
   "name": "UBEP provisioning",
   "namespace": "UBEP\\Provisioning",
-  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. In questa versione la scrittura e' confinata ai progetti elencati qui sotto in 'Progetti di prova': con la lista vuota ogni scrittura e' rifiutata.",
+  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. In questa versione la scrittura e' confinata ai progetti elencati qui sotto in 'Progetti di prova': con la lista vuota ogni scrittura e' rifiutata. La scrittura richiede inoltre che il chiamante dichiari un'impronta di superficie corrispondente a quella dell'istanza, altrimenti la scrittura viene simulata.",
   "authors": [
     {
       "name": "Corrado Lanera",
