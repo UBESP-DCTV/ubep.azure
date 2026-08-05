@@ -43,7 +43,7 @@ di rango, la data più recente.
 | 1 | `ubep-azure.md` §Stato corrente (voce più recente) e §Prossime azioni | lo **stato** e le **decisioni** |
 | 2 | `git log` dei rami di lavoro e di `main`; artefatti versionati (`inst/extdata/tested-fingerprints.csv`, `DESCRIPTION`, `NEWS.md`) | **cosa è stato eseguito**, e quando |
 | 3 | `censimento-server-redcap-*.md`, `rettifiche-censimento-*.md`, `spike-account-di-prova.md` | i **fatti misurati** sul parco e sullo spike |
-| 4 | `dev/specs/*`, `dev/plans/*` (il testo), `ondata-design.md`, `ondata-handoff.md` | l'**intenzione**, mai lo stato |
+| 4 | gli spec e i piani nella cartella di progetto del vault — `*-design.md` e `*-canale-autorizzazione-fase*.md` (il testo) — più `ondata-design.md` e `ondata-handoff.md` | l'**intenzione**, mai lo stato |
 | 5 | `CLAUDE.md` del repo, `PROJECT-INDEX.md`, `README`, `inventory.md`, e tutto `ubep-azure.md` fuori da §Stato corrente e §Prossime azioni | contesto storico, **mai** stato |
 | 6 | `update-redcap.md` §Stato corrente | lo stato **dell'ondata**, mai di questo progetto |
 | 7 | `2026-07-13-ubep-azure-accessi-redcap-recap-plaud.md` | trascrizione di riunione, superata per costruzione: **mai** stato |
@@ -62,10 +62,14 @@ rango vince, ma la discrepanza si segnala.
 
 ### Le caselle dei piani non sono un segnale
 
-**In questo progetto i piani in `dev/plans/` non si spuntano.** Al 2026-08-05 il
-piano della fase 2 aveva decine di passi e **zero** caselle `- [x]` pur essendo
-arrivato al penultimo task. Contare le caselle di un piano ti farebbe dichiarare
-non iniziata una fase quasi conclusa.
+**In questo progetto i piani non si spuntano.** Al 2026-08-05 il piano della
+fase 2 aveva decine di passi e **zero** caselle `- [x]` pur essendo arrivato al
+penultimo task. Contare le caselle di un piano ti farebbe dichiarare non
+iniziata una fase quasi conclusa.
+
+(I piani stavano allora in `dev/plans/` nel repo; dal 2026-08-05 vivono nella
+cartella di progetto del vault, per la decisione 8 del design della fase 3. La
+regola non cambia con l'indirizzo.)
 
 Il progresso di una fase si legge dai **commit** del suo ramo, confrontati con
 l'elenco dei task del piano: i messaggi di commit nominano ciò che chiudono.
