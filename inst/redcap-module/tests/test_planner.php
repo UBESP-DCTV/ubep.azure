@@ -87,6 +87,59 @@ ubep_assert_same(
     'revoking what is not there is a noop, not an error'
 );
 
+// A batch: several requests to Planner::planApply() in a single call, each
+// landing on a different outcome. Every fixture above passes a one-element
+// $requests, and the field run did not exercise more than one pair either
+// (§12 of the phase-2 design spec), so the index lookup across a mixed
+// batch had no coverage from either side.
+$batchCurrent = [
+    [
+        'username' => 'a@example.org', 'project_id' => 27,
+        'role_name' => 'data entry', 'dag_name' => 'centro-01',
+        'expiration' => '2027-01-01',
+    ],
+    [
+        'username' => 'c@example.org', 'project_id' => 27,
+        'role_name' => 'data entry', 'dag_name' => 'centro-01',
+        'expiration' => '2027-01-01',
+    ],
+];
+$batch = Planner::planApply([
+    [
+        'username' => 'a@example.org', 'project_id' => 27,
+        'role_name' => 'data entry', 'dag_name' => 'centro-01',
+        'expiration' => '2027-01-01',
+    ],
+    [
+        'username' => 'b@example.org', 'project_id' => 27,
+        'role_name' => 'read only', 'dag_name' => null, 'expiration' => null,
+    ],
+    [
+        'username' => 'c@example.org', 'project_id' => 27,
+        'role_name' => 'data entry', 'dag_name' => 'centro-01',
+        'expiration' => '2027-06-30',
+    ],
+], $batchCurrent);
+ubep_assert_same(3, count($batch), 'a batch yields one entry per request');
+ubep_assert_same(
+    'a@example.org',
+    $batch[0]['username'],
+    'batch entries stay in request order (1st)'
+);
+ubep_assert_same('noop', $batch[0]['outcome'], 'unchanged pair in a batch is a noop');
+ubep_assert_same(
+    'b@example.org',
+    $batch[1]['username'],
+    'batch entries stay in request order (2nd)'
+);
+ubep_assert_same('creato', $batch[1]['outcome'], 'absent pair in a batch is a creation');
+ubep_assert_same(
+    'c@example.org',
+    $batch[2]['username'],
+    'batch entries stay in request order (3rd)'
+);
+ubep_assert_same('aggiornato', $batch[2]['outcome'], 'changed pair in a batch is an update');
+
 // The structural guarantee behind dry_run, made checkable. A text scan is
 // crude, but this is the check that turns red the day someone "simplifies" by
 // moving the write back into the planner — which is how the guarantee dies.
