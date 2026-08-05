@@ -92,6 +92,9 @@ $fingerprint = Surface::fingerprintFrom(
 // against. An instance can sit in the right major and have a changed
 // surface, which is the case no version comparison can see -- and the one
 // that arrives with every upgrade inside a major.
+//
+// VersionGate stays the sole place that compares versions: both branches
+// below read the verdict computed above instead of comparing again.
 $surfaceUntested = !TestedSurfaces::accepts(
     $fingerprint,
     $body['tested_fingerprints'] ?? null
@@ -99,7 +102,14 @@ $surfaceUntested = !TestedSurfaces::accepts(
 
 $isWrite = ($operation === 'apply' || $operation === 'revoke') && !$dryRun;
 $forcedByVersion = $gate === VersionGate::UNTESTED && $isWrite;
-$forcedBySurface = $surfaceUntested && $isWrite;
+// Below the floor nothing is simulated: the request is refused outright a
+// few lines down, before StateReader or Planner see it. Without this clause
+// the answer would carry "the write was simulated" for a write that never
+// was, and invite whoever reads the audit to add a fingerprint to the
+// registry for an instance that is not a candidate at all. The version axis
+// needs no such clause: UNTESTED and BELOW cannot both hold.
+$forcedBySurface = $surfaceUntested && $isWrite
+    && $gate !== VersionGate::BELOW;
 
 if ($forcedByVersion || $forcedBySurface) {
     $dryRun = true;
