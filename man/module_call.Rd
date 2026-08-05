@@ -10,7 +10,8 @@ module_call(
   operation,
   requests = list(),
   dry_run = TRUE,
-  registry = tested_fingerprints()
+  registry = tested_fingerprints(),
+  declare = certified_fingerprints(registry)
 )
 }
 \arguments{
@@ -27,6 +28,10 @@ not uniform on this point, so the mount cannot be assumed.}
 \item{dry_run}{Logical; the module writes only on an explicit \code{FALSE}.}
 
 \item{registry}{Tested fingerprints, see \code{check_fingerprint()}.}
+
+\item{declare}{Fingerprints the caller states it has been tested against.
+The module refuses to write when its own is not among them, so an empty
+declaration writes nothing. Reads and dry runs ignore it.}
 }
 \value{
 A list with \code{ok}, \code{errors}, \code{payload} and \code{gate}.

@@ -89,3 +89,35 @@ conformance_passed <- function(major, registry = tested_fingerprints()) {
 
   any(!is.na(dates) & dates != "")
 }
+
+
+#' Fingerprints whose write behavior a conformance run has verified
+#'
+#' The list the ordinary caller declares when it is about to write. It is
+#' deliberately narrower than the measured one that `tested_fingerprints()`
+#' returns: a row added after a bare `state` measures a surface, it does not
+#' certify what writing to it does.
+#'
+#' The conformance run itself declares the measured list instead, and must:
+#' the surface it is about to certify has no date yet by definition, so
+#' requiring one would recreate the ordering trap the ceiling already has —
+#' the run could never earn what it exists to earn.
+#'
+#' @param registry Data frame of tested fingerprints.
+#'
+#' @return A character vector, possibly empty.
+#'
+#' @keywords internal
+certified_fingerprints <- function(registry = tested_fingerprints()) {
+  if (!"conformance_passed_on" %in% names(registry)) {
+    return(character())
+  }
+
+  # as.character() for the same reason conformance_passed() coerces: a
+  # registry with no conformance anywhere is read back as an all-NA logical
+  # column, not a character one.
+  dates <- as.character(registry[["conformance_passed_on"]])
+  keep <- !is.na(dates) & dates != ""
+
+  as.character(registry[["fingerprint"]][keep])
+}

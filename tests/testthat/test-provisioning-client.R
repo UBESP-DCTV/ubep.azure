@@ -374,3 +374,64 @@ test_that("a dry run is a read for contract purposes", {
   # step that exists to look before touching.
   expect_true(result[["ok"]])
 })
+
+
+test_that("the declared fingerprints travel as an array, never as a scalar", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response-v2.json")
+  )
+  captured <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+      )),
+      dry_run = FALSE,
+      declare = "16faf46d5ab1"
+    )
+  )
+  sent <- jsonlite::toJSON(
+    captured[["body"]][["data"]], auto_unbox = TRUE
+  )
+
+  # test
+  # The registry holds a single row today, so the declaration is a character
+  # vector of length one, and auto_unbox turns those into scalars. The module
+  # would then receive "16faf46d5ab1" instead of ["16faf46d5ab1"], and
+  # in_array() with a non-array haystack is a fatal TypeError in PHP 8: HTTP
+  # 500, no JSON, and a client that recognises a response by its shape
+  # reporting the module as absent.
+  expect_match(
+    as.character(sent), '"tested_fingerprints":["16faf46d5ab1"]',
+    fixed = TRUE
+  )
+  # The direct cause, asserted next to its consequence: auto_unbox unboxes a
+  # length-one atomic vector and leaves a list alone, so the type of what
+  # `module_call()` puts in the body is what decides array versus scalar.
+  expect_type(captured[["body"]][["data"]][["tested_fingerprints"]], "list")
+})
+
+
+test_that("an empty declaration still travels as an array", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response-v2.json")
+  )
+  captured <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    module_state("redcap.example.org", "s3cret", declare = character())
+  )
+
+  # test
+  expect_length(captured[["body"]][["data"]][["tested_fingerprints"]], 0L)
+})

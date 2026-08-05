@@ -192,3 +192,37 @@ test_that("the test project brake must go once conformance is earned", {
     expect_true("test-project-ids" %in% keys)
   }
 })
+
+
+test_that("only a recorded conformance certifies a surface", {
+  # eval
+  registry <- data.frame(
+    redcap_major = c(17L, 17L, 18L),
+    fingerprint = c("misurata", "certificata", "altra"),
+    conformance_passed_on = c(NA, "2026-08-05", NA),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # The two columns answer two questions. `fingerprint` says the surface was
+  # measured, which is what lets a conformance run write on it in the first
+  # place; the date says writing was verified there. Declaring the measured
+  # ones from the ordinary caller would let a row added after a bare `state`
+  # reopen writes on a surface nobody ran conformance against.
+  expect_equal(certified_fingerprints(registry), "certificata")
+})
+
+
+test_that("a registry with no conformance certifies nothing", {
+  # eval
+  registry <- data.frame(
+    redcap_major = 17L,
+    fingerprint = "misurata",
+    conformance_passed_on = NA_character_,
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  expect_length(certified_fingerprints(registry), 0L)
+  expect_type(certified_fingerprints(registry), "character")
+})

@@ -12,6 +12,9 @@
 #' @param requests List of requests; empty reads the whole instance.
 #' @param dry_run Logical; the module writes only on an explicit `FALSE`.
 #' @param registry Tested fingerprints, see `check_fingerprint()`.
+#' @param declare Fingerprints the caller states it has been tested against.
+#'   The module refuses to write when its own is not among them, so an empty
+#'   declaration writes nothing. Reads and dry runs ignore it.
 #'
 #' @return A list with `ok`, `errors`, `payload` and `gate`.
 #'
@@ -21,7 +24,8 @@ module_call <- function(server,
                         operation,
                         requests = list(),
                         dry_run = TRUE,
-                        registry = tested_fingerprints()) {
+                        registry = tested_fingerprints(),
+                        declare = certified_fingerprints(registry)) {
   stopifnot(
     is.character(server), length(server) == 1L,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run)
@@ -46,6 +50,9 @@ module_call <- function(server,
         list(
           operation = operation,
           dry_run = dry_run,
+          # as.list(), not the bare vector: auto_unbox turns a length-one
+          # atomic vector into a scalar, and the registry holds one row.
+          tested_fingerprints = as.list(as.character(declare)),
           requests = requests
         ),
         auto_unbox = TRUE
@@ -108,7 +115,8 @@ module_call <- function(server,
 module_state <- function(server,
                          secret,
                          pairs = list(),
-                         registry = tested_fingerprints()) {
+                         registry = tested_fingerprints(),
+                         declare = certified_fingerprints(registry)) {
   requests <- lapply(pairs, function(pair) {
     list(
       username = pair[["username"]],
@@ -118,7 +126,8 @@ module_state <- function(server,
 
   module_call(
     server, secret, "state",
-    requests = requests, dry_run = TRUE, registry = registry
+    requests = requests, dry_run = TRUE, registry = registry,
+    declare = declare
   )
 }
 
@@ -151,10 +160,12 @@ module_apply <- function(server,
                          secret,
                          requests,
                          dry_run = TRUE,
-                         registry = tested_fingerprints()) {
+                         registry = tested_fingerprints(),
+                         declare = certified_fingerprints(registry)) {
   module_call(
     server, secret, "apply",
-    requests = requests, dry_run = dry_run, registry = registry
+    requests = requests, dry_run = dry_run, registry = registry,
+    declare = declare
   )
 }
 
@@ -180,7 +191,8 @@ module_revoke <- function(server,
                           secret,
                           requests,
                           dry_run = TRUE,
-                          registry = tested_fingerprints()) {
+                          registry = tested_fingerprints(),
+                          declare = certified_fingerprints(registry)) {
   pairs <- lapply(requests, function(request) {
     list(
       username = request[["username"]],
@@ -190,6 +202,7 @@ module_revoke <- function(server,
 
   module_call(
     server, secret, "revoke",
-    requests = pairs, dry_run = dry_run, registry = registry
+    requests = pairs, dry_run = dry_run, registry = registry,
+    declare = declare
   )
 }
