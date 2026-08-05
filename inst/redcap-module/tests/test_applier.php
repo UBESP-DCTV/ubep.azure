@@ -16,10 +16,27 @@ $entry = [
                 'expiration' => '2027-01-01'],
 ];
 
-$args = Applier::argumentsFor($entry);
+$args = Applier::argumentsFor($entry, 5);
 
 // the username always travels
 ubep_assert_same('a@example.org', $args['username'], 'username is carried');
+
+// the DAG travels as the id argumentsFor() is given, never as the plan
+// entry's dag_name: REDCap stores data_access_group in an int column with a
+// foreign key to redcap_data_access_groups, and a name there coerces to 0
+// under non-strict SQL mode, which the foreign key then refuses -- taking
+// the role and the expiration down with it (see Applier's class docblock).
+// argumentsFor() cannot resolve the name itself -- resolution touches the
+// database -- so the caller passes the id in already.
+ubep_assert_same('5', $args[FieldNames::DAG], 'the resolved DAG id travels under FieldNames::DAG');
+ubep_assert_true(
+    $args[FieldNames::DAG] !== $entry['after']['dag_name'],
+    'the DAG value is not the plan entry\'s dag_name'
+);
+ubep_assert_true(
+    is_numeric($args[FieldNames::DAG]),
+    'the DAG value is numeric -- an id, never a name'
+);
 
 // both fields that travel inside the rights array are present, always:
 // updatePrivileges skips what you do not pass, except data_access_group, which
@@ -42,10 +59,12 @@ ubep_assert_same(
     'the role does not travel inside the rights array'
 );
 
-// an absent value is asserted as empty, not omitted
-$noDag = $entry;
-$noDag['after']['dag_name'] = null;
-$argsNoDag = Applier::argumentsFor($noDag);
+// an absent DAG id (null, meaning resolution found no name to resolve) is
+// asserted as empty, not omitted -- the path that is already correct on the
+// field (cases 3 and 4 of the conformance run) and must not be disturbed by
+// this change. $entry['after']['dag_name'] is irrelevant here: argumentsFor()
+// no longer reads it, the resolved id is the only input that matters.
+$argsNoDag = Applier::argumentsFor($entry, null);
 ubep_assert_true(
     array_key_exists(FieldNames::DAG, $argsNoDag),
     'an absent DAG is still asserted'
@@ -60,7 +79,7 @@ ubep_assert_same(
 // carries, not just the DAG
 $noExpiration = $entry;
 $noExpiration['after']['expiration'] = null;
-$argsNoExpiration = Applier::argumentsFor($noExpiration);
+$argsNoExpiration = Applier::argumentsFor($noExpiration, 5);
 ubep_assert_true(
     array_key_exists(FieldNames::EXPIRATION, $argsNoExpiration),
     'an absent expiration is still asserted'

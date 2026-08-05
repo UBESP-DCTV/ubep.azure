@@ -22,10 +22,23 @@ namespace UbepProvisioning;
  * identifier, resolved from the role name via
  * \ExternalModules\ExternalModules::getRoleId().
  *
- * Three steps, in this order, and the order matters for two different reasons:
- * the name is resolved *before* either write, so a typo or a renamed role
- * fails the whole entry cleanly instead of half-applying the rights and
- * reporting failure; the rights row is then written *before* the role,
+ * The DAG does travel in that array, but as an id, not the name the plan
+ * entry carries. addPrivileges()/updatePrivileges() store data_access_group
+ * straight into group_id, an int column with a foreign key to
+ * redcap_data_access_groups. Passing a name there does not degrade the DAG
+ * alone: non-strict SQL mode coerces the name to 0, no DAG has id 0, and the
+ * foreign key refuses the whole INSERT/UPDATE — the role and the expiration
+ * are lost with it, and the caller sees a bare write refusal that does not
+ * say which field caused it. No framework callable resolves a DAG name to an
+ * id the way getRoleId() resolves a role name — Project::getGroups() and
+ * Project::getUniqueGroupNames() both go id → name, the wrong direction — so
+ * resolveDag() runs its own SELECT against redcap_data_access_groups, same
+ * read style as StateReader.
+ *
+ * Four steps, in this order, and the order matters for two different reasons:
+ * both names are resolved *before* either write, so a typo or a renamed role
+ * or DAG fails the whole entry cleanly instead of half-applying the rights
+ * and reporting failure; the rights row is then written *before* the role,
  * because updateUserRoleMapping is an UPDATE and the row a creation writes
  * has to exist first.
  *
@@ -41,15 +54,20 @@ namespace UbepProvisioning;
  */
 class Applier
 {
-    /** @return array the rights array: the DAG and the expiration, never the role */
-    public static function argumentsFor(array $entry): array
+    /**
+     * @param int|null $dagId the DAG's id, already resolved by the caller —
+     *                        argumentsFor() is pure and cannot look it up
+     *                        itself, since resolution touches the database.
+     *                        null means "no DAG", asserted the same as any
+     *                        other absent field this array carries.
+     * @return array the rights array: the DAG and the expiration, never the role
+     */
+    public static function argumentsFor(array $entry, ?int $dagId): array
     {
-        $after = $entry['after'];
-
         return [
             'username' => (string) $entry['username'],
-            FieldNames::DAG => self::flat($after['dag_name']),
-            FieldNames::EXPIRATION => self::flat($after['expiration']),
+            FieldNames::DAG => self::flat($dagId),
+            FieldNames::EXPIRATION => self::flat($entry['after']['expiration']),
         ];
     }
 
@@ -93,21 +111,31 @@ class Applier
             }
 
             // Resolved before either write touches REDCap: a bad or ambiguous
-            // role name must fail the entry cleanly, not after the rights row
-            // has already been created or updated. Once this step has passed,
-            // the only failure left possible is a write refusal, which cannot
-            // be pre-checked.
-            $resolution = self::resolveRole($entry);
-            if ($resolution['error'] !== null) {
+            // role name, or a bad or ambiguous DAG name, must fail the entry
+            // cleanly, not after the rights row has already been created or
+            // updated. Once both have passed, the only failure left possible
+            // is a write refusal, which cannot be pre-checked.
+            $roleResolution = self::resolveRole($entry);
+            if ($roleResolution['error'] !== null) {
                 $plan[$index] = self::withError(
                     $entry,
-                    $resolution['error']['code'],
-                    $resolution['error']['message']
+                    $roleResolution['error']['code'],
+                    $roleResolution['error']['message']
                 );
                 continue;
             }
 
-            $args = self::argumentsFor($entry);
+            $dagResolution = self::resolveDag($entry);
+            if ($dagResolution['error'] !== null) {
+                $plan[$index] = self::withError(
+                    $entry,
+                    $dagResolution['error']['code'],
+                    $dagResolution['error']['message']
+                );
+                continue;
+            }
+
+            $args = self::argumentsFor($entry, $dagResolution['dagId']);
             $written = $kind === 'create'
                 ? \UserRights::addPrivileges($entry['project_id'], $args)
                 : \UserRights::updatePrivileges($entry['project_id'], $args);
@@ -127,7 +155,7 @@ class Applier
             $written = \UserRights::updateUserRoleMapping(
                 $entry['project_id'],
                 $entry['username'],
-                $resolution['roleId']
+                $roleResolution['roleId']
             );
 
             if ($written === false) {
@@ -198,6 +226,70 @@ class Applier
         // isinteger() is strict about type and would silently treat it as "no
         // role" instead of the id it is.
         return ['roleId' => (int) $roleId, 'error' => null];
+    }
+
+    /**
+     * Resolves after['dag_name'] into a group_id, without writing anything.
+     *
+     * No framework callable does this the way ExternalModules::getRoleId()
+     * does for roles — measured on the target REDCap instance (see the
+     * phase-2 design spec §4) by reading Project::getGroups() and
+     * Project::getUniqueGroupNames(), both of which map id → name, the
+     * opposite direction. So this runs its own read, same style as
+     * StateReader: a direct SELECT against redcap_data_access_groups, not a
+     * prepared statement.
+     *
+     * redcap_data_access_groups carries no uniqueness constraint on
+     * group_name (checked against the schema on the target instance) — the
+     * same gap already handled for role_name — so a second matching row is
+     * treated as ambiguous rather than picked from arbitrarily, the same
+     * choice getRoleId() makes for roles.
+     *
+     * @return array{dagId: int|null, error: array{code: string, message: string}|null}
+     */
+    private static function resolveDag(array $entry): array
+    {
+        $dagName = $entry['after']['dag_name'];
+        if ($dagName === null) {
+            // "No DAG" is asserted later, via an empty string that REDCap
+            // stores as NULL — not skipped — so there is nothing to resolve
+            // here. That path is already correct on the field and stays
+            // untouched.
+            return ['dagId' => null, 'error' => null];
+        }
+
+        $sql = sprintf(
+            "select group_id
+             from redcap_data_access_groups
+             where project_id = %d
+               and group_name = '%s'",
+            (int) $entry['project_id'],
+            db_escape($dagName)
+        );
+        $query = db_query($sql);
+        $row = $query === false ? null : db_fetch_assoc($query);
+
+        if ($row === null) {
+            return [
+                'dagId' => null,
+                'error' => [
+                    'code' => 'DATO_DAG_INESISTENTE',
+                    'message' => "DAG '$dagName' is not defined in this project",
+                ],
+            ];
+        }
+
+        if ($query !== false && db_fetch_assoc($query) !== null) {
+            return [
+                'dagId' => null,
+                'error' => [
+                    'code' => 'INTERNO',
+                    'message' => "DAG name '$dagName' is not unique in this project",
+                ],
+            ];
+        }
+
+        return ['dagId' => (int) $row['group_id'], 'error' => null];
     }
 
     private static function withError(array $entry, string $code, string $message): array
