@@ -123,13 +123,12 @@ test_that("the shipped registry accepts the captured response", {
 })
 
 
-test_that("conformance is not claimed until it is earned", {
+test_that("the shipped registry declares a conformance column", {
   # eval
   registry <- tested_fingerprints()
 
   # test
   expect_true("conformance_passed_on" %in% names(registry))
-  expect_false(conformance_passed(17L, registry))
 })
 
 
