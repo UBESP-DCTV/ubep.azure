@@ -27,15 +27,15 @@ ubep_assert_same('a@example.org', $args['username'], 'username is carried');
 // under non-strict SQL mode, which the foreign key then refuses -- taking
 // the role and the expiration down with it (see Applier's class docblock).
 // argumentsFor() cannot resolve the name itself -- resolution touches the
-// database -- so the caller passes the id in already.
-ubep_assert_same('5', $args[FieldNames::DAG], 'the resolved DAG id travels under FieldNames::DAG');
-ubep_assert_true(
-    $args[FieldNames::DAG] !== $entry['after']['dag_name'],
-    'the DAG value is not the plan entry\'s dag_name'
-);
-ubep_assert_true(
-    is_numeric($args[FieldNames::DAG]),
-    'the DAG value is numeric -- an id, never a name'
+// database -- so the caller passes the id in already. A weaker assertion
+// here (e.g. "!== the plan entry's dag_name", or "is numeric") would be
+// subsumed by this one and unable to fail independently of it, so the
+// discriminating check carries the intent in its own message instead of
+// splitting it across assertions that cannot disagree with each other.
+ubep_assert_same(
+    '5',
+    $args[FieldNames::DAG],
+    "the resolved DAG id ('5'), not the plan entry's dag_name ('centro-01'), travels under FieldNames::DAG"
 );
 
 // both fields that travel inside the rights array are present, always:
@@ -73,6 +73,28 @@ ubep_assert_same(
     '',
     $argsNoDag[FieldNames::DAG],
     'an absent DAG is asserted as empty'
+);
+
+// argumentsFor() above pins only the downstream half of that path: the id
+// resolveDag() would hand it, once resolved. The other half -- that a null
+// dag_name makes resolveDag() return immediately, without ever building the
+// SELECT -- has no coverage yet, and it is the guard that keeps the two
+// DAG-absent cases green on the field without a database call. resolveDag()
+// is private, reached in production only through apply(), which this
+// offline suite cannot exercise (no \UserRights class to receive the write).
+// Reflection is the only way to call it directly: if the null branch were
+// ever removed, this would not fail an assertion, it would fatal on the
+// undefined db_query() -- this offline suite defines none of REDCap's DB
+// functions -- the same fail-loud shape already relied on for revoke()
+// below.
+$resolveDag = new ReflectionMethod(Applier::class, 'resolveDag');
+$resolveDag->setAccessible(true);
+$noDagName = $entry;
+$noDagName['after']['dag_name'] = null;
+ubep_assert_same(
+    ['dagId' => null, 'error' => null],
+    $resolveDag->invoke(null, $noDagName),
+    'resolveDag() short-circuits a null name without touching the database'
 );
 
 // the same absent-is-empty rule applies to the other field this array

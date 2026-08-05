@@ -221,10 +221,16 @@ class Applier
         }
 
         // getRoleId() returns a column value straight out of fetch_assoc(),
-        // whose PHP type the driver does not guarantee to be int. Cast here so
-        // a numeric string never reaches updateUserRoleMapping(), where
-        // isinteger() is strict about type and would silently treat it as "no
-        // role" instead of the id it is.
+        // whose PHP type the driver does not guarantee to be int. Measured on
+        // the target REDCap instance (see the phase-2 design spec §4):
+        // isinteger() stringifies its argument before matching it against
+        // /^[-+]?\b\d+\b$/, so a numeric string is accepted on the same terms
+        // as an int -- '5' passes exactly like 5 -- but a leading zero is
+        // not: '05' fails where '5' does not. Casting to int here is not
+        // about numeric strings, which isinteger() already accepts; it is
+        // about guaranteeing the one canonical shape isinteger() is
+        // guaranteed to accept, whatever shape the driver actually handed
+        // back.
         return ['roleId' => (int) $roleId, 'error' => null];
     }
 
@@ -244,6 +250,12 @@ class Applier
      * same gap already handled for role_name — so a second matching row is
      * treated as ambiguous rather than picked from arbitrarily, the same
      * choice getRoleId() makes for roles.
+     *
+     * A failed read is not the same fact as a name that legitimately does
+     * not exist, and is reported as INTERNO rather than DATO_DAG_INESISTENTE
+     * — collapsing the two would tell the requester their data is wrong when
+     * the database is, the same misattribution the role path (resolveRole())
+     * already avoids by catching getRoleId()'s exception separately.
      *
      * @return array{dagId: int|null, error: array{code: string, message: string}|null}
      */
@@ -267,9 +279,23 @@ class Applier
             db_escape($dagName)
         );
         $query = db_query($sql);
-        $row = $query === false ? null : db_fetch_assoc($query);
+        if ($query === false) {
+            return [
+                'dagId' => null,
+                'error' => [
+                    'code' => 'INTERNO',
+                    'message' => "could not resolve DAG name '$dagName': the read failed",
+                ],
+            ];
+        }
 
-        if ($row === null) {
+        // Falsy, not strictly null: same convention as StateReader's
+        // `while ($row = db_fetch_assoc($query))`, which does not assume the
+        // exhausted-cursor value is exactly null. Matching it here means
+        // this does not depend on a return shape that was only ever measured
+        // once.
+        $row = db_fetch_assoc($query);
+        if (!$row) {
             return [
                 'dagId' => null,
                 'error' => [
@@ -279,7 +305,7 @@ class Applier
             ];
         }
 
-        if ($query !== false && db_fetch_assoc($query) !== null) {
+        if (db_fetch_assoc($query)) {
             return [
                 'dagId' => null,
                 'error' => [
