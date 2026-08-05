@@ -31,13 +31,17 @@ parse_module_response <- function(body, status, accepted = c(1L, 2L)) {
     return(utils::modifyList(empty, list(errors = "TRASPORTO_MODULO_ASSENTE")))
   }
 
-  # suppressWarnings, because a contract version that is not a number at all
-  # is a mismatch and not something to warn about on the way to saying so.
-  declared <- suppressWarnings(as.integer(payload[["contract_version"]]))
-  if (
-    length(declared) != 1L || is.na(declared) ||
-      !declared %in% as.integer(accepted)
-  ) {
+  # The shape is checked before the coercion, never after it. The declared
+  # value arrives from JSON and may be anything, and `as.integer()` hides two
+  # malformed shapes rather than rejecting them: it collapses a one-element
+  # list to a scalar, so `[2]` would read as 2, and it truncates silently, so
+  # 2.9 would read as 2. Both would then be accepted as a valid contract —
+  # which is the one outcome this check exists to prevent.
+  raw <- payload[["contract_version"]]
+  well_formed <- is.numeric(raw) && length(raw) == 1L &&
+    !is.na(raw) && raw == trunc(raw)
+
+  if (!well_formed || !as.integer(raw) %in% as.integer(accepted)) {
     return(utils::modifyList(
       empty,
       list(errors = "TRASPORTO_CONTRATTO_DISALLINEATO", payload = payload)

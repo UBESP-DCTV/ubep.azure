@@ -147,3 +147,33 @@ test_that("an uninterpretable contract version is a mismatch, not a crash", {
   expect_false(parsed[["ok"]])
   expect_equal(parsed[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
 })
+
+
+test_that("a coerced-looking contract version is still a mismatch", {
+  # eval
+  # `as.integer()` collapses a one-element list to a scalar, so a JSON array
+  # `[2]` would read as 2 even though a well-formed declaration is never a
+  # list. Coercion hides the shape violation instead of rejecting it.
+  singleton_array <- parse_module_response(
+    '{"contract_version": [2]}', status = 200L, accepted = 2L
+  )
+  # `as.integer()` truncates without warning, so 2.9 would read as 2 - a
+  # different number pretending to be the one that was declared accepted.
+  fractional <- parse_module_response(
+    '{"contract_version": 2.9}', status = 200L, accepted = 2L
+  )
+  # `as.integer()` also coerces a numeric string silently, so "2" would read
+  # as 2 - the module is expected to declare a number, not a string shaped
+  # like one.
+  numeric_string <- parse_module_response(
+    '{"contract_version": "2"}', status = 200L, accepted = 2L
+  )
+
+  # test
+  expect_false(singleton_array[["ok"]])
+  expect_equal(singleton_array[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+  expect_false(fractional[["ok"]])
+  expect_equal(fractional[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+  expect_false(numeric_string[["ok"]])
+  expect_equal(numeric_string[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+})
