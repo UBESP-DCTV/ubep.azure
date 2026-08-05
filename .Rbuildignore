@@ -14,3 +14,4 @@
 ^pkgdown$
 ^\.claude$
 ^CLAUDE\.md$
+^\.superpowers$
