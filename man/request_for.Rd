@@ -24,7 +24,7 @@ an absent key is different from an asserted absence. Every case in
 correct on the expectation side that \code{compare_readback()} reads, but wrong
 on the wire: \code{utils::modifyList()} drops a \code{NULL}-valued key instead of
 setting it, and even a key that did survive with a \code{NULL} value would
-serialize through \code{httr2::req_body_json(auto_unbox = TRUE)} as \code{{}}, not
+serialize through \code{httr2::req_body_json(auto_unbox = TRUE)} as \code{null}, not
 \code{""}. So this is the one place a \code{NULL} in \code{assert} becomes the explicit
 empty string the channel elsewhere asserts an absence as.
 }

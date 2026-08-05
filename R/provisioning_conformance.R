@@ -113,7 +113,7 @@ compare_readback <- function(expected, actual) {
 #' correct on the expectation side that `compare_readback()` reads, but wrong
 #' on the wire: `utils::modifyList()` drops a `NULL`-valued key instead of
 #' setting it, and even a key that did survive with a `NULL` value would
-#' serialize through `httr2::req_body_json(auto_unbox = TRUE)` as `{}`, not
+#' serialize through `httr2::req_body_json(auto_unbox = TRUE)` as `null`, not
 #' `""`. So this is the one place a `NULL` in `assert` becomes the explicit
 #' empty string the channel elsewhere asserts an absence as.
 #'
