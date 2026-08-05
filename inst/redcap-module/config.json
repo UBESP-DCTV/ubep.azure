@@ -1,7 +1,7 @@
 {
   "name": "UBEP provisioning",
   "namespace": "UBEP\\Provisioning",
-  "description": "Canale di autorizzazione: legge e riconcilia i diritti di progetto assegnati dal provisioning UBEP. In questa versione opera in sola lettura.",
+  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. In questa versione la scrittura e' confinata ai progetti elencati qui sotto in 'Progetti di prova': con la lista vuota ogni scrittura e' rifiutata.",
   "authors": [
     {
       "name": "Corrado Lanera",
@@ -22,6 +22,12 @@
     {
       "key": "ip-allow-list",
       "name": "Indirizzi IP ammessi, uno per riga",
+      "required": true,
+      "type": "textarea"
+    },
+    {
+      "key": "test-project-ids",
+      "name": "Progetti di prova su cui la scrittura e' ammessa, uno per riga",
       "required": true,
       "type": "textarea"
     }

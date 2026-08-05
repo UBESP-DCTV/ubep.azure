@@ -8,3 +8,6 @@ docs
 # Claude locale
 .claude/settings.local.json
 .claude/**/__pycache__/
+
+# scratch di lavoro degli agenti (ledger, brief, pacchetti di review)
+.superpowers/

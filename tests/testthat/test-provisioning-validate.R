@@ -56,21 +56,6 @@ test_that("validate_request reports data errors by code", {
 })
 
 
-test_that("an expiration of today is already refused", {
-  # eval
-  today <- validate_request(list(
-    username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
-    expiration = as.character(Sys.Date())
-  ))
-
-  # test
-  # REDCap applies `expiration <= TODAY`, so the day written is already out:
-  # accepting today would grant an access that never happens.
-  expect_true("DATO_SCADENZA_NON_VALIDA" %in% today)
-})
-
-
 test_that("validate_request only ever returns data codes", {
   # eval
   every_error <- validate_request(list(
@@ -85,4 +70,74 @@ test_that("validate_request only ever returns data codes", {
   # is by recipient, and everything decidable here belongs to the requester.
   expect_length(every_error, 3L)
   expect_true(all(grepl("^DATO_", every_error)))
+})
+
+
+test_that("intake_request converts the expiration to the REDCap value", {
+  # eval
+  # A plain future date, away from the today/yesterday boundary covered
+  # below: relative to Sys.Date() so the fixture never expires.
+  last_day <- Sys.Date() + 30L
+  taken <- intake_request(list(
+    username = "mario.rossi@ubep.unipd.it",
+    project_id = 27L,
+    role_name = "data entry",
+    expiration = as.character(last_day)
+  ))
+
+  # test
+  # The request says the last day of access; REDCap denies from the day it
+  # holds, so the value written is the day after.
+  expect_equal(taken[["errors"]], character())
+  expect_equal(
+    taken[["request"]][["expiration"]],
+    as.character(last_day + 1L)
+  )
+})
+
+
+test_that("a request without an expiration keeps none", {
+  # eval
+  taken <- intake_request(list(
+    username = "mario.rossi@ubep.unipd.it", project_id = 27L
+  ))
+
+  # test
+  expect_equal(taken[["errors"]], character())
+  expect_null(taken[["request"]][["expiration"]])
+})
+
+
+test_that("an invalid request yields errors and no request at all", {
+  # eval
+  taken <- intake_request(list(username = "not-an-upn", project_id = "abc"))
+
+  # test
+  # There is no door that returns an unconverted request: a caller cannot get
+  # the validation without the conversion, so the conversion cannot be skipped.
+  expect_true("DATO_UTENTE_NON_VALIDO" %in% taken[["errors"]])
+  expect_null(taken[["request"]])
+})
+
+
+test_that("today is a valid last day of access", {
+  # eval
+  today <- intake_request(list(
+    username = "mario.rossi@ubep.unipd.it",
+    project_id = 27L,
+    expiration = as.character(Sys.Date())
+  ))
+  yesterday <- intake_request(list(
+    username = "mario.rossi@ubep.unipd.it",
+    project_id = 27L,
+    expiration = as.character(Sys.Date() - 1)
+  ))
+
+  # test
+  # This reverses the phase one rule, and it is a unit correction rather than a
+  # loosening: a last day of access of today becomes a REDCap value of tomorrow,
+  # so today's access exists. Yesterday is still past.
+  expect_equal(today[["errors"]], character())
+  expect_equal(today[["request"]][["expiration"]], as.character(Sys.Date() + 1))
+  expect_true("DATO_SCADENZA_NON_VALIDA" %in% yesterday[["errors"]])
 })
