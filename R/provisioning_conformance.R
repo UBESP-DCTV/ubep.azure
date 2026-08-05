@@ -181,13 +181,23 @@ request_for <- function(username, project_id, assert) {
 #' same default resolves inside the installation library instead, and the
 #' date never reaches the repository — no error, just nothing to commit.
 #'
+#' The test project must already define every role and data access group
+#' the cases name, because the channel asserts memberships and does not
+#' create them: a role or a DAG that is not there is a data error the
+#' instance returns, not something this run can provision on the way past.
+#' Read `conformance_cases()` for the exact names, and check them against
+#' the project before running — a missing role surfaces as a
+#' `DATO_RUOLO_INESISTENTE` on one case, which reads like a conformance
+#' failure and is not one.
+#'
 #' Server, secret, project and usernames come from the caller: this
 #' repository is public and none of them may appear in it.
 #'
 #' @param server Hostname, optionally with the path REDCap is mounted under.
 #' @param secret Shared secret.
 #' @param project_id Test project; writes are refused outside the module's
-#'   configured test projects.
+#'   configured test projects. Must already define the roles and the data
+#'   access group the cases name — see the note above.
 #' @param username Test account to assert rights for. Must hold no rights
 #'   in `project_id` before the run starts — see the note on step 5 above.
 #' @param registry_path CSV to record the outcome in. See the note above on

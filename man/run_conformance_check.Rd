@@ -19,7 +19,8 @@ run_conformance_check(
 \item{secret}{Shared secret.}
 
 \item{project_id}{Test project; writes are refused outside the module's
-configured test projects.}
+configured test projects. Must already define the roles and the data
+access group the cases name — see the note above.}
 
 \item{username}{Test account to assert rights for. Must hold no rights
 in \code{project_id} before the run starts — see the note on step 5 above.}
@@ -82,6 +83,15 @@ inside the source tree, so a passing run is written where the next task's
 \verb{git add} can see it. Run against an installed copy of the package, the
 same default resolves inside the installation library instead, and the
 date never reaches the repository — no error, just nothing to commit.
+
+The test project must already define every role and data access group
+the cases name, because the channel asserts memberships and does not
+create them: a role or a DAG that is not there is a data error the
+instance returns, not something this run can provision on the way past.
+Read \code{conformance_cases()} for the exact names, and check them against
+the project before running — a missing role surfaces as a
+\code{DATO_RUOLO_INESISTENTE} on one case, which reads like a conformance
+failure and is not one.
 
 Server, secret, project and usernames come from the caller: this
 repository is public and none of them may appear in it.
