@@ -144,7 +144,16 @@ if ($gate === VersionGate::BELOW) {
 $requests = [];
 $malformed = [];
 foreach (($body['requests'] ?? []) as $request) {
-    if (isset($request['username'], $request['project_id'])) {
+    // Both isset() and is_scalar(): a username or project_id present but
+    // non-scalar (an array, say) must not reach the (string)/(int) casts
+    // below, for the same reason explained under role_name -- a PHP warning
+    // ahead of the JSON body, headers already sent, output unbuffered. Such
+    // a request falls through to the malformed branch instead.
+    if (
+        isset($request['username'], $request['project_id'])
+        && is_scalar($request['username'])
+        && is_scalar($request['project_id'])
+    ) {
         $requests[] = [
             'username' => (string) $request['username'],
             'project_id' => (int) $request['project_id'],
@@ -174,10 +183,10 @@ foreach (($body['requests'] ?? []) as $request) {
     // considered. Whatever the request did supply is carried through so the
     // caller can identify which row this was.
     $missing = [];
-    if (!isset($request['username'])) {
+    if (!isset($request['username']) || !is_scalar($request['username'])) {
         $missing[] = 'username';
     }
-    if (!isset($request['project_id'])) {
+    if (!isset($request['project_id']) || !is_scalar($request['project_id'])) {
         $missing[] = 'project_id';
     }
     $malformed[] = [
@@ -190,7 +199,7 @@ foreach (($body['requests'] ?? []) as $request) {
         'after' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
         'errors' => [[
             'code' => 'DATO_UTENTE_NON_VALIDO',
-            'message' => implode(', ', $missing) . ' missing or null',
+            'message' => implode(', ', $missing) . ' missing, null or not scalar',
         ]],
     ];
 }
@@ -209,9 +218,14 @@ if ($operation === 'state') {
 
 if ($operation !== 'apply' && $operation !== 'revoke') {
     http_response_code(501);
+    // Interpolating a non-scalar $operation (an array, say) would raise the
+    // same "ahead of the JSON body" warning explained above, so it is named
+    // only when it is safe to turn into a string.
     $response['errors'][] = [
         'code' => 'INTERNO',
-        'message' => "operation '$operation' is not implemented in this version",
+        'message' => 'operation '
+            . (is_scalar($operation) ? "'" . $operation . "'" : '(not a string)')
+            . ' is not implemented in this version',
     ];
     echo json_encode($response, JSON_UNESCAPED_SLASHES);
     exit;
