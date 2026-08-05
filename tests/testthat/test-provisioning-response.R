@@ -94,3 +94,56 @@ test_that("a non-200 status with nothing reported is an internal error", {
   expect_false(parsed[["ok"]])
   expect_equal(parsed[["errors"]], "INTERNO")
 })
+
+
+test_that("a read accepts either contract version", {
+  # eval
+  one <- parse_module_response(
+    '{"contract_version": 1, "version_gate": "collaudata"}',
+    status = 200L
+  )
+  two <- parse_module_response(
+    '{"contract_version": 2, "version_gate": "collaudata"}',
+    status = 200L
+  )
+
+  # test
+  # The audit exists to say what state the fleet is in, and a partial
+  # deployment would blind it precisely on the instances left behind, which
+  # are the only ones worth knowing about.
+  expect_true(one[["ok"]])
+  expect_true(two[["ok"]])
+})
+
+
+test_that("a write accepts only the contract that can enforce the handshake", {
+  # eval
+  one <- parse_module_response(
+    '{"contract_version": 1, "version_gate": "collaudata"}',
+    status = 200L, accepted = 2L
+  )
+  two <- parse_module_response(
+    '{"contract_version": 2, "version_gate": "collaudata"}',
+    status = 200L, accepted = 2L
+  )
+
+  # test
+  expect_false(one[["ok"]])
+  expect_equal(one[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+  expect_true(two[["ok"]])
+})
+
+
+test_that("an uninterpretable contract version is a mismatch, not a crash", {
+  # eval
+  # as.integer("abc") is NA with a warning, and NA %in% accepted is FALSE, so
+  # the branch is right by accident; asserted here so it stays right on
+  # purpose.
+  parsed <- parse_module_response(
+    '{"contract_version": "abc"}', status = 200L
+  )
+
+  # test
+  expect_false(parsed[["ok"]])
+  expect_equal(parsed[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+})

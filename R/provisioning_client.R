@@ -64,9 +64,14 @@ module_call <- function(server,
     ))
   }
 
+  # A dry run counts as a read: it changes nothing, and rollout point 1 is
+  # "dry_run only, over everything", which a stricter rule would cancel.
+  writing <- !dry_run && operation %in% c("apply", "revoke")
+
   parsed <- parse_module_response(
     httr2::resp_body_string(response),
-    status = httr2::resp_status(response)
+    status = httr2::resp_status(response),
+    accepted = if (writing) 2L else c(1L, 2L)
   )
 
   # No payload means no major and no fingerprint, so any gate here would be

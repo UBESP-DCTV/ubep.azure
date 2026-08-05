@@ -1,0 +1,34 @@
+{
+  "server": "redcap.example.org",
+  "redcap_version": "17.0.6",
+  "redcap_major": 17,
+  "module_version": "0.3.0",
+  "contract_version": 2,
+  "version_gate": "collaudata",
+  "surface_fingerprint": "16faf46d5ab1",
+  "dry_run": true,
+  "results": [
+    {
+      "username": "pinco.pallino@example.org",
+      "project_id": 16,
+      "role_name": "Superuser",
+      "dag_name": null,
+      "expiration": null
+    },
+    {
+      "username": "ciccio.pasticcio@example.org",
+      "project_id": 16,
+      "role_name": "data entry",
+      "dag_name": "centro-01",
+      "expiration": "2026-12-31"
+    },
+    {
+      "username": "mario.rossi@example.org",
+      "project_id": 27,
+      "role_name": null,
+      "dag_name": null,
+      "expiration": null
+    }
+  ],
+  "summary": { "letti": 3 }
+}

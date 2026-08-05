@@ -307,3 +307,70 @@ test_that("all three operations share one base normalisation", {
   expect_length(unique(seen), 1L)
   expect_true(startsWith(seen[[1]], "https://host.example.org/redcap/api/?"))
 })
+
+
+test_that("a write against a contract 1 module is refused", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+      )),
+      dry_run = FALSE
+    )
+  )
+
+  # test
+  # A module that predates the handshake cannot enforce it, so a write must
+  # fail closed against it. The same module answers reads normally.
+  expect_false(result[["ok"]])
+  expect_equal(result[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+})
+
+
+test_that("a read against a contract 1 module still answers", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_state(
+      "redcap.example.org", "s3cret",
+      pairs = list(
+        list(username = "mario.rossi@ubep.unipd.it", project_id = 27L)
+      )
+    )
+  )
+
+  # test
+  expect_true(result[["ok"]])
+})
+
+
+test_that("a dry run is a read for contract purposes", {
+  # eval
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response.json")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+      ))
+    )
+  )
+
+  # test
+  # Rollout point 1 is "dry_run only, over everything": a simulation that
+  # refused to answer on the instances still to be upgraded would cancel the
+  # step that exists to look before touching.
+  expect_true(result[["ok"]])
+})

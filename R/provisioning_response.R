@@ -10,12 +10,15 @@
 #'
 #' @param body Raw response body.
 #' @param status HTTP status code.
+#' @param accepted Integer vector of contract versions this call tolerates.
+#'   Reads pass both, a write passes only the one that can enforce the surface
+#'   handshake — a module that predates it would accept the write and simply
+#'   ignore the declaration.
 #'
 #' @return A list with `ok`, `errors` and `payload`.
 #'
 #' @keywords internal
-parse_module_response <- function(body, status) {
-  expected_contract <- 1L
+parse_module_response <- function(body, status, accepted = c(1L, 2L)) {
   empty <- list(ok = FALSE, errors = character(), payload = NULL)
 
   payload <- tryCatch(
@@ -28,10 +31,12 @@ parse_module_response <- function(body, status) {
     return(utils::modifyList(empty, list(errors = "TRASPORTO_MODULO_ASSENTE")))
   }
 
-  contract <- payload[["contract_version"]]
+  # suppressWarnings, because a contract version that is not a number at all
+  # is a mismatch and not something to warn about on the way to saying so.
+  declared <- suppressWarnings(as.integer(payload[["contract_version"]]))
   if (
-    is.null(contract) ||
-      !identical(as.integer(contract), expected_contract)
+    length(declared) != 1L || is.na(declared) ||
+      !declared %in% as.integer(accepted)
   ) {
     return(utils::modifyList(
       empty,

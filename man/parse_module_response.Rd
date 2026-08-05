@@ -4,12 +4,17 @@
 \alias{parse_module_response}
 \title{Interpret a response from the provisioning module}
 \usage{
-parse_module_response(body, status)
+parse_module_response(body, status, accepted = c(1L, 2L))
 }
 \arguments{
 \item{body}{Raw response body.}
 
 \item{status}{HTTP status code.}
+
+\item{accepted}{Integer vector of contract versions this call tolerates.
+Reads pass both, a write passes only the one that can enforce the surface
+handshake — a module that predates it would accept the write and simply
+ignore the declaration.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{payload}.
