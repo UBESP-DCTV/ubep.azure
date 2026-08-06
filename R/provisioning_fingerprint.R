@@ -4,13 +4,20 @@
 #' empty fingerprint are dropped: a placeholder must not be able to certify an
 #' instance as tested.
 #'
+#' @param path Registry CSV. Defaults to the one shipped with the package, but
+#'   a conformance run must be able to point this at the same registry it is
+#'   about to write to: with a custom `registry_path`, the shipped file is not
+#'   the one that matters, and reading from it while writing to another would
+#'   declare one registry's surfaces while stamping a different one — an
+#'   accepted pairing nobody actually measured.
+#'
 #' @return A data frame with `redcap_major` and `fingerprint`.
 #'
 #' @keywords internal
-tested_fingerprints <- function() {
-  path <- system.file(
-    "extdata", "tested-fingerprints.csv", package = "ubep.azure"
-  )
+tested_fingerprints <- function(path = system.file(
+  "extdata", "tested-fingerprints.csv",
+  package = "ubep.azure"
+)) {
   registry <- readr::read_csv(path, show_col_types = FALSE)
 
   keep <- !is.na(registry[["fingerprint"]]) &

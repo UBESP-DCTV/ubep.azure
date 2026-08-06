@@ -4,7 +4,17 @@
 \alias{tested_fingerprints}
 \title{Fingerprints of REDCap surfaces this client has been tested against}
 \usage{
-tested_fingerprints()
+tested_fingerprints(
+  path = system.file("extdata", "tested-fingerprints.csv", package = "ubep.azure")
+)
+}
+\arguments{
+\item{path}{Registry CSV. Defaults to the one shipped with the package, but
+a conformance run must be able to point this at the same registry it is
+about to write to: with a custom \code{registry_path}, the shipped file is not
+the one that matters, and reading from it while writing to another would
+declare one registry's surfaces while stamping a different one — an
+accepted pairing nobody actually measured.}
 }
 \value{
 A data frame with \code{redcap_major} and \code{fingerprint}.

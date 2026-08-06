@@ -169,11 +169,19 @@ request_for <- function(username, project_id, assert) {
 #' list of fields — the same vocabulary `module_call()` already uses for a
 #' failure that is not the instance's answer.
 #'
-#' If the instance itself does not answer the baseline read — no payload,
-#' so no major — the run stops right there: every later step compares
-#' against a baseline and a major that were never established, so
+#' If the instance itself does not answer the baseline read — no payload, so
+#' no major and no fingerprint — the run stops right there: every later step
+#' compares against a baseline and a pair that were never established, so
 #' continuing would measure nothing and could still send further requests
 #' to a server already known to be unreachable.
+#'
+#' The run declares the **measured** fingerprints, not the certified ones,
+#' and must: the surface it is about to certify has no conformance date yet
+#' by definition. Requiring one would recreate the ordering trap the ceiling
+#' already has — the gate would force `dry_run`, the run could not write, and
+#' the date could never be earned. The ordinary caller declares the certified
+#' list instead, so that a row added after a bare `state` does not reopen
+#' writes on a surface nobody ran this check against.
 #'
 #' Run under `devtools::load_all()`, `registry_path`'s default resolves
 #' inside the source tree, so a passing run is written where the next task's
@@ -227,6 +235,17 @@ run_conformance_check <- function(server,
   steps <- list()
   differences <- character()
 
+  # The measured list, not the certified one: the surface this run is about
+  # to certify has no conformance date yet by definition, so declaring the
+  # certified list here would recreate the ordering trap the ceiling already
+  # has. See the roxygen above for the full reasoning.
+  #
+  # Read from the same registry this run will write to. With a custom
+  # registry_path the shipped file is not the one that matters, and a run
+  # that declared one registry's surfaces while stamping another's would be
+  # certifying a pairing nobody measured.
+  measured <- as.character(tested_fingerprints(registry_path)[["fingerprint"]])
+
   note_transport <- function(label, response) {
     paste0(
       label, ": TRASPORTO (",
@@ -242,14 +261,21 @@ run_conformance_check <- function(server,
   # stashing them in the enclosing scope: every call site that needs the
   # major or the raw errors reads it off this return value instead.
   read_state <- function() {
-    answer <- module_state(server, secret, pairs = pair)
+    # module_state() does not need the handshake -- reads aren't subject to
+    # it -- but passing declare = measured costs nothing and keeps every
+    # call in this function uniform, which is cheaper than explaining why
+    # one call site is the exception.
+    answer <- module_state(server, secret, pairs = pair, declare = measured)
     rows <- answer[["payload"]][["results"]]
     list(
       row = if (length(rows) == 0L) NULL else rows[[1]],
-      # The major is taken from the instance, never assumed: recording a
-      # run under the wrong major is how a conformance date would certify
-      # something nobody tested.
+      # Major and fingerprint both come from the instance, never assumed:
+      # recording a run under the wrong pair is how a conformance date would
+      # certify something nobody tested.
       major = as.integer(answer[["payload"]][["redcap_major"]]),
+      fingerprint = as.character(
+        answer[["payload"]][["surface_fingerprint"]] %||% NA_character_
+      ),
       answer = answer
     )
   }
@@ -276,11 +302,13 @@ run_conformance_check <- function(server,
   baseline_state <- read_state()
   baseline <- baseline_state[["row"]]
   major <- baseline_state[["major"]]
+  fingerprint <- baseline_state[["fingerprint"]]
   # length() first: as.integer(NULL) is integer(0), and is.na() on a
   # zero-length value returns logical(0), which makes && raise in R >= 4.3
   # instead of reporting the one condition this step exists to catch.
   steps[["instance_answered"]] <-
-    length(major) == 1L && !is.na(major)
+    length(major) == 1L && !is.na(major) &&
+    length(fingerprint) == 1L && !is.na(fingerprint)
 
   if (!isTRUE(steps[["instance_answered"]])) {
     return(invisible(list(
@@ -296,7 +324,9 @@ run_conformance_check <- function(server,
   dry_requests <- list(
     request_for(username, project_id, first_case[["assert"]])
   )
-  dry_response <- module_apply(server, secret, dry_requests, dry_run = TRUE)
+  dry_response <- module_apply(
+    server, secret, dry_requests, dry_run = TRUE, declare = measured
+  )
 
   if (isTRUE(dry_response[["ok"]])) {
     dry_run_verdict <- reread_and_compare(baseline)
@@ -324,7 +354,9 @@ run_conformance_check <- function(server,
 
   for (case in conformance_cases()) {
     requests <- list(request_for(username, project_id, case[["assert"]]))
-    apply_response <- module_apply(server, secret, requests, dry_run = FALSE)
+    apply_response <- module_apply(
+      server, secret, requests, dry_run = FALSE, declare = measured
+    )
 
     if (!isTRUE(apply_response[["ok"]])) {
       steps[[case[["name"]]]] <- FALSE
@@ -350,7 +382,9 @@ run_conformance_check <- function(server,
   # revoke is the only cleanup step, so a case failing above must not skip
   # it. It does not restore anything it did not find empty — see the
   # roxygen above.
-  revoke_response <- module_revoke(server, secret, pair, dry_run = FALSE)
+  revoke_response <- module_revoke(
+    server, secret, pair, dry_run = FALSE, declare = measured
+  )
 
   if (isTRUE(revoke_response[["ok"]])) {
     restored_verdict <- reread_and_compare(baseline)
@@ -376,7 +410,10 @@ run_conformance_check <- function(server,
     # replace the whole return value with a stack trace.
     record_error <- tryCatch(
       {
-        record_conformance(registry_path, major = major, on = Sys.Date())
+        record_conformance(
+          registry_path,
+          major = major, fingerprint = fingerprint, on = Sys.Date()
+        )
         NULL
       },
       error = function(e) conditionMessage(e)
@@ -407,29 +444,42 @@ run_conformance_check <- function(server,
 #' add` can see it, while against an installed copy it lands in the
 #' installation library instead and never reaches the repository.
 #'
-#' Raises when `major` matches no row: assigning into a `[` index that is
+#' Raises when the pair matches no row: assigning into a `[` index that is
 #' all `FALSE` is a silent no-op in R, and `write_csv()` would then rewrite
-#' the file unchanged. A run against a major the registry has never heard
+#' the file unchanged. A run against a pair the registry has never heard
 #' of is precisely the case this mechanism exists for, and it must not be
 #' indistinguishable from a run that actually recorded a date.
 #'
 #' @param path Registry CSV.
 #' @param major REDCap major the run covered.
+#' @param fingerprint Surface fingerprint the run covered, read from the
+#'   instance's own answer. The key is the pair, not the major: a major can
+#'   hold more than one surface — an upgrade inside it changes the fingerprint
+#'   and leaves the major alone — and stamping every row of a major would
+#'   certify a surface nobody tested.
 #' @param on Date of the run.
 #'
 #' @return The updated registry, invisibly.
 #'
 #' @keywords internal
-record_conformance <- function(path, major, on) {
+record_conformance <- function(path, major, fingerprint, on) {
   registry <- readr::read_csv(path, show_col_types = FALSE)
-  matched <- registry[["redcap_major"]] == major
+
+  # NA-safe on both columns: `NA == x` is NA, and `any()` over an NA would
+  # make the guard below raise for the wrong reason.
+  matched <- !is.na(registry[["redcap_major"]]) &
+    registry[["redcap_major"]] == major &
+    !is.na(registry[["fingerprint"]]) &
+    registry[["fingerprint"]] == fingerprint
+
   if (!any(matched)) {
     stop(
       "record_conformance(): no row for redcap_major = ", major,
-      " in ", path,
+      " and fingerprint = ", fingerprint, " in ", path,
       call. = FALSE
     )
   }
+
   registry[["conformance_passed_on"]][matched] <- as.character(on)
   readr::write_csv(registry, path)
 

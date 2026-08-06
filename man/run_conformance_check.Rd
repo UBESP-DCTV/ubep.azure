@@ -72,11 +72,19 @@ errors are recorded in \code{differences} prefixed \code{TRASPORTO}, instead of 
 list of fields — the same vocabulary \code{module_call()} already uses for a
 failure that is not the instance's answer.
 
-If the instance itself does not answer the baseline read — no payload,
-so no major — the run stops right there: every later step compares
-against a baseline and a major that were never established, so
+If the instance itself does not answer the baseline read — no payload, so
+no major and no fingerprint — the run stops right there: every later step
+compares against a baseline and a pair that were never established, so
 continuing would measure nothing and could still send further requests
 to a server already known to be unreachable.
+
+The run declares the \strong{measured} fingerprints, not the certified ones,
+and must: the surface it is about to certify has no conformance date yet
+by definition. Requiring one would recreate the ordering trap the ceiling
+already has — the gate would force \code{dry_run}, the run could not write, and
+the date could never be earned. The ordinary caller declares the certified
+list instead, so that a row added after a bare \code{state} does not reopen
+writes on a surface nobody ran this check against.
 
 Run under \code{devtools::load_all()}, \code{registry_path}'s default resolves
 inside the source tree, so a passing run is written where the next task's

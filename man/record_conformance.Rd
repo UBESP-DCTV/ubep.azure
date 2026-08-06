@@ -4,12 +4,18 @@
 \alias{record_conformance}
 \title{Record a passed conformance run in the registry}
 \usage{
-record_conformance(path, major, on)
+record_conformance(path, major, fingerprint, on)
 }
 \arguments{
 \item{path}{Registry CSV.}
 
 \item{major}{REDCap major the run covered.}
+
+\item{fingerprint}{Surface fingerprint the run covered, read from the
+instance's own answer. The key is the pair, not the major: a major can
+hold more than one surface — an upgrade inside it changes the fingerprint
+and leaves the major alone — and stamping every row of a major would
+certify a surface nobody tested.}
 
 \item{on}{Date of the run.}
 }
@@ -27,9 +33,9 @@ caveat applies here: under \code{devtools::load_all()} the default resolves
 inside the source tree and the write lands where the next task's \verb{git add} can see it, while against an installed copy it lands in the
 installation library instead and never reaches the repository.
 
-Raises when \code{major} matches no row: assigning into a \code{[} index that is
+Raises when the pair matches no row: assigning into a \code{[} index that is
 all \code{FALSE} is a silent no-op in R, and \code{write_csv()} would then rewrite
-the file unchanged. A run against a major the registry has never heard
+the file unchanged. A run against a pair the registry has never heard
 of is precisely the case this mechanism exists for, and it must not be
 indistinguishable from a run that actually recorded a date.
 }

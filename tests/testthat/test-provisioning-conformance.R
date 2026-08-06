@@ -120,7 +120,9 @@ test_that("record_conformance writes the date on the matching major only", {
   # as.character() before comparing; matching that here rather than
   # asserting against a Date keeps this test about record_conformance(),
   # not about readr's type guessing.
-  record_conformance(path, major = 18L, on = as.Date("2026-08-01"))
+  record_conformance(
+    path, major = 18L, fingerprint = "aaaabbbbcccc", on = as.Date("2026-08-01")
+  )
   written <- readr::read_csv(path, show_col_types = FALSE)
   passed_on <- as.character(written[["conformance_passed_on"]])
   expect_equal(passed_on[written[["redcap_major"]] == 18L], "2026-08-01")
@@ -144,5 +146,108 @@ test_that("record_conformance refuses to write silently for an unknown major", {
   # guard, a run against a major the registry has never heard of — the
   # exact case this mechanism exists for — would report success and write
   # nothing, indistinguishable from a run that actually recorded a date.
-  expect_error(record_conformance(path, major = 21L, on = Sys.Date()))
+  expect_error(
+    record_conformance(
+      path, major = 21L, fingerprint = "abc123def456", on = Sys.Date()
+    )
+  )
+})
+
+
+test_that("a conformance stamps one surface, not every row of its major", {
+  # eval
+  path <- withr::local_tempfile(fileext = ".csv")
+  readr::write_csv(
+    data.frame(
+      redcap_major = c(17L, 17L),
+      fingerprint = c("vecchia", "nuova"),
+      tested_on = c("2026-08-01", "2026-09-10"),
+      conformance_passed_on = NA_character_,
+      note = c("17.0.6", "17.3.3"),
+      stringsAsFactors = FALSE
+    ),
+    path
+  )
+
+  # test
+  # A3 takes edc10 from 17.0.6 to 17.3.3: same major, new surface, second row.
+  # Keyed on the major alone, a conformance passed on one would certify the
+  # other, which nobody ran.
+  record_conformance(
+    path, major = 17L, fingerprint = "nuova", on = "2026-09-11"
+  )
+  written <- readr::read_csv(path, show_col_types = FALSE)
+  stamped <- as.character(written[["conformance_passed_on"]])
+
+  expect_true(is.na(stamped[[1]]))
+  expect_equal(stamped[[2]], "2026-09-11")
+})
+
+
+test_that("a conformance on an unknown surface raises", {
+  # eval
+  path <- withr::local_tempfile(fileext = ".csv")
+  readr::write_csv(
+    data.frame(
+      redcap_major = 17L, fingerprint = "nota",
+      tested_on = "2026-08-01", conformance_passed_on = NA_character_,
+      note = "", stringsAsFactors = FALSE
+    ),
+    path
+  )
+
+  # test
+  # Assigning into an all-FALSE index is a silent no-op in R, and write_csv()
+  # would then rewrite the file unchanged: a run against a surface the
+  # registry has never heard of must not be indistinguishable from one that
+  # recorded a date.
+  expect_error(
+    record_conformance(
+      path, major = 17L, fingerprint = "ignota", on = "2026-09-11"
+    ),
+    "ignota"
+  )
+})
+
+
+test_that("the conformance run declares the measured surfaces", {
+  # eval
+  path <- withr::local_tempfile(fileext = ".csv")
+  readr::write_csv(
+    data.frame(
+      redcap_major = 17L, fingerprint = "misurata-non-certificata",
+      tested_on = "2026-08-06", conformance_passed_on = NA_character_,
+      note = "", stringsAsFactors = FALSE
+    ),
+    path
+  )
+  body <- readr::read_file(
+    testthat::test_path("fixtures", "state-response-v2.json")
+  )
+  declared <- list()
+  httr2::with_mocked_responses(
+    function(req) {
+      declared[[length(declared) + 1L]] <<-
+        req[["body"]][["data"]][["tested_fingerprints"]]
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    run_conformance_check(
+      server = "redcap.example.org", secret = "s3cret",
+      project_id = 27L, username = "mario.rossi@ubep.unipd.it",
+      registry_path = path
+    )
+  )
+  writes <- Filter(function(x) length(x) > 0L, declared)
+
+  # test
+  # The run must declare what has been *measured*, not what has been
+  # certified: the surface it is about to certify has no date yet by
+  # definition. Declaring the certified list would leave the write simulated,
+  # the case failed and the date unearnable — the ordering trap this exists
+  # to avoid, and one that would surface only on a field run.
+  expect_true(length(writes) > 0L)
+  expect_true(all(vapply(
+    writes, function(x) identical(x[[1]], "misurata-non-certificata"),
+    logical(1)
+  )))
 })
