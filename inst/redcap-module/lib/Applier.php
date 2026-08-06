@@ -334,11 +334,11 @@ class Applier
     {
         foreach ($plan as $index => $entry) {
             // Filtered on 'revocato', the one outcome that calls for a write
-            // -- not on "anything but noop". TestProjects can mark an
-            // out-of-scope entry 'errore' before Applier ever sees it (see
-            // api.php); a filter on non-noop would let that refusal reach
-            // removePrivileges() the same as a real revocation, deleting the
-            // rights while reporting a refusal.
+            // -- not on "anything but noop". Malformed entries reach the plan
+            // already marked 'errore', built that way before Applier ever
+            // sees them (see api.php); a filter on non-noop would let that
+            // refusal reach removePrivileges() the same as a real revocation,
+            // deleting the rights while reporting a refusal.
             if ($entry['outcome'] !== 'revocato') {
                 continue;
             }

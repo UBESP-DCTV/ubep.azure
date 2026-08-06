@@ -1,7 +1,7 @@
 {
   "name": "UBEP provisioning",
   "namespace": "UBEP\\Provisioning",
-  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. In questa versione la scrittura e' confinata ai progetti elencati qui sotto in 'Progetti di prova': con la lista vuota ogni scrittura e' rifiutata. La scrittura richiede inoltre che il chiamante dichiari un'impronta di superficie corrispondente a quella dell'istanza, altrimenti la scrittura viene simulata.",
+  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. Nessun elenco di progetti confina la scrittura. A trattenerla sono: il segreto condiviso e l'allowlist di IP qui sotto, il rifiuto sotto la versione minima di REDCap dichiarata in 'compatibility', la simulazione sopra la versione collaudata, la simulazione quando il chiamante non dichiara un'impronta di superficie corrispondente a quella dell'istanza, il rifiuto di una richiesta che tocchi piu' di un progetto, e il fatto che si scrive solo su un 'dry_run' esplicitamente falso.",
   "authors": [
     {
       "name": "Corrado Lanera",
@@ -22,12 +22,6 @@
     {
       "key": "ip-allow-list",
       "name": "Indirizzi IP ammessi, uno per riga",
-      "required": true,
-      "type": "textarea"
-    },
-    {
-      "key": "test-project-ids",
-      "name": "Progetti di prova su cui la scrittura e' ammessa, uno per riga",
       "required": true,
       "type": "textarea"
     }

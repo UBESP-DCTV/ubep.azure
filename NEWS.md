@@ -1,3 +1,21 @@
+# ubep.azure 0.7.0
+
+* **Writing is no longer confined to designated test projects.** The
+  `test-project-ids` setting is gone from the module manifest. What removed it
+  is not a decision to trust the channel but a recorded fact: a conformance run
+  passed against the surface the instance actually runs, re-reading every field
+  the channel writes and comparing it to what was asserted. A test in this
+  package fails if that date is ever present while the manifest still declares
+  the confinement, so the two cannot drift apart.
+* What still restrains a write: the module refuses anything below its version
+  floor, simulates above its tested ceiling, simulates when the caller's
+  declared surfaces do not include its own, refuses a write spanning more than
+  one project, and writes at all only on an explicit `dry_run: false`. Nothing
+  restrains it per project, by design — a permanent project allow list would
+  cost one configuration per server, growing with the projects, which is the
+  friction this channel exists to stop paying.
+
+
 # ubep.azure 0.6.0
 
 * Writing now requires the caller to declare which REDCap surfaces it has been

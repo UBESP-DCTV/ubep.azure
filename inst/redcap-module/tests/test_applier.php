@@ -140,9 +140,9 @@ ubep_assert_same(
     'a revocation never selects a rights write'
 );
 
-// revoke() must filter on 'revocato', not on "anything but noop". The
-// test-project brake marks an out-of-scope entry 'errore' before revoke()
-// ever sees it (see api.php); with the old "!== noop" filter that entry
+// revoke() must filter on 'revocato', not on "anything but noop". A
+// malformed entry is marked 'errore' before revoke() ever sees it (see
+// api.php); with the old "!== noop" filter that entry
 // would reach removePrivileges() the same as a real revocation, deleting the
 // rights while the caller is told the write was refused. No \UserRights
 // class exists in this offline suite, so if either entry below were not

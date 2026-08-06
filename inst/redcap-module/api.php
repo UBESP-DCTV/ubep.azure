@@ -6,7 +6,6 @@ require_once __DIR__ . '/lib/Surface.php';
 require_once __DIR__ . '/lib/Auth.php';
 require_once __DIR__ . '/lib/StateReader.php';
 require_once __DIR__ . '/lib/FieldNames.php';
-require_once __DIR__ . '/lib/TestProjects.php';
 require_once __DIR__ . '/lib/TestedSurfaces.php';
 require_once __DIR__ . '/lib/Planner.php';
 require_once __DIR__ . '/lib/Applier.php';
@@ -17,7 +16,6 @@ use UbepProvisioning\Planner;
 use UbepProvisioning\StateReader;
 use UbepProvisioning\Surface;
 use UbepProvisioning\TestedSurfaces;
-use UbepProvisioning\TestProjects;
 use UbepProvisioning\VersionGate;
 
 const UBEP_CONTRACT_VERSION = 2;
@@ -301,28 +299,6 @@ $current = $pairs === [] ? [] : StateReader::read($pairs);
 $plan = $operation === 'apply'
     ? Planner::planApply($requests, $current)
     : Planner::planRevoke($requests, $current);
-
-// Write-only, per the phase-2 design spec §4 "Il freno" and rollout §10
-// point 1: with the brake active in simulation too, a dry_run over any
-// non-test project would return 'errore' for every entry of that project --
-// not a degraded preview but an impossible one, since "solo dry_run, su
-// tutto" depends on being able to simulate a real batch, production
-// projects included. Only $plan is checked here, and $plan holds only
-// requests Planner could shape; $malformed joins after, so a null
-// project_id never reaches TestProjects::allows(), which is typed int.
-if (!$dryRun) {
-    $allowed = (string) $module->getSystemSetting('test-project-ids');
-    foreach ($plan as $index => $entry) {
-        if (!TestProjects::allows($entry['project_id'], $allowed)) {
-            $plan[$index]['outcome'] = 'errore';
-            $plan[$index]['errors'][] = [
-                'code' => 'INTERNO',
-                'message' => 'writes are confined to test projects '
-                    . 'in this module version',
-            ];
-        }
-    }
-}
 
 $plan = array_merge($plan, $malformed);
 

@@ -67,5 +67,9 @@ test_that("the shipped manifest keeps the page free of both auth and csrf", {
   # entry would look like a routing problem rather than a packaging one.
   expect_equal(manifest[["no-auth-pages"]], "api")
   expect_equal(manifest[["no-csrf-pages"]], "api")
-  expect_true("test-project-ids" %in% manifest[["system-settings"]][["key"]])
+  # The phase two confinement is gone: a conformance run has been recorded
+  # against the surface the instance runs, which is the observable fact the
+  # removal was tied to. Asserted here as well as in the guard, because this
+  # is the manifest that actually ships.
+  expect_false("test-project-ids" %in% manifest[["system-settings"]][["key"]])
 })

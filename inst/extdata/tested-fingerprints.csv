@@ -1,2 +1,2 @@
 redcap_major,fingerprint,tested_on,conformance_passed_on,note
-17,16faf46d5ab1,2026-08-01,,"REDCap 17.0.6; map read with a null project id"
+17,16faf46d5ab1,2026-08-01,2026-08-06,REDCap 17.0.6; map read with a null project id
