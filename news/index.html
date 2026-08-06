@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,19 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.0" id="ubepazure-070">ubep.azure 0.7.0<a class="anchor" aria-label="anchor" href="#ubepazure-070"></a></h2>
+<ul><li>
+<strong>Writing is no longer confined to designated test projects.</strong> The <code>test-project-ids</code> setting is gone from the module manifest. What removed it is not a decision to trust the channel but a recorded fact: a conformance run passed against the surface the instance actually runs, re-reading every field the channel writes and comparing it to what was asserted. A test in this package fails if that date is ever present while the manifest still declares the confinement, so the two cannot drift apart.</li>
+<li>What still restrains a write: the module refuses anything below its version floor, simulates above its tested ceiling, simulates when the caller’s declared surfaces do not include its own, refuses a write spanning more than one project, and writes at all only on an explicit <code>dry_run: false</code>. Nothing restrains it per project, by design — a permanent project allow list would cost one configuration per server, growing with the projects, which is the friction this channel exists to stop paying.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.0" id="ubepazure-060">ubep.azure 0.6.0<a class="anchor" aria-label="anchor" href="#ubepazure-060"></a></h2>
+<ul><li>Writing now requires the caller to declare which REDCap surfaces it has been tested against. The module compares its own runtime fingerprint against that declaration and simulates the write when it is not among them, on the same branch that already forces a simulation above the tested ceiling. The previous release computed the fingerprint, reported it, and let every write through regardless — the check ran client side, on the answer, after the module had written.</li>
+<li>The endpoint contract moves to version 2. A write is refused against a module still on contract 1, which cannot enforce the declaration; reads accept either, so a partial deployment does not blind the fleet audit on the instances still to be upgraded.</li>
+<li>A passed conformance run is now recorded against the pair (major, fingerprint) rather than the major alone. A major can hold more than one surface — an upgrade inside it changes the fingerprint and leaves the major alone — and the previous behavior stamped every row sharing the major.</li>
+<li>Writing is still confined to the projects listed in the module’s <code>test-project-ids</code> setting. That confinement is removed in the next release, and only once a conformance run has been recorded against the surface the instance actually runs.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="ubepazure-050">ubep.azure 0.5.0<a class="anchor" aria-label="anchor" href="#ubepazure-050"></a></h2>
 <ul><li>The REDCap authorization channel gained a write path: it can now assert project rights (role, DAG, expiration) on a real instance, and revoke them. Every operation simulates by default; the instance is touched only on an explicit <code>dry_run: false</code>.</li>

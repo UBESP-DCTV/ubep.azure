@@ -7,7 +7,7 @@ mechanism exists to replace.
 ## Usage
 
 ``` r
-record_conformance(path, major, on)
+record_conformance(path, major, fingerprint, on)
 ```
 
 ## Arguments
@@ -19,6 +19,14 @@ record_conformance(path, major, on)
 - major:
 
   REDCap major the run covered.
+
+- fingerprint:
+
+  Surface fingerprint the run covered, read from the instance's own
+  answer. The key is the pair, not the major: a major can hold more than
+  one surface — an upgrade inside it changes the fingerprint and leaves
+  the major alone — and stamping every row of a major would certify a
+  surface nobody tested.
 
 - on:
 
@@ -39,8 +47,8 @@ the next task's `git add` can see it, while against an installed copy it
 lands in the installation library instead and never reaches the
 repository.
 
-Raises when `major` matches no row: assigning into a `[` index that is
+Raises when the pair matches no row: assigning into a `[` index that is
 all `FALSE` is a silent no-op in R, and `write_csv()` would then rewrite
-the file unchanged. A run against a major the registry has never heard
-of is precisely the case this mechanism exists for, and it must not be
+the file unchanged. A run against a pair the registry has never heard of
+is precisely the case this mechanism exists for, and it must not be
 indistinguishable from a run that actually recorded a date.

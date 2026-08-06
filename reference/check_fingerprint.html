@@ -11,7 +11,7 @@ have a changed surface — the case no version comparison can see."></head><body
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,6 +69,14 @@ have a changed surface — the case no version comparison can see.</p>
 <code>non_collaudata</code>, never the other way. An unknown fingerprint is not a
 failure, it is a version waiting to be tested, and downgrading is how the
 system asks for that instead of writing blind.</p>
+<p>A missing or malformed <code>surface_fingerprint</code> downgrades the same way: an
+absent field makes <code>NULL %in% known</code> a zero-length logical, and an
+unguarded <code>if()</code> around it raises "argument is of length zero" instead of
+answering. The shape is checked before the comparison, never after, the
+same reason <code><a href="parse_module_response.html">parse_module_response()</a></code> checks <code>contract_version</code>'s shape
+before coercing it — a JSON array of one element parses to an R list, not
+a character scalar, and would otherwise be compared (and could match)
+where a scalar belongs.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

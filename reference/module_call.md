@@ -13,7 +13,8 @@ module_call(
   operation,
   requests = list(),
   dry_run = TRUE,
-  registry = tested_fingerprints()
+  registry = tested_fingerprints(),
+  declare = certified_fingerprints(registry)
 )
 ```
 
@@ -45,6 +46,12 @@ module_call(
 
   Tested fingerprints, see
   [`check_fingerprint()`](https://ubesp-dctv.github.io/ubep.azure/reference/check_fingerprint.md).
+
+- declare:
+
+  Fingerprints the caller states it has been tested against. The module
+  refuses to write when its own is not among them, so an empty
+  declaration writes nothing. Reads and dry runs ignore it.
 
 ## Value
 

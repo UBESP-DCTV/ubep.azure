@@ -11,7 +11,7 @@ mechanism exists to replace."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,7 @@ mechanism exists to replace.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">record_conformance</span><span class="op">(</span><span class="va">path</span>, <span class="va">major</span>, <span class="va">on</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">record_conformance</span><span class="op">(</span><span class="va">path</span>, <span class="va">major</span>, <span class="va">fingerprint</span>, <span class="va">on</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -57,6 +57,14 @@ mechanism exists to replace.</p>
 
 <dt id="arg-major">major<a class="anchor" aria-label="anchor" href="#arg-major"></a></dt>
 <dd><p>REDCap major the run covered.</p></dd>
+
+
+<dt id="arg-fingerprint">fingerprint<a class="anchor" aria-label="anchor" href="#arg-fingerprint"></a></dt>
+<dd><p>Surface fingerprint the run covered, read from the
+instance's own answer. The key is the pair, not the major: a major can
+hold more than one surface — an upgrade inside it changes the fingerprint
+and leaves the major alone — and stamping every row of a major would
+certify a surface nobody tested.</p></dd>
 
 
 <dt id="arg-on">on<a class="anchor" aria-label="anchor" href="#arg-on"></a></dt>
@@ -73,9 +81,9 @@ mechanism exists to replace.</p>
 caveat applies here: under <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code> the default resolves
 inside the source tree and the write lands where the next task's <code>git add</code> can see it, while against an installed copy it lands in the
 installation library instead and never reaches the repository.</p>
-<p>Raises when <code>major</code> matches no row: assigning into a <code>[</code> index that is
+<p>Raises when the pair matches no row: assigning into a <code>[</code> index that is
 all <code>FALSE</code> is a silent no-op in R, and <code>write_csv()</code> would then rewrite
-the file unchanged. A run against a major the registry has never heard
+the file unchanged. A run against a pair the registry has never heard
 of is precisely the case this mechanism exists for, and it must not be
 indistinguishable from a run that actually recorded a date.</p>
     </div>

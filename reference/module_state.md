@@ -7,7 +7,13 @@ outside the job, which is neither true nor desirable.
 ## Usage
 
 ``` r
-module_state(server, secret, pairs = list(), registry = tested_fingerprints())
+module_state(
+  server,
+  secret,
+  pairs = list(),
+  registry = tested_fingerprints(),
+  declare = certified_fingerprints(registry)
+)
 ```
 
 ## Arguments
@@ -31,6 +37,12 @@ module_state(server, secret, pairs = list(), registry = tested_fingerprints())
 
   Tested fingerprints, see
   [`check_fingerprint()`](https://ubesp-dctv.github.io/ubep.azure/reference/check_fingerprint.md).
+
+- declare:
+
+  Fingerprints the caller states it has been tested against. The module
+  refuses to write when its own is not among them, so an empty
+  declaration writes nothing. Reads and dry runs ignore it.
 
 ## Value
 

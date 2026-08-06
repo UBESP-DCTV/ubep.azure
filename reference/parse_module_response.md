@@ -8,7 +8,7 @@ JSON parser, reporting an error that does not name the cause.
 ## Usage
 
 ``` r
-parse_module_response(body, status)
+parse_module_response(body, status, accepted = c(1L, 2L))
 ```
 
 ## Arguments
@@ -20,6 +20,13 @@ parse_module_response(body, status)
 - status:
 
   HTTP status code.
+
+- accepted:
+
+  Integer vector of contract versions this call tolerates. Reads pass
+  both, a write passes only the one that can enforce the surface
+  handshake — a module that predates it would accept the write and
+  simply ignore the declaration.
 
 ## Value
 

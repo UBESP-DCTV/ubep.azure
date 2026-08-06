@@ -1,5 +1,47 @@
 # Changelog
 
+## ubep.azure 0.7.0
+
+- **Writing is no longer confined to designated test projects.** The
+  `test-project-ids` setting is gone from the module manifest. What
+  removed it is not a decision to trust the channel but a recorded fact:
+  a conformance run passed against the surface the instance actually
+  runs, re-reading every field the channel writes and comparing it to
+  what was asserted. A test in this package fails if that date is ever
+  present while the manifest still declares the confinement, so the two
+  cannot drift apart.
+- What still restrains a write: the module refuses anything below its
+  version floor, simulates above its tested ceiling, simulates when the
+  caller’s declared surfaces do not include its own, refuses a write
+  spanning more than one project, and writes at all only on an explicit
+  `dry_run: false`. Nothing restrains it per project, by design — a
+  permanent project allow list would cost one configuration per server,
+  growing with the projects, which is the friction this channel exists
+  to stop paying.
+
+## ubep.azure 0.6.0
+
+- Writing now requires the caller to declare which REDCap surfaces it
+  has been tested against. The module compares its own runtime
+  fingerprint against that declaration and simulates the write when it
+  is not among them, on the same branch that already forces a simulation
+  above the tested ceiling. The previous release computed the
+  fingerprint, reported it, and let every write through regardless — the
+  check ran client side, on the answer, after the module had written.
+- The endpoint contract moves to version 2. A write is refused against a
+  module still on contract 1, which cannot enforce the declaration;
+  reads accept either, so a partial deployment does not blind the fleet
+  audit on the instances still to be upgraded.
+- A passed conformance run is now recorded against the pair (major,
+  fingerprint) rather than the major alone. A major can hold more than
+  one surface — an upgrade inside it changes the fingerprint and leaves
+  the major alone — and the previous behavior stamped every row sharing
+  the major.
+- Writing is still confined to the projects listed in the module’s
+  `test-project-ids` setting. That confinement is removed in the next
+  release, and only once a conformance run has been recorded against the
+  surface the instance actually runs.
+
 ## ubep.azure 0.5.0
 
 - The REDCap authorization channel gained a write path: it can now

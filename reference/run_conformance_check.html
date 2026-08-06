@@ -9,7 +9,7 @@ conformance date. Seven steps, on a designated test project:"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -116,11 +116,18 @@ observed. When either a write or the re-read after it reports <code>ok = FALSE</
 errors are recorded in <code>differences</code> prefixed <code>TRASPORTO</code>, instead of a
 list of fields — the same vocabulary <code><a href="module_call.html">module_call()</a></code> already uses for a
 failure that is not the instance's answer.</p>
-<p>If the instance itself does not answer the baseline read — no payload,
-so no major — the run stops right there: every later step compares
-against a baseline and a major that were never established, so
+<p>If the instance itself does not answer the baseline read — no payload, so
+no major and no fingerprint — the run stops right there: every later step
+compares against a baseline and a pair that were never established, so
 continuing would measure nothing and could still send further requests
 to a server already known to be unreachable.</p>
+<p>The run declares the <strong>measured</strong> fingerprints, not the certified ones,
+and must: the surface it is about to certify has no conformance date yet
+by definition. Requiring one would recreate the ordering trap the ceiling
+already has — the gate would force <code>dry_run</code>, the run could not write, and
+the date could never be earned. The ordinary caller declares the certified
+list instead, so that a row added after a bare <code>state</code> does not reopen
+writes on a surface nobody ran this check against.</p>
 <p>Run under <code><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">devtools::load_all()</a></code>, <code>registry_path</code>'s default resolves
 inside the source tree, so a passing run is written where the next task's
 <code>git add</code> can see it. Run against an installed copy of the package, the

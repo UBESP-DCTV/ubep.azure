@@ -11,7 +11,7 @@ outside the job, which is neither true nor desirable."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,13 @@ outside the job, which is neither true nor desirable.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">module_state</span><span class="op">(</span><span class="va">server</span>, <span class="va">secret</span>, pairs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>, registry <span class="op">=</span> <span class="fu"><a href="tested_fingerprints.html">tested_fingerprints</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">module_state</span><span class="op">(</span></span>
+<span>  <span class="va">server</span>,</span>
+<span>  <span class="va">secret</span>,</span>
+<span>  pairs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  registry <span class="op">=</span> <span class="fu"><a href="tested_fingerprints.html">tested_fingerprints</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  declare <span class="op">=</span> <span class="fu"><a href="certified_fingerprints.html">certified_fingerprints</a></span><span class="op">(</span><span class="va">registry</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -68,6 +74,12 @@ instance, which is what the audit needs.</p></dd>
 
 <dt id="arg-registry">registry<a class="anchor" aria-label="anchor" href="#arg-registry"></a></dt>
 <dd><p>Tested fingerprints, see <code><a href="check_fingerprint.html">check_fingerprint()</a></code>.</p></dd>
+
+
+<dt id="arg-declare">declare<a class="anchor" aria-label="anchor" href="#arg-declare"></a></dt>
+<dd><p>Fingerprints the caller states it has been tested against.
+The module refuses to write when its own is not among them, so an empty
+declaration writes nothing. Reads and dry runs ignore it.</p></dd>
 
 </dl></div>
     <div class="section level2">
