@@ -108,7 +108,7 @@ test_that("a missing surface fingerprint downgrades instead of raising", {
   # length zero: unguarded, the if() around it raises "argument is of
   # length zero" instead of answering. A module that has not computed the
   # fingerprint yet is not an error, it is a version waiting to be tested --
-  # the same treatment an unrecognised fingerprint already gets below.
+  # the same treatment an unrecognized fingerprint already gets below.
   expect_equal(check_fingerprint(payload, registry), "non_collaudata")
 })
 
