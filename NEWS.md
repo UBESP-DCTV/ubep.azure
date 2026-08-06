@@ -1,3 +1,25 @@
+# ubep.azure 0.6.0
+
+* Writing now requires the caller to declare which REDCap surfaces it has been
+  tested against. The module compares its own runtime fingerprint against that
+  declaration and simulates the write when it is not among them, on the same
+  branch that already forces a simulation above the tested ceiling. The
+  previous release computed the fingerprint, reported it, and let every write
+  through regardless — the check ran client side, on the answer, after the
+  module had written.
+* The endpoint contract moves to version 2. A write is refused against a
+  module still on contract 1, which cannot enforce the declaration; reads
+  accept either, so a partial deployment does not blind the fleet audit on the
+  instances still to be upgraded.
+* A passed conformance run is now recorded against the pair (major,
+  fingerprint) rather than the major alone. A major can hold more than one
+  surface — an upgrade inside it changes the fingerprint and leaves the major
+  alone — and the previous behavior stamped every row sharing the major.
+* Writing is still confined to the projects listed in the module's
+  `test-project-ids` setting. That confinement is removed in the next release,
+  and only once a conformance run has been recorded against the surface the
+  instance actually runs.
+
 # ubep.azure 0.5.0
 
 * The REDCap authorization channel gained a write path: it can now assert
