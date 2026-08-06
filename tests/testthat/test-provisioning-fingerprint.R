@@ -157,7 +157,7 @@ test_that("the shipped registry accepts the captured response", {
 
   # test
   # Closes the loop between the module and the registry: the fingerprint the
-  # module computes on a tested instance has to be one the client recognises,
+  # module computes on a tested instance has to be one the client recognizes,
   # or every instance would silently sit in `non_collaudata`.
   expect_equal(check_fingerprint(payload), "collaudata")
 })

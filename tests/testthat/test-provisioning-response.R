@@ -13,7 +13,7 @@ test_that("a well formed response is accepted", {
 })
 
 
-test_that("a disabled module is recognised despite HTTP 200", {
+test_that("a disabled module is recognized despite HTTP 200", {
   # eval
   # This is verbatim what REDCap answers for a module that is not enabled,
   # observed while dismantling the spike: status 200, plain text, no JSON.

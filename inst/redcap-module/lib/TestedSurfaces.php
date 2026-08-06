@@ -18,7 +18,7 @@ namespace UbepProvisioning;
  * because the declaration arrives from a JSON body and may be anything at all.
  * Nothing here may raise: this runs on a page that has already sent its
  * headers, so a TypeError would print ahead of the JSON body and the client,
- * which recognises a response by its shape, would report the module absent.
+ * which recognizes a response by its shape, would report the module absent.
  *
  * This protects against drift, not against a hostile caller: whoever holds the
  * secret reads the current fingerprint from any `state` and can declare it
