@@ -11,6 +11,14 @@
 #' something this code may assume — so clearing has to be exercised as
 #' deliberately as setting.
 #'
+#' What the run does not cover, stated so a green result is read for what it
+#' is: every case reads back only the one pair it just wrote. A major that
+#' changed which rows `state` enumerates, or the field-name map used on read,
+#' would leave all of these green. The run answers "writing one pair and
+#' reading it back still means what it meant", not "the channel is unharmed" —
+#' a distinction that matters at the first ceiling advance, which is the first
+#' time this runs against a major it has never seen.
+#'
 #' @return A list of cases, each with `name`, `assert` and `why`.
 #'
 #' @keywords internal
