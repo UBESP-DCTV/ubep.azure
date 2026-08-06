@@ -95,6 +95,46 @@ test_that("a fingerprint known for another major does not count", {
 })
 
 
+test_that("a missing surface fingerprint downgrades instead of raising", {
+  # eval
+  registry <- data.frame(
+    redcap_major = 17L, fingerprint = "abc123def456",
+    stringsAsFactors = FALSE
+  )
+  payload <- list(redcap_major = 17L, version_gate = "collaudata")
+
+  # test
+  # payload[["surface_fingerprint"]] is NULL here, and NULL %in% known has
+  # length zero: unguarded, the if() around it raises "argument is of
+  # length zero" instead of answering. A module that has not computed the
+  # fingerprint yet is not an error, it is a version waiting to be tested --
+  # the same treatment an unrecognised fingerprint already gets below.
+  expect_equal(check_fingerprint(payload, registry), "non_collaudata")
+})
+
+
+test_that("a fingerprint sent as a one-element array downgrades", {
+  # eval
+  registry <- data.frame(
+    redcap_major = 17L, fingerprint = "abc123def456",
+    stringsAsFactors = FALSE
+  )
+  payload <- list(
+    redcap_major = 17L, surface_fingerprint = list("abc123def456"),
+    version_gate = "collaudata"
+  )
+
+  # test
+  # jsonlite::fromJSON(simplifyVector = FALSE) turns a JSON array into an R
+  # list, never a character scalar, even a one-element one. Without a shape
+  # check, %in% would still evaluate this list against the known character
+  # vector rather than being rejected, and a payload that sent
+  # `"surface_fingerprint": ["abc123def456"]` where a scalar belongs would
+  # not be told apart from one that sent the scalar itself.
+  expect_equal(check_fingerprint(payload, registry), "non_collaudata")
+})
+
+
 test_that("the shipped registry carries the surface measured on the fleet", {
   # eval
   registry <- tested_fingerprints()

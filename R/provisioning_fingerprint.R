@@ -38,6 +38,15 @@ tested_fingerprints <- function(path = system.file(
 #' failure, it is a version waiting to be tested, and downgrading is how the
 #' system asks for that instead of writing blind.
 #'
+#' A missing or malformed `surface_fingerprint` downgrades the same way: an
+#' absent field makes `NULL %in% known` a zero-length logical, and an
+#' unguarded `if()` around it raises "argument is of length zero" instead of
+#' answering. The shape is checked before the comparison, never after, the
+#' same reason `parse_module_response()` checks `contract_version`'s shape
+#' before coercing it — a JSON array of one element parses to an R list, not
+#' a character scalar, and would otherwise be compared (and could match)
+#' where a scalar belongs.
+#'
 #' @param payload Parsed module response.
 #' @param registry Data frame of tested fingerprints.
 #'
@@ -50,11 +59,16 @@ check_fingerprint <- function(payload, registry = tested_fingerprints()) {
     return(declared)
   }
 
+  surface <- payload[["surface_fingerprint"]]
+  if (!is.character(surface) || length(surface) != 1L || is.na(surface)) {
+    return("non_collaudata")
+  }
+
   known <- registry[["fingerprint"]][
     registry[["redcap_major"]] == payload[["redcap_major"]]
   ]
 
-  if (payload[["surface_fingerprint"]] %in% known) {
+  if (surface %in% known) {
     "collaudata"
   } else {
     "non_collaudata"

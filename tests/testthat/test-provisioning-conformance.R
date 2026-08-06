@@ -227,8 +227,11 @@ test_that("the conformance run declares the measured surfaces", {
   declared <- list()
   httr2::with_mocked_responses(
     function(req) {
-      declared[[length(declared) + 1L]] <<-
-        req[["body"]][["data"]][["tested_fingerprints"]]
+      declared[[length(declared) + 1L]] <<- list(
+        op = req[["body"]][["data"]][["operation"]],
+        dry = req[["body"]][["data"]][["dry_run"]],
+        declare = unlist(req[["body"]][["data"]][["tested_fingerprints"]])
+      )
       httr2::response(status_code = 200L, body = charToRaw(body))
     },
     run_conformance_check(
@@ -237,7 +240,10 @@ test_that("the conformance run declares the measured surfaces", {
       registry_path = path
     )
   )
-  writes <- Filter(function(x) length(x) > 0L, declared)
+  writes <- Filter(
+    function(x) !isTRUE(x[["dry"]]) && x[["op"]] %in% c("apply", "revoke"),
+    declared
+  )
 
   # test
   # The run must declare what has been *measured*, not what has been
@@ -245,9 +251,61 @@ test_that("the conformance run declares the measured surfaces", {
   # definition. Declaring the certified list would leave the write simulated,
   # the case failed and the date unearnable — the ordering trap this exists
   # to avoid, and one that would surface only on a field run.
-  expect_true(length(writes) > 0L)
+  #
+  # Filtered on operation and dry_run, not on "declared something": a mock
+  # that captured every request and kept only the non-empty declarations
+  # would let module_state()'s declaration (which the run always sends, for
+  # uniformity, even though reads do not need it) stand in for a write's,
+  # and a regression that dropped declare = measured from every write but
+  # left it on the reads would go unnoticed. Five cases plus the final
+  # revoke is six writes; asserting the count, not just "more than zero",
+  # is what catches a run that stopped declaring partway through.
+  expect_equal(length(writes), 6L)
   expect_true(all(vapply(
-    writes, function(x) identical(x[[1]], "misurata-non-certificata"),
+    writes,
+    function(x) identical(x[["declare"]], "misurata-non-certificata"),
     logical(1)
   )))
+})
+
+
+test_that("a baseline missing the fingerprint does not blame transport", {
+  # eval
+  path <- withr::local_tempfile(fileext = ".csv")
+  readr::write_csv(
+    data.frame(
+      redcap_major = 17L, fingerprint = "qualsiasi",
+      tested_on = "2026-08-01", conformance_passed_on = NA_character_,
+      note = "", stringsAsFactors = FALSE
+    ),
+    path
+  )
+  # contract_version 2, status 200, no errors: a well-formed, successful
+  # answer that simply never computed surface_fingerprint (sent as a
+  # one-element array here, the same malformed shape check_fingerprint()
+  # guards against) and omits results.
+  body <- paste0(
+    '{"contract_version": 2, "redcap_major": 17,',
+    ' "surface_fingerprint": ["16faf46d5ab1"], "results": []}'
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    run_conformance_check(
+      server = "redcap.example.org", secret = "s3cret",
+      project_id = 27L, username = "mario.rossi@ubep.unipd.it",
+      registry_path = path
+    )
+  )
+
+  # test
+  # Shape is checked before as.character() coerces: an array masquerading
+  # as a scalar must fail the same way a genuinely absent field does, not
+  # be silently accepted as the one-element vector R would collapse it to.
+  # And the failure must name what is actually wrong -- the module answered
+  # fine, on a working transport, with a payload this run cannot use -- so
+  # calling it TRASPORTO would send a field run looking on the wrong side
+  # of the wire.
+  expect_false(result[["steps"]][["instance_answered"]])
+  expect_match(result[["differences"]], "DATO_MAJOR_O_FINGERPRINT_ASSENTE")
+  expect_false(grepl("TRASPORTO", result[["differences"]]))
 })

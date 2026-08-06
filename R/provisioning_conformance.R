@@ -235,16 +235,22 @@ run_conformance_check <- function(server,
   steps <- list()
   differences <- character()
 
+  # Read from the same registry this run will write to, once, and pass it
+  # explicitly at every module_call() site below instead of leaving each one
+  # to its own default. With a custom registry_path the shipped file is not
+  # the one that matters: an unpassed `registry` argument defaults to
+  # tested_fingerprints() with no path, i.e. the shipped file, and the run
+  # would then declare one registry's surfaces (measured, below) while
+  # computing gate against another -- the same mixed provenance this task
+  # exists to remove. Reading once here also turns fifteen CSV reads, one
+  # per module_call() below, into one.
+  registry <- tested_fingerprints(registry_path)
+
   # The measured list, not the certified one: the surface this run is about
   # to certify has no conformance date yet by definition, so declaring the
   # certified list here would recreate the ordering trap the ceiling already
   # has. See the roxygen above for the full reasoning.
-  #
-  # Read from the same registry this run will write to. With a custom
-  # registry_path the shipped file is not the one that matters, and a run
-  # that declared one registry's surfaces while stamping another's would be
-  # certifying a pairing nobody measured.
-  measured <- as.character(tested_fingerprints(registry_path)[["fingerprint"]])
+  measured <- as.character(registry[["fingerprint"]])
 
   note_transport <- function(label, response) {
     paste0(
@@ -265,17 +271,37 @@ run_conformance_check <- function(server,
     # it -- but passing declare = measured costs nothing and keeps every
     # call in this function uniform, which is cheaper than explaining why
     # one call site is the exception.
-    answer <- module_state(server, secret, pairs = pair, declare = measured)
+    answer <- module_state(
+      server, secret, pairs = pair, registry = registry, declare = measured
+    )
     rows <- answer[["payload"]][["results"]]
+
+    raw_major <- answer[["payload"]][["redcap_major"]]
+    raw_fingerprint <- answer[["payload"]][["surface_fingerprint"]]
+
     list(
       row = if (length(rows) == 0L) NULL else rows[[1]],
       # Major and fingerprint both come from the instance, never assumed:
-      # recording a run under the wrong pair is how a conformance date would
-      # certify something nobody tested.
-      major = as.integer(answer[["payload"]][["redcap_major"]]),
-      fingerprint = as.character(
-        answer[["payload"]][["surface_fingerprint"]] %||% NA_character_
-      ),
+      # recording a run under the wrong pair is how a conformance date
+      # would certify something nobody tested. Shape is checked before the
+      # coercion, never after -- the same reason parse_module_response()
+      # checks contract_version's shape first: as.integer()/as.character()
+      # would both collapse a one-element list to a scalar, so a payload
+      # that sent an array where a scalar belongs would be accepted rather
+      # than rejected.
+      major = if (is.numeric(raw_major) && length(raw_major) == 1L &&
+                    !is.na(raw_major)) {
+        as.integer(raw_major)
+      } else {
+        NA_integer_
+      },
+      fingerprint = if (is.character(raw_fingerprint) &&
+                          length(raw_fingerprint) == 1L &&
+                          !is.na(raw_fingerprint)) {
+        raw_fingerprint
+      } else {
+        NA_character_
+      },
       answer = answer
     )
   }
@@ -303,20 +329,27 @@ run_conformance_check <- function(server,
   baseline <- baseline_state[["row"]]
   major <- baseline_state[["major"]]
   fingerprint <- baseline_state[["fingerprint"]]
-  # length() first: as.integer(NULL) is integer(0), and is.na() on a
-  # zero-length value returns logical(0), which makes && raise in R >= 4.3
-  # instead of reporting the one condition this step exists to catch.
-  steps[["instance_answered"]] <-
-    length(major) == 1L && !is.na(major) &&
-    length(fingerprint) == 1L && !is.na(fingerprint)
+  # read_state() already reduces a missing or malformed value to a scalar
+  # NA rather than a zero-length one, so a plain is.na() check is enough
+  # here -- see the shape check inside read_state() above.
+  steps[["instance_answered"]] <- !is.na(major) && !is.na(fingerprint)
 
   if (!isTRUE(steps[["instance_answered"]])) {
+    # A transport failure and a well-formed answer that simply omits the
+    # major or the fingerprint are different faults and must read as such:
+    # the first is TRASPORTO, the module never answered; the second is the
+    # instance answering with a payload this run cannot use. Naming the
+    # second one TRASPORTO too would send a field run looking for the fault
+    # on the wrong side of a wire that worked fine.
+    cause <- if (!isTRUE(baseline_state[["answer"]][["ok"]])) {
+      note_transport("instance_answered", baseline_state[["answer"]])
+    } else {
+      "instance_answered: DATO_MAJOR_O_FINGERPRINT_ASSENTE"
+    }
     return(invisible(list(
       conforms = FALSE,
       steps = steps,
-      differences = note_transport(
-        "instance_answered", baseline_state[["answer"]]
-      )
+      differences = cause
     )))
   }
 
@@ -325,7 +358,8 @@ run_conformance_check <- function(server,
     request_for(username, project_id, first_case[["assert"]])
   )
   dry_response <- module_apply(
-    server, secret, dry_requests, dry_run = TRUE, declare = measured
+    server, secret, dry_requests,
+    dry_run = TRUE, registry = registry, declare = measured
   )
 
   if (isTRUE(dry_response[["ok"]])) {
@@ -355,7 +389,8 @@ run_conformance_check <- function(server,
   for (case in conformance_cases()) {
     requests <- list(request_for(username, project_id, case[["assert"]]))
     apply_response <- module_apply(
-      server, secret, requests, dry_run = FALSE, declare = measured
+      server, secret, requests,
+      dry_run = FALSE, registry = registry, declare = measured
     )
 
     if (!isTRUE(apply_response[["ok"]])) {
@@ -383,7 +418,8 @@ run_conformance_check <- function(server,
   # it. It does not restore anything it did not find empty — see the
   # roxygen above.
   revoke_response <- module_revoke(
-    server, secret, pair, dry_run = FALSE, declare = measured
+    server, secret, pair,
+    dry_run = FALSE, registry = registry, declare = measured
   )
 
   if (isTRUE(revoke_response[["ok"]])) {
