@@ -206,14 +206,25 @@ request_for <- function(username, project_id, assert) {
 #' `DATO_RUOLO_INESISTENTE` on one case, which reads like a conformance
 #' failure and is not one.
 #'
+#' The project has to be one that outlives the run, and that is worth saying
+#' because the first one was not. The project this ran against until
+#' 2026-08-06 was created by the design spike, named "usa e getta" and marked
+#' deleted when the spike was dismantled — REDCap keeps such a project working
+#' while a `delete_project_day_lag` countdown runs, then purges it. It was
+#' correct when the spike made it and became wrong when conformance became the
+#' thing that authorizes every future write. A conformance project marked for
+#' deletion fails in the worst possible way: not now, but on the first run
+#' after a version change, which is the run whose failure would be read as the
+#' new version breaking the channel.
+#'
 #' Server, secret, project and usernames come from the caller: this
 #' repository is public and none of them may appear in it.
 #'
 #' @param server Hostname, optionally with the path REDCap is mounted under.
 #' @param secret Shared secret.
-#' @param project_id Test project; writes are refused outside the module's
-#'   configured test projects. Must already define the roles and the data
-#'   access group the cases name — see the note above.
+#' @param project_id The designated conformance project. Must already define
+#'   the roles and the data access group the cases name — see the note above —
+#'   and must be a project meant to last, for the reason below.
 #' @param username Test account to assert rights for. Must hold no rights
 #'   in `project_id` before the run starts — see the note on step 5 above.
 #' @param registry_path CSV to record the outcome in. See the note above on
