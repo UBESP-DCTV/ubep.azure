@@ -76,7 +76,7 @@ ubep_assert_same(
     'signaturesOf renders an untyped signature'
 );
 // Note the return type: declared as bool|array, reflected as array|bool. PHP
-// normalises the order of union members, which is what we want — the same type
+// normalizes the order of union members, which is what we want — the same type
 // declared in either order yields the same fingerprint, so the gate does not
 // cry wolf over a cosmetic edit in REDCap's source.
 ubep_assert_same(

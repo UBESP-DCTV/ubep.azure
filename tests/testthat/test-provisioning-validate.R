@@ -1,4 +1,4 @@
-test_that("compose_upn normalises names into an identity", {
+test_that("compose_upn normalizes names into an identity", {
   # eval
   plain <- compose_upn("Mario", "Rossi")
   accented <- compose_upn("Niccolò", "Dall'Acqua")

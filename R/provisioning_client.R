@@ -31,7 +31,7 @@ module_call <- function(server,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run)
   )
 
-  # A scheme is dropped rather than honoured, so a base handed over as http is
+  # A scheme is dropped rather than honored, so a base handed over as http is
   # corrected instead of silently downgrading the channel: the spec allows TLS
   # only, and this is the one place that builds the URL.
   base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", server)

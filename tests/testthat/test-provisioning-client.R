@@ -111,7 +111,7 @@ test_that("an instance mounted in a subdirectory is reachable", {
 })
 
 
-test_that("the base is normalised and never downgraded to plain HTTP", {
+test_that("the base is normalized and never downgraded to plain HTTP", {
   # eval
   seen <- character()
   mock <- function(req) {
@@ -127,7 +127,7 @@ test_that("the base is normalised and never downgraded to plain HTTP", {
 
   # test
   # The spec allows TLS only, so a base handed over as http is corrected
-  # rather than honoured.
+  # rather than honored.
   expect_true(all(startsWith(seen, "https://")))
   expect_true(startsWith(seen[[1]], "https://a.example.org/api/?"))
   expect_true(startsWith(seen[[2]], "https://b.example.org/api/?"))
@@ -290,7 +290,7 @@ test_that("module_revoke carries only the pair", {
 })
 
 
-test_that("all three operations share one base normalisation", {
+test_that("all three operations share one base normalization", {
   # eval
   seen <- character()
   mock <- function(req) {
