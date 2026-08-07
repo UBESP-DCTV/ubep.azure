@@ -78,3 +78,57 @@ observe_instance <- function(server, state, today = Sys.Date()) {
 
   row
 }
+
+
+#' Build the record a run leaves behind
+#'
+#' The channel keeps no copy of the state it reconciles, so a run leaves no
+#' other trace: this record is it. That is not in tension with "no local store
+#' of the state" — what that forbids is a copy of what can be re-read, and a
+#' run log is the only evidence of an event that leaves none.
+#'
+#' It carries `letture_riuscite` because the alarm on absence fires on the lack
+#' of a record with at least one successful read. Were it to say only "the
+#' process started", a job that started, failed against every instance and
+#' exited would satisfy the alarm — a detector the fault can meet, which is the
+#' shape of defect this project has already found twice.
+#'
+#' `major_singleton` is the condition the two clauses on retiring compatibility
+#' branches rest on. Nothing observed it before this.
+#'
+#' @param observations Rows from `observe_instance()`, bound together.
+#' @param at When the run finished, as `YYYY-MM-DD HH:MM`. Passed in rather
+#'   than read here so the record stays a pure function of what was observed.
+#'
+#' @return A named list, ready to be serialised as one JSON object.
+#'
+#' @keywords internal
+run_record <- function(observations, at) {
+  stopifnot(
+    is.data.frame(observations),
+    is.character(at), length(at) == 1L
+  )
+
+  # `unique(sort(x))` drops NA on its own; naming the intent here rather than
+  # reaching for stats::na.omit avoids an Imports entry for one call.
+  distinct <- function(values) {
+    values <- values[!is.na(values)]
+    sort(unique(values))
+  }
+
+  reached <- observations[["raggiungibile"]]
+  majors <- distinct(observations[["redcap_major"]][reached])
+
+  list(
+    at = at,
+    istanze = nrow(observations),
+    letture_riuscite = sum(reached),
+    irraggiungibili = sum(!reached),
+    major_in_flotta = as.integer(majors),
+    major_singleton = length(majors) == 1L,
+    impronte_superficie = distinct(observations[["surface_fingerprint"]]),
+    impronte_allowlist = distinct(observations[["allowlist_fingerprint"]]),
+    coppie_scadute = sum(observations[["scadute"]], na.rm = TRUE),
+    coppie_totali = sum(observations[["coppie"]], na.rm = TRUE)
+  )
+}

@@ -82,3 +82,65 @@ test_that("a module that predates the allowlist fingerprint stays readable", {
   expect_true(is.na(row[["allowlist_fingerprint"]]))
   expect_equal(row[["coppie"]], 0L)
 })
+
+
+test_that("the run record counts successful reads, not attempted instances", {
+  observations <- rbind(
+    observe_instance("a", list(
+      ok = TRUE, gate = "collaudata",
+      payload = list(
+        redcap_major = 17L, redcap_version = "17.3.3",
+        surface_fingerprint = "16faf46d5ab1", results = list()
+      )
+    )),
+    observe_instance("b", list(
+      ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE", payload = NULL
+    ))
+  )
+
+  record <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(record[["istanze"]], 2L)
+  expect_equal(record[["letture_riuscite"]], 1L)
+  expect_equal(record[["irraggiungibili"]], 1L)
+  expect_equal(record[["major_in_flotta"]], 17L)
+  expect_true(record[["major_singleton"]])
+})
+
+
+test_that("a run that read nothing reports zero reads", {
+  # The alarm on absence fires on the lack of a record with at least one
+  # successful read. If the record said only "the process started", a job that
+  # started, failed against every instance and exited would satisfy it — a
+  # detector the fault can meet.
+  observations <- observe_instance("a", list(
+    ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE", payload = NULL
+  ))
+
+  record <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(record[["letture_riuscite"]], 0L)
+  expect_equal(length(record[["major_in_flotta"]]), 0L)
+  expect_false(record[["major_singleton"]])
+})
+
+
+test_that("two majors in the fleet are not a singleton", {
+  # The condition the two clauses on retiring compatibility branches rest on.
+  observations <- rbind(
+    observe_instance("a", list(ok = TRUE, gate = "collaudata", payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    ))),
+    observe_instance("b", list(ok = TRUE, gate = "collaudata", payload = list(
+      redcap_major = 15L, redcap_version = "15.8.4",
+      surface_fingerprint = "ffffffffffff", results = list()
+    )))
+  )
+
+  record <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(record[["major_in_flotta"]], c(15L, 17L))
+  expect_false(record[["major_singleton"]])
+  expect_equal(length(record[["impronte_superficie"]]), 2L)
+})
