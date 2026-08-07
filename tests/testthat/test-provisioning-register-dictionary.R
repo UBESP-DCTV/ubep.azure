@@ -67,3 +67,19 @@ test_that("the register carries the field names the pure layer already speaks", 
     )
   )
 })
+
+
+test_that("what the job writes is declared in the dictionary too", {
+  # eval
+  written <- setdiff(
+    names(outcome_payload(record_id = "1", outcome = "pending")),
+    "record_id"
+  )
+
+  # test
+  # This is the seam between the two artefacts: adding an outcome field to the
+  # dictionary without teaching the payload about it, or the other way round,
+  # turns this red instead of producing a field nobody fills.
+  expect_true(all(written %in% register_readonly_fields()))
+  expect_true(all(written %in% register_dictionary()[["Variable / Field Name"]]))
+})

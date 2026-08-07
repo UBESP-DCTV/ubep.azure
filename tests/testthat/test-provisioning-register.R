@@ -182,3 +182,42 @@ test_that("the last day of access is converted once, at the border", {
     as.character(last_day + 1L)
   )
 })
+
+
+test_that("outcome_payload carries the outcome and nothing else", {
+  # eval
+  payload <- outcome_payload(
+    record_id = "1",
+    outcome = "applied",
+    detail = "",
+    at = "2026-08-07 10:15",
+    applied_as = "role_name=data entry; dag_name=centro-01"
+  )
+
+  # test
+  # The body is where a bug could rewrite what people asked for. Keeping the
+  # columns exact is the structural defence, the same shape as the planner that
+  # computes without naming the write functions: it is checked, not promised.
+  expect_setequal(
+    names(payload),
+    c("record_id", "outcome", "outcome_detail", "outcome_at", "applied_as")
+  )
+  expect_equal(nrow(payload), 1L)
+})
+
+
+test_that("outcome_payload refuses an outcome outside the vocabulary", {
+  # eval / test
+  expect_error(outcome_payload(record_id = "1", outcome = "ok"))
+})
+
+
+test_that("outcome_payload ignores a request field handed to it by mistake", {
+  # eval
+  payload <- outcome_payload(record_id = "1", outcome = "pending")
+
+  # test
+  expect_false("role_name" %in% names(payload))
+  expect_false("request_status" %in% names(payload))
+  expect_false("username" %in% names(payload))
+})
