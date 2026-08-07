@@ -53,3 +53,45 @@ register_readonly_fields <- function() {
     "outcome_at", "applied_as"
   )
 }
+
+
+#' Turn one register row into a request
+#'
+#' The register's field names are the request's field names, so there is no map
+#' between the two and no key can fall into a default without raising. That is
+#' the whole reason the names were chosen.
+#'
+#' A blank cell is dropped rather than carried as `""`. The difference matters
+#' downstream: `provisioning_diff()` reads an absent field as "not set", while
+#' an empty string would be a value nobody asked for — and a DAG nobody asked
+#' for is an update, never a `noop`.
+#'
+#' @param row A one-row data frame from the register.
+#'
+#' @return A named list holding only the fields that carry a value.
+#'
+#' @keywords internal
+request_from_row <- function(row) {
+  stopifnot(is.data.frame(row), nrow(row) == 1L)
+
+  fields <- c(
+    "server", "username", "project_id", "role_name", "dag_name",
+    "expiration", "contact_email"
+  )
+
+  value_of <- function(field) {
+    if (!field %in% names(row)) {
+      return(NULL)
+    }
+    raw <- row[[field]]
+    if (length(raw) != 1L || is.na(raw)) {
+      return(NULL)
+    }
+    text <- trimws(as.character(raw))
+    if (nzchar(text)) text else NULL
+  }
+
+  request <- lapply(fields, value_of)
+  names(request) <- fields
+  request[!vapply(request, is.null, logical(1))]
+}
