@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_observe.R
 \name{run_record_json}
 \alias{run_record_json}
-\title{Serialise a run record, keeping list-valued fields as arrays}
+\title{Serialize a run record, keeping list-valued fields as arrays}
 \usage{
 run_record_json(record)
 }

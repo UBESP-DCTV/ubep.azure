@@ -13,7 +13,7 @@ run_record(observations, at)
 than read here so the record stays a pure function of what was observed.}
 }
 \value{
-A named list, ready to be serialised as one JSON object.
+A named list, ready to be serialized as one JSON object.
 }
 \description{
 The channel keeps no copy of the state it reconciles, so a run leaves no

@@ -100,7 +100,7 @@ observe_instance <- function(server, state, today = Sys.Date()) {
 #' @param at When the run finished, as `YYYY-MM-DD HH:MM`. Passed in rather
 #'   than read here so the record stays a pure function of what was observed.
 #'
-#' @return A named list, ready to be serialised as one JSON object.
+#' @return A named list, ready to be serialized as one JSON object.
 #'
 #' @keywords internal
 run_record <- function(observations, at) {
@@ -134,7 +134,7 @@ run_record <- function(observations, at) {
 }
 
 
-#' Serialise a run record, keeping list-valued fields as arrays
+#' Serialize a run record, keeping list-valued fields as arrays
 #'
 #' `auto_unbox` collapses a one-element vector into a scalar, which is right
 #' for the counters and wrong for everything that is semantically a list: a
