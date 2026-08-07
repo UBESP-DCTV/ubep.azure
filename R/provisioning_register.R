@@ -55,6 +55,115 @@ register_readonly_fields <- function() {
 }
 
 
+#' Compare a project's dictionary against the packaged one
+#'
+#' The packaged CSV is the schema and REDCap imports it as it is, so the two
+#' start identical. What this reads is whether they still are: an import that
+#' dropped a field, a hand edit on the form, a field type loosened to get past
+#' a validation complaint.
+#'
+#' None of those raise anywhere else. `request_from_row()` reads a missing
+#' column as "not set" rather than as an error, and the channel ignores fields
+#' it does not know — which is correct behavior and also the reason drift here
+#' is silent. The comparison is the only thing that looks.
+#'
+#' The codes it can report, and why each is not cosmetic:
+#'
+#' - `DIZIONARIO_CAMPO_ASSENTE` — the request loses that field without saying
+#'   so;
+#' - `DIZIONARIO_CAMPO_IN_PIU` — breaks nothing, and is direct evidence that
+#'   somebody edited the form by hand;
+#' - `DIZIONARIO_TIPO_DIVERSO` — a `request_status` gone free-text turns a
+#'   typo into a request to grant what somebody asked to revoke;
+#' - `DIZIONARIO_SCELTE_DIVERSE` — same type, and the value that revokes is
+#'   gone;
+#' - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
+#'   outcome, and the register carries a success nobody produced.
+#'
+#' @param actual The dictionary read back from the live project, in the same
+#'   eighteen-column shape `register_dictionary()` returns.
+#'
+#' @return A list with `conforms` and `differences`, the latter a character
+#'   vector of `CODE:field` strings. Shaped like `compare_readback()` because
+#'   it answers the same kind of question.
+#'
+#' @keywords internal
+compare_dictionary <- function(actual) {
+  expected <- register_dictionary()
+  field <- "Variable / Field Name"
+
+  # paste0() treats a zero-length vector as "" instead of propagating the
+  # empty, so the naive form reports one nameless difference on a dictionary
+  # that matches perfectly.
+  tag <- function(code, fields) {
+    if (length(fields) == 0L) character(0) else paste0(code, ":", fields)
+  }
+
+  readonly_in <- function(dictionary) {
+    annotation <- dictionary[["Field Annotation"]]
+    annotation[is.na(annotation)] <- ""
+    dictionary[[field]][grepl("@READONLY", annotation)]
+  }
+
+  # Only fields both sides carry can drift: the ones only one side has are
+  # already reported as absent, and comparing them here would say the same
+  # thing twice in a different vocabulary.
+  common <- intersect(expected[[field]], actual[[field]])
+
+  cell <- function(dictionary, column) {
+    at <- match(common, dictionary[[field]])
+    value <- as.character(dictionary[[column]][at])
+    value[is.na(value)] <- ""
+    value
+  }
+
+  drifted <- function(column) {
+    common[cell(expected, column) != cell(actual, column)]
+  }
+
+  # Compared as parsed pairs, not as the raw cell: REDCap may hand the same
+  # choices back with different spacing around the separators, and a collaudo
+  # that cries drift on a round trip is one nobody reads by the third run.
+  # Order stays significant — a reordering is an edit somebody made.
+  choices_of <- function(dictionary) {
+    vapply(
+      cell(dictionary, "Choices, Calculations, OR Slider Labels"),
+      function(text) {
+        parsed <- dictionary_choices(text)
+        if (nrow(parsed) == 0L) {
+          return("")
+        }
+        paste0(parsed[["code"]], "\r", parsed[["label"]], collapse = "\n")
+      },
+      character(1),
+      USE.NAMES = FALSE
+    )
+  }
+
+  differences <- c(
+    tag(
+      "DIZIONARIO_CAMPO_ASSENTE",
+      setdiff(expected[[field]], actual[[field]])
+    ),
+    tag(
+      "DIZIONARIO_CAMPO_IN_PIU",
+      setdiff(actual[[field]], expected[[field]])
+    ),
+    tag("DIZIONARIO_TIPO_DIVERSO", drifted("Field Type")),
+    tag(
+      "DIZIONARIO_SCELTE_DIVERSE",
+      common[choices_of(expected) != choices_of(actual)]
+    ),
+    tag(
+      "DIZIONARIO_READONLY_CADUTO",
+      setdiff(readonly_in(expected), readonly_in(actual))
+    )
+  )
+
+  list(conforms = length(differences) == 0L, differences = differences)
+}
+
+
 #' Turn one register row into a request
 #'
 #' The register's field names are the request's field names, so there is no map
