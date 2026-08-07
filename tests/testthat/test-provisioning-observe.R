@@ -103,8 +103,40 @@ test_that("the run record counts successful reads, not attempted instances", {
   expect_equal(record[["istanze"]], 2L)
   expect_equal(record[["letture_riuscite"]], 1L)
   expect_equal(record[["irraggiungibili"]], 1L)
-  expect_equal(record[["major_in_flotta"]], 17L)
-  expect_true(record[["major_singleton"]])
+  expect_equal(record[["major_fra_lette"]], 17L)
+  # one instance could not be read, so the fleet claim cannot be made
+  expect_false(record[["copertura_completa"]])
+  expect_false(record[["flotta_a_una_major"]])
+})
+
+
+test_that("the fleet claim is false whenever coverage is partial", {
+  # The clause that retires a compatibility branch fires when the set of majors
+  # in the fleet is a singleton. A flag computed over the instances that happen
+  # to answer would report a singleton while instances on an older major sit
+  # unread — and would retire a branch that is still needed. So the flag is
+  # false whenever it cannot know.
+  observations <- observe_instance("a", list(
+    ok = TRUE, gate = "collaudata",
+    payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    )
+  ))
+
+  tutte <- run_record(observations, at = "2026-08-07 03:00")
+  expect_true(tutte[["copertura_completa"]])
+  expect_true(tutte[["flotta_a_una_major"]])
+
+  parziale <- run_record(
+    observations,
+    at = "2026-08-07 03:00",
+    non_osservate = c("edc01", "mst01")
+  )
+  expect_equal(parziale[["major_fra_lette"]], 17L)
+  expect_false(parziale[["copertura_completa"]])
+  expect_false(parziale[["flotta_a_una_major"]])
+  expect_equal(parziale[["non_osservate"]], c("edc01", "mst01"))
 })
 
 
@@ -120,8 +152,8 @@ test_that("a run that read nothing reports zero reads", {
   record <- run_record(observations, at = "2026-08-07 03:00")
 
   expect_equal(record[["letture_riuscite"]], 0L)
-  expect_equal(length(record[["major_in_flotta"]]), 0L)
-  expect_false(record[["major_singleton"]])
+  expect_equal(length(record[["major_fra_lette"]]), 0L)
+  expect_false(record[["flotta_a_una_major"]])
 })
 
 
@@ -140,8 +172,8 @@ test_that("two majors in the fleet are not a singleton", {
 
   record <- run_record(observations, at = "2026-08-07 03:00")
 
-  expect_equal(record[["major_in_flotta"]], c(15L, 17L))
-  expect_false(record[["major_singleton"]])
+  expect_equal(record[["major_fra_lette"]], c(15L, 17L))
+  expect_false(record[["flotta_a_una_major"]])
   expect_equal(length(record[["impronte_superficie"]]), 2L)
 })
 
@@ -164,11 +196,11 @@ test_that("list fields serialize as arrays even when holding one item", {
 
   expect_true(is.list(back[["impronte_superficie"]]))
   expect_length(back[["impronte_superficie"]], 1L)
-  expect_true(is.list(back[["major_in_flotta"]]))
+  expect_true(is.list(back[["major_fra_lette"]]))
 
   # scalars must stay scalars: a run with one reading is not a list of one
   expect_true(is.numeric(back[["letture_riuscite"]]))
-  expect_true(is.logical(back[["major_singleton"]]))
+  expect_true(is.logical(back[["flotta_a_una_major"]]))
 })
 
 
@@ -180,6 +212,6 @@ test_that("an empty list-valued field stays an empty array, not null", {
   json <- run_record_json(run_record(observations, at = "2026-08-07 03:00"))
   back <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-  expect_true(is.list(back[["major_in_flotta"]]))
-  expect_length(back[["major_in_flotta"]], 0L)
+  expect_true(is.list(back[["major_fra_lette"]]))
+  expect_length(back[["major_fra_lette"]], 0L)
 })

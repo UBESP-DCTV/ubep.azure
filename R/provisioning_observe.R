@@ -93,20 +93,32 @@ observe_instance <- function(server, state, today = Sys.Date()) {
 #' exited would satisfy the alarm — a detector the fault can meet, which is the
 #' shape of defect this project has already found twice.
 #'
-#' `major_singleton` is the condition the two clauses on retiring compatibility
-#' branches rest on. Nothing observed it before this.
+#' `flotta_a_una_major` is the condition the two clauses on retiring
+#' compatibility branches rest on, and it is deliberately conservative: it is
+#' true only when the run covered every instance. A flag computed over whichever
+#' instances happened to answer would report a singleton while instances on an
+#' older major sat unread, and would retire a branch still in use. A flag that
+#' authorizes a destructive decision must be false when it cannot know.
+#'
+#' Found by running rather than by reading: with the module on three instances
+#' of fourteen, a field named for the fleet reported the fleet was a singleton
+#' while two instances on major 11 were never contacted.
 #'
 #' @param observations Rows from `observe_instance()`, bound together.
 #' @param at When the run finished, as `YYYY-MM-DD HH:MM`. Passed in rather
 #'   than read here so the record stays a pure function of what was observed.
+#' @param non_osservate Names of instances the run did not even attempt —
+#'   those without the module. Passed in so the record can state its own scope
+#'   instead of leaving the reader to assume it covered everything.
 #'
 #' @return A named list, ready to be serialized as one JSON object.
 #'
 #' @keywords internal
-run_record <- function(observations, at) {
+run_record <- function(observations, at, non_osservate = character()) {
   stopifnot(
     is.data.frame(observations),
-    is.character(at), length(at) == 1L
+    is.character(at), length(at) == 1L,
+    is.character(non_osservate)
   )
 
   # `unique(sort(x))` drops NA on its own; naming the intent here rather than
@@ -119,13 +131,19 @@ run_record <- function(observations, at) {
   reached <- observations[["raggiungibile"]]
   majors <- distinct(observations[["redcap_major"]][reached])
 
+  # Complete means every instance was attempted *and* answered. Either gap
+  # makes any statement about the fleet an extrapolation.
+  complete <- sum(!reached) == 0L && length(non_osservate) == 0L
+
   list(
     at = at,
     istanze = nrow(observations),
     letture_riuscite = sum(reached),
     irraggiungibili = sum(!reached),
-    major_in_flotta = as.integer(majors),
-    major_singleton = length(majors) == 1L,
+    non_osservate = non_osservate,
+    copertura_completa = complete,
+    major_fra_lette = as.integer(majors),
+    flotta_a_una_major = complete && length(majors) == 1L,
     impronte_superficie = distinct(observations[["surface_fingerprint"]]),
     impronte_allowlist = distinct(observations[["allowlist_fingerprint"]]),
     coppie_scadute = sum(observations[["scadute"]], na.rm = TRUE),
@@ -155,10 +173,10 @@ run_record_json <- function(record) {
   stopifnot(is.list(record))
 
   as_array <- c(
-    "major_in_flotta",
+    "major_fra_lette",
     "impronte_superficie",
     "impronte_allowlist",
-    "senza_modulo"
+    "non_osservate"
   )
 
   for (field in intersect(as_array, names(record))) {

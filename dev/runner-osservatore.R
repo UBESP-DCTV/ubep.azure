@@ -98,13 +98,16 @@ osservazioni <- do.call(rbind, lapply(con_modulo, function(istanza) {
   ubep.azure:::observe_instance(nome, stato, today = oggi)
 }))
 
+# Le istanze senza modulo entrano nel record come ambito dichiarato, non come
+# nota a margine: senza di loro un giro che ne legge tre su quattordici
+# direbbe che la flotta ha una major sola, e quella frase autorizza a
+# dismettere un ramo di compatibilita' che serve ancora.
 record <- ubep.azure:::run_record(
   osservazioni,
-  at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
-)
-
-record[["senza_modulo"]] <- vapply(
-  senza_modulo, function(x) as.character(x[["nome"]]), character(1)
+  at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"),
+  non_osservate = vapply(
+    senza_modulo, function(x) as.character(x[["nome"]]), character(1)
+  )
 )
 
 cat(ubep.azure:::run_record_json(record), "\n")
