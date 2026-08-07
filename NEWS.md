@@ -1,3 +1,27 @@
+# ubep.azure 0.9.0
+
+* **The job runs from a dedicated machine, and observes without comparing.**
+  `observe_instance()` turns one instance's `state` reply into a row — version,
+  major, gate, surface fingerprint, reachability, and the pairs whose
+  expiration has already passed — and `run_record()` builds the record a run
+  leaves behind. Neither touches the diff: with no register every real pair
+  would be classified as no longer wanted, so the danger is not the write call
+  but the comparison feeding it, and the comparison is not computed at all.
+* **A record states its own scope.** `flotta_a_una_major` is true only when
+  every instance was attempted and answered. The clause that retires a
+  compatibility branch fires on that flag, so a value computed over whichever
+  instances happened to answer would retire a branch still in use: a flag that
+  authorizes a destructive decision is false when it cannot know.
+* **The module reports the fingerprint of its own IP allow list**, never its
+  contents. The caller keeps no expected value and alarms on the change between
+  two runs, which makes a hand on any instance's perimeter an observed event
+  and avoids storing a digest small enough to enumerate. Parsing lives in one
+  place and the address check uses it, so the reported fingerprint and the
+  enforced list cannot drift apart.
+* `contract_version` becomes **3**. Reads tolerate every version; writes
+  tolerate 2 and everything after it, rather than 2 alone — pinning to one
+  version would refuse an instance the moment its module is updated.
+
 # ubep.azure 0.8.0
 
 * **The request register gains a schema.**

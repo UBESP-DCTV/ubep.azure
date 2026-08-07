@@ -452,3 +452,53 @@ test_that("an empty declaration still travels as an array", {
   expect_type(captured[["body"]][["data"]][["tested_fingerprints"]], "list")
   expect_length(captured[["body"]][["data"]][["tested_fingerprints"]], 0L)
 })
+
+
+test_that("a write against a contract 3 module is accepted", {
+  # eval
+  # Contract 3 adds the allow list fingerprint and keeps the surface handshake
+  # of contract 2, so it can still enforce what a write needs. Pinning writes
+  # to exactly 2 would refuse every instance the moment its module is updated —
+  # the deploy would break writing rather than extend it.
+  body <- '{"contract_version": 3, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.9.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": false, "results": [], "summary": {"creato": 1}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+      )),
+      dry_run = FALSE
+    )
+  )
+
+  # test
+  expect_true(result[["ok"]])
+  expect_equal(
+    result[["payload"]][["allowlist_fingerprint"]], "aabbccddeeff"
+  )
+})
+
+
+test_that("a read against a contract 3 module answers", {
+  # eval
+  body <- '{"contract_version": 3, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.9.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": true, "results": [], "summary": {"letti": 0}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_state("redcap.example.org", "s3cret")
+  )
+
+  # test
+  expect_true(result[["ok"]])
+  expect_equal(result[["gate"]], "collaudata")
+})

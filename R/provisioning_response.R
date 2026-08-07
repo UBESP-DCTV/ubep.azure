@@ -11,9 +11,11 @@
 #' @param body Raw response body.
 #' @param status HTTP status code.
 #' @param accepted Integer vector of contract versions this call tolerates.
-#'   Reads pass both, a write passes only the one that can enforce the surface
+#'   Reads pass every version, a write only those that can enforce the surface
 #'   handshake — a module that predates it would accept the write and simply
-#'   ignore the declaration.
+#'   ignore the declaration. That is contract 2 and everything after it, not
+#'   contract 2 alone: pinning to one version would refuse an instance the
+#'   moment its module is updated.
 #'
 #' @return A list with `ok`, `errors` and `payload`.
 #'

@@ -12,9 +12,11 @@ parse_module_response(body, status, accepted = c(1L, 2L))
 \item{status}{HTTP status code.}
 
 \item{accepted}{Integer vector of contract versions this call tolerates.
-Reads pass both, a write passes only the one that can enforce the surface
+Reads pass every version, a write only those that can enforce the surface
 handshake — a module that predates it would accept the write and simply
-ignore the declaration.}
+ignore the declaration. That is contract 2 and everything after it, not
+contract 2 alone: pinning to one version would refuse an instance the
+moment its module is updated.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{payload}.

@@ -78,7 +78,11 @@ module_call <- function(server,
   parsed <- parse_module_response(
     httr2::resp_body_string(response),
     status = httr2::resp_status(response),
-    accepted = if (writing) 2L else c(1L, 2L)
+    # Writes need a contract that can enforce the surface handshake, which is
+    # 2 and everything after it. Pinning to exactly 2 would refuse an instance
+    # the moment its module is updated: the deploy would break writing rather
+    # than extend it.
+    accepted = if (writing) c(2L, 3L) else c(1L, 2L, 3L)
   )
 
   # No payload means no major and no fingerprint, so any gate here would be
