@@ -146,7 +146,7 @@ test_that("two majors in the fleet are not a singleton", {
 })
 
 
-test_that("list-valued fields serialise as arrays even when they hold one item", {
+test_that("list fields serialise as arrays even when holding one item", {
   # The length-one array trap, on the emission side this time. `auto_unbox`
   # turns a one-element vector into a scalar, so a fleet with a single instance
   # would emit a string where the alert query expects an array — and the fault
