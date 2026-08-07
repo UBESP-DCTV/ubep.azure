@@ -95,3 +95,102 @@ request_from_row <- function(row) {
   names(request) <- fields
   request[!vapply(request, is.null, logical(1))]
 }
+
+
+#' Turn the register into the desired state
+#'
+#' The register declares requests; it does not describe reality. A pair that
+#' exists in REDCap and appears nowhere here means nothing, so this function
+#' never produces a revocation that a person did not ask for: only
+#' `request_status = "revoked"` does that.
+#'
+#' Three things keep a row out of the desired state, and they are not the same
+#' thing. A row with no resolved username is not a pair yet and is not an
+#' error. A pair that appears twice is an error on **both** rows, because
+#' either one of them is the mistake and there is no way to tell which —
+#' guessing which one wins is what a ledger does, and a register refuses. A row
+#' that fails validation carries the data-error codes back to whoever wrote it.
+#'
+#' @param register The register as a data frame, one row per pair, carrying at
+#'   least `record_id` and `request_status`.
+#'
+#' @return A list with `desired`, `revoked` and `errors`. The first two hold
+#'   requests that already went through `intake_request()`, each carrying its
+#'   `record_id` so the outcome knows where to go back. `errors` is named by
+#'   `record_id`.
+#'
+#' @keywords internal
+register_to_desired <- function(register) {
+  stopifnot(
+    is.data.frame(register),
+    all(c("record_id", "request_status") %in% names(register))
+  )
+
+  ids <- as.character(register[["record_id"]])
+  statuses <- as.character(register[["request_status"]])
+  requests <- lapply(
+    seq_len(nrow(register)),
+    function(i) request_from_row(register[i, , drop = FALSE])
+  )
+
+  is_pair <- vapply(
+    requests,
+    function(request) {
+      all(
+        vapply(
+          c("server", "project_id", "username"),
+          function(field) !is.null(request[[field]]),
+          logical(1)
+        )
+      )
+    },
+    logical(1)
+  )
+
+  keys <- vapply(seq_along(requests), function(i) {
+    if (!is_pair[[i]]) {
+      return(NA_character_)
+    }
+    paste(
+      requests[[i]][["server"]],
+      requests[[i]][["project_id"]],
+      requests[[i]][["username"]],
+      sep = "\r"
+    )
+  }, character(1))
+
+  # The NA guard is not decoration: `NA %in% NA` is TRUE, so without it every
+  # row still waiting for an identity would report itself as a duplicate.
+  repeated <- !is.na(keys) & keys %in% keys[duplicated(keys)]
+
+  desired <- list()
+  revoked <- list()
+  errors <- list()
+
+  for (i in seq_along(requests)) {
+    if (!is_pair[[i]]) {
+      next
+    }
+
+    if (repeated[[i]]) {
+      errors[[ids[[i]]]] <- "DATO_COPPIA_DUPLICATA"
+      next
+    }
+
+    taken <- intake_request(requests[[i]])
+    if (length(taken[["errors"]]) > 0L) {
+      errors[[ids[[i]]]] <- taken[["errors"]]
+      next
+    }
+
+    entry <- taken[["request"]]
+    entry[["record_id"]] <- ids[[i]]
+    if (identical(statuses[[i]], "revoked")) {
+      revoked[[length(revoked) + 1L]] <- entry
+    } else {
+      desired[[length(desired) + 1L]] <- entry
+    }
+  }
+
+  list(desired = desired, revoked = revoked, errors = errors)
+}

@@ -68,3 +68,117 @@ test_that("request_from_row carries no field the register does not send", {
     )
   )
 })
+
+
+test_that("register_to_desired splits by requested state", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1"),
+    register_row(record_id = "2", project_id = "28", request_status = "revoked")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  expect_length(split[["desired"]], 1L)
+  expect_length(split[["revoked"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "1")
+  expect_equal(split[["revoked"]][[1]][["record_id"]], "2")
+  expect_length(split[["errors"]], 0L)
+})
+
+
+test_that("a row without a username is not a pair, and is not an error either", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1"),
+    register_row(record_id = "2", username = "")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # The key is incomplete, so the row is not yet a pair: it stays out of the
+  # desired state without any special case, which is the whole point of keying
+  # on the username. It is waiting for the identity layer, not misfiled.
+  expect_length(split[["desired"]], 1L)
+  expect_length(split[["errors"]], 0L)
+})
+
+
+test_that("a pair present in two rows fails closed on both", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1", role_name = "data entry"),
+    register_row(record_id = "2", role_name = "read only")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # Guessing which row wins is what a ledger does; a register refuses. Both
+  # rows carry the error, because either one of them is the mistake and there
+  # is no way to tell which.
+  expect_length(split[["desired"]], 0L)
+  expect_setequal(names(split[["errors"]]), c("1", "2"))
+  expect_equal(split[["errors"]][["1"]], "DATO_COPPIA_DUPLICATA")
+  expect_equal(split[["errors"]][["2"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("the same person in two different projects is not a duplicate", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1", project_id = "27"),
+    register_row(record_id = "2", project_id = "28")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  expect_length(split[["desired"]], 2L)
+  expect_length(split[["errors"]], 0L)
+})
+
+
+test_that("the key does not collapse two different pairs", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1", project_id = "2", username = "7a@ubep.unipd.it"),
+    register_row(record_id = "2", project_id = "27", username = "a@ubep.unipd.it")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # Joined without a separator these two pairs read as the same string. The
+  # separator is not decoration, and this is the test that says so.
+  expect_length(split[["desired"]], 2L)
+  expect_length(split[["errors"]], 0L)
+})
+
+
+test_that("register_to_desired reports the data errors of validation", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1"),
+    register_row(record_id = "2", project_id = "28", expiration = "2020-01-01")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["errors"]][["2"]], "DATO_SCADENZA_NON_VALIDA")
+})
+
+
+test_that("the last day of access is converted once, at the border", {
+  # eval
+  last_day <- Sys.Date() + 30L
+  split <- register_to_desired(register_row(expiration = as.character(last_day)))
+
+  # test
+  # REDCap denies access when expiration <= TODAY, so the day it holds is
+  # already out: a request that says "until the 31st" has to be stored as the
+  # 1st. It is a one day error, which is to say the kind nobody sees until it
+  # concerns the last day of a study.
+  expect_equal(
+    split[["desired"]][[1]][["expiration"]],
+    as.character(last_day + 1L)
+  )
+})
