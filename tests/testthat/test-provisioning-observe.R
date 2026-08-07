@@ -215,3 +215,45 @@ test_that("an empty list-valued field stays an empty array, not null", {
   expect_true(is.list(back[["major_fra_lette"]]))
   expect_length(back[["major_fra_lette"]], 0L)
 })
+
+
+test_that("the record carries the gates, so an alarm can see a bad one", {
+  # The alarm on outcome fires on a gate other than `collaudata`. Without the
+  # gates in the record the rule would have nothing to read, and the run would
+  # look healthy while an instance refused every write.
+  observations <- rbind(
+    observe_instance("a", list(ok = TRUE, gate = "collaudata", payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    ))),
+    observe_instance("b", list(
+      ok = TRUE, gate = "non_collaudata", payload = list(
+        redcap_major = 17L, redcap_version = "17.9.9",
+        surface_fingerprint = "ffffffffffff", results = list()
+      )
+    ))
+  )
+
+  record <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(record[["cancelli"]], c("collaudata", "non_collaudata"))
+  expect_false(record[["tutti_collaudati"]])
+})
+
+
+test_that("all gates collaudata is only true when every read said so", {
+  observations <- observe_instance("a", list(
+    ok = TRUE, gate = "collaudata",
+    payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    )
+  ))
+  expect_true(run_record(observations, at = "x")[["tutti_collaudati"]])
+
+  # a run that read nothing has not seen a good gate, so the claim is false
+  niente <- observe_instance("a", list(
+    ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE", payload = NULL
+  ))
+  expect_false(run_record(niente, at = "x")[["tutti_collaudati"]])
+})

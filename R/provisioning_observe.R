@@ -130,6 +130,7 @@ run_record <- function(observations, at, non_osservate = character()) {
 
   reached <- observations[["raggiungibile"]]
   majors <- distinct(observations[["redcap_major"]][reached])
+  gates <- distinct(observations[["version_gate"]][reached])
 
   # Complete means every instance was attempted *and* answered. Either gap
   # makes any statement about the fleet an extrapolation.
@@ -144,6 +145,11 @@ run_record <- function(observations, at, non_osservate = character()) {
     copertura_completa = complete,
     major_fra_lette = as.integer(majors),
     flotta_a_una_major = complete && length(majors) == 1L,
+    cancelli = gates,
+    # False when nothing was read: a run that saw no gate has not seen a good
+    # one, and an alarm reading this must not take silence for assent.
+    tutti_collaudati = sum(reached) > 0L &&
+      identical(gates, "collaudata"),
     impronte_superficie = distinct(observations[["surface_fingerprint"]]),
     impronte_allowlist = distinct(observations[["allowlist_fingerprint"]]),
     coppie_scadute = sum(observations[["scadute"]], na.rm = TRUE),
@@ -176,6 +182,7 @@ run_record_json <- function(record) {
     "major_fra_lette",
     "impronte_superficie",
     "impronte_allowlist",
+    "cancelli",
     "non_osservate"
   )
 

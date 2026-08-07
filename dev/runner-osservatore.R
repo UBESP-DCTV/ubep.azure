@@ -110,7 +110,59 @@ record <- ubep.azure:::run_record(
   )
 )
 
-cat(ubep.azure:::run_record_json(record), "\n")
+# Log Analytics vuole `TimeGenerated`: entra nel record prima della
+# serializzazione invece di essere incollato nel JSON dopo, perche' incollare
+# stringhe dentro JSON gia' formato e' il modo di rompersi su un valore che
+# contiene una parentesi.
+record[["TimeGenerated"]] <- format(
+  Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"
+)
+
+json <- ubep.azure:::run_record_json(record)
+cat(json, "\n")
+
+# --- emissione ---------------------------------------------------------------
+
+# Il record si emette alla FINE della run e non all'inizio. Se dicesse solo
+# "il processo e' partito", un giro che parte, fallisce su ogni istanza e
+# termina soddisferebbe l'allarme sull'assenza: un rilevatore che il guasto
+# puo' accontentare. Per questo l'allarme guarda `letture_riuscite` e non
+# l'esistenza del record.
+#
+# La via e' la Logs Ingestion API con l'identita' gestita, non la vecchia Data
+# Collector: quella vuole una shared key, cioe' un altro segreto da custodire
+# per fare una cosa che l'identita' gia' fa senza.
+DCE <- Sys.getenv("UBEP_DCE")
+DCR <- Sys.getenv("UBEP_DCR")
+
+if (nzchar(DCE) && nzchar(DCR)) {
+  emesso <- tryCatch({
+    token <- token_imds("https://monitor.azure.com")
+    corpo <- paste0("[", json, "]")
+
+    httr2::request(
+      paste0(DCE, "/dataCollectionRules/", DCR, "/streams/Custom-UbepRun_CL")
+    ) |>
+      httr2::req_url_query(`api-version` = "2023-01-01") |>
+      httr2::req_headers(
+        Authorization = paste("Bearer", token),
+        `Content-Type` = "application/json"
+      ) |>
+      httr2::req_body_raw(corpo) |>
+      httr2::req_perform()
+
+    TRUE
+  }, error = function(e) {
+    message("emissione fallita: ", conditionMessage(e))
+    FALSE
+  })
+
+  # Un'emissione fallita non e' silenziosa: il codice d'uscita la porta fuori,
+  # cosi' il timer la registra e la run non risulta riuscita per intero.
+  if (!emesso) {
+    quit(status = 1L)
+  }
+}
 
 # Il dettaglio per istanza va sullo standard error, cosi' che lo standard
 # output resti il solo record e sia incollabile in una pipe senza filtri.
