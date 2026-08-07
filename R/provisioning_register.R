@@ -1,9 +1,9 @@
 #' Read the request register's data dictionary
 #'
 #' The dictionary is the schema, and it lives as a file rather than as R code
-#' because REDCap imports it as it is: one artefact, two consumers.
+#' because REDCap imports it as it is: one artifact, two consumers.
 #'
-#' @return A data frame with REDCap's eighteen data-dictionary columns.
+#' @return A data frame with the eighteen columns of a REDCap data dictionary.
 #'
 #' @keywords internal
 register_dictionary <- function() {

@@ -1,4 +1,4 @@
-test_that("dictionary_choices splits a REDCap choice string on the first comma", {
+test_that("dictionary_choices splits a choice string on the first comma", {
   # eval
   parsed <- dictionary_choices("a, alpha | b, beta, gamma")
 
@@ -34,12 +34,13 @@ test_that("every coded field uses its label as its own code", {
 })
 
 
-test_that("the fields only the job writes are the ones marked read-only", {
+test_that("the job-written fields are the ones marked read-only", {
   # eval
   dictionary <- register_dictionary()
   annotation <- dictionary[["Field Annotation"]]
   annotation[is.na(annotation)] <- ""
-  marked <- dictionary[["Variable / Field Name"]][grepl("@READONLY", annotation)]
+  names <- dictionary[["Variable / Field Name"]]
+  marked <- names[grepl("@READONLY", annotation)]
 
   # test
   # Without the tag a requester could type "applied" into the outcome and the
@@ -49,7 +50,7 @@ test_that("the fields only the job writes are the ones marked read-only", {
 })
 
 
-test_that("the register carries the field names the pure layer already speaks", {
+test_that("the register carries the names the pure layer speaks", {
   # eval
   fields <- register_dictionary()[["Variable / Field Name"]]
 
@@ -77,9 +78,10 @@ test_that("what the job writes is declared in the dictionary too", {
   )
 
   # test
-  # This is the seam between the two artefacts: adding an outcome field to the
+  # This is the seam between the two artifacts: adding an outcome field to the
   # dictionary without teaching the payload about it, or the other way round,
   # turns this red instead of producing a field nobody fills.
   expect_true(all(written %in% register_readonly_fields()))
-  expect_true(all(written %in% register_dictionary()[["Variable / Field Name"]]))
+  declared <- register_dictionary()[["Variable / Field Name"]]
+  expect_true(all(written %in% declared))
 })

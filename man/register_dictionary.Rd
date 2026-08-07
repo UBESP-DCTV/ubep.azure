@@ -7,10 +7,10 @@
 register_dictionary()
 }
 \value{
-A data frame with REDCap's eighteen data-dictionary columns.
+A data frame with the eighteen columns of a REDCap data dictionary.
 }
 \description{
 The dictionary is the schema, and it lives as a file rather than as R code
-because REDCap imports it as it is: one artefact, two consumers.
+because REDCap imports it as it is: one artifact, two consumers.
 }
 \keyword{internal}

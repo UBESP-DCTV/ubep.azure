@@ -37,7 +37,7 @@ test_that("request_from_row keeps the field names the pure layer speaks", {
 })
 
 
-test_that("request_from_row drops what is blank instead of carrying an empty string", {
+test_that("request_from_row drops what is blank, never keeps an empty string", {
   # eval
   no_dag <- request_from_row(register_row(dag_name = ""))
   no_expiry <- request_from_row(register_row(expiration = NA_character_))
@@ -87,7 +87,7 @@ test_that("register_to_desired splits by requested state", {
 })
 
 
-test_that("a row without a username is not a pair, and is not an error either", {
+test_that("a row without a username is not a pair, nor an error", {
   # eval
   register <- rbind(
     register_row(record_id = "1"),
@@ -140,8 +140,12 @@ test_that("the same person in two different projects is not a duplicate", {
 test_that("the key does not collapse two different pairs", {
   # eval
   register <- rbind(
-    register_row(record_id = "1", project_id = "2", username = "7a@ubep.unipd.it"),
-    register_row(record_id = "2", project_id = "27", username = "a@ubep.unipd.it")
+    register_row(
+      record_id = "1", project_id = "2", username = "7a@ubep.unipd.it"
+    ),
+    register_row(
+      record_id = "2", project_id = "27", username = "a@ubep.unipd.it"
+    )
   )
   split <- register_to_desired(register)
 
@@ -170,7 +174,9 @@ test_that("register_to_desired reports the data errors of validation", {
 test_that("the last day of access is converted once, at the border", {
   # eval
   last_day <- Sys.Date() + 30L
-  split <- register_to_desired(register_row(expiration = as.character(last_day)))
+  split <- register_to_desired(
+    register_row(expiration = as.character(last_day))
+  )
 
   # test
   # REDCap denies access when expiration <= TODAY, so the day it holds is
@@ -196,7 +202,7 @@ test_that("outcome_payload carries the outcome and nothing else", {
 
   # test
   # The body is where a bug could rewrite what people asked for. Keeping the
-  # columns exact is the structural defence, the same shape as the planner that
+  # columns exact is the structural defense, the same shape as the planner that
   # computes without naming the write functions: it is checked, not promised.
   expect_setequal(
     names(payload),
@@ -207,7 +213,7 @@ test_that("outcome_payload carries the outcome and nothing else", {
 
 
 test_that("outcome_payload refuses an outcome outside the vocabulary", {
-  # eval / test
+  # test
   expect_error(outcome_payload(record_id = "1", outcome = "ok"))
 })
 

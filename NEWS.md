@@ -1,3 +1,27 @@
+# ubep.azure 0.8.0
+
+* **The request register gains a schema.**
+  `inst/extdata/request-register-dictionary.csv` is the data dictionary of the
+  REDCap project that carries the desired state, and the pure layer can now
+  turn that register into the lists the diff already consumes.
+  `register_to_desired()` splits requested from revoked, refuses a pair that
+  appears twice rather than guessing which row wins, and leaves a row whose
+  identity is unresolved out of the desired state without calling it an error.
+* **A pair that exists in REDCap and appears nowhere in the register means
+  nothing.** Removing an access takes an explicit request, never an absence.
+  The diff has always classified an unrequested pair as `revocato`, which with
+  an empty register would name every right in the fleet: the register declares
+  requests, so it never produces a revocation nobody asked for.
+* The register's field names are the ones the pure layer already speaks, so no
+  map exists between the form and the request, and no key can fall into a
+  default without raising. Every coded field uses its label as its own code,
+  and a test on the dictionary keeps it that way.
+* `outcome_payload()` builds the body that writes an outcome back, with the
+  columns fixed in the function rather than assembled by the caller. What a
+  person asked for is intent and what happened is observation; a transport
+  error records itself without taking the row out of the desired state.
+
+
 # ubep.azure 0.7.0
 
 * **Writing is no longer confined to designated test projects.** The
