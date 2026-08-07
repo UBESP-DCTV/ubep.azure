@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/lib/VersionGate.php';
 require_once __DIR__ . '/lib/Surface.php';
+require_once __DIR__ . '/lib/Allowlist.php';
 require_once __DIR__ . '/lib/Auth.php';
 require_once __DIR__ . '/lib/StateReader.php';
 require_once __DIR__ . '/lib/FieldNames.php';
@@ -18,7 +19,7 @@ use UbepProvisioning\Surface;
 use UbepProvisioning\TestedSurfaces;
 use UbepProvisioning\VersionGate;
 
-const UBEP_CONTRACT_VERSION = 2;
+const UBEP_CONTRACT_VERSION = 3;
 const UBEP_FLOOR_MAJOR = 17;
 const UBEP_CEILING_MAJOR = 17;
 
@@ -126,6 +127,11 @@ $response = [
     'contract_version' => UBEP_CONTRACT_VERSION,
     'version_gate' => $gate,
     'surface_fingerprint' => $fingerprint,
+    // The digest of the perimeter, never its contents. The caller keeps no
+    // expected value and alarms on the change between two runs: that is what
+    // makes a hand on any instance's allow list an observed event, and what
+    // avoids storing an expected digest of IPv4 addresses anywhere.
+    'allowlist_fingerprint' => Allowlist::fingerprintOf($module),
     'dry_run' => $dryRun,
     'results' => [],
     'summary' => [],

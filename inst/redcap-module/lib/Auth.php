@@ -2,6 +2,8 @@
 
 namespace UbepProvisioning;
 
+require_once __DIR__ . '/Allowlist.php';
+
 /**
  * The channel's authorisation.
  *
@@ -37,13 +39,12 @@ class Auth
             return false;
         }
 
-        $entries = preg_split(
-            '/[\s,]+/',
-            trim($allowList),
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
-        if ($entries === false || $entries === []) {
+        // Parsed by Allowlist, which also fingerprints it. Two parsers would
+        // let the reported fingerprint and the enforced list drift apart, and
+        // the drift would show up as either a standing false alarm or a real
+        // change going unreported.
+        $entries = Allowlist::entriesOf($allowList);
+        if ($entries === []) {
             return false;
         }
 
