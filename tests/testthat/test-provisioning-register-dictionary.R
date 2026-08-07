@@ -218,6 +218,24 @@ test_that("a dictionary without the annotation column reports, not raises", {
 })
 
 
+test_that("a dictionary missing a compared column is not conforming", {
+  # eval
+  dictionary <- register_dictionary()
+  dictionary[["Field Type"]] <- NULL
+  verdict <- compare_dictionary(dictionary)
+
+  # test
+  # Without this the comparison of a length-17 vector against a length-0 one
+  # yields logical(0), so nothing is reported and a malformed dictionary reads
+  # as conforming — the silent pass this whole function exists to prevent, in
+  # the function itself.
+  expect_false(verdict[["conforms"]])
+  expect_true(
+    "DIZIONARIO_COLONNA_ASSENTE:Field Type" %in% verdict[["differences"]]
+  )
+})
+
+
 test_that("what the job writes is declared in the dictionary too", {
   # eval
   written <- setdiff(

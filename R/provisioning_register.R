@@ -78,7 +78,9 @@ register_readonly_fields <- function() {
 #' - `DIZIONARIO_SCELTE_DIVERSE` — same type, and the value that revokes is
 #'   gone;
 #' - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
-#'   outcome, and the register carries a success nobody produced.
+#'   outcome, and the register carries a success nobody produced;
+#' - `DIZIONARIO_COLONNA_ASSENTE` — the dictionary is malformed, and without
+#'   this code it would read as conforming rather than as unreadable.
 #'
 #' @param actual The dictionary read back from the live project, in the same
 #'   eighteen-column shape `register_dictionary()` returns.
@@ -105,6 +107,16 @@ compare_dictionary <- function(actual) {
     dictionary[[field]][grepl("@READONLY", annotation)]
   }
 
+  # Checked up front because an absent column does not raise downstream: the
+  # comparison of a seventeen-long vector against a zero-long one yields
+  # logical(0), nothing gets reported, and a malformed dictionary reads as
+  # conforming. That is the silent pass this function exists to prevent,
+  # happening inside the function.
+  columns <- c(
+    field, "Field Type", "Choices, Calculations, OR Slider Labels",
+    "Field Annotation"
+  )
+
   # Only fields both sides carry can drift: the ones only one side has are
   # already reported as absent, and comparing them here would say the same
   # thing twice in a different vocabulary.
@@ -122,7 +134,7 @@ compare_dictionary <- function(actual) {
   }
 
   # Compared as parsed pairs, not as the raw cell: REDCap may hand the same
-  # choices back with different spacing around the separators, and a collaudo
+  # choices back with different spacing around the separators, and a check
   # that cries drift on a round trip is one nobody reads by the third run.
   # Order stays significant — a reordering is an edit somebody made.
   choices_of <- function(dictionary) {
@@ -141,6 +153,7 @@ compare_dictionary <- function(actual) {
   }
 
   differences <- c(
+    tag("DIZIONARIO_COLONNA_ASSENTE", setdiff(columns, names(actual))),
     tag(
       "DIZIONARIO_CAMPO_ASSENTE",
       setdiff(expected[[field]], actual[[field]])
