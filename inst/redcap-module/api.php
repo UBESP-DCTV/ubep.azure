@@ -11,6 +11,7 @@ require_once __DIR__ . '/lib/TestedSurfaces.php';
 require_once __DIR__ . '/lib/Planner.php';
 require_once __DIR__ . '/lib/Applier.php';
 
+use UbepProvisioning\Allowlist;
 use UbepProvisioning\Applier;
 use UbepProvisioning\Auth;
 use UbepProvisioning\Planner;
