@@ -144,3 +144,42 @@ test_that("two majors in the fleet are not a singleton", {
   expect_false(record[["major_singleton"]])
   expect_equal(length(record[["impronte_superficie"]]), 2L)
 })
+
+
+test_that("list-valued fields serialise as arrays even when they hold one item", {
+  # The length-one array trap, on the emission side this time. `auto_unbox`
+  # turns a one-element vector into a scalar, so a fleet with a single instance
+  # would emit a string where the alert query expects an array — and the fault
+  # stays hidden until the day only one instance answers.
+  observations <- observe_instance("a", list(
+    ok = TRUE, gate = "collaudata",
+    payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    )
+  ))
+
+  json <- run_record_json(run_record(observations, at = "2026-08-07 03:00"))
+  back <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+
+  expect_true(is.list(back[["impronte_superficie"]]))
+  expect_length(back[["impronte_superficie"]], 1L)
+  expect_true(is.list(back[["major_in_flotta"]]))
+
+  # scalars must stay scalars: a run with one reading is not a list of one
+  expect_true(is.numeric(back[["letture_riuscite"]]))
+  expect_true(is.logical(back[["major_singleton"]]))
+})
+
+
+test_that("an empty list-valued field stays an empty array, not null", {
+  observations <- observe_instance("a", list(
+    ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE", payload = NULL
+  ))
+
+  json <- run_record_json(run_record(observations, at = "2026-08-07 03:00"))
+  back <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+
+  expect_true(is.list(back[["major_in_flotta"]]))
+  expect_length(back[["major_in_flotta"]], 0L)
+})

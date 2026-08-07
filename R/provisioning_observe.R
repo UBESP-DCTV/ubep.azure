@@ -132,3 +132,40 @@ run_record <- function(observations, at) {
     coppie_totali = sum(observations[["coppie"]], na.rm = TRUE)
   )
 }
+
+
+#' Serialise a run record, keeping list-valued fields as arrays
+#'
+#' `auto_unbox` collapses a one-element vector into a scalar, which is right
+#' for the counters and wrong for everything that is semantically a list: a
+#' fleet with a single instance would emit a string where the alert query
+#' expects an array, and the fault would stay hidden until the day only one
+#' instance answers.
+#'
+#' This is the same length-one array trap the client already met on the request
+#' side, where the declared fingerprints had to be sent as a list because the
+#' registry holds one row. Same trap, other end of the wire.
+#'
+#' @param record What `run_record()` returned.
+#'
+#' @return A JSON string, one object.
+#'
+#' @keywords internal
+run_record_json <- function(record) {
+  stopifnot(is.list(record))
+
+  as_array <- c(
+    "major_in_flotta",
+    "impronte_superficie",
+    "impronte_allowlist",
+    "senza_modulo"
+  )
+
+  for (field in intersect(as_array, names(record))) {
+    record[[field]] <- I(record[[field]])
+  }
+
+  as.character(
+    jsonlite::toJSON(record, auto_unbox = TRUE, null = "null", digits = NA)
+  )
+}

@@ -107,7 +107,7 @@ record[["senza_modulo"]] <- vapply(
   senza_modulo, function(x) as.character(x[["nome"]]), character(1)
 )
 
-cat(jsonlite::toJSON(record, auto_unbox = TRUE, null = "null"), "\n")
+cat(ubep.azure:::run_record_json(record), "\n")
 
 # Il dettaglio per istanza va sullo standard error, cosi' che lo standard
 # output resti il solo record e sia incollabile in una pipe senza filtri.
