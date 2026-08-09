@@ -1,0 +1,515 @@
+---
+title: "Manutenzione del canale di autorizzazione"
+lang: it
+---
+
+Questa guida è per chi mantiene il canale: oggi noi, domani chi verrà dopo.
+Risponde a «da dove arriva questo valore e che cosa si rompe se lo cambio»,
+che è una domanda diversa da quella di chi compila una richiesta — per quella
+ci sono le work instruction nella cartella condivisa.
+
+**Questa guida nomina i ruoli, non i valori.** «L'istanza che ospita il
+registro», «la macchina da cui gira il job», «il segreto del registro in Key
+Vault». Il repository è pubblico, quindi ogni volta che servirebbe un valore
+concreto qui si trova il *nome del parametro* e il rimando al foglio dei
+parametri di esercizio, che vive nella cartella condivisa. Dei segreti si cita
+il nome sotto cui stanno, mai il contenuto: il nome è un indirizzo, non una
+credenziale.
+
+## 1. Che cos'è il canale
+
+Cinque pezzi, ciascuno con un mestiere.
+
+**Il modulo REDCap.** Codice PHP installato sulle istanze osservate. Espone tre
+operazioni — leggere lo stato di una coppia, asserire dei diritti, revocarli —
+dietro un segreto condiviso e una lista di indirizzi ammessi. È l'unico pezzo
+che tocca `\UserRights`, e l'unico che calcola le due impronte: quella della
+superficie di REDCap e quella della propria lista di indirizzi.
+
+**Il client R.** Questo pacchetto. Parla al modulo, valida le richieste,
+calcola il confronto fra desiderato e reale, e decide che cosa dichiarare al
+modulo quando chiede di scrivere.
+
+**Il registro delle richieste.** Un progetto REDCap su un'istanza dedicata,
+dove i referenti scrivono chi deve avere che cosa. Il registro *dichiara delle
+richieste*; non descrive la realtà. Una coppia che esiste su un'istanza e non
+compare nel registro non significa niente — in particolare non significa «da
+revocare».
+
+**Il perimetro.** Una macchina virtuale dedicata in Azure, con identità
+gestita, da cui parte una lavorazione giornaliera. Sul disco della macchina non
+c'è nessun segreto: il token si chiede al servizio di metadati dell'istanza,
+che risponde solo a chi gira su quella macchina, e con quel token si legge il
+Key Vault. L'indirizzo pubblico della macchina è statico per necessità e non
+per comodità — è l'unica voce ammessa nelle liste di indirizzi delle istanze,
+e cambiarlo le chiude tutte insieme.
+
+**La telemetria e gli allarmi.** Ogni esecuzione lascia un record in un
+workspace di Log Analytics, attraverso un punto di raccolta e una regola di
+raccolta. Sei regole d'allarme leggono quel record e scrivono a un gruppo di
+azione.
+
+```
+     referenti                        chi mantiene
+         │                                  │
+         ▼                                  ▼
+  ┌──────────────┐                 ┌──────────────────┐
+  │ registro     │                 │ client R         │
+  │ richieste    │◄- - - - - - - - │ (questo          │
+  │ (REDCap)     │  legge          │  pacchetto)      │
+  └──────────────┘  (non ancora)   └────────┬─────────┘
+                                            │
+                               stato / asserisci / revoca
+                                            │
+                                            ▼
+  ┌─────────────────────────┐      ┌──────────────────┐
+  │ perimetro               │      │ modulo REDCap    │
+  │ - identità gestita      │─────►│ sulle istanze    │
+  │ - segreti in Key Vault  │      │ osservate        │
+  │ - lavorazione al giorno │      └─────────┬────────┘
+  └───────────┬─────────────┘                │
+              │                              │ due impronte:
+              │ un record per esecuzione     │ superficie, indirizzi
+              ▼                              │
+  ┌─────────────────────────┐                │
+  │ telemetria              │◄───────────────┘
+  │ + sei regole d'allarme  │
+  └─────────────────────────┘
+```
+
+**Oggi la lavorazione osserva e non confronta**, e la freccia «legge» verso il
+registro è tratteggiata apposta. Le ragioni stanno in §2.
+
+## 2. I due cancelli, e che cosa fa scattare ciascuno
+
+Il canale non decide di scrivere in un posto solo. Due cancelli indipendenti
+stanno fra una richiesta e una scrittura, e rispondono a due domande diverse.
+
+### Il soffitto di major
+
+Il primo cancello confronta le versioni, ed è l'unico punto del codice che lo
+fa. La finestra è espressa in **major interi**, non in versioni complete: due
+versioni dentro lo stesso major non hanno bisogno di essere ordinate, il che
+toglie di mezzo la trappola dell'ordinamento lessicografico.
+
+Tre regimi:
+
+| Regime | Quando | Effetto |
+|---|---|---|
+| sotto il pavimento | major minore del minimo | il canale rifiuta ogni operazione |
+| collaudata | dentro la finestra | operazione ordinaria |
+| sopra il soffitto | major maggiore del massimo | la scrittura è forzata a simulazione |
+
+**Il major è una dichiarazione di politica, non una garanzia di
+compatibilità.** Dice quali versioni scegliamo di sostenere e su quali
+proviamo, e questo è tutto ciò che dice. La compatibilità la controlla l'altro
+cancello, e la misura sul parco lo mostra: la superficie da cui il canale
+dipende cambia *dentro* un major e resta identica attraverso tre major
+consecutivi.
+
+### La stretta di mano sull'impronta
+
+Il secondo cancello confronta le **superfici**. Il modulo calcola l'impronta
+della superficie che il canale usa — le firme di sei metodi e la mappa dei
+privilegi — e la riporta a ogni risposta. Il client dichiara, quando chiede di
+scrivere, l'elenco delle impronte contro cui è stato collaudato. Il modulo
+concede la scrittura solo se la propria impronta è in quell'elenco.
+
+`check_fingerprint()` **declassa soltanto**: può portare un'istanza da
+collaudata a non collaudata, mai il contrario. La direzione unica è la
+proprietà che rende il meccanismo sicuro da estendere.
+
+> Un'impronta ignota non è un guasto: è una versione che aspetta di essere
+> collaudata. Il declassamento è il modo in cui il sistema **chiede di essere
+> ricollaudato** invece di scrivere alla cieca.
+
+Anche una risposta senza impronta, o con un'impronta di forma sbagliata,
+declassa. La forma si controlla prima del confronto e mai dopo, perché un
+elemento JSON che arriva come lista di uno invece che come scalare verrebbe
+altrimenti confrontato — e potrebbe combaciare — dove sta un valore singolo.
+
+### Misurate e certificate non sono la stessa cosa
+
+Il registro delle superfici, un file CSV impacchettato, porta due colonne che
+si somigliano e non vanno confuse.
+
+- `tested_fingerprints()` restituisce le impronte **misurate**: qualcuno ha
+  letto lo stato di quell'istanza e ha registrato che cosa ha visto.
+- `certified_fingerprints()` restituisce le sole impronte con una **data di
+  conformità**: su quella superficie una run di conformità ha scritto per
+  davvero, riletto, e visto che il risultato era quello asserito.
+
+Il chiamante ordinario dichiara le certificate. La run di conformità dichiara
+le misurate, e deve: la superficie che sta per certificare non ha una data per
+definizione, e pretenderla ricreerebbe la trappola d'ordine — il cancello
+forzerebbe la simulazione, la run non potrebbe scrivere, e la data non
+potrebbe essere guadagnata mai. Una riga aggiunta da una semplice lettura di
+stato **misura** una superficie, non certifica che cosa succede a scriverci.
+
+### Due punti ciechi, dichiarati
+
+**L'impronta misura dichiarazioni, non comportamenti.** Un cambiamento nel
+*corpo* di uno dei sei metodi, a firma invariata, resta invisibile. È per
+costruzione, non per difetto: la conferma che il lettore legge non allarga ciò
+che guarda.
+
+**L'impronta ha un ingresso che non è la versione di REDCap.** La mappa dei
+privilegi può guadagnare un campo in base a un'impostazione dell'istanza,
+fuori dal blocco condizionato dal progetto. Se quell'impostazione venisse
+accesa, l'impronta cambierebbe senza alcun aggiornamento di REDCap: le
+scritture si degraderebbero a simulazione e si andrebbe a cercare un cambio di
+versione che non c'è stato. È un rischio di diagnosi, non di sicurezza, ed è
+scritto qui perché costa mezza giornata a chi non lo sa.
+
+### Il confronto fra desiderato e reale è spento
+
+`provisioning_diff()` esiste, è collaudato, ed è la parte del canale che
+decide che cosa succede. **La lavorazione giornaliera non lo chiama.**
+
+La ragione è di ordine, non di qualità. Il registro dichiara il desiderato;
+finché il registro non è popolato, il desiderato è vuoto, e un confronto fra
+un desiderato vuoto e un reale pieno classifica **ogni coppia esistente** come
+non più voluta. Non è la chiamata che scrive a essere pericolosa: è il
+confronto che la alimenterebbe. Per questo la versione 1 della lavorazione non
+lo calcola affatto, invece di calcolarlo e non usarlo — e un controllo in
+`tests/testthat/test-runner-guardie.R` sorveglia che resti così.
+
+La condizione di accensione è una sola: **il registro popolato**, cioè a fine
+migrazione del parco. Questa guida non descrive come si accende, ed è
+deliberato: una procedura scritta è una procedura che qualcuno esegue.
+
+Va saputo anche che quella guardia è l'unico presidio, e ha un limite noto:
+sta sotto `tests/testthat/` ma sorveglia un file in `dev/`, che è fuori dal
+pacchetto costruito, quindi sotto `R CMD check` non gira.
+
+## 3. Il protocollo di riqualificazione
+
+Un aggiornamento di REDCap che cambia la superficie è **procedura ordinaria**,
+non caso eccezionale. Da qui in avanti il parco si aggiorna, e ogni
+aggiornamento che tocca la superficie chiede questi quattro passi, in
+quest'ordine.
+
+1. **Leggere l'impronta corrente** dall'istanza, con una lettura di stato.
+2. **Aggiungere la riga** al registro delle superfici, con la data di oggi e la
+   conformità vuota. Le righe vecchie non si toccano: certificano le superfici
+   che le istanze non ancora aggiornate espongono ancora.
+3. **Eseguire la conformità**, che può scrivere perché dichiara le impronte
+   misurate e non quelle certificate.
+4. **La run scrive lei la data.** Non si digita a mano: un innesco che dipende
+   da qualcuno che si ricorda di scrivere una data è un promemoria, ed è
+   proprio la cosa che il meccanismo esiste per sostituire.
+
+Fra il passo 1 e il passo 4 il chiamante ordinario continua a leggere, e le sue
+scritture sono degradate a simulazione. È il comportamento voluto.
+
+`dev/riqualifica-superficie.R` esegue i quattro passi nell'ordine, e ha un modo
+`--diagnosi` che dice solo dove siamo senza scrivere niente. Esiste come script
+invece che come procedura da rifare a mano perché il momento in cui serve è
+subito dopo una finestra di manutenzione, che è il momento peggiore per
+improvvisare quattro passi in ordine.
+
+**Il vincolo d'ordine fra i due cancelli.** Se l'istanza è *sopra il soffitto*
+di major, la scrittura è forzata a simulazione e i cinque casi della conformità
+escono rossi per una ragione che non è una difformità. Va alzato prima il
+soffitto nel modulo e ridistribuito il modulo, e solo dopo rieseguita la
+conformità. Mai il contrario. Per un aggiornamento dentro lo stesso major
+questo ramo non scatta, ed è il caso ordinario.
+
+**Due precondizioni che lo script non può verificare da solo**, e che vanno
+controllate prima:
+
+- l'account di prova non deve avere diritti nel progetto di conformità. Il
+  passo di revoca non ripristina niente: toglie i diritti, e questo coincide
+  con lo stato iniziale solo se quello stato era vuoto;
+- il progetto di conformità deve già definire i ruoli e il gruppo di accesso
+  che i casi nominano. Il canale asserisce le appartenenze e non le crea, e un
+  ruolo mancante torna come errore di dato su un caso — che **somiglia** a una
+  difformità e non lo è.
+
+Il progetto di conformità dev'essere un progetto destinato a durare. Il primo
+non lo era: nato da uno spike, marcato come cancellato quando lo spike è stato
+smontato, avrebbe continuato a funzionare per tutto il conto alla rovescia di
+REDCap e poi sarebbe stato ripulito. Un progetto di conformità marcato per la
+cancellazione fallisce nel modo peggiore: non adesso, ma alla prima run dopo un
+cambio di versione — cioè la run il cui fallimento verrebbe letto come «la
+versione nuova rompe il canale».
+
+## 4. Il registro delle richieste
+
+### Lo schema è un file, non del codice
+
+Il dizionario del registro vive come CSV impacchettato, e REDCap lo importa
+com'è: **un artefatto, due consumatori**. I nomi dei campi del registro sono
+anche i nomi dei campi della richiesta, quindi fra i due non c'è nessuna mappa
+e nessuna chiave può cadere in un valore di riserva senza che qualcuno se ne
+accorga. È l'intera ragione per cui quei nomi sono stati scelti così.
+
+### Chi scrive che cosa
+
+Il referente compila la richiesta. I campi d'esito li scrive la lavorazione, e
+sul form portano `@READONLY`: la marca governa il **form**, non l'API, quindi
+la lavorazione continua a scriverli mentre chi compila non può. Senza quella
+marca un referente potrebbe digitare «applicata» nel campo d'esito, e il
+registro porterebbe un successo che nessuno ha prodotto.
+
+Una richiesta è **una persona su un progetto**. Una coppia che compare due
+volte è un errore su **entrambe** le righe, non su una: una delle due è
+l'errore e non c'è modo di sapere quale. Indovinare quale vince è ciò che fa un
+libro mastro; un registro si rifiuta.
+
+### Verificare che il progetto sia ancora quello che il canale si aspetta
+
+`compare_dictionary()` rilegge il dizionario dal progetto vivo e lo confronta
+con quello impacchettato. I due nascono identici; la domanda è se lo siano
+ancora dopo un import che ha perso un campo, una modifica a mano sul form, o un
+tipo allentato per far passare una validazione.
+
+Sei codici, e nessuno è cosmetico:
+
+| Codice | Che cosa è successo | Perché conta |
+|---|---|---|
+| campo assente | un campo del dizionario non c'è più | la richiesta perde quel campo senza dirlo |
+| campo in più | c'è un campo che il dizionario non prevede | non rompe niente, ed è la prova diretta che qualcuno ha modificato il form a mano |
+| tipo diverso | il tipo del campo è cambiato | uno stato di richiesta diventato testo libero trasforma un refuso in una richiesta di concedere ciò che qualcuno ha chiesto di revocare |
+| scelte diverse | stesso tipo, valori ammessi diversi | il valore che revoca può non esserci più |
+| readonly caduto | la marca di sola lettura non c'è più | chi compila può scrivere un esito che nessuno ha prodotto |
+| colonna assente | manca una colonna del dizionario stesso | il dizionario è illeggibile, e senza questo codice risulterebbe conforme invece che illeggibile |
+
+**Un import riuscito non basta**, ed è il punto della sezione. Nessuno di
+quei difetti solleva da nessun'altra parte: la lettura di una riga tratta una
+colonna assente come «non impostato» invece che come errore, e il canale
+ignora i campi che non conosce. Sono entrambi comportamenti corretti, e sono
+anche la ragione per cui la deriva qui è silenziosa. Il confronto è l'unica
+cosa che guarda.
+
+L'ultimo codice merita una riga in più: senza di lui un dizionario a cui manca
+una colonna verrebbe letto come conforme, perché non ci sarebbe niente da
+confrontare e «nessuna differenza» è la risposta che si dà quando non si è
+guardato niente.
+
+## 5. Gli allarmi
+
+Sei regole attive, tutte con risoluzione automatica e finestra di due giorni.
+Si dividono in due famiglie, e la **gravità dice quale**:
+
+- **gravità 1 — «non possiamo più vedere»**: la lavorazione non ha lasciato
+  nessun record; oppure il record c'è ma non porta le colonne che deve;
+- **gravità 2 — «abbiamo trovato un problema»**: una o più istanze non si sono
+  lasciate leggere; un'istanza non è in stato collaudato; la superficie di
+  un'istanza è cambiata; le liste di indirizzi sono cambiate o divergono fra
+  istanze.
+
+I nomi esatti delle sei regole stanno nel foglio dei parametri.
+
+### La forma della query, e perché è quella
+
+Ogni regola prende **l'ultima osservazione** e la giudica: `top 1 by
+TimeGenerated desc` **prima** dei filtri, non un filtro su una finestra
+temporale.
+
+La differenza non è di stile. Una query nella forma «è successo qualcosa di
+brutto nelle ultime ventiquattr'ore?» resta vera per ventiquattr'ore, perché i
+record sono immutabili: un guasto riparato in cinque minuti tiene la regola
+rossa per un giorno intero. La forma giusta per un osservatore giornaliero è
+«l'ultima osservazione com'è andata?», che torna verde appena atterra una run
+buona.
+
+Questa è anche la ragione per cui una regola sola con quattro rami in `or` è
+stata ritirata: spezzarla in quattro senza rimediare prima la finestra avrebbe
+fatto ereditare a tutte e quattro il rosso appiccicoso, moltiplicando le
+notifiche invece di dividerle.
+
+### La regola ritirata è disattivata, non cancellata
+
+La vecchia regola a quattro rami è ancora nella sottoscrizione, disattivata,
+con la descrizione che spiega perché è stata sostituita. Va lasciata dov'è:
+cancellarla toglierebbe quella spiegazione. Il ritorno indietro è una modifica
+che la riabilita.
+
+### La deduplica, misurata
+
+Con la risoluzione automatica **spenta**, ogni valutazione che trova la
+condizione vera crea un allarme **nuovo** — il precedente non si risolve mai,
+quindi non c'è niente su cui deduplicare. Misurato: tre valutazioni, tre
+allarmi. Con la risoluzione automatica accesa, l'allarme aperto resta e non se
+ne crea un altro: cinque valutazioni, un allarme.
+
+Il difetto della configurazione vecchia non era il silenzio, era la
+ripetizione. È lo stesso modo di rendere inutile un monitor, preso dal lato
+opposto.
+
+### Il punto cieco che ha richiesto una settima regola
+
+Una condizione del tipo «l'array ha più di un elemento» vale **falso** su una
+colonna assente. Quindi, se il modulo smettesse di riportare un'impronta, la
+regola corrispondente tacerebbe invece di allarmare — e la regola sull'assenza
+di record non lo coprirebbe, perché guarda un'altra colonna. Il canale
+perderebbe la sorveglianza su quell'asse **in silenzio**, e ogni segnale
+disponibile direbbe che la sorveglianza funziona.
+
+La regola sul record incompleto chiude quel buco, ed **elenca esplicitamente**
+le colonne che pretende invece di dire «tutte». Non è stile. Scritta come
+«tutte le colonne», dipenderebbe da ciò che la lavorazione capita di emettere,
+e diventerebbe rossa ogni volta che estendiamo il record — cioè insegnerebbe il
+riflesso «ignorala», che è il difetto che la regola esiste per togliere. Con la
+lista esplicita la dipendenza si rovescia: è l'allarme a dichiarare il proprio
+contratto, e una colonna nuova non è pretesa finché non la aggiungiamo, cosa
+che facciamo dopo averla vista arrivare.
+
+**Un array vuoto invece è corretto che sia verde.** Durante un'interruzione le
+impronte sono vuote e le regole di omogeneità tacciono, delegando a quelle
+sulla raggiungibilità e sull'assenza. La delega è verificata in entrambe le
+direzioni.
+
+## 6. Che cosa fare quando suona
+
+Una voce per regola, con la prima cosa da guardare. Le regole sono nominate per
+contenuto; i nomi stanno nel foglio dei parametri.
+
+**Nessun record (gravità 1).** La lavorazione non è partita, o è morta prima di
+emettere. Guardare lo stato dell'unità di sistema e i suoi log sulla macchina
+del perimetro. Se l'unità è partita e ha fallito, l'errore è quasi sempre nel
+recupero del token o del segreto.
+
+**Record incompleto (gravità 1).** Il record c'è ma manca una colonna pretesa.
+Due cause, e vanno distinte prima di toccare qualcosa: o il modulo ha smesso di
+riportare quel campo su qualche istanza, oppure la regola di raccolta non
+conosce ancora una colonna che la lavorazione ha cominciato a emettere. La
+seconda si riconosce dal fatto che la colonna è **nuova**, e si ripara
+aggiornando la regola di raccolta.
+
+**Istanze irraggiungibili (gravità 2).** Una o più istanze non hanno risposto.
+Guardare quante, e quali: se sono tutte, il sospetto è sul perimetro — tipico
+l'indirizzo della macchina cambiato, che chiude tutte le liste insieme. Se è
+una sola, il sospetto è su quell'istanza.
+
+**Cancello non collaudato (gravità 2).** Un'istanza non è in stato collaudato.
+Leggere quale dei due cancelli l'ha declassata: se è il soffitto di major,
+l'istanza è stata aggiornata oltre la finestra del modulo; se è l'impronta, la
+superficie è cambiata dentro lo stesso major. Nel primo caso si alza il
+soffitto prima di ricollaudare, nel secondo si va direttamente al protocollo di
+§3.
+
+**Superficie disomogenea (gravità 2).** Le istanze osservate non espongono la
+stessa impronta di superficie. Normale durante un'ondata di aggiornamenti, in
+cui le istanze passano alla versione nuova una per volta; da spiegare se
+l'ondata è finita.
+
+**Liste di indirizzi divergenti (gravità 2).** Le istanze non ammettono lo
+stesso insieme di indirizzi. **Un'impronta unica su tutte significa che le
+liste coincidono**; se ne compaiono due, due istanze ammettono indirizzi
+diversi, e la differenza va spiegata prima di essere accettata. L'impronta è un
+digest di una manciata di indirizzi: lo spazio dei candidati è minuscolo, e
+ricostruire il contenuto per enumerazione costa meno che andare a leggere la
+configurazione. È un rilevatore di cambiamento, non un segreto.
+
+**Prima di inseguire un allarme isolato.** L'ingestione ha consistenza
+eventuale: per qualche decina di secondi due query identiche possono vedere
+«ultimo record» diversi. Una regola che valuta dentro quella finestra può
+scegliere un record vecchio e produrre uno scatto che si richiude alla
+valutazione dopo. Con una valutazione all'ora e una run al giorno è raro e
+costa poco — ma se non lo si sa, è il classico allarme fantasma che si insegue
+per settimane.
+
+## 7. Le trappole misurate
+
+Ogni voce è un fatto già pagato una volta. Sono scritte qui perché ricomprarle
+costa quanto la prima volta.
+
+**L'ingestione scarta in silenzio le colonne che la regola di raccolta non
+conosce.** Chi aggiunge un campo al record e non aggiorna prima la regola non
+ottiene un errore: ottiene un record accettato con quel campo vuoto. Da qui la
+regola d'ordine: **si aggiorna la regola di raccolta prima di distribuire la
+lavorazione** che emette la colonna nuova, mai dopo.
+
+**`readr::read_csv()` ha `trim_ws = TRUE` per default.** Un confronto cella per
+cella fra due dizionari diceva «nessuna differenza», ed era lo strumento a
+dirlo: lo spazio iniziale che REDCap aggiunge alle celle *Field Annotation*
+veniva tagliato in lettura. Ricompare rileggendo con `trim_ws = FALSE`.
+
+**Su Windows `az` è `az.cmd`.** Un URL con una `&` dentro viene rianalizzato da
+`cmd.exe`, che spezza il comando. Si passano i parametri con l'opzione
+dedicata, senza mettere la `&` nell'URL. E l'uscita in formato tabulato emette
+terminatori di riga CRLF: il ritorno a capo va tolto prima di confrontare la
+stringa con qualcosa.
+
+**Alcune sottoutilità di `az` chiedono conferma interattiva per installare
+un'estensione.** In una shell non interattiva muoiono con un errore di lettura
+da terminale, che non ha niente a che vedere con il comando. Si aggira
+chiamando l'API di gestione direttamente, che non installa niente.
+
+**`accountEnabled` non torna se non lo si seleziona.** La lettura di un'utenza
+dalla riga di comando omette la proprietà se non la si chiede esplicitamente, e
+in formato tabulato esce come «nessun valore» — che si legge come «disattivato»
+o come «non so», a seconda di come si è disposti. Va chiesta con la selezione
+esplicita dei campi.
+
+**Bloccare l'utenza nel sistema di identità non ferma il canale**, e va tenuta
+bloccata: il token dell'API non passa dal sistema di identità, quindi l'unica
+credenziale che apre il registro resta quella in Key Vault. **Non** sospendere
+invece l'utente *dentro* REDCap: è una leva dal nome simile e blocca anche
+l'API.
+
+**Tre servizi Azure con consistenza eventuale.** Una rilettura immediata non è
+una verifica. Vale per l'ingestione della telemetria, per lo stato delle regole
+d'allarme e per le proprietà di un'utenza appena modificata. Quando la domanda
+è «è cambiato davvero?», la risposta si prende due volte a distanza.
+
+**`paste0("X:", character(0))` torna `"X:"`, non `character(0)`.** Un vettore
+vuoto in `paste0()` non propaga il vuoto: lo riempie. È il modo in cui un
+elenco di errori vuoto diventa un elenco di un errore senza contenuto, che poi
+viene contato come «c'è un problema».
+
+**Il modulo si distribuisce con `git archive`, mai copiando dal working tree.**
+Su Windows la copia dal working tree porta con sé i terminatori di riga CRLF, e
+il PHP arriva sull'istanza diverso da quello in git. E in PowerShell la pipe
+fra `git archive` e `ssh` **corrompe l'archivio**: la pipe non è binaria. Si
+scrive il tar su file e lo si trasferisce, in due passi.
+
+**Il verde di un controllo mai stato rosso vale poco.** Ogni guardia di questo
+canale è stata provata in entrambe le direzioni, e in un caso pinnando la
+finestra su record storici di stato noto invece di iniettare record falsi nella
+tabella — che poi resterebbero a inquinare ogni lettura futura.
+
+## 8. Dove stanno i valori
+
+Nel **foglio dei parametri di esercizio**, nella cartella condivisa. Il rimando
+è sempre **per nome del parametro**, mai per posizione nel foglio, così che
+riordinare il foglio non invalidi questa guida.
+
+Il foglio raccoglie sei famiglie:
+
+- il registro delle richieste: URL, istanza, identificativo del progetto, nome
+  del modulo e numero dei campi;
+- l'utenza di servizio: nome utente, gruppo di appartenenza, stato
+  dell'account, ruolo sul registro;
+- i segreti **per nome**: il Key Vault, il token del registro, il segreto del
+  modulo per ciascuna istanza;
+- la macchina del perimetro: nome, dimensione, indirizzo pubblico, alias di
+  connessione, unità di sistema e orario;
+- la telemetria: workspace, tabella, punto di raccolta, regola di raccolta,
+  gruppo di azione;
+- la flotta osservata: quali istanze hanno il modulo, le due impronte correnti,
+  il numero di coppie e quante hanno una scadenza.
+
+**Ogni riga del foglio porta la data in cui il valore è stato verificato**, e
+non quella in cui è stato scritto. Su servizi con consistenza eventuale «quando
+l'hai guardato» è parte del valore: una riga senza data è una riga di cui
+nessuno sa se è ancora vera.
+
+Le righe della flotta osservata **non si modificano a mano**: sono misure, e il
+loro valore corretto è quello che la lavorazione riporta. Stanno nel foglio
+perché chi legge un allarme deve poter confrontare ciò che vede con ciò che era
+normale l'ultima volta che qualcuno ha guardato.
+
+## Che cosa questa guida non copre
+
+- **Il provisioning delle identità.** Non è ancora automatizzato: la creazione
+  dell'account si fa a mano, con la procedura storica. Il confine è nominato
+  invece di taciuto, perché chi cerca «come nasce l'account» deve trovare una
+  risposta, e «non ancora automatizzato» è una risposta.
+- **Il caricamento in batch delle richieste.** Passa da IT. Un import per
+  identificatore di record permetterebbe a un referente di sovrascrivere le
+  righe di un altro, e la difesa nativa non è ancora in piedi.
+- **L'accensione del confronto fra desiderato e reale.** Vedi §2: qui si dice
+  che è spento e perché, non come si accende.
