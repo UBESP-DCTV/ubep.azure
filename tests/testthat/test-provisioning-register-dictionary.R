@@ -77,12 +77,17 @@ test_that("the register carries the names the pure layer speaks", {
 
 test_that("a project answering with the packaged dictionary conforms", {
   # eval
-  verdict <- compare_dictionary(register_dictionary())
+  instances <- c("srvA", "srvB")
+  verdict <- compare_dictionary(
+    register_dictionary(instances = instances),
+    instances = instances
+  )
 
   # test
   # The baseline the other cases are read against: without it, a comparison
   # that reported drift for everything would look just as green as one that
-  # works.
+  # works. Read with a list on both sides, because the packaged file is now a
+  # template and comparing a template against itself is a different question.
   expect_true(verdict[["conforms"]])
   expect_equal(verdict[["differences"]], character(0))
 })
@@ -167,17 +172,19 @@ test_that("a field whose choices changed is reported by name", {
 
 test_that("choices that differ only in spacing are not drift", {
   # eval
-  dictionary <- register_dictionary()
+  instances <- c("srvA", "srvB")
+  dictionary <- register_dictionary(instances = instances)
   respaced <- dictionary
   column <- "Choices, Calculations, OR Slider Labels"
   row <- respaced[["Variable / Field Name"]] == "request_status"
   respaced[[column]][row] <- "active, active|revoked, revoked"
-  verdict <- compare_dictionary(respaced)
+  verdict <- compare_dictionary(respaced, instances = instances)
 
   # test
   # A collaudo that cries drift on a round trip is a collaudo nobody reads by
   # the third run. What the channel contracts on is the set of codes, which
-  # this string carries unchanged.
+  # this string carries unchanged. The list is passed so that the assertion
+  # stays about spacing and not about the fleet.
   expect_true(verdict[["conforms"]])
   expect_equal(verdict[["differences"]], character(0))
 })
@@ -305,6 +312,137 @@ test_that("an empty instance list is refused, and is not the same as none", {
   expect_error(
     register_dictionary(instances = c("srvA", NA)),
     regexp = "non-empty character"
+  )
+})
+
+
+test_that("with a list, drift in the fleet choices is still reported", {
+  # eval
+  dictionary <- register_dictionary(instances = c("srvA", "srvB"))
+  verdict <- compare_dictionary(dictionary, instances = c("srvA", "srvC"))
+
+  # test
+  # The point of the whole change: separating schema from data must not become,
+  # by inattention, a reduction of what the comparison sees. With the list in
+  # hand this is the same check it has always been.
+  expect_false(verdict[["conforms"]])
+  expect_true("DIZIONARIO_SCELTE_DIVERSE:server" %in% verdict[["differences"]])
+})
+
+
+test_that("with a list, a reordering of the fleet choices is drift", {
+  # eval
+  dictionary <- register_dictionary(instances = c("srvA", "srvB"))
+  verdict <- compare_dictionary(dictionary, instances = c("srvB", "srvA"))
+
+  # test
+  # Order stays significant, as it already is for every other coded field: a
+  # reordering is an edit somebody made.
+  expect_false(verdict[["conforms"]])
+  expect_true("DIZIONARIO_SCELTE_DIVERSE:server" %in% verdict[["differences"]])
+})
+
+
+test_that("with the matching list, the same dictionary conforms", {
+  # eval
+  instances <- c("srvA", "srvB")
+  verdict <- compare_dictionary(
+    register_dictionary(instances = instances),
+    instances = instances
+  )
+
+  # test
+  # The baseline for the "with a list" mode: without it, a comparison that
+  # reported drift for everything would look just as green as one that works.
+  expect_true(verdict[["conforms"]])
+  expect_equal(verdict[["differences"]], character(0))
+})
+
+
+test_that("without a list, a sound dictionary is judged only partially", {
+  # eval
+  verdict <- compare_dictionary(register_dictionary(instances = c("srvA")))
+
+  # test
+  # A comparison that could not look does not return a green. This is the same
+  # discipline DIZIONARIO_COLONNA_ASSENTE exists for: whoever wants a full
+  # verdict passes the list. Nothing else is reported, so the sixteen fields
+  # were all compared and all matched.
+  expect_false(verdict[["conforms"]])
+  expect_equal(
+    verdict[["differences"]],
+    "DIZIONARIO_SCELTE_NON_CONFRONTATE:server"
+  )
+})
+
+
+test_that("without a list, malformed fleet choices are still drift", {
+  # eval
+  dictionary <- register_dictionary(instances = c("srvA", "srvB"))
+  row <- dictionary[["Variable / Field Name"]] == "server"
+  dictionary[["Choices, Calculations, OR Slider Labels"]][row] <-
+    "srvA, alpha | srvB, srvB"
+  verdict <- compare_dictionary(dictionary)
+
+  # test
+  # What can be asserted without knowing which instances exist: every choice
+  # has its code equal to its label. A code that differs from its label forces
+  # the client to hold a map between the two, and that is drift whether or not
+  # we know the fleet.
+  expect_false(verdict[["conforms"]])
+  expect_true("DIZIONARIO_SCELTE_DIVERSE:server" %in% verdict[["differences"]])
+})
+
+
+test_that("without a list, an empty fleet field is drift", {
+  # eval
+  verdict <- compare_dictionary(register_dictionary())
+
+  # test
+  # The template compared against itself. Sixteen fields match, and the
+  # seventeenth has no choices at all — which is right for a template and wrong
+  # for a live project, so it is reported rather than excused.
+  expect_false(verdict[["conforms"]])
+  expect_true("DIZIONARIO_SCELTE_DIVERSE:server" %in% verdict[["differences"]])
+})
+
+
+test_that("compare_dictionary refuses an empty list too", {
+  # test
+  # The refusal has to hold at both doors, not only at the one where it is
+  # implemented: a caller reaching the fleet field through the comparison must
+  # not be able to assert an empty fleet where the other function forbids it.
+  sound <- register_dictionary(instances = "srvA")
+  expect_error(
+    compare_dictionary(sound, instances = character(0)),
+    regexp = "non-empty character"
+  )
+  expect_error(
+    compare_dictionary(sound, instances = c("srvA", "")),
+    regexp = "non-empty character"
+  )
+  expect_error(
+    compare_dictionary(sound, instances = c("srvA", NA)),
+    regexp = "non-empty character"
+  )
+})
+
+
+test_that("without a list, the other sixteen fields are still compared", {
+  # eval
+  dictionary <- register_dictionary(instances = c("srvA"))
+  row <- dictionary[["Variable / Field Name"]] == "request_status"
+  dictionary[["Choices, Calculations, OR Slider Labels"]][row] <-
+    "active, active"
+  verdict <- compare_dictionary(dictionary)
+
+  # test
+  # The check that says the sixteen were not weakened while the seventeenth was
+  # being touched. Losing the only value that revokes anything has to stay
+  # visible in the mode without a list, which is the mode anyone calling this
+  # by hand will use first.
+  expect_true(
+    "DIZIONARIO_SCELTE_DIVERSE:request_status" %in% verdict[["differences"]]
   )
 })
 

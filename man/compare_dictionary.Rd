@@ -4,11 +4,16 @@
 \alias{compare_dictionary}
 \title{Compare a project's dictionary against the packaged one}
 \usage{
-compare_dictionary(actual)
+compare_dictionary(actual, instances = NULL)
 }
 \arguments{
 \item{actual}{The dictionary read back from the live project, in the same
 eighteen-column shape \code{register_dictionary()} returns.}
+
+\item{instances}{Character vector of instance names, passed through to
+\code{register_dictionary()}. With it, the choices of \code{server} are compared by
+content as every other field is. Without it, they are compared by shape
+and the substitution is declared.}
 }
 \value{
 A list with \code{conforms} and \code{differences}, the latter a character
@@ -40,7 +45,13 @@ gone;
 \item \code{DIZIONARIO_READONLY_CADUTO} — a requester can type \code{applied} into the
 outcome, and the register carries a success nobody produced;
 \item \code{DIZIONARIO_COLONNA_ASSENTE} — the dictionary is malformed, and without
-this code it would read as conforming rather than as unreadable.
+this code it would read as conforming rather than as unreadable;
+\item \code{DIZIONARIO_SCELTE_NON_CONFRONTATE} — reported for \code{server} when no
+instance list was given: its choices are the fleet, so without the list
+only their shape can be judged. It makes \code{conforms} false on an otherwise
+sound dictionary, deliberately — a comparison that could not look at a
+field must not be able to return a green, which is the same reason
+\code{DIZIONARIO_COLONNA_ASSENTE} exists.
 }
 }
 \keyword{internal}

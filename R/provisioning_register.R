@@ -119,18 +119,28 @@ register_readonly_fields <- function() {
 #' - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
 #'   outcome, and the register carries a success nobody produced;
 #' - `DIZIONARIO_COLONNA_ASSENTE` — the dictionary is malformed, and without
-#'   this code it would read as conforming rather than as unreadable.
+#'   this code it would read as conforming rather than as unreadable;
+#' - `DIZIONARIO_SCELTE_NON_CONFRONTATE` — reported for `server` when no
+#'   instance list was given: its choices are the fleet, so without the list
+#'   only their shape can be judged. It makes `conforms` false on an otherwise
+#'   sound dictionary, deliberately — a comparison that could not look at a
+#'   field must not be able to return a green, which is the same reason
+#'   `DIZIONARIO_COLONNA_ASSENTE` exists.
 #'
 #' @param actual The dictionary read back from the live project, in the same
 #'   eighteen-column shape `register_dictionary()` returns.
+#' @param instances Character vector of instance names, passed through to
+#'   `register_dictionary()`. With it, the choices of `server` are compared by
+#'   content as every other field is. Without it, they are compared by shape
+#'   and the substitution is declared.
 #'
 #' @return A list with `conforms` and `differences`, the latter a character
 #'   vector of `CODE:field` strings. Shaped like `compare_readback()` because
 #'   it answers the same kind of question.
 #'
 #' @keywords internal
-compare_dictionary <- function(actual) {
-  expected <- register_dictionary()
+compare_dictionary <- function(actual, instances = NULL) {
+  expected <- register_dictionary(instances)
   field <- "Variable / Field Name"
 
   # paste0() treats a zero-length vector as "" instead of propagating the
@@ -191,6 +201,42 @@ compare_dictionary <- function(actual) {
     )
   }
 
+  # The one field whose choices are operating data rather than the contract's
+  # vocabulary. Without the list there is nothing to compare them against, so
+  # what can still be asserted is their shape: every choice carries its code
+  # equal to its label, none is empty, and there is at least one.
+  fleet_field <- "server"
+
+  well_formed_fleet <- function() {
+    at <- match(fleet_field, common)
+    if (is.na(at)) {
+      return(TRUE)
+    }
+    text <- cell(actual, "Choices, Calculations, OR Slider Labels")
+    if (length(text) < at) {
+      return(FALSE)
+    }
+    parsed <- dictionary_choices(text[[at]])
+    nrow(parsed) > 0L &&
+      all(nzchar(parsed[["code"]])) &&
+      identical(parsed[["code"]], parsed[["label"]])
+  }
+
+  drifted_choices <- common[choices_of(expected) != choices_of(actual)]
+  not_compared <- character(0)
+
+  if (is.null(instances)) {
+    # Judged by shape instead of by content, and the substitution is declared:
+    # a check that could not look must not be able to return a green.
+    drifted_choices <- setdiff(drifted_choices, fleet_field)
+    if (!well_formed_fleet()) {
+      drifted_choices <- c(drifted_choices, fleet_field)
+    }
+    if (fleet_field %in% common) {
+      not_compared <- fleet_field
+    }
+  }
+
   differences <- c(
     tag("DIZIONARIO_COLONNA_ASSENTE", setdiff(columns, names(actual))),
     tag(
@@ -202,10 +248,8 @@ compare_dictionary <- function(actual) {
       setdiff(actual[[field]], expected[[field]])
     ),
     tag("DIZIONARIO_TIPO_DIVERSO", drifted("Field Type")),
-    tag(
-      "DIZIONARIO_SCELTE_DIVERSE",
-      common[choices_of(expected) != choices_of(actual)]
-    ),
+    tag("DIZIONARIO_SCELTE_DIVERSE", drifted_choices),
+    tag("DIZIONARIO_SCELTE_NON_CONFRONTATE", not_compared),
     tag(
       "DIZIONARIO_READONLY_CADUTO",
       setdiff(readonly_in(expected), readonly_in(actual))
