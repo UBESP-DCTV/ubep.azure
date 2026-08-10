@@ -1,6 +1,6 @@
 "Variable / Field Name","Form Name","Section Header","Field Type","Field Label","Choices, Calculations, OR Slider Labels","Field Note","Text Validation Type OR Show Slider Number","Text Validation Min","Text Validation Max",Identifier?,"Branching Logic (Show field only if...)","Required Field?","Custom Alignment","Question Number (surveys only)","Matrix Group Name","Matrix Ranking?","Field Annotation"
 record_id,request_register,,text,"Record ID",,,,,,,,,,,,,
-server,request_register,"The pair",radio,"REDCap instance","edc01, edc01 | edc03, edc03 | edc04, edc04 | edc05, edc05 | edc06, edc06 | edc07, edc07 | edc08, edc08 | edc09, edc09 | edc10, edc10 | edc11, edc11 | edc12, edc12 | edc13, edc13 | mst01, mst01",,,,,,,y,,,,,
+server,request_register,"The pair",radio,"REDCap instance",,,,,,,,y,,,,,
 project_id,request_register,,text,"Project PID",,"The identifier shown in the project's own URL.",integer,,,,,y,,,,,
 username,request_register,,text,"Username (UPN)",,"Leave blank unless you already know it: it is filled in once the identity is resolved.",email,,,,,,,,,,
 first_name,request_register,"The person",text,"First name",,,,,,,,y,,,,,

@@ -10,7 +10,7 @@ test_that("dictionary_choices splits a choice string on the first comma", {
 
 test_that("every coded field uses its label as its own code", {
   # eval
-  dictionary <- register_dictionary()
+  dictionary <- register_dictionary(instances = c("srvA", "srvB"))
   coded <- dictionary[
     dictionary[["Field Type"]] %in% c("radio", "dropdown", "checkbox"),
   ]
@@ -20,6 +20,11 @@ test_that("every coded field uses its label as its own code", {
   # to the other, and a reordering of the choices would then shift that map in
   # silence. Making them equal removes the map, and this test is what keeps a
   # convention from decaying into a habit.
+  #
+  # Read with a list rather than as the template: on the template `server` has
+  # no choices, so this assertion would compare two empty vectors and pass
+  # without having looked at the field it exists to check. It would have stayed
+  # green while covering one field fewer, which no failure announces.
   expect_gt(nrow(coded), 0L)
   for (row in seq_len(nrow(coded))) {
     parsed <- dictionary_choices(
@@ -232,6 +237,74 @@ test_that("a dictionary missing a compared column is not conforming", {
   expect_false(verdict[["conforms"]])
   expect_true(
     "DIZIONARIO_COLONNA_ASSENTE:Field Type" %in% verdict[["differences"]]
+  )
+})
+
+
+test_that("the packaged dictionary is a template with no fleet in it", {
+  # eval
+  dictionary <- register_dictionary()
+  row <- dictionary[["Variable / Field Name"]] == "server"
+  choices <- dictionary[["Choices, Calculations, OR Slider Labels"]][row]
+
+  # test
+  # The choices of `server` are the fleet, which changes when the machines
+  # change rather than when the contract does. Keeping them here coupled a
+  # release of this package to every movement of the fleet, and published the
+  # list in a public repository. The other coded fields are the contract's own
+  # vocabulary and stay.
+  expect_equal(nrow(dictionary), 17L)
+  expect_true(is.na(choices) || !nzchar(choices))
+  for (name in c("identity", "request_status", "outcome")) {
+    kept <- dictionary[["Choices, Calculations, OR Slider Labels"]][
+      dictionary[["Variable / Field Name"]] == name
+    ]
+    expect_true(nzchar(kept), info = name)
+  }
+})
+
+
+test_that("an instance list fills the template's choices", {
+  # eval
+  dictionary <- register_dictionary(instances = c("srvA", "srvB"))
+  row <- dictionary[["Variable / Field Name"]] == "server"
+  parsed <- dictionary_choices(
+    dictionary[["Choices, Calculations, OR Slider Labels"]][row]
+  )
+
+  # test
+  # Code equal to label, like every other coded field: a code that differs from
+  # its label forces the client to hold a map, and a reordering would then
+  # shift that map in silence.
+  expect_equal(parsed[["code"]], c("srvA", "srvB"))
+  expect_equal(parsed[["label"]], c("srvA", "srvB"))
+  expect_equal(nrow(dictionary), 17L)
+})
+
+
+test_that("an empty instance list is refused, and is not the same as none", {
+  # test
+  # NULL means "I am not passing it, judge as best you can". A zero-length
+  # vector means "the fleet is this, and it is empty" — a false statement that
+  # would produce a dictionary indistinguishable from the template, reached for
+  # the opposite reason. An empty or missing name would silently become the
+  # choice ", " inside a dictionary that otherwise looks sound.
+  #
+  # The message is asserted, not merely the failure: before the argument
+  # existed a bare expect_error() was satisfied by "unused argument", so it
+  # passed for a reason that was about to disappear — green on a check that had
+  # never once been red for its own reason.
+  expect_error(
+    register_dictionary(instances = character(0)),
+    regexp = "non-empty character"
+  )
+  expect_error(
+    register_dictionary(instances = c("srvA", "")),
+    regexp = "non-empty character"
+  )
+  expect_error(
+    register_dictionary(instances = c("srvA", NA)),
+    regexp = "non-empty character"
   )
 })
 
