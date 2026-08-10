@@ -14,8 +14,16 @@
 # impronta di superficie, raggiungibilita', e le coppie la cui scadenza e' gia'
 # passata -- che e' una delle tre derive, ed e' proprieta' del solo reale.
 #
-# I nomi delle istanze non stanno in questo file: il repository e' pubblico.
-# Arrivano da un inventario sulla macchina, fuori da git.
+# Nessun nome che identifichi una risorsa -- le istanze, il Key Vault, il punto
+# di raccolta, la regola, il flusso -- sta in questo file: il repository e'
+# pubblico. Arrivano tutti dall'ambiente dell'unita' o da un inventario sulla
+# macchina, fuori da git.
+#
+# Quindi nessun valore di riserva, perche' un valore di riserva e' un valore
+# pubblicato: scriverlo come default non lo rende meno presente nel file, lo
+# rende solo meno visibile a chi lo cerca. L'inventario fa eccezione perche' il
+# suo default e' un percorso sul disco della macchina, non un nome che
+# identifica qualcosa dentro la sottoscrizione.
 
 suppressMessages(library(ubep.azure))
 
@@ -23,7 +31,20 @@ INVENTARIO <- Sys.getenv(
   "UBEP_INVENTARIO",
   "/etc/ubep-provisioning/istanze.json"
 )
-KEYVAULT <- Sys.getenv("UBEP_KEYVAULT", "kv-ubep-provisioning")
+KEYVAULT <- Sys.getenv("UBEP_KEYVAULT")
+
+# Un Key Vault non configurato e' un errore di configurazione, e va detto
+# cosi'. Lasciandolo passare vuoto, ogni istanza uscirebbe con il segreto non
+# leggibile e la run somiglierebbe a una flotta irraggiungibile: manderebbe a
+# cercare il guasto sulle istanze invece che sull'unita' che la lancia. E' la
+# stessa distinzione fra TRASPORTO e un dato mancante che la conformita' fa.
+if (!nzchar(KEYVAULT)) {
+  stop(
+    "UBEP_KEYVAULT non e' impostata: senza il nome del Key Vault non si ",
+    "legge nessun segreto, e la run direbbe che la flotta e' irraggiungibile.",
+    call. = FALSE
+  )
+}
 
 # --- identita' gestita ------------------------------------------------------
 
@@ -132,16 +153,23 @@ cat(json, "\n")
 # La via e' la Logs Ingestion API con l'identita' gestita, non la vecchia Data
 # Collector: quella vuole una shared key, cioe' un altro segreto da custodire
 # per fare una cosa che l'identita' gia' fa senza.
+#
+# Il nome del flusso sta accanto a DCE e DCR e non nella riga della URL: e' un
+# nome di risorsa come gli altri due, e teneva compagnia a loro solo per
+# distrazione. La condizione qui sotto lo pretende insieme agli altri, cosi'
+# che una configurazione a meta' salti l'emissione invece di comporre una URL
+# valida verso un flusso che non e' quello.
 DCE <- Sys.getenv("UBEP_DCE")
 DCR <- Sys.getenv("UBEP_DCR")
+STREAM <- Sys.getenv("UBEP_STREAM")
 
-if (nzchar(DCE) && nzchar(DCR)) {
+if (nzchar(DCE) && nzchar(DCR) && nzchar(STREAM)) {
   emesso <- tryCatch({
     token <- token_imds("https://monitor.azure.com")
     corpo <- paste0("[", json, "]")
 
     httr2::request(
-      paste0(DCE, "/dataCollectionRules/", DCR, "/streams/Custom-UbepRun_CL")
+      paste0(DCE, "/dataCollectionRules/", DCR, "/streams/", STREAM)
     ) |>
       httr2::req_url_query(`api-version` = "2023-01-01") |>
       httr2::req_headers(
