@@ -433,6 +433,18 @@ dedicata, senza mettere la `&` nell'URL. E l'uscita in formato tabulato emette
 terminatori di riga CRLF: il ritorno a capo va tolto prima di confrontare la
 stringa con qualcosa.
 
+**E non è solo la `&`: anche la barra verticale.** Una query di telemetria è
+fatta di barre verticali, e passata come parametro a `az` su Windows viene
+rianalizzata dalla stessa shell. Il modo in cui si scopre è il peggiore
+possibile: **il comando esce zero con una risposta vuota**, quindi non
+somiglia a un errore ma a un workspace senza dati — che è la conclusione
+sbagliata più costosa che si possa trarre guardando la telemetria.
+
+L'aggiramento che vale per entrambe è lo stesso, e toglie la causa invece di
+schivarla: si chiede il token con `az` e si esegue la chiamata come richiesta
+REST, con la query nel corpo. Un corpo JSON non passa da nessuna shell, quindi
+nessun carattere ha bisogno di essere protetto.
+
 **Alcune sottoutilità di `az` chiedono conferma interattiva per installare
 un'estensione.** In una shell non interattiva muoiono con un errore di lettura
 da terminale, che non ha niente a che vedere con il comando. Si aggira
