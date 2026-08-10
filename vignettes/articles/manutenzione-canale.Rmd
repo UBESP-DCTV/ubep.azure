@@ -264,7 +264,7 @@ con quello impacchettato. I due nascono identici; la domanda è se lo siano
 ancora dopo un import che ha perso un campo, una modifica a mano sul form, o un
 tipo allentato per far passare una validazione.
 
-Sei codici, e nessuno è cosmetico:
+Sette codici, e nessuno è cosmetico:
 
 | Codice | Che cosa è successo | Perché conta |
 |---|---|---|
@@ -274,6 +274,7 @@ Sei codici, e nessuno è cosmetico:
 | scelte diverse | stesso tipo, valori ammessi diversi | il valore che revoca può non esserci più |
 | readonly caduto | la marca di sola lettura non c'è più | chi compila può scrivere un esito che nessuno ha prodotto |
 | colonna assente | manca una colonna del dizionario stesso | il dizionario è illeggibile, e senza questo codice risulterebbe conforme invece che illeggibile |
+| scelte non confrontate | l'elenco delle istanze non è stato fornito | le scelte di quel campo sono la flotta, non lo schema: senza l'elenco se ne può giudicare solo la forma, e un confronto che non ha potuto guardare non deve restituire un verde |
 
 **Un import riuscito non basta**, ed è il punto della sezione. Nessuno di
 quei difetti solleva da nessun'altra parte: la lettura di una riga tratta una
@@ -282,10 +283,22 @@ ignora i campi che non conosce. Sono entrambi comportamenti corretti, e sono
 anche la ragione per cui la deriva qui è silenziosa. Il confronto è l'unica
 cosa che guarda.
 
-L'ultimo codice merita una riga in più: senza di lui un dizionario a cui manca
-una colonna verrebbe letto come conforme, perché non ci sarebbe niente da
-confrontare e «nessuna differenza» è la risposta che si dà quando non si è
-guardato niente.
+Il codice sulla colonna assente merita una riga in più: senza di lui un
+dizionario a cui manca una colonna verrebbe letto come conforme, perché non ci
+sarebbe niente da confrontare e «nessuna differenza» è la risposta che si dà
+quando non si è guardato niente.
+
+Il settimo dice una cosa diversa dagli altri sei: non riporta una deriva,
+riporta un **limite del giudizio**. Le scelte di quel campo sono l'elenco delle
+istanze, cioè un dato che cambia quando cambia la flotta e non quando cambia il
+contratto, e che per questo non vive nel pacchetto — il pacchetto ne porta un
+modello con quella cella vuota, e chi confronta fornisce l'elenco. Chi lo
+fornisce riceve il confronto per intero; chi non lo fornisce riceve un giudizio
+parziale che si dichiara tale, invece di un verde che non ha guardato.
+
+Il modello, di suo, non è importabile: REDCap rifiuta un campo a scelta singola
+che non ha scelte. È voluto, ed è ciò che impedisce di importarlo per sbaglio
+al posto del dizionario vero.
 
 ## 5. Gli allarmi
 
