@@ -1,5 +1,77 @@
 # Changelog
 
+## ubep.azure 0.9.1
+
+- **The endpoint imports the class it calls.** `api.php` declares no
+  namespace, so the `Allowlist` added in 0.9.0 resolved to the global
+  one and every authorized request raised an `Error` that REDCap turned
+  into its generic API reply — the channel answered 400 to a valid
+  secret and nothing was logged. A new test reads `api.php` as tokens
+  and refuses any class it names unqualified that does not resolve once
+  the module is loaded, which is the failure `php -l` cannot see. Anyone
+  running 0.9.0 must move to this release: the module directory of 0.9.0
+  serves no request that authenticates.
+- **The module’s `VERSION` tracks the package again.** It had stayed at
+  0.7.0 through two releases, so `module_version` in every reply named a
+  version the code was not.
+
+## ubep.azure 0.9.0
+
+- **The job runs from a dedicated machine, and observes without
+  comparing.**
+  [`observe_instance()`](https://ubesp-dctv.github.io/ubep.azure/reference/observe_instance.md)
+  turns one instance’s `state` reply into a row — version, major, gate,
+  surface fingerprint, reachability, and the pairs whose expiration has
+  already passed — and
+  [`run_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/run_record.md)
+  builds the record a run leaves behind. Neither touches the diff: with
+  no register every real pair would be classified as no longer wanted,
+  so the danger is not the write call but the comparison feeding it, and
+  the comparison is not computed at all.
+- **A record states its own scope.** `flotta_a_una_major` is true only
+  when every instance was attempted and answered. The clause that
+  retires a compatibility branch fires on that flag, so a value computed
+  over whichever instances happened to answer would retire a branch
+  still in use: a flag that authorizes a destructive decision is false
+  when it cannot know.
+- **The module reports the fingerprint of its own IP allow list**, never
+  its contents. The caller keeps no expected value and alarms on the
+  change between two runs, which makes a hand on any instance’s
+  perimeter an observed event and avoids storing a digest small enough
+  to enumerate. Parsing lives in one place and the address check uses
+  it, so the reported fingerprint and the enforced list cannot drift
+  apart.
+- `contract_version` becomes **3**. Reads tolerate every version; writes
+  tolerate 2 and everything after it, rather than 2 alone — pinning to
+  one version would refuse an instance the moment its module is updated.
+
+## ubep.azure 0.8.0
+
+- **The request register gains a schema.**
+  `inst/extdata/request-register-dictionary.csv` is the data dictionary
+  of the REDCap project that carries the desired state, and the pure
+  layer can now turn that register into the lists the diff already
+  consumes.
+  [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md)
+  splits requested from revoked, refuses a pair that appears twice
+  rather than guessing which row wins, and leaves a row whose identity
+  is unresolved out of the desired state without calling it an error.
+- **A pair that exists in REDCap and appears nowhere in the register
+  means nothing.** Removing an access takes an explicit request, never
+  an absence. The diff has always classified an unrequested pair as
+  `revocato`, which with an empty register would name every right in the
+  fleet: the register declares requests, so it never produces a
+  revocation nobody asked for.
+- The register’s field names are the ones the pure layer already speaks,
+  so no map exists between the form and the request, and no key can fall
+  into a default without raising. Every coded field uses its label as
+  its own code, and a test on the dictionary keeps it that way.
+- [`outcome_payload()`](https://ubesp-dctv.github.io/ubep.azure/reference/outcome_payload.md)
+  builds the body that writes an outcome back, with the columns fixed in
+  the function rather than assembled by the caller. What a person asked
+  for is intent and what happened is observation; a transport error
+  records itself without taking the row out of the desired state.
+
 ## ubep.azure 0.7.0
 
 - **Writing is no longer confined to designated test projects.** The

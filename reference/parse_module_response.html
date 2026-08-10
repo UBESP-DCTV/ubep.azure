@@ -13,7 +13,7 @@ parser, reporting an error that does not name the cause."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -22,6 +22,10 @@ parser, reporting an error that does not name the cause."></head><body>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/manutenzione-canale.html">Manutenzione del canale di autorizzazione</a></li>
+  </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -64,9 +68,11 @@ parser, reporting an error that does not name the cause.</p>
 
 <dt id="arg-accepted">accepted<a class="anchor" aria-label="anchor" href="#arg-accepted"></a></dt>
 <dd><p>Integer vector of contract versions this call tolerates.
-Reads pass both, a write passes only the one that can enforce the surface
+Reads pass every version, a write only those that can enforce the surface
 handshake — a module that predates it would accept the write and simply
-ignore the declaration.</p></dd>
+ignore the declaration. That is contract 2 and everything after it, not
+contract 2 alone: pinning to one version would refuse an instance the
+moment its module is updated.</p></dd>
 
 </dl></div>
     <div class="section level2">

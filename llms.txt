@@ -30,3 +30,9 @@ By contributing to this project, you agree to abide by its terms.
 - [`build_redcap_module()`](https://ubesp-dctv.github.io/ubep.azure/reference/build_redcap_module.md)
   : Build the distributable REDCap module archive
 
+# Articles
+
+### All vignettes
+
+- [Manutenzione del canale di
+  autorizzazione](https://ubesp-dctv.github.io/ubep.azure/articles/manutenzione-canale.md):

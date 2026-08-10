@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -16,6 +16,10 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/manutenzione-canale.html">Manutenzione del canale di autorizzazione</a></li>
+  </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -31,6 +35,34 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.1" id="ubepazure-091">ubep.azure 0.9.1<a class="anchor" aria-label="anchor" href="#ubepazure-091"></a></h2>
+<ul><li>
+<strong>The endpoint imports the class it calls.</strong> <code>api.php</code> declares no namespace, so the <code>Allowlist</code> added in 0.9.0 resolved to the global one and every authorized request raised an <code>Error</code> that REDCap turned into its generic API reply — the channel answered 400 to a valid secret and nothing was logged. A new test reads <code>api.php</code> as tokens and refuses any class it names unqualified that does not resolve once the module is loaded, which is the failure <code>php -l</code> cannot see. Anyone running 0.9.0 must move to this release: the module directory of 0.9.0 serves no request that authenticates.</li>
+<li>
+<strong>The module’s <code>VERSION</code> tracks the package again.</strong> It had stayed at 0.7.0 through two releases, so <code>module_version</code> in every reply named a version the code was not.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.0" id="ubepazure-090">ubep.azure 0.9.0<a class="anchor" aria-label="anchor" href="#ubepazure-090"></a></h2>
+<ul><li>
+<strong>The job runs from a dedicated machine, and observes without comparing.</strong> <code><a href="../reference/observe_instance.html">observe_instance()</a></code> turns one instance’s <code>state</code> reply into a row — version, major, gate, surface fingerprint, reachability, and the pairs whose expiration has already passed — and <code><a href="../reference/run_record.html">run_record()</a></code> builds the record a run leaves behind. Neither touches the diff: with no register every real pair would be classified as no longer wanted, so the danger is not the write call but the comparison feeding it, and the comparison is not computed at all.</li>
+<li>
+<strong>A record states its own scope.</strong> <code>flotta_a_una_major</code> is true only when every instance was attempted and answered. The clause that retires a compatibility branch fires on that flag, so a value computed over whichever instances happened to answer would retire a branch still in use: a flag that authorizes a destructive decision is false when it cannot know.</li>
+<li>
+<strong>The module reports the fingerprint of its own IP allow list</strong>, never its contents. The caller keeps no expected value and alarms on the change between two runs, which makes a hand on any instance’s perimeter an observed event and avoids storing a digest small enough to enumerate. Parsing lives in one place and the address check uses it, so the reported fingerprint and the enforced list cannot drift apart.</li>
+<li>
+<code>contract_version</code> becomes <strong>3</strong>. Reads tolerate every version; writes tolerate 2 and everything after it, rather than 2 alone — pinning to one version would refuse an instance the moment its module is updated.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.0" id="ubepazure-080">ubep.azure 0.8.0<a class="anchor" aria-label="anchor" href="#ubepazure-080"></a></h2>
+<ul><li>
+<strong>The request register gains a schema.</strong> <code>inst/extdata/request-register-dictionary.csv</code> is the data dictionary of the REDCap project that carries the desired state, and the pure layer can now turn that register into the lists the diff already consumes. <code><a href="../reference/register_to_desired.html">register_to_desired()</a></code> splits requested from revoked, refuses a pair that appears twice rather than guessing which row wins, and leaves a row whose identity is unresolved out of the desired state without calling it an error.</li>
+<li>
+<strong>A pair that exists in REDCap and appears nowhere in the register means nothing.</strong> Removing an access takes an explicit request, never an absence. The diff has always classified an unrequested pair as <code>revocato</code>, which with an empty register would name every right in the fleet: the register declares requests, so it never produces a revocation nobody asked for.</li>
+<li>The register’s field names are the ones the pure layer already speaks, so no map exists between the form and the request, and no key can fall into a default without raising. Every coded field uses its label as its own code, and a test on the dictionary keeps it that way.</li>
+<li>
+<code><a href="../reference/outcome_payload.html">outcome_payload()</a></code> builds the body that writes an outcome back, with the columns fixed in the function rather than assembled by the caller. What a person asked for is intent and what happened is observation; a transport error records itself without taking the row out of the desired state.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.0" id="ubepazure-070">ubep.azure 0.7.0<a class="anchor" aria-label="anchor" href="#ubepazure-070"></a></h2>
 <ul><li>
