@@ -20,14 +20,13 @@ round_state_pairs <- function(requests, asks) {
     list(
       username = trimws(as.character(username)),
       # `asks` comes straight from `scope_pairs()`, which filters its rows
-      # for non-emptiness and never for numeric-ness, so a register row whose
-      # `project_id` does not parse coerces to NA here rather than raising.
-      # The NA is harmless twice over: the same row already reports
-      # `DATO_PROGETTO_INESISTENTE` from `register_to_desired()`, so whoever
-      # filed it is told the real cause, and a pair whose `project_id`
-      # serializes as JSON `null` fails the module's `isset()` check on the
-      # way in and is dropped before it reaches the rights table — nothing is
-      # asked about it and nothing is written.
+      # for non-emptiness and never for form, so a `project_id` the register
+      # accepted but that is not a number can reach here and coerce to NA
+      # rather than raise. The NA never reaches an instance's rights table: a
+      # pair whose `project_id` serializes as JSON `null` is refused by the
+      # module before it reads anything (inst/redcap-module/api.php). Saying
+      # why this row's `project_id` was bad is the caller's job, not this
+      # one's.
       project_id = suppressWarnings(as.integer(project_id))
     )
   }
