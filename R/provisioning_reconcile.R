@@ -179,13 +179,40 @@ provisioning_reconcile <- function(register_url,
     # and more specific verdict, and the register takes one outcome per record.
     ids <- setdiff(as.character(rows[["record_id"]]), names(row_errors))
 
+    mine <- function(collection) {
+      Filter(
+        function(e) identical(as.character(e[["server"]]), server), collection
+      )
+    }
+    wanted <- mine(plan[["desired"]])
+    revoked <- mine(plan[["revoked"]])
+
+    # The record ids of a row the round could actually have acted on. Not
+    # every register row for this server: a row still waiting for an
+    # identity -- no `username` yet, the ordinary state in this version --
+    # is not a pair, and `register_to_desired()` never put it in `wanted` or
+    # `revoked`. Left as every row, an unreachable instance would collect a
+    # transport error on a row the round never touched, contradicting the
+    # early-feedback promise the scope-refusal path below still keeps for
+    # exactly those rows.
+    actionable <- unique(c(
+      vapply(
+        wanted, function(e) as.character(e[["record_id"]]), character(1)
+      ),
+      vapply(
+        revoked, function(e) as.character(e[["record_id"]]), character(1)
+      )
+    ))
+
     unreachable <- function(code) {
       list(
         stato = data.frame(
           server = server, raggiunta = FALSE, ambito_leggibile = NA,
           errori = paste(code, collapse = ","), stringsAsFactors = FALSE
         ),
-        esiti = outcome_rows(ids, "transport_error", detail = code)
+        esiti = outcome_rows(
+          intersect(ids, actionable), "transport_error", detail = code
+        )
       )
     }
 
@@ -195,14 +222,6 @@ provisioning_reconcile <- function(register_url,
     if (!server %in% names(secrets) || is.na(secrets[[server]])) {
       return(unreachable("TRASPORTO_SEGRETO_NON_LEGGIBILE"))
     }
-
-    mine <- function(collection) {
-      Filter(
-        function(e) identical(as.character(e[["server"]]), server), collection
-      )
-    }
-    wanted <- mine(plan[["desired"]])
-    revoked <- mine(plan[["revoked"]])
 
     state <- module_state(
       hosts[[server]], secrets[[server]],

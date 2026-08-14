@@ -496,6 +496,35 @@ test_that("a row still waiting for an identity gets no outcome at all", {
   # out from.
   expect_equal(nrow(esito[["esiti"]]), 0L)
   expect_length(importazioni(), 0L)
+
+  # The claim has to hold when the instance is down too, not only on the
+  # happy path: a row that is not a pair was never in `wanted` or `revoked`,
+  # so there is nothing for an unreachable instance to have failed at either.
+  # Before restricting the transport outcome to actionable record ids, `ids`
+  # was every register row for the server, and this row collected
+  # TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been asked for.
+  inviate <<- list() # nolint: assignment_linter.
+  fermo <- httr2::with_mocked_responses(
+    function(req) {
+      inviate[[length(inviate) + 1L]] <<- req # nolint: assignment_linter.
+      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
+        stop("Could not resolve host")
+      }
+      httr2::response(
+        status_code = 200L,
+        body = charToRaw(registro_doppio(record_json(
+          list(record_id = "1", username = "")
+        ))(req[["body"]][["data"]]))
+      )
+    },
+    provisioning_reconcile(
+      "registro.example.org", "t0ken",
+      hosts = c(edc10 = "edc10.example.org"),
+      secrets = c(edc10 = "s3cret"),
+      instances = c("edc10", "edc12"), at = "2026-08-14 03:00"
+    )
+  )
+  expect_equal(nrow(fermo[["esiti"]]), 0L)
 })
 
 
