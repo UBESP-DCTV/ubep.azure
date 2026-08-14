@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -710,6 +710,16 @@ in piedi.</li>
 <li>
 <strong>L’accensione del confronto fra desiderato e reale.</strong>
 Vedi §2: qui si dice che è spento e perché, non come si accende.</li>
+<li>
+<strong>Il cancello sull’ambito delle richieste.</strong> Il
+pacchetto porta <code><a href="../reference/scope_errors.html">scope_errors()</a></code>, che rifiuta una richiesta
+il cui autore non detiene il permesso <code>user_rights</code> sul
+progetto che la richiesta nomina — la regola è che il canale non deve
+permettere a nessuno ciò che non potrebbe già fare a mano. <strong>Non è
+ancora in catena</strong>: la lavorazione che dovrebbe chiamarlo non è
+scritta, quindi oggi il cancello è un pezzo pronto e non un cancello in
+esercizio. Detto qui perché chi trova la funzione nel pacchetto deve
+poter sapere se gira, e «esiste ma non è collegata» è una risposta.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

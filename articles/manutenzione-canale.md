@@ -572,3 +572,13 @@ guardato.
   piedi.
 - **L’accensione del confronto fra desiderato e reale.** Vedi §2: qui si
   dice che è spento e perché, non come si accende.
+- **Il cancello sull’ambito delle richieste.** Il pacchetto porta
+  [`scope_errors()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_errors.md),
+  che rifiuta una richiesta il cui autore non detiene il permesso
+  `user_rights` sul progetto che la richiesta nomina — la regola è che
+  il canale non deve permettere a nessuno ciò che non potrebbe già fare
+  a mano. **Non è ancora in catena**: la lavorazione che dovrebbe
+  chiamarlo non è scritta, quindi oggi il cancello è un pezzo pronto e
+  non un cancello in esercizio. Detto qui perché chi trova la funzione
+  nel pacchetto deve poter sapere se gira, e «esiste ma non è collegata»
+  è una risposta.

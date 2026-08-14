@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,17 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.0" id="ubepazure-0100">ubep.azure 0.10.0<a class="anchor" aria-label="anchor" href="#ubepazure-0100"></a></h2>
+<ul><li>
+<strong>A request is bounded by what the person who filed it could already do by hand.</strong> The channel applies without anyone reading, so the gate on <em>who may ask</em> — rights on the request register — said nothing about <em>what they may ask for</em>: any authorized requester could name any project on any instance. <code><a href="../reference/scope_errors.html">scope_errors()</a></code> refuses a row whose requester does not hold REDCap’s <code>user_rights</code> permission on the project the row names, with <code>DATO_AMBITO_NON_AUTORIZZATO</code>, and <code><a href="../reference/scope_pairs.html">scope_pairs()</a></code> says which pairs the instances have to be asked about. The rule automates a power instead of adding one: holding that permission is exactly “could have granted this access themselves”.</li>
+<li>
+<strong>The gate refuses whenever it could not read, and never grants.</strong> A module too old to report the permission, a role deleted underneath a row, a value that read as empty, a row nobody can be attributed with: none of these is a permission. The one that decides the shape is the first — a missing column refuses every row loudly, rather than granting them all quietly.</li>
+<li>
+<strong><code>StateReader</code> reports the permission that governs, role first.</strong> A user with a role inherits the role’s permissions and the columns on their own row do not govern; a user without a role carries their own. Reading one table only returns the wrong answer for everybody in the other half, silently — the same trap the DAG read already documents. The resolution is a pure method so it is tested without a REDCap instance, and it reports the raw REDCap value rather than a verdict: what counts as “may manage users” is policy, and policy lives with the caller.</li>
+<li>
+<strong>Fixture project identifiers moved to a reserved block, and a guard keeps them there.</strong> Two of the values in the fixtures were projects that exist. The guard states the rule on the class rather than on a list of forbidden values, because a guard naming them would have to write them into this public repository; it covers the three syntaxes the repository writes an identifier in, refuses to pass when it read nothing, and names the offending file rather than the value it found.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9.1" id="ubepazure-091">ubep.azure 0.9.1<a class="anchor" aria-label="anchor" href="#ubepazure-091"></a></h2>
 <ul><li>
