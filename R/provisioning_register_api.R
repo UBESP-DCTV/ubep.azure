@@ -48,6 +48,14 @@ register_call <- function(url, token, params) {
   # makes every element compare unequal to a plain character scalar under
   # waldo, which is what a caller inspecting the body -- this package's own
   # tests included -- reasonably expects to hold.
+  #
+  # `request$body$data` is a representation httr2 does not document or
+  # promise to keep, not a public field of the request object. The guard
+  # below is what makes that dependency safe to carry: if a future httr2
+  # restructures `body`, `stopifnot()` raises here, loudly, rather than
+  # `lapply(NULL, ...)` returning `list()` and this function going on to
+  # submit an empty POST body to a live instance without a single error.
+  stopifnot(is.list(request[["body"]][["data"]]))
   request$body$data <- lapply(request$body$data, function(value) {
     class(value) <- setdiff(class(value), "AsIs")
     value
@@ -104,6 +112,25 @@ register_call <- function(url, token, params) {
 }
 
 
+#' Read one list element as a length-one character, or as an empty string
+#'
+#' Both frame builders below walk a REDCap list-of-lists field by field, and
+#' both meet the same two edges there: a field a given record does not carry,
+#' and a value REDCap hands back longer than one (a checkbox field, most
+#' often). Neither is an error at this layer — it becomes `""`, so a shape
+#' this reader is not the one meant to judge cannot raise before the caller's
+#' own shape check gets to see it.
+#'
+#' @param value One raw list element: `NULL`, length one, or longer.
+#'
+#' @return A length-one character vector.
+#'
+#' @keywords internal
+scalar_as_character <- function(value) {
+  if (is.null(value) || length(value) != 1L) "" else as.character(value)
+}
+
+
 #' Turn a REDCap record export into a frame of character columns
 #'
 #' Every column stays character, `project_id` included. The pure layer already
@@ -123,10 +150,11 @@ records_frame <- function(records) {
 
   fields <- unique(unlist(lapply(records, names)))
   columns <- lapply(fields, function(field) {
-    vapply(records, function(record) {
-      value <- record[[field]]
-      if (is.null(value) || length(value) != 1L) "" else as.character(value)
-    }, character(1))
+    vapply(
+      records,
+      function(record) scalar_as_character(record[[field]]),
+      character(1)
+    )
   })
   names(columns) <- fields
 
@@ -201,10 +229,11 @@ metadata_frame <- function(fields) {
   )
 
   columns <- lapply(map, function(key) {
-    vapply(fields, function(field) {
-      value <- field[[key]]
-      if (is.null(value) || length(value) != 1L) "" else as.character(value)
-    }, character(1))
+    vapply(
+      fields,
+      function(field) scalar_as_character(field[[key]]),
+      character(1)
+    )
   })
   names(columns) <- names(map)
 
