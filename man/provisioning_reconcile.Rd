@@ -54,6 +54,7 @@ together;
 \item ask the scope gate about the instances that answered, and only those;
 \item diff against the real rows somebody asked about;
 \item batch by \verb{(server, project_id)}, never across two projects;
+\item read back what a real write did, before calling it applied;
 \item write back the outcome, and only what changed.
 }
 

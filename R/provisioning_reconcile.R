@@ -14,7 +14,8 @@
 #' 5. ask the scope gate about the instances that answered, and only those;
 #' 6. diff against the real rows somebody asked about;
 #' 7. batch by `(server, project_id)`, never across two projects;
-#' 8. write back the outcome, and only what changed.
+#' 8. read back what a real write did, before calling it applied;
+#' 9. write back the outcome, and only what changed.
 #'
 #' Idempotent by construction: a round interrupted between applying and writing
 #' the outcome leaves the row as still to do, and the next round applies it
@@ -301,8 +302,8 @@ provisioning_reconcile <- function(register_url,
           ))
         }
 
-        # What `applied` has to mean. A dry run has nothing to read back — the
-        # instance is unchanged — so it carries the intention the module
+        # 8. What `applied` has to mean. A dry run has nothing to read back —
+        # the instance is unchanged — so it carries the intention the module
         # planned. A real write carries what the instance says afterwards, and
         # if that cannot be read the write is not called applied: the write
         # may well have landed, but `applied` is a claim about evidence, not
@@ -354,15 +355,23 @@ provisioning_reconcile <- function(register_url,
               function(error) as.character(error[["code"]]),
               character(1)
             )
-            observed <- if (is.null(reread)) {
-              entry[["after"]]
-            } else {
-              found <- round_actual(reread, list(entry))
-              if (length(found) == 0L) NULL else found[[1]]
+            observed <- round_observed(reread, entry)
+            # A write with no error code has said only that nothing went
+            # wrong sending it -- the same thing the four spike cases said
+            # while doing something else. Only the re-read settles it: an
+            # apply not shown by the re-read, or a revoke still shown by it,
+            # is not called applied, and the row returns to the queue instead
+            # of closing on a claim nobody verified.
+            kind <- round_outcome_kind(codes, dry_run)
+            detail <- paste(codes, collapse = ",")
+            if (identical(kind, "applied") &&
+                  !round_write_confirmed(batch[["op"]], observed)) {
+              kind <- "transport_error"
+              detail <- "TRASPORTO_SCRITTURA_NON_CONFERMATA"
             }
             outcome_payload(
-              id, round_outcome_kind(codes, dry_run),
-              detail = paste(codes, collapse = ","), at = at,
+              id, kind,
+              detail = detail, at = at,
               applied_as = round_applied_as(observed)
             )
           })
@@ -394,7 +403,7 @@ provisioning_reconcile <- function(register_url,
   # them in.
   outcomes <- outcomes[!duplicated(outcomes[["record_id"]]), , drop = FALSE]
 
-  # 8. only what changed
+  # 9. only what changed
   changed <- round_changed(register, outcomes)
   import <- register_import(register_url, register_token, changed)
 

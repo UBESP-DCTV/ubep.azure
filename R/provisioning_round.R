@@ -158,6 +158,55 @@ round_actual <- function(results, requests) {
 }
 
 
+#' What the instance showed for one written pair
+#'
+#' The one place that decides what a write's `applied_as` is allowed to come
+#' from. A `NULL` re-read means there was nothing to read back — a
+#' simulation, where the module's own `after` is the whole story, because
+#' nothing happened to look at. A re-read that ran carries the only thing
+#' that can settle whether the write landed: what the instance shows now, not
+#' what the write claimed a moment ago.
+#'
+#' @param reread The `results` of the post-write `state` call, or `NULL` when
+#'   this was a simulation and there is nothing to read back.
+#' @param entry One entry of a write response's `results`, carrying
+#'   `username`, `project_id` and the response's own `after`.
+#'
+#' @return The matching row from `reread`, the entry's own `after` when
+#'   `reread` is `NULL`, or `NULL` when a real re-read ran and did not find
+#'   the pair.
+#'
+#' @keywords internal
+round_observed <- function(reread, entry) {
+  if (is.null(reread)) {
+    return(entry[["after"]])
+  }
+  found <- round_actual(reread, list(entry))
+  if (length(found) == 0L) NULL else found[[1]]
+}
+
+
+#' Did the instance show what the write asked for
+#'
+#' Confirmation is by presence and not by field-by-field equality, and the
+#' difference is deliberate: REDCap normalizes what it stores — a role name's
+#' spacing, a case — and a row that had to match exactly could become
+#' impossible to confirm and would be retried for ever. Presence is the fact
+#' the write was about. Disagreement on the fields stays visible in
+#' `applied_as`, and the next round's diff is where the design acts on it.
+#'
+#' @param operation `"apply"` or `"revoke"`, from the batch that was written.
+#' @param observed What `round_observed()` returned for this entry.
+#'
+#' @return `TRUE` when the write is confirmed: the pair is there after an
+#'   apply, or gone after a revoke.
+#'
+#' @keywords internal
+round_write_confirmed <- function(operation, observed) {
+  if (identical(operation, "revoke")) is.null(observed) else !is.null(observed)
+}
+
+
 #' Which dictionary differences stop the round and which are only reported
 #'
 #' Five of the seven codes change what the round reads and one of them —

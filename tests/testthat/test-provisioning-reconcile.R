@@ -162,7 +162,11 @@ istanza_doppia <- function(..., contract = 3L) {
 # followed by a read-back, so a fixture whose reality never moves cannot tell
 # the difference between "read it back" and "reported what it intended". Used
 # below to exercise exactly that discipline: the round has to see the second
-# state read differ from the first before it can call anything applied.
+# state read differ from the first before it can call anything applied. The
+# grown row's expiration is one the apply request never carried -- REDCap can
+# accept a value and store another, and a test whose grown row only ever
+# echoed back what was asked would pass just as well built from the write
+# response's own plan as from a genuine re-read.
 istanza_che_scrive <- function() {
   written <- FALSE
   requester <- list(
@@ -178,7 +182,7 @@ istanza_che_scrive <- function() {
     if (written) {
       rows[[2]] <- list(
         username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
-        role_name = "data entry", dag_name = NULL, expiration = NULL,
+        role_name = "data entry", dag_name = NULL, expiration = "2027-01-01",
         user_rights = 0L
       )
     }
@@ -489,11 +493,13 @@ test_that("a real write is followed by a read-back, and applied_as comes from it
   # `applied` has to mean "read back", not "no error returned": an outcome that
   # only said the second would be the same thing as the four spike cases that
   # reported true while doing something else. So the round asks twice — once to
-  # plan, once to see — and the second read is what applied_as carries.
+  # plan, once to see — and the second read is what applied_as carries. The
+  # expiration asserted here is one the apply request never sent: only a
+  # genuine re-read can produce it, never the write response's own plan.
   expect_length(scritture(), 1L)
   expect_length(riletture, 2L)
   expect_equal(esito[["esiti"]][["outcome"]], "applied")
-  expect_match(esito[["esiti"]][["applied_as"]], "role_name=data entry")
+  expect_match(esito[["esiti"]][["applied_as"]], "expiration=2027-01-01")
 })
 
 
@@ -567,4 +573,68 @@ test_that("two projects on one instance are two writes, never one", {
   # and the diagnosis would start from the wrong end.
   expect_length(scritture(), 2L)
   expect_true(all(vapply(progetti, length, integer(1)) == 1L))
+})
+
+
+test_that("an apply the re-read never shows is not called applied", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The write came back with no error code -- exactly the shape of the spike
+  # cases that reported success while doing something else. `istanza_doppia`
+  # is a stateless double: its `state` answer never grows to include the pair
+  # an `apply` just claimed to create, because nothing actually moved. The
+  # cause is ours to chase, not the requester's, so the row returns to the
+  # queue instead of closing on a claim nobody verified.
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_SCRITTURA_NON_CONFERMATA"
+  )
+})
+
+
+test_that("a revoke the re-read still shows is not called applied", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", request_status = "revoked")
+    )),
+    istanza_doppia(
+      list(),
+      list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
+    ),
+    dry_run = FALSE
+  )
+
+  # test
+  # The revoke's own response can say "revocato" with no error and still be
+  # wrong: `istanza_doppia`'s `state` answer keeps reporting the pair it was
+  # configured with regardless of what was written, so the re-read finds
+  # exactly what the revoke was supposed to remove. Confirmation for a revoke
+  # means absence, and absence is exactly what did not happen here.
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_SCRITTURA_NON_CONFERMATA"
+  )
+})
+
+
+test_that("a simulated write carries the module's own intention in applied_as", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list())
+  )
+
+  # test
+  # A dry run changes nothing on the instance, so there is nothing to read
+  # back: applied_as has to come from what the module says it would have
+  # done, not from a state nobody wrote.
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+  expect_match(esito[["esiti"]][["applied_as"]], "role_name=data entry")
 })
