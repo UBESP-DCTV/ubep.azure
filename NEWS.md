@@ -1,5 +1,22 @@
 # ubep.azure (development version)
 
+* **The channel's round leaves a record, and it goes in a table of its own.**
+  A round left no trace but the outcomes it wrote into the register, and those
+  say nothing about the round itself. `round_record()` builds that trace and
+  `dev/runner-canale.R` emits it. It carries `registro_letto` — the channel's
+  counterpart of the observer's `letture_riuscite` — because an alarm firing
+  on the absence of a record would be satisfied by a round that started,
+  stopped on a drifted dictionary and exited; and because an empty register
+  and an unreachable one both give `righe = 0`, while only one of them needs
+  somebody. One counter per word of the closed outcome vocabulary rather than
+  a single total, since a night of data errors and a night of transport errors
+  go to different people. **A second table rather than a column in the
+  observer's**: the observer's alarm rules read its table without asking who
+  wrote the record, and five of the seven read whichever record is the most
+  recent — so a channel record in there would have made one of them a standing
+  red and three of them silently green, masking the observer's findings
+  instead of reporting them.
+
 * **The module resolves the names a write would need on every run, simulated
   or not.** A role or a DAG that does not exist was refused only by a real
   write, because the resolutions lived inside the branch a dry run skips — so

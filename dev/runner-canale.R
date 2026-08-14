@@ -131,28 +131,25 @@ esito <- ubep.azure:::provisioning_reconcile(
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 
-# Il riassunto sullo standard output, il dettaglio per riga sullo standard
-# error: cosi' l'uno resta incollabile in una pipe e l'altro leggibile da chi
-# guarda una run singola. L'emissione in telemetria e' del sotto-progetto 4 e
-# non sta qui.
-cat(as.character(jsonlite::toJSON(
-  list(
-    at = esito[["at"]],
-    fermato = esito[["fermato"]],
-    scrittura = SCRITTURA,
-    schema_ferma = esito[["schema"]][["blocks"]] %||% FALSE,
-    schema_differenze = I(c(
-      esito[["schema"]][["blocking"]] %||% character(),
-      esito[["schema"]][["tolerated"]] %||% character()
-    )),
-    istanze = nrow(esito[["istanze"]]),
-    irraggiungibili = sum(!esito[["istanze"]][["raggiunta"]]),
-    righe = nrow(esito[["esiti"]]),
-    scritte = esito[["scritte"]],
-    errori = I(esito[["errori"]] %||% character())
-  ),
-  auto_unbox = TRUE, null = "null"
-)), "\n")
+# Il record del giro, che e' anche il riassunto sullo standard output: cio' che
+# si stampa e cio' che si emette sono lo stesso oggetto, quindi non possono
+# divergere. Il dettaglio per riga resta sullo standard error, cosi' l'uno e'
+# incollabile in una pipe e l'altro leggibile da chi guarda un giro singolo.
+#
+# Che cosa entri nel record lo decide il pacchetto, non questo file: qui c'e'
+# solo il momento in cui si costruisce e la via per cui esce.
+record <- ubep.azure:::round_record(esito, SCRITTURA)
+
+# Log Analytics vuole `TimeGenerated`: entra nel record prima della
+# serializzazione invece di essere incollato nel JSON dopo, perche' incollare
+# stringhe dentro JSON gia' formato e' il modo di rompersi su un valore che
+# contiene una parentesi.
+record[["TimeGenerated"]] <- format(
+  Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"
+)
+
+json <- ubep.azure:::run_record_json(record)
+cat(json, "\n")
 
 if (nrow(esito[["esiti"]]) > 0L) {
   utils::write.table(
@@ -161,6 +158,53 @@ if (nrow(esito[["esiti"]]) > 0L) {
   )
 }
 
-if (length(esito[["errori"]]) > 0L || isTRUE(esito[["fermato"]])) {
+# --- emissione ---------------------------------------------------------------
+
+# Il record si emette alla FINE del giro, come quello dell'osservatore e per la
+# stessa ragione: un record scritto all'inizio direbbe "il processo e' partito",
+# e un giro che parte, si ferma sul dizionario e termina soddisferebbe l'allarme
+# sull'assenza. Per questo il record porta `registro_letto` e l'allarme guarda
+# quello, non l'esistenza del record.
+#
+# Le variabili sono distinte da quelle dell'osservatore perche' le due
+# lavorazioni condividono lo stesso EnvironmentFile e scrivono in due tabelle
+# diverse. Le due tabelle non sono un vezzo: le regole d'allarme
+# dell'osservatore interrogano la sua senza chiedersi chi abbia scritto il
+# record, e cinque di esse guardano l'ultimo record della tabella -- un record
+# del canale nella stessa tabella le renderebbe una rossa fissa e tre cieche.
+DCE <- Sys.getenv("UBEP_DCE")
+DCR <- Sys.getenv("UBEP_DCR_CANALE")
+STREAM <- Sys.getenv("UBEP_STREAM_CANALE")
+
+emesso <- TRUE
+
+if (nzchar(DCE) && nzchar(DCR) && nzchar(STREAM)) {
+  emesso <- tryCatch(
+    {
+      token <- token_imds("https://monitor.azure.com")
+
+      httr2::request(
+        paste0(DCE, "/dataCollectionRules/", DCR, "/streams/", STREAM)
+      ) |>
+        httr2::req_url_query(`api-version` = "2023-01-01") |>
+        httr2::req_headers(
+          Authorization = paste("Bearer", token),
+          `Content-Type` = "application/json"
+        ) |>
+        httr2::req_body_raw(paste0("[", json, "]")) |>
+        httr2::req_perform()
+
+      TRUE
+    },
+    error = function(e) {
+      message("emissione fallita: ", conditionMessage(e))
+      FALSE
+    }
+  )
+}
+
+# Un'emissione fallita non e' silenziosa: esce dal codice d'uscita, cosi' il
+# timer la registra e il giro non risulta riuscito per intero.
+if (!emesso || length(esito[["errori"]]) > 0L || isTRUE(esito[["fermato"]])) {
   quit(status = 1L)
 }
