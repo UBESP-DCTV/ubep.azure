@@ -576,6 +576,54 @@ test_that("two projects on one instance are two writes, never one", {
 })
 
 
+test_that("a diff miss does not leak into to_apply through an index shift", { # nolint: line_length_linter.
+  # eval
+  # provisioning_diff() always emits a row per desired entry -- see its own
+  # union() of keys -- so a key miss cannot happen through the real diff, and
+  # this cannot be reached honestly by feeding it a crafted register. Reached
+  # here instead by mocking provisioning_diff() itself, the one seam that can
+  # produce what a miss looks like to provisioning_reconcile(), without
+  # touching the function under test.
+  testthat::local_mocked_bindings(
+    provisioning_diff = function(desired, actual) {
+      # Only the second entry gets a row -- the first is the miss acted()
+      # will find no key for.
+      second <- desired[[2]]
+      data.frame(
+        username = as.character(second[["username"]]),
+        project_id = as.integer(second[["project_id"]]),
+        action = "aggiornato",
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", project_id = "9003"),
+      list(record_id = "2", project_id = "9004")
+    )),
+    istanza_doppia(list(project_id = 9003L), list(project_id = 9004L))
+  )
+  simulate <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+
+  # test
+  # base::Filter() is unlist(lapply()) followed by x[which(ind)]: a
+  # logical(0) element does not drop its own slot, it shifts every index
+  # after it. The first entry (project 9003) is the miss; the second
+  # (project 9004) is the one the mocked diff calls "aggiornato". The batch
+  # has to carry only the second -- never the miss, and never both.
+  expect_length(simulate, 1L)
+  progetti <- unique(vapply(
+    simulate[[1]][["body"]][["data"]][["requests"]],
+    function(r) as.integer(r[["project_id"]]), integer(1)
+  ))
+  expect_equal(progetti, 9004L)
+})
+
+
 test_that("an apply the re-read never shows is not called applied", {
   # eval
   esito <- giro(

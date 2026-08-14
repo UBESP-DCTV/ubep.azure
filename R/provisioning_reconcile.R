@@ -252,7 +252,7 @@ provisioning_reconcile <- function(register_url,
 
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
     to_apply <- Filter(
-      function(e) acted(e) %in% c("creato", "aggiornato"), wanted
+      function(e) isTRUE(acted(e) %in% c("creato", "aggiornato")), wanted
     )
     present <- function(e) length(round_actual(results, list(e))) > 0L
     to_revoke <- Filter(present, revoked)
