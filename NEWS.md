@@ -1,3 +1,36 @@
+# ubep.azure 0.10.0
+
+* **A request is bounded by what the person who filed it could already do by
+  hand.** The channel applies without anyone reading, so the gate on *who may
+  ask* — rights on the request register — said nothing about *what they may ask
+  for*: any authorized requester could name any project on any instance.
+  `scope_errors()` refuses a row whose requester does not hold REDCap's
+  `user_rights` permission on the project the row names, with
+  `DATO_AMBITO_NON_AUTORIZZATO`, and `scope_pairs()` says which pairs the
+  instances have to be asked about. The rule automates a power instead of
+  adding one: holding that permission is exactly "could have granted this
+  access themselves".
+* **The gate refuses whenever it could not read, and never grants.** A module
+  too old to report the permission, a role deleted underneath a row, a value
+  that read as empty, a row nobody can be attributed with: none of these is a
+  permission. The one that decides the shape is the first — a missing column
+  refuses every row loudly, rather than granting them all quietly.
+* **`StateReader` reports the permission that governs, role first.** A user
+  with a role inherits the role's permissions and the columns on their own row
+  do not govern; a user without a role carries their own. Reading one table
+  only returns the wrong answer for everybody in the other half, silently —
+  the same trap the DAG read already documents. The resolution is a pure method
+  so it is tested without a REDCap instance, and it reports the raw REDCap
+  value rather than a verdict: what counts as "may manage users" is policy, and
+  policy lives with the caller.
+* **Fixture project identifiers moved to a reserved block, and a guard keeps
+  them there.** Two of the values in the fixtures were projects that exist. The
+  guard states the rule on the class rather than on a list of forbidden values,
+  because a guard naming them would have to write them into this public
+  repository; it covers the three syntaxes the repository writes an identifier
+  in, refuses to pass when it read nothing, and names the offending file rather
+  than the value it found.
+
 # ubep.azure 0.9.1
 
 * **The endpoint imports the class it calls.** `api.php` declares no namespace,
