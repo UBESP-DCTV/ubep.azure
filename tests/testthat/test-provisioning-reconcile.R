@@ -161,6 +161,10 @@ istanza_doppia <- function(..., contract = 3L) {
 # The only double that changes when it is written to. A write is meant to be
 # followed by a read-back, so a fixture whose reality never moves cannot tell
 # the difference between "read it back" and "reported what it intended".
+# Unused in this task's own tests -- the write path is still refused here.
+# It is Task 5's fixture: no test in this file exercises the read-back
+# discipline it documents, so its presence here must not be read as proof
+# that discipline is already covered.
 istanza_che_scrive <- function() {
   written <- FALSE
   requester <- list(
@@ -394,6 +398,43 @@ test_that("a request in scope is simulated and never written", {
   expect_length(scritture(), 0L)
   expect_length(simulate, 1L)
   expect_true(simulate[[1]][["body"]][["data"]][["dry_run"]])
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+})
+
+
+test_that("an instance that echoes an entry nobody asked for does not abort the round", { # nolint: line_length_linter.
+  # eval
+  # The key that maps an echoed entry back to its record_id is rebuilt from
+  # what the instance reports, with no normalization -- so one entry more
+  # than was sent, for a pair the batch never carried, is not exotic. The
+  # lookup this reads from has to answer "not mine" instead of raising: a
+  # named atomic vector's `[[` throws "subscript out of bounds" on a miss,
+  # which would abort the round and lose every outcome it had already
+  # computed, for every instance, before anything reached the register.
+  rumorosa <- function(data) {
+    body <- istanza_doppia(list())(data)
+    if (!identical(data[["operation"]], "apply")) {
+      return(body)
+    }
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]][[length(parsed[["results"]]) + 1L]] <- list(
+      username = "estranea@ubep.unipd.it", project_id = 9099L,
+      outcome = "creato",
+      before = list(role_name = NULL, dag_name = NULL, expiration = NULL),
+      after = list(
+        role_name = "data entry", dag_name = NULL, expiration = NULL
+      ),
+      errors = list()
+    )
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+  esito <- giro(registro_doppio(record_json(list())), rumorosa)
+
+  # test
+  # One row went in, one row must come out: the extra entry is ignored, not
+  # merged into a row, and its presence must not keep the real one from
+  # being reported either.
+  expect_equal(nrow(esito[["esiti"]]), 1L)
   expect_equal(esito[["esiti"]][["outcome"]], "simulated")
 })
 

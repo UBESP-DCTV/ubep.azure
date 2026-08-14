@@ -103,16 +103,25 @@ test_that("nothing in the package writes on an instance without naming the gate"
     ls(namespace, all.names = TRUE)
   )
 
-  writes <- c("module_apply", "module_revoke")
-  # run_conformance_check is the one deliberate second write path, and it
-  # predates this gate: a calibration tool an operator runs by hand against a
+  # run_conformance_check is itself a write path -- it calls both
+  # module_apply() and module_revoke() with dry_run = FALSE -- so it belongs
+  # in `writes`, not only in `exempt`: a new function whose body calls
+  # run_conformance_check() writes on an instance too, and without its name
+  # here nothing would stop a caller from routing around the two write
+  # primitives through this one, with no allowlist edit and nothing for a
+  # reviewer to catch in a diff.
+  writes <- c("module_apply", "module_revoke", "run_conformance_check")
+  # run_conformance_check predates this gate and is the one deliberate second
+  # write path: a calibration tool an operator runs by hand against a
   # dedicated conformance project and a dedicated test account to certify a
   # module version before its ceiling can advance -- never against
   # register-derived data, never unattended. It carries no requester and no
   # register row to gate on, so the rule this guard enforces ("could the
   # requester have granted this by hand") does not apply to it. Named here, in
   # the same commit that wires the gate, exactly as this test's own message
-  # asks of a deliberate second write path.
+  # asks of a deliberate second write path -- and it stays out of `offending`
+  # below because it is also in `exempt`, so it is never scanned against
+  # itself.
   exempt <- c(writes, "run_conformance_check")
   offending <- Filter(function(name) {
     body <- paste(deparse(body(get(name, envir = namespace))), collapse = " ")
@@ -126,8 +135,11 @@ test_that("nothing in the package writes on an instance without naming the gate"
   expect_equal(
     offending, character(),
     info = paste(
-      "A function that can write on an instance must name the scope gate. The",
-      "rule the gate enforces is that the channel must not let anyone do",
+      "A function that can write on an instance must name the scope gate,",
+      "and that includes a function that writes only by calling",
+      "run_conformance_check() -- exempt from being scanned itself (see the",
+      "docblock above), but not from requiring the gate in whoever calls it.",
+      "The rule the gate enforces is that the channel must not let anyone do",
       "something they could not already do by hand, and a write path that",
       "never asks is a channel that grants what nobody could have granted.",
       "The check is a coarse text search on purpose: a false red costs a",
@@ -135,6 +147,16 @@ test_that("nothing in the package writes on an instance without naming the gate"
       "was looking. If you are deliberately adding a second write path, change",
       "this test in the same commit — not afterwards."
     )
+  )
+  # `writes` now names run_conformance_check itself, so `setdiff(exempt,
+  # writes)` is empty by construction and cannot tell a stale exemption from
+  # a correct one; the base primitives are the only fixed point to measure
+  # `exempt` against. If this ever reports more than run_conformance_check,
+  # either a second gate-free tool was exempted deliberately (name it above,
+  # in the same commit) or the exemption drifted.
+  expect_equal(
+    setdiff(exempt, c("module_apply", "module_revoke")),
+    "run_conformance_check"
   )
 })
 

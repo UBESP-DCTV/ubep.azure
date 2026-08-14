@@ -242,7 +242,12 @@ provisioning_reconcile <- function(register_url,
 
     # 6. the diff, against the real rows somebody asked about and no others
     diff <- provisioning_diff(wanted, round_actual(results, wanted))
-    action <- as.character(diff[["action"]])
+    # A list, not a character vector: `[[` on an unmatched character subscript
+    # raises "subscript out of bounds" on an atomic vector but returns NULL on
+    # a list, and a miss here has to fall through, not abort the round.
+    # Unreachable today -- provisioning_diff() emits a row per desired entry
+    # -- but the same latent crash as by_pair below, on the same construct.
+    action <- as.list(as.character(diff[["action"]]))
     names(action) <- paste(
       diff[["username"]], diff[["project_id"]], sep = "\r"
     )
@@ -306,7 +311,15 @@ provisioning_reconcile <- function(register_url,
           ))
         }
 
-        by_pair <- batch[["record_ids"]]
+        # A list, not a character vector: `[[` on an unmatched character
+        # subscript raises "subscript out of bounds" on an atomic vector but
+        # returns NULL on a list, and the `%||%` right below only ever gets
+        # consulted on a list. The key is rebuilt from what the instance
+        # echoes, with no normalization, so an entry the module returns with a
+        # different case or padding -- or one entry more than it was sent --
+        # is not exotic, and the guard against it has to actually run instead
+        # of the round losing every outcome it computed to an uncaught error.
+        by_pair <- as.list(batch[["record_ids"]])
         names(by_pair) <- vapply(batch[["requests"]], function(r) {
           paste(r[["username"]], r[["project_id"]], sep = "\r")
         }, character(1))
