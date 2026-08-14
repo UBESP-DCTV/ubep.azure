@@ -8,7 +8,12 @@ test_that("empty rows are cleaned up", {
   )
 
   # eval
-  res <- read_data(db_wit_empties, csv = TRUE)
+  # I() says "this string is the data, not a path to it". Since readr 2.2.0
+  # the bare form is deprecated, and the deprecation speaks only when the
+  # caller is the package under test -- so it is silent under a hand-rolled
+  # test_file() and audible under devtools::test(), which is the shape of
+  # warning that survives a long time by looking like somebody else's.
+  res <- read_data(I(db_wit_empties), csv = TRUE)
 
   # test
   expect_equal(nrow(res), 1L)
@@ -56,5 +61,5 @@ test_that("read_data doesn't produce readr output for column spec", {
     "Ex,Ample,ex.ample@example.it,160,utente_base,,,,\n,,,,,,,,"
   )
 
-  expect_silent(read_data(db_wit_empties, csv = TRUE))
+  expect_silent(read_data(I(db_wit_empties), csv = TRUE))
 })
