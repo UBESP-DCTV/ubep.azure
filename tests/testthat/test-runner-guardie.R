@@ -4,10 +4,12 @@ test_that("the runner names neither the diff nor the writes", {
   # guard bites in the source tree, which is where the edit that would break it
   # happens, and not in CI. Whoever adds the write path runs `devtools::test()`
   # before committing; that is the gate this relies on.
-  runner <- testthat::test_path("..", "..", "dev", "runner-osservatore.R")
-  skip_if_not(file.exists(runner), "dev/ is not in the built package")
-
-  lines <- readLines(runner, warn = FALSE)
+  runners <- list.files(
+    testthat::test_path("..", "..", "dev"),
+    pattern = "^runner-.*[.]R$", full.names = TRUE
+  )
+  skip_if(length(runners) == 0L, "dev/ is not in the built package")
+  lines <- unlist(lapply(runners, readLines, warn = FALSE))
 
   forbidden <- c("provisioning_diff", "module_apply", "module_revoke")
   found <- forbidden[vapply(
@@ -87,4 +89,72 @@ test_that("the guard is coarse on purpose and catches a mention in a comment", {
 
   lines <- c("# we must never call provisioning_diff() here", "x <- 1")
   expect_true(any(grepl("provisioning_diff", lines, fixed = TRUE)))
+})
+
+
+test_that("nothing in the package writes on an instance without naming the gate", { # nolint: line_length_linter.
+  # eval
+  # This one bites under `R CMD check` too, unlike the two guards above: it
+  # reads the installed function bodies instead of the source tree, so `dev/`
+  # not shipping cannot make it skip.
+  namespace <- asNamespace("ubep.azure")
+  functions <- Filter(
+    function(name) is.function(get(name, envir = namespace)),
+    ls(namespace, all.names = TRUE)
+  )
+
+  writes <- c("module_apply", "module_revoke")
+  # run_conformance_check is the one deliberate second write path, and it
+  # predates this gate: a calibration tool an operator runs by hand against a
+  # dedicated conformance project and a dedicated test account to certify a
+  # module version before its ceiling can advance -- never against
+  # register-derived data, never unattended. It carries no requester and no
+  # register row to gate on, so the rule this guard enforces ("could the
+  # requester have granted this by hand") does not apply to it. Named here, in
+  # the same commit that wires the gate, exactly as this test's own message
+  # asks of a deliberate second write path.
+  exempt <- c(writes, "run_conformance_check")
+  offending <- Filter(function(name) {
+    body <- paste(deparse(body(get(name, envir = namespace))), collapse = " ")
+    calls_write <- any(vapply(
+      writes, function(symbol) grepl(symbol, body, fixed = TRUE), logical(1)
+    ))
+    calls_write && !grepl("scope_errors", body, fixed = TRUE)
+  }, setdiff(functions, exempt))
+
+  # test
+  expect_equal(
+    offending, character(),
+    info = paste(
+      "A function that can write on an instance must name the scope gate. The",
+      "rule the gate enforces is that the channel must not let anyone do",
+      "something they could not already do by hand, and a write path that",
+      "never asks is a channel that grants what nobody could have granted.",
+      "The check is a coarse text search on purpose: a false red costs a",
+      "minute, a false green costs an out-of-scope grant applied while nobody",
+      "was looking. If you are deliberately adding a second write path, change",
+      "this test in the same commit — not afterwards."
+    )
+  )
+})
+
+
+test_that("the guard on the package is coarse enough to catch a rename", {
+  # eval
+  # Same shape as the guard above, run against two hand-written bodies so the
+  # test that guards the guard cannot pass by finding nothing.
+  named <- function() module_apply(server, secret, requests)
+  gated <- function() {
+    errors <- scope_errors(register, rights)
+    module_apply(server, secret, requests)
+  }
+  scan <- function(f) {
+    body <- paste(deparse(body(f)), collapse = " ")
+    grepl("module_apply", body, fixed = TRUE) &&
+      !grepl("scope_errors", body, fixed = TRUE)
+  }
+
+  # test
+  expect_true(scan(named))
+  expect_false(scan(gated))
 })

@@ -1,0 +1,448 @@
+# httr2::req_body_form() percent-encodes every pre-encoded scalar at build
+# time and marks the result AsIs (see the same helper in
+# test-provisioning-register-api.R). The register travels form-encoded, so
+# every field the register double dispatches on -- `content`, `action`,
+# and the `data` payload of an import -- has to be read through this one
+# place. The module travels JSON-encoded and is not affected: `operation` and
+# `dry_run` on an instance request compare directly.
+form_field_value <- function(value) {
+  utils::URLdecode(as.character(value))
+}
+
+
+# One mock stands in for both adapters and dispatches on the URL: the register
+# speaks to /api/ with a token in the body, the instances to the module
+# endpoint. Keeping a single mock is what lets a test assert "no write ever
+# left this machine" — two separate doubles could each only speak for
+# themselves.
+inviate <- list()
+
+
+canale_mock <- function(registro, istanza) {
+  function(req) {
+    # A mock lives inside httr2's request loop, so this is the one place the
+    # captured wire log has to reach out of its own call frame.
+    inviate[[length(inviate) + 1L]] <<- req # nolint: assignment_linter.
+    body <- if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
+      istanza(req[["body"]][["data"]])
+    } else {
+      registro(req[["body"]][["data"]])
+    }
+    httr2::response(status_code = 200L, body = charToRaw(body))
+  }
+}
+
+
+scritture <- function() {
+  Filter(function(req) {
+    data <- req[["body"]][["data"]]
+    isFALSE(data[["dry_run"]]) &&
+      isTRUE(data[["operation"]] %in% c("apply", "revoke"))
+  }, inviate)
+}
+
+
+importazioni <- function() {
+  Filter(function(req) {
+    identical(form_field_value(req[["body"]][["data"]][["action"]]), "import")
+  }, inviate)
+}
+
+
+dizionario_json <- function() {
+  packaged <- register_dictionary(c("edc10", "edc12"))
+  blank <- function(values) {
+    values <- as.character(values)
+    values[is.na(values)] <- ""
+    values
+  }
+  as.character(jsonlite::toJSON(
+    lapply(seq_len(nrow(packaged)), function(i) {
+      list(
+        field_name = blank(packaged[["Variable / Field Name"]])[[i]],
+        field_type = blank(packaged[["Field Type"]])[[i]],
+        select_choices_or_calculations =
+          blank(packaged[["Choices, Calculations, OR Slider Labels"]])[[i]],
+        field_annotation = blank(packaged[["Field Annotation"]])[[i]]
+      )
+    }),
+    auto_unbox = TRUE
+  ))
+}
+
+
+registro_doppio <- function(records) {
+  function(data) {
+    if (identical(form_field_value(data[["content"]]), "metadata")) {
+      return(dizionario_json())
+    }
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      return(paste0('{"count":', length(sent), "}"))
+    }
+    records
+  }
+}
+
+
+record_json <- function(...) {
+  rows <- list(...)
+  as.character(jsonlite::toJSON(lapply(rows, function(row) {
+    defaults <- list(
+      record_id = "1", server = "edc10", project_id = "9003",
+      username = "mario.rossi@ubep.unipd.it",
+      contact_email = "mario.rossi@example.org",
+      role_name = "data entry", dag_name = "", expiration = "",
+      requested_by = "anna.bianchi@ubep.unipd.it",
+      request_status = "active",
+      outcome = "", outcome_detail = "", outcome_at = "", applied_as = ""
+    )
+    defaults[names(row)] <- row
+    defaults
+  }), auto_unbox = TRUE))
+}
+
+
+# The instance answers a `state` with the rows it was configured with, and an
+# `apply`/`revoke` with one entry per request it actually received — which is
+# what the module does, and what lets the round map an entry back to the
+# record that asked for it. A double that echoed a fixed list instead would
+# keep passing after that mapping broke.
+istanza_doppia <- function(..., contract = 3L) {
+  rows <- lapply(list(...), function(row) {
+    defaults <- list(
+      username = "anna.bianchi@ubep.unipd.it", project_id = 9003L,
+      role_name = NULL, dag_name = NULL, expiration = NULL, user_rights = 1L
+    )
+    defaults[names(row)] <- row
+    defaults
+  })
+
+  function(data) {
+    results <- if (identical(data[["operation"]], "state")) {
+      rows
+    } else {
+      lapply(data[["requests"]] %||% list(), function(request) {
+        revoking <- identical(data[["operation"]], "revoke")
+        list(
+          username = request[["username"]],
+          project_id = as.integer(request[["project_id"]]),
+          outcome = if (revoking) "revocato" else "creato",
+          before = list(role_name = NULL, dag_name = NULL, expiration = NULL),
+          after = if (revoking) {
+            list(role_name = NULL, dag_name = NULL, expiration = NULL)
+          } else {
+            list(
+              role_name = request[["role_name"]],
+              dag_name = request[["dag_name"]],
+              expiration = request[["expiration"]]
+            )
+          },
+          errors = list()
+        )
+      })
+    }
+
+    as.character(jsonlite::toJSON(list(
+      contract_version = contract,
+      redcap_version = "17.3.3", redcap_major = 17L,
+      module_version = "0.10.0", version_gate = "collaudata",
+      surface_fingerprint = "16faf46d5ab1",
+      allowlist_fingerprint = "aabbccddeeff",
+      dry_run = data[["dry_run"]],
+      results = results, summary = list(), errors = list()
+    ), auto_unbox = TRUE, null = "null"))
+  }
+}
+
+
+# The only double that changes when it is written to. A write is meant to be
+# followed by a read-back, so a fixture whose reality never moves cannot tell
+# the difference between "read it back" and "reported what it intended".
+istanza_che_scrive <- function() {
+  written <- FALSE
+  requester <- list(
+    username = "anna.bianchi@ubep.unipd.it", project_id = 9003L,
+    role_name = NULL, dag_name = NULL, expiration = NULL, user_rights = 1L
+  )
+
+  function(data) {
+    if (identical(data[["operation"]], "apply") && isFALSE(data[["dry_run"]])) {
+      written <<- TRUE
+    }
+    rows <- list(requester)
+    if (written) {
+      rows[[2]] <- list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
+        role_name = "data entry", dag_name = NULL, expiration = NULL,
+        user_rights = 0L
+      )
+    }
+    do.call(istanza_doppia, rows)(data)
+  }
+}
+
+
+giro <- function(registro, istanza, ...) {
+  inviate <<- list() # nolint: assignment_linter.
+  httr2::with_mocked_responses(
+    canale_mock(registro, istanza),
+    provisioning_reconcile(
+      register_url = "registro.example.org",
+      register_token = "t0ken",
+      hosts = c(edc10 = "edc10.example.org", edc12 = "edc12.example.org"),
+      secrets = c(edc10 = "s3cret", edc12 = "s3cret"),
+      instances = c("edc10", "edc12"),
+      at = "2026-08-14 03:00",
+      ...
+    )
+  )
+}
+
+
+test_that("the job never writes on a row the gate did not pass", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(
+      list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
+    )
+  )
+
+  # test
+  # The guard this whole cycle owes the design. The requester is a user of the
+  # project and cannot manage its users, so they could not have granted this
+  # access by hand — and the channel must not become the way they can. Asserted
+  # on the wire and not on a branch: nothing that writes left this machine.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
+test_that("a project_id that is not a number is named, not turned into a scope refusal", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", username = "", project_id = "9003abc")
+    )),
+    istanza_doppia(list())
+  )
+
+  # test
+  # Without this the row reaches the gate, matches no granted key, and comes
+  # back "you may not ask for that project" — a sentence the referent can only
+  # act on by requesting a permission they already have. The row is not a pair
+  # (no username yet, which is the ordinary state in this version), so nothing
+  # upstream validated it.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_PROGETTO_INESISTENTE"
+  )
+})
+
+
+test_that("an instance that did not answer is not asked the gate's question", {
+  # eval
+  inviate <<- list()
+  esito <- httr2::with_mocked_responses(
+    function(req) {
+      inviate[[length(inviate) + 1L]] <<- req
+      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
+        stop("Could not resolve host")
+      }
+      httr2::response(
+        status_code = 200L,
+        body = charToRaw(registro_doppio(record_json(list()))(
+          req[["body"]][["data"]]
+        ))
+      )
+    },
+    provisioning_reconcile(
+      "registro.example.org", "t0ken",
+      hosts = c(edc10 = "edc10.example.org"),
+      secrets = c(edc10 = "s3cret"),
+      instances = c("edc10", "edc12"), at = "2026-08-14 03:00"
+    )
+  )
+
+  # test
+  # Writing this as a data error would tell a referent "you are not authorized"
+  # when the truth is "I could not ask". The row stays in the desired state and
+  # the next round picks it up, which is what a transport error means.
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+})
+
+
+test_that("a module too old to report the permission puts the row back in the queue", { # nolint: line_length_linter.
+  # eval
+  vecchia <- function(data) {
+    body <- istanza_doppia(list())(data)
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]] <- lapply(parsed[["results"]], function(row) {
+      row[["user_rights"]] <- NULL
+      row
+    })
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+  esito <- giro(registro_doppio(record_json(list())), vecchia)
+
+  # test
+  # Measured on 2026-08-14: on 0.9.1 the field comes back on zero rows out of
+  # seventeen. The instance answered, but not this question — and the gate
+  # interrogates answers, never absences. IT gets the copy of the alert, which
+  # is what puts the cause in front of somebody who can remove it.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_AMBITO_NON_LEGGIBILE"
+  )
+})
+
+
+test_that("a server the channel does not serve is a transport error", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(record_id = "1", server = "edc07"))),
+    istanza_doppia(list())
+  )
+
+  # test
+  # The register offers thirteen instances and the module is on three. A row
+  # for one of the other ten is not a badly filled request: it is a thing the
+  # channel cannot do yet, and saying so keeps it pending instead of closing it
+  # against whoever asked.
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_ISTANZA_SENZA_MODULO"
+  )
+})
+
+
+test_that("a drifted dictionary stops the round before it reads a record", {
+  # eval
+  storto <- function(data) {
+    if (identical(form_field_value(data[["content"]]), "metadata")) {
+      parsed <- jsonlite::fromJSON(dizionario_json(), simplifyVector = FALSE)
+      parsed <- lapply(parsed, function(field) {
+        if (identical(field[["field_name"]], "outcome")) {
+          field[["field_annotation"]] <- ""
+        }
+        field
+      })
+      return(as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE)))
+    }
+    registro_doppio(record_json(list()))(data)
+  }
+  esito <- giro(storto, istanza_doppia(list()))
+
+  # test
+  # A `@READONLY` that fell means a requester may have typed `applied` into the
+  # outcome, so the register could be carrying a success nobody produced —
+  # exactly the field the round is about to read to decide it has nothing to
+  # do. Nothing is read and nothing is written.
+  expect_true(esito[["fermato"]])
+  expect_true(esito[["schema"]][["blocks"]])
+  expect_length(importazioni(), 0L)
+  expect_equal(nrow(esito[["esiti"]]), 0L)
+})
+
+
+test_that("an extra field on the form is reported and stops nothing", {
+  # eval
+  in_piu <- function(data) {
+    if (identical(form_field_value(data[["content"]]), "metadata")) {
+      parsed <- jsonlite::fromJSON(dizionario_json(), simplifyVector = FALSE)
+      parsed[[length(parsed) + 1L]] <- list(
+        field_name = "note_interne", field_type = "notes",
+        select_choices_or_calculations = "", field_annotation = ""
+      )
+      return(as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE)))
+    }
+    registro_doppio(record_json(list()))(data)
+  }
+  esito <- giro(in_piu, istanza_doppia(list()))
+
+  # test
+  expect_false(esito[["fermato"]])
+  expect_equal(
+    esito[["schema"]][["tolerated"]], "DIZIONARIO_CAMPO_IN_PIU:note_interne"
+  )
+})
+
+
+test_that("a request in scope is simulated and never written", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list())
+  )
+  simulate <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+
+  # test
+  # Rollout point 1 is "dry_run only, over everything", and this is what the
+  # referents read before anything writes: what would happen, in their own row.
+  expect_length(scritture(), 0L)
+  expect_length(simulate, 1L)
+  expect_true(simulate[[1]][["body"]][["data"]][["dry_run"]])
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+})
+
+
+test_that("no record is written twice in one round", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", username = ""),
+      list(record_id = "2", server = "edc07"),
+      list(record_id = "3", expiration = "1999-01-01")
+    )),
+    istanza_doppia(list())
+  )
+
+  # test
+  # A row can meet more than one verdict in one round — a form error and then
+  # its instance being unreachable — and the register takes one outcome per
+  # record. Two rows with the same record_id in one import body is a write
+  # whose result depends on the order REDCap happens to apply them in.
+  expect_false(any(duplicated(esito[["esiti"]][["record_id"]])))
+})
+
+
+test_that("a row still waiting for an identity gets no outcome at all", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(record_id = "1", username = ""))),
+    istanza_doppia(list())
+  )
+
+  # test
+  # It is not a pair yet (decision 9), so there is nothing to report. Writing
+  # `pending` into it every night would be the noise the alert exists to stand
+  # out from.
+  expect_equal(nrow(esito[["esiti"]]), 0L)
+  expect_length(importazioni(), 0L)
+})
+
+
+test_that("the write path refuses to run until it is wired", {
+  # eval
+  # test
+  # The round can simulate correctly and still be wrong about writing: the
+  # read-back that `applied` has to mean does not exist yet. Failing closed
+  # here is cheaper than an `applied` nobody verified.
+  expect_error(
+    giro(registro_doppio(record_json(list())), istanza_doppia(list()),
+         dry_run = FALSE),
+    "write path"
+  )
+})
