@@ -210,7 +210,8 @@ test_that("the job never writes on a row the gate did not pass", {
     registro_doppio(record_json(list())),
     istanza_doppia(
       list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
-    )
+    ),
+    dry_run = FALSE
   )
 
   # test
@@ -294,7 +295,7 @@ test_that("a module too old to report the permission puts the row back in the qu
     })
     as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
   }
-  esito <- giro(registro_doppio(record_json(list())), vecchia)
+  esito <- giro(registro_doppio(record_json(list())), vecchia, dry_run = FALSE)
 
   # test
   # Measured on 2026-08-14: on 0.9.1 the field comes back on zero rows out of
