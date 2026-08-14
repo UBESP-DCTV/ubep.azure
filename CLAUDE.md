@@ -149,8 +149,14 @@ Comandi ricorrenti:
 
 ## Workflow git
 
-- Un commit = una modifica logica. Messaggi in italiano, verbo
-  all’imperativo.
+- Un commit = una modifica logica. Messaggi in italiano, **verbo alla
+  terza persona singolare dell’indicativo**: «Aggiunge», «Corregge»,
+  «Toglie» — il soggetto è il commit, che fa qualcosa al codice.
+  Misurato il 2026-08-14 su 168 commit: 76 iniziano con una forma di
+  terza persona non ambigua (in `-e`), nessuno con un imperativo; il
+  resto sono forme in `-are` che le due coniugazioni condividono e la
+  storia inglese anteriore alla convenzione. La regola diceva
+  «imperativo» e descriveva un repository che non è mai esistito.
 - **Un branch per sotto-progetto, poi `main`.** Nessun ramo di
   integrazione intermedio: `develop` è stato ritirato nel 2026-07 perché
   non aveva mai contenuto un commit che `main` non avesse già, e un

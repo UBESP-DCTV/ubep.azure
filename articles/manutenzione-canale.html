@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -97,25 +97,28 @@ Il registro <em>dichiara delle richieste</em>; non descrive la realtà.
 Una coppia che esiste su un’istanza e non compare nel registro non
 significa niente — in particolare non significa «da revocare».</p>
 <p><strong>Il perimetro.</strong> Una macchina virtuale dedicata in
-Azure, con identità gestita, da cui parte una lavorazione giornaliera.
-Sul disco della macchina non c’è nessun segreto: il token si chiede al
+Azure, con identità gestita, da cui partono due lavorazioni separate —
+l’osservatore e il giro del canale, dettagliati sotto il diagramma. Sul
+disco della macchina non c’è nessun segreto: il token si chiede al
 servizio di metadati dell’istanza, che risponde solo a chi gira su
 quella macchina, e con quel token si legge il Key Vault. L’indirizzo
 pubblico della macchina è statico per necessità e non per comodità — è
 l’unica voce ammessa nelle liste di indirizzi delle istanze, e cambiarlo
 le chiude tutte insieme.</p>
-<p><strong>La telemetria e gli allarmi.</strong> Ogni esecuzione lascia
-un record in un workspace di Log Analytics, attraverso un punto di
-raccolta e una regola di raccolta. Sei regole d’allarme leggono quel
-record e scrivono a un gruppo di azione.</p>
+<p><strong>La telemetria e gli allarmi.</strong> Ogni esecuzione
+dell’osservatore lascia un record in un workspace di Log Analytics,
+attraverso un punto di raccolta e una regola di raccolta. Sei regole
+d’allarme leggono quel record e scrivono a un gruppo di azione. Il giro
+del canale non emette ancora telemetria: emetterla è del sotto-progetto
+4.</p>
 <pre><code>     referenti                        chi mantiene
          │                                  │
          ▼                                  ▼
   ┌──────────────┐                 ┌──────────────────┐
-  │ registro     │                 │ client R         │
-  │ richieste    │◄- - - - - - - - │ (questo          │
-  │ (REDCap)     │  legge          │  pacchetto)      │
-  └──────────────┘  (non ancora)   └────────┬─────────┘
+  │ registro     │                 │ giro del canale  │
+  │ richieste    │◄- - - - - - - - │ (client R,       │
+  │ (REDCap)     │  legge, scrive  │  a chiamata)     │
+  └──────────────┘  il solo esito  └────────┬─────────┘
                                             │
                                stato / asserisci / revoca
                                             │
@@ -124,18 +127,41 @@ record e scrivono a un gruppo di azione.</p>
   │ perimetro               │      │ modulo REDCap    │
   │ - identità gestita      │─────►│ sulle istanze    │
   │ - segreti in Key Vault  │      │ osservate        │
-  │ - lavorazione al giorno │      └─────────┬────────┘
+  │ - due lavorazioni:      │      └─────────┬────────┘
+  │   osservatore (giorno)  │                │
+  │   giro (a chiamata)     │                │
   └───────────┬─────────────┘                │
               │                              │ due impronte:
-              │ un record per esecuzione     │ superficie, indirizzi
+              │ un record, dall'osservatore  │ superficie, indirizzi
               ▼                              │
   ┌─────────────────────────┐                │
   │ telemetria              │◄───────────────┘
   │ + sei regole d'allarme  │
+  │ solo dall'osservatore   │
   └─────────────────────────┘</code></pre>
-<p><strong>Oggi la lavorazione osserva e non confronta</strong>, e la
-freccia «legge» verso il registro è tratteggiata apposta. Le ragioni
-stanno in §2.</p>
+<p><strong>La macchina del perimetro ospita due lavorazioni, non
+una</strong>, e questo è il punto che il diagramma dice per primo:
+nessuna delle due sta per «il canale» da sola.
+<strong>L’osservatore</strong> gira ogni giorno, legge lo stato di ogni
+istanza che ha il modulo e non confronta niente — non legge il registro
+e non chiama <code><a href="../reference/provisioning_diff.html">provisioning_diff()</a></code>, e una guardia in
+<code>tests/testthat/test-runner-guardie.R</code> lo sorveglia.
+<strong>Il giro del canale</strong> è un job separato, apposta:
+osservare e agire hanno cadenze diverse e conseguenze diverse, e un
+guasto nell’uno non deve fermare l’altro. Legge il registro con l’API a
+token, chiede il cancello sull’ambito a ogni istanza che ha risposto,
+confronta il desiderato con il reale per le sole coppie di cui qualcuno
+ha chiesto, e scrive solo quando la scrittura è richiesta esplicitamente
+— di default simula. Le ragioni di questa divisione, e perché solo
+l’osservatore doveva restare senza confronto, stanno in §2.</p>
+<p><strong>Il giro non ha ancora un’unità di sistema o un
+timer</strong>: gira quando qualcuno lo lancia, da riga di comando sulla
+macchina del perimetro (<code>dev/runner-canale.R</code>, installato
+come per l’osservatore). Programmarlo è un lavoro del sotto-progetto 4,
+non ancora fatto: questa guida non descrive un orario che non esiste.
+Per lo stesso motivo la telemetria oggi riceve un record solo
+dall’osservatore — il giro non emette ancora nulla lì, e il diagramma lo
+dice piuttosto che lasciarlo intuire.</p>
 </div>
 <div class="section level2">
 <h2 id="i-due-cancelli-e-che-cosa-fa-scattare-ciascuno">2. I due cancelli, e che cosa fa scattare ciascuno<a class="anchor" aria-label="anchor" href="#i-due-cancelli-e-che-cosa-fa-scattare-ciascuno"></a>
@@ -254,28 +280,44 @@ stato. È un rischio di diagnosi, non di sicurezza, ed è scritto qui
 perché costa mezza giornata a chi non lo sa.</p>
 </div>
 <div class="section level3">
-<h3 id="il-confronto-fra-desiderato-e-reale-è-spento">Il confronto fra desiderato e reale è spento<a class="anchor" aria-label="anchor" href="#il-confronto-fra-desiderato-e-reale-%C3%A8-spento"></a>
+<h3 id="il-confronto-fra-desiderato-e-reale-spento-nellosservatore-acceso-nel-giro">Il confronto fra desiderato e reale: spento nell’osservatore, acceso
+nel giro<a class="anchor" aria-label="anchor" href="#il-confronto-fra-desiderato-e-reale-spento-nellosservatore-acceso-nel-giro"></a>
 </h3>
 <p><code><a href="../reference/provisioning_diff.html">provisioning_diff()</a></code> esiste, è collaudato, ed è la parte
-del canale che decide che cosa succede. <strong>La lavorazione
-giornaliera non lo chiama.</strong></p>
+del canale che decide che cosa succede. <strong>L’osservatore non lo
+chiama, e non deve.</strong></p>
 <p>La ragione è di ordine, non di qualità. Il registro dichiara il
-desiderato; finché il registro non è popolato, il desiderato è vuoto, e
-un confronto fra un desiderato vuoto e un reale pieno classifica
-<strong>ogni coppia esistente</strong> come non più voluta. Non è la
-chiamata che scrive a essere pericolosa: è il confronto che la
-alimenterebbe. Per questo la versione 1 della lavorazione non lo calcola
-affatto, invece di calcolarlo e non usarlo — e un controllo in
-<code>tests/testthat/test-runner-guardie.R</code> sorveglia che resti
-così.</p>
-<p>La condizione di accensione è una sola: <strong>il registro
-popolato</strong>, cioè a fine migrazione del parco. Questa guida non
-descrive come si accende, ed è deliberato: una procedura scritta è una
-procedura che qualcuno esegue.</p>
-<p>Va saputo anche che quella guardia è l’unico presidio, e ha un limite
-noto: sta sotto <code>tests/testthat/</code> ma sorveglia un file in
-<code>dev/</code>, che è fuori dal pacchetto costruito, quindi sotto
-<code>R CMD check</code> non gira.</p>
+desiderato, e l’osservatore legge lo stato di un’istanza <strong>per
+intero</strong> — nessuno gli chiede coppie specifiche, è la sola
+passata che esiste finché non c’è un registro da cui ricavarne una
+stretta (<code>dev/runner-osservatore.R</code> lo dice con queste
+parole). Un confronto fatto lì, fra il desiderato dichiarato dal
+registro e quel reale letto per intero, classificherebbe <strong>ogni
+coppia esistente</strong> come non più voluta, ogni volta che il
+registro non nomina ancora quella coppia — e all’inizio della migrazione
+del parco non ne nomina quasi nessuna. Non è la chiamata che scrive a
+essere pericolosa: è il confronto che la alimenterebbe. Per questo
+l’osservatore non lo calcola affatto, invece di calcolarlo e non usarlo
+— e un controllo in <code>tests/testthat/test-runner-guardie.R</code>
+sorveglia che quel job resti così.</p>
+<p><strong>Il giro del canale lo chiama, e può fin da subito.</strong>
+La differenza non è che il registro sia più popolato oggi di quanto lo
+sarebbe stato ieri: è che il giro non legge mai lo stato di un’istanza
+per intero. Chiede al modulo le sole coppie che il registro nomina —
+quelle desiderate e quelle da revocare, più quelle su cui il cancello
+sull’ambito deve interrogare — e confronta il reale con il desiderato
+solo su quelle. Un registro vuoto o appena iniziato non produce righe in
+più da confrontare: produce meno domande da fare, e zero righe è un
+risultato quieto, non un falso «tutto revocato». Non c’è quindi un
+interruttore da aspettare: la sicurezza non viene dal registro essere
+pieno, viene dal confronto non guardare mai più di quanto qualcuno ha
+chiesto — una proprietà del codice, non una soglia di avanzamento della
+migrazione.</p>
+<p><strong>Questo non riguarda la scrittura</strong>, che resta un
+interruttore separato e distinto dal confronto: il giro simula di
+default, e scrive solo quando la scrittura è richiesta esplicitamente
+(§1). Il confronto sempre acceso dice solo che cosa cambierebbe; se
+scriverlo per davvero è una decisione ulteriore, presa altrove.</p>
 </div>
 </div>
 <div class="section level2">
@@ -696,30 +738,57 @@ che qualcuno ha guardato.</p>
 <h2 id="che-cosa-questa-guida-non-copre">Che cosa questa guida non copre<a class="anchor" aria-label="anchor" href="#che-cosa-questa-guida-non-copre"></a>
 </h2>
 <ul>
-<li>
-<strong>Il provisioning delle identità.</strong> Non è ancora
+<li><p><strong>Il provisioning delle identità.</strong> Non è ancora
 automatizzato: la creazione dell’account si fa a mano, con la procedura
 storica. Il confine è nominato invece di taciuto, perché chi cerca «come
 nasce l’account» deve trovare una risposta, e «non ancora automatizzato»
-è una risposta.</li>
+è una risposta.</p></li>
+<li><p><strong>Il caricamento in batch delle richieste.</strong> Passa
+da IT. Un import per identificatore di record permetterebbe a un
+referente di sovrascrivere le righe di un altro, e la difesa nativa non
+è ancora in piedi.</p></li>
+<li><p><strong>Quando passare dalla simulazione alla scrittura
+vera.</strong> Vedi §1: il giro del canale simula finché nessuno gli
+chiede di scrivere per davvero, e il confronto fra desiderato e reale è
+acceso da subito — non è più lui l’interruttore, vedi §2. Questa guida
+non descrive quando si decide di girare quell’interruttore, ed è
+deliberato: una procedura scritta è una procedura che qualcuno esegue
+prima che sia il momento.</p></li>
 <li>
-<strong>Il caricamento in batch delle richieste.</strong> Passa da
-IT. Un import per identificatore di record permetterebbe a un referente
-di sovrascrivere le righe di un altro, e la difesa nativa non è ancora
-in piedi.</li>
-<li>
-<strong>L’accensione del confronto fra desiderato e reale.</strong>
-Vedi §2: qui si dice che è spento e perché, non come si accende.</li>
-<li>
-<strong>Il cancello sull’ambito delle richieste.</strong> Il
+<p><strong>Il cancello sull’ambito delle richieste.</strong> Il
 pacchetto porta <code><a href="../reference/scope_errors.html">scope_errors()</a></code>, che rifiuta una richiesta
 il cui autore non detiene il permesso <code>user_rights</code> sul
 progetto che la richiesta nomina — la regola è che il canale non deve
-permettere a nessuno ciò che non potrebbe già fare a mano. <strong>Non è
-ancora in catena</strong>: la lavorazione che dovrebbe chiamarlo non è
-scritta, quindi oggi il cancello è un pezzo pronto e non un cancello in
-esercizio. Detto qui perché chi trova la funzione nel pacchetto deve
-poter sapere se gira, e «esiste ma non è collegata» è una risposta.</li>
+permettere a nessuno ciò che non potrebbe già fare a mano. <strong>È in
+catena</strong>: il giro lo interroga per ogni istanza che ha risposto,
+e una guardia nega qualunque funzione del pacchetto che sappia scrivere
+su un’istanza senza nominarlo. Il cancello si interroga sulle risposte e
+mai sulle assenze, e la distinzione ha una grana precisa. Un’istanza
+irraggiungibile torna con il proprio codice di trasporto — quello che
+riporta <code><a href="../reference/module_state.html">module_state()</a></code>, oppure
+<code>TRASPORTO_ISTANZA_SENZA_MODULO</code> o
+<code>TRASPORTO_SEGRETO_NON_LEGGIBILE</code> se non è nemmeno stata
+interrogata; una che risponde ma il cui modulo è troppo vecchio per
+riportare il permesso su qualunque riga torna invece
+<code>TRASPORTO_AMBITO_NON_LEGGIBILE</code>. In entrambi i casi
+rimettono in coda le sole righe già risolte in una coppia, mai una
+dichiarazione di fuori ambito — dire «non sei autorizzato» quando la
+verità è «non ho potuto chiedere» manda a correggere la persona
+sbagliata. Una singola riga la cui autorizzazione non si lascia
+risolvere — un ruolo cancellato sotto di lei, su un’istanza che altrove
+risponde — è invece rifiutata come fuori ambito: l’alternativa sarebbe
+allargare l’accesso proprio nel momento in cui il canale ha smesso di
+poterlo vedere.</p>
+<p>La guardia ha un’eccezione dichiarata: lo strumento di conformità
+(<code><a href="../reference/run_conformance_check.html">run_conformance_check()</a></code>), che non legge il registro e non
+ha un richiedente su cui interrogare il cancello — la regola che il
+cancello applica («il richiedente avrebbe potuto concederlo a mano») non
+si pone per uno strumento che un operatore lancia a mano contro un
+progetto di conformità dedicato, mai su dati derivati dal registro.
+Dirlo qui evita di promettere una garanzia più larga di quella che il
+codice mantiene: una guardia descritta come più ampia di quanto sia
+viene creduta più di quanto meriti.</p>
+</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

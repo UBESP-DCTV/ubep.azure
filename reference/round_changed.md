@@ -1,0 +1,28 @@
+# Keep only the outcomes that are not what the register already says
+
+`outcome_at` is deliberately outside the comparison: it changes every
+run by construction, so including it would make every row differ and the
+filter would filter nothing. Without the filter every quiet night
+rewrites every row, and the alert on the outcome field becomes
+background noise — which is the thing people stop reading, and the alert
+exists to be read.
+
+## Usage
+
+``` r
+round_changed(register, payload)
+```
+
+## Arguments
+
+- register:
+
+  The register as read.
+
+- payload:
+
+  The outcome rows this round produced.
+
+## Value
+
+`payload`, reduced to the rows that changed something.

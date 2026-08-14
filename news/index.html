@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,17 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.11.0" id="ubepazure-0110">ubep.azure 0.11.0<a class="anchor" aria-label="anchor" href="#ubepazure-0110"></a></h2>
+<ul><li>
+<strong>The channel reads the request register with the token API and writes back only the outcome.</strong> <code><a href="../reference/provisioning_reconcile.html">provisioning_reconcile()</a></code> is the one function that holds the register and the instances together, and the only place a write can start from. A <code>project_id</code> the register accepted but that is not a number is reported <code>DATO_PROGETTO_INESISTENTE</code> before the scope gate ever sees the row — such a row may not be a pair yet, so nothing upstream validated it, and left to the gate it would come back “you may not ask for that project” when the truth is “that is not a project number”.</li>
+<li>
+<strong>The gate on scope is wired in.</strong> A request is applicable only if whoever filed it holds REDCap’s <code>user_rights</code> permission on the project it names, and a guard refuses any package function that can write on an instance without naming the gate — with one declared exemption, the conformance tool, which does not read the register and has no requester to gate on. An instance that did not answer returns its own transport code — whatever <code><a href="../reference/module_state.html">module_state()</a></code> reports, or <code>TRASPORTO_ISTANZA_SENZA_MODULO</code> / <code>TRASPORTO_SEGRETO_NON_LEGGIBILE</code> when it was never even asked; one that answered but whose module is too old to carry the permission on any row returns <code>TRASPORTO_AMBITO_NON_LEGGIBILE</code> instead. Either way only the rows already resolved into a pair go back to the queue, never a declaration of out of scope. A single row whose own permission cannot be resolved — a role deleted underneath it, on an instance that otherwise answers — is refused as out of scope: the alternative would be to widen access exactly when the channel has stopped being able to see it.</li>
+<li>
+<strong><code>applied</code> is a claim about evidence, not about the absence of an error.</strong> A real write is followed by a read-back, and the outcome is <code>applied</code> only if the re-read confirms it — the pair present after an apply, absent after a revoke; otherwise the row is reported <code>TRASPORTO_SCRITTURA_NON_CONFERMATA</code> and returns to the queue. Confirmation is by presence and not by field-by-field equality, deliberately: REDCap normalizes what it stores, and a rule demanding an exact match could make a row impossible to confirm and retried for ever. What the instance actually shows travels in <code>applied_as</code>, and the next round’s diff is where a real disagreement gets acted on.</li>
+<li>Writes on the instances are grouped by <code>(server, project_id)</code>: the module refuses a write that touches more than one project, and the refusal arrives before touching anything.</li>
+<li>The dictionary comparison finally has a caller: the round stops before writing if the register’s schema has drifted in a way that changes what it reads.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.10.0" id="ubepazure-0100">ubep.azure 0.10.0<a class="anchor" aria-label="anchor" href="#ubepazure-0100"></a></h2>
 <ul><li>

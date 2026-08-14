@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -127,7 +127,7 @@
 </div>
 <div class="section level2">
 <h2 id="workflow-git">Workflow git<a class="anchor" aria-label="anchor" href="#workflow-git"></a></h2>
-<ul><li>Un commit = una modifica logica. Messaggi in italiano, verbo all’imperativo.</li>
+<ul><li>Un commit = una modifica logica. Messaggi in italiano, <strong>verbo alla terza persona singolare dell’indicativo</strong>: «Aggiunge», «Corregge», «Toglie» — il soggetto è il commit, che fa qualcosa al codice. Misurato il 2026-08-14 su 168 commit: 76 iniziano con una forma di terza persona non ambigua (in <code>-e</code>), nessuno con un imperativo; il resto sono forme in <code>-are</code> che le due coniugazioni condividono e la storia inglese anteriore alla convenzione. La regola diceva «imperativo» e descriveva un repository che non è mai esistito.</li>
 <li>
 <strong>Un branch per sotto-progetto, poi <code>main</code>.</strong> Nessun ramo di integrazione intermedio: <code>develop</code> è stato ritirato nel 2026-07 perché non aveva mai contenuto un commit che <code>main</code> non avesse già, e un workflow che non gira mai è il posto dove le action invecchiano fino a rompersi.</li>
 <li>
