@@ -122,8 +122,10 @@ test_that("nothing in the package writes on an instance without naming the gate"
   # the same commit that wires the gate, exactly as this test's own message
   # asks of a deliberate second write path -- and it stays out of `offending`
   # below because it is also in `exempt`, so it is never scanned against
-  # itself.
-  exempt <- c(writes, "run_conformance_check")
+  # itself. It is already in `writes` above, so it needs no second mention
+  # here: the exemption this guard grants beyond the write primitives
+  # themselves is exactly one name, not two copies of it.
+  exempt <- writes
   offending <- Filter(function(name) {
     body <- paste(deparse(body(get(name, envir = namespace))), collapse = " ")
     calls_write <- any(vapply(
