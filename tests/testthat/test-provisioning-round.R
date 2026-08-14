@@ -106,7 +106,7 @@ test_that("an instance that answers without the permission has not answered", {
 })
 
 
-test_that("the rights frame carries no permission column when nobody reported one", {
+test_that("the rights frame carries no permission column when nobody reported one", { # nolint: line_length_linter.
   # eval
   readable <- round_rights("edc10", state_reply(list(user_rights = 0L)))
   unreadable <- round_rights(
@@ -167,7 +167,7 @@ test_that("a real row nobody asked about never reaches the diff", {
 })
 
 
-test_that("the schema gate stops on what changes the reading and not on the rest", {
+test_that("the schema gate stops on what changes the reading and not on the rest", { # nolint: line_length_linter.
   # eval
   blocking <- round_schema_verdict(c(
     "DIZIONARIO_READONLY_CADUTO:outcome", "DIZIONARIO_CAMPO_IN_PIU:note"
@@ -232,7 +232,7 @@ test_that("a batch sends the five fields the module reads and nothing else", {
 })
 
 
-test_that("the read-back reads as a sentence and says absent when nothing is there", {
+test_that("the read-back reads as a sentence and says absent when nothing is there", { # nolint: line_length_linter.
   # eval
   present <- round_applied_as(list(
     role_name = "data entry", dag_name = NULL, expiration = "2027-01-01"
@@ -289,8 +289,10 @@ test_that("an outcome that did not change is not written again", {
       "1", "applied", at = "2026-08-14 03:00",
       applied_as = "role_name=data entry; dag_name=; expiration="
     ),
-    outcome_payload("2", "transport_error", detail = "TRASPORTO_NON_RAGGIUNGIBILE",
-                    at = "2026-08-14 03:00")
+    outcome_payload(
+      "2", "transport_error",
+      detail = "TRASPORTO_NON_RAGGIUNGIBILE", at = "2026-08-14 03:00"
+    )
   )
   changed <- round_changed(register, payload)
 
