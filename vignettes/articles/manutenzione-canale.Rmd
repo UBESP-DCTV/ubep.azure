@@ -588,10 +588,16 @@ normale l'ultima volta che qualcuno ha guardato.
   **È in catena**: il giro lo interroga per ogni istanza che ha risposto, e una
   guardia nega qualunque funzione del pacchetto che sappia scrivere su
   un'istanza senza nominarlo. Il cancello si interroga sulle risposte e mai
-  sulle assenze: un'istanza irraggiungibile, o un modulo troppo vecchio per
-  riportare il permesso, rimettono la riga in coda invece di dichiararla fuori
-  ambito — dire «non sei autorizzato» quando la verità è «non ho potuto
-  chiedere» manda a correggere la persona sbagliata.
+  sulle assenze, e la distinzione ha una grana precisa. Un'istanza
+  irraggiungibile, o un modulo troppo vecchio per riportare il permesso su
+  qualunque riga, rimette in coda l'intera istanza con
+  `TRASPORTO_AMBITO_NON_LEGGIBILE` invece di dichiararla fuori ambito — dire
+  «non sei autorizzato» quando la verità è «non ho potuto chiedere» manda a
+  correggere la persona sbagliata. Una singola riga la cui autorizzazione non
+  si lascia risolvere — un ruolo cancellato sotto di lei, su un'istanza che
+  altrove risponde — è invece rifiutata come fuori ambito: l'alternativa
+  sarebbe allargare l'accesso proprio nel momento in cui il canale ha smesso
+  di poterlo vedere.
 
   La guardia ha un'eccezione dichiarata: lo strumento di conformità
   (`run_conformance_check()`), che non legge il registro e non ha un

@@ -13,9 +13,13 @@
   and a guard refuses any package function that can write on an instance
   without naming the gate — with one declared exemption, the conformance
   tool, which does not read the register and has no requester to gate on. An
-  instance that did not answer, or that answered without carrying the
-  permission, returns the row to the queue instead of declaring it out of
-  scope.
+  instance that did not answer, or whose module is too old to carry the
+  permission on any row, returns every row to the queue with
+  `TRASPORTO_AMBITO_NON_LEGGIBILE` instead of declaring them out of scope. A
+  single row whose own permission cannot be resolved — a role deleted
+  underneath it, on an instance that otherwise answers — is refused as out of
+  scope: the alternative would be to widen access exactly when the channel has
+  stopped being able to see it.
 * **`applied` is a claim about evidence, not about the absence of an
   error.** A real write is followed by a read-back, and the outcome is
   `applied` only if the re-read confirms it — the pair present after an
