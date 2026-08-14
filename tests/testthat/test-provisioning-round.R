@@ -67,6 +67,26 @@ test_that("a pair asked for twice is asked for once", {
 })
 
 
+test_that("a scope pair whose project_id will not parse asks quietly", {
+  # eval
+  # scope_pairs() (R/provisioning_scope.R) filters register rows for
+  # non-emptiness only, never for numeric-ness, so a row with a malformed
+  # project_id reaches `asks` even though the same row is already refused
+  # elsewhere as DATO_PROGETTO_INESISTENTE by register_to_desired(). That
+  # duplication is what makes the NA this produces harmless rather than
+  # unnoticed, but it must stay silent: a coercion warning here would show up
+  # in a cron log and in test output on every run that carries one bad row.
+  asks <- data.frame(
+    server = "edc10", project_id = "9003abc",
+    username = "anna.bianchi@ubep.unipd.it", stringsAsFactors = FALSE
+  )
+
+  # test
+  expect_no_warning(pairs <- round_state_pairs(list(), asks))
+  expect_true(is.na(pairs[[1]][["project_id"]]))
+})
+
+
 test_that("an instance that answers without the permission has not answered", {
   # eval
   old <- round_scope_readable(state_reply(list(), carries_rights = FALSE))

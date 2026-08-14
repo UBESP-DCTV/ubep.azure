@@ -19,7 +19,16 @@ round_state_pairs <- function(requests, asks) {
   pair_of <- function(username, project_id) {
     list(
       username = trimws(as.character(username)),
-      project_id = as.integer(project_id)
+      # `asks` comes straight from `scope_pairs()`, which filters its rows
+      # for non-emptiness and never for numeric-ness, so a register row whose
+      # `project_id` does not parse coerces to NA here rather than raising.
+      # The NA is harmless twice over: the same row already reports
+      # `DATO_PROGETTO_INESISTENTE` from `register_to_desired()`, so whoever
+      # filed it is told the real cause, and a pair whose `project_id`
+      # serializes as JSON `null` fails the module's `isset()` check on the
+      # way in and is dropped before it reaches the rights table — nothing is
+      # asked about it and nothing is written.
+      project_id = suppressWarnings(as.integer(project_id))
     )
   }
 
@@ -140,7 +149,7 @@ round_actual <- function(results, requests) {
   key_of <- function(row) {
     paste(
       trimws(as.character(row[["username"]])),
-      as.integer(row[["project_id"]]),
+      suppressWarnings(as.integer(row[["project_id"]])),
       sep = "\r"
     )
   }
@@ -214,7 +223,7 @@ round_batches <- function(entries) {
   keys <- vapply(entries, function(entry) {
     paste(
       as.character(entry[["server"]]),
-      as.integer(entry[["project_id"]]),
+      suppressWarnings(as.integer(entry[["project_id"]])),
       sep = "\r"
     )
   }, character(1))
@@ -224,7 +233,7 @@ round_batches <- function(entries) {
 
     list(
       server = as.character(members[[1]][["server"]]),
-      project_id = as.integer(members[[1]][["project_id"]]),
+      project_id = suppressWarnings(as.integer(members[[1]][["project_id"]])),
       record_ids = vapply(
         members, function(entry) as.character(entry[["record_id"]]),
         character(1)
@@ -235,7 +244,7 @@ round_batches <- function(entries) {
         # the register's internal numbering into the instance's log.
         request <- list(
           username = trimws(as.character(entry[["username"]])),
-          project_id = as.integer(entry[["project_id"]])
+          project_id = suppressWarnings(as.integer(entry[["project_id"]]))
         )
         for (field in c("role_name", "dag_name", "expiration")) {
           value <- entry[[field]]
