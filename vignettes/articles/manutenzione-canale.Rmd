@@ -37,27 +37,29 @@ compare nel registro non significa niente — in particolare non significa «da
 revocare».
 
 **Il perimetro.** Una macchina virtuale dedicata in Azure, con identità
-gestita, da cui parte una lavorazione giornaliera. Sul disco della macchina non
+gestita, da cui partono due lavorazioni separate — l'osservatore e il giro del
+canale, dettagliati sotto il diagramma. Sul disco della macchina non
 c'è nessun segreto: il token si chiede al servizio di metadati dell'istanza,
 che risponde solo a chi gira su quella macchina, e con quel token si legge il
 Key Vault. L'indirizzo pubblico della macchina è statico per necessità e non
 per comodità — è l'unica voce ammessa nelle liste di indirizzi delle istanze,
 e cambiarlo le chiude tutte insieme.
 
-**La telemetria e gli allarmi.** Ogni esecuzione lascia un record in un
-workspace di Log Analytics, attraverso un punto di raccolta e una regola di
-raccolta. Sei regole d'allarme leggono quel record e scrivono a un gruppo di
-azione.
+**La telemetria e gli allarmi.** Ogni esecuzione dell'osservatore lascia un
+record in un workspace di Log Analytics, attraverso un punto di raccolta e una
+regola di raccolta. Sei regole d'allarme leggono quel record e scrivono a un
+gruppo di azione. Il giro del canale non emette ancora telemetria: emetterla è
+del sotto-progetto 4.
 
 ```
      referenti                        chi mantiene
          │                                  │
          ▼                                  ▼
   ┌──────────────┐                 ┌──────────────────┐
-  │ registro     │                 │ client R         │
-  │ richieste    │◄- - - - - - - - │ (questo          │
-  │ (REDCap)     │  legge          │  pacchetto)      │
-  └──────────────┘  (non ancora)   └────────┬─────────┘
+  │ registro     │                 │ giro del canale  │
+  │ richieste    │◄- - - - - - - - │ (client R,       │
+  │ (REDCap)     │  legge, scrive  │  a chiamata)     │
+  └──────────────┘  il solo esito  └────────┬─────────┘
                                             │
                                stato / asserisci / revoca
                                             │
@@ -66,19 +68,41 @@ azione.
   │ perimetro               │      │ modulo REDCap    │
   │ - identità gestita      │─────►│ sulle istanze    │
   │ - segreti in Key Vault  │      │ osservate        │
-  │ - lavorazione al giorno │      └─────────┬────────┘
+  │ - due lavorazioni:      │      └─────────┬────────┘
+  │   osservatore (giorno)  │                │
+  │   giro (a chiamata)     │                │
   └───────────┬─────────────┘                │
               │                              │ due impronte:
-              │ un record per esecuzione     │ superficie, indirizzi
+              │ un record, dall'osservatore  │ superficie, indirizzi
               ▼                              │
   ┌─────────────────────────┐                │
   │ telemetria              │◄───────────────┘
   │ + sei regole d'allarme  │
+  │ solo dall'osservatore   │
   └─────────────────────────┘
 ```
 
-**Oggi la lavorazione osserva e non confronta**, e la freccia «legge» verso il
-registro è tratteggiata apposta. Le ragioni stanno in §2.
+**La macchina del perimetro ospita due lavorazioni, non una**, e questo è il
+punto che il diagramma dice per primo: nessuna delle due sta per «il canale»
+da sola. **L'osservatore** gira ogni giorno, legge lo stato di ogni istanza
+che ha il modulo e non confronta niente — non legge il registro e non chiama
+`provisioning_diff()`, e una guardia in `tests/testthat/test-runner-guardie.R`
+lo sorveglia. **Il giro del canale** è un job separato, apposta: osservare e
+agire hanno cadenze diverse e conseguenze diverse, e un guasto nell'uno non
+deve fermare l'altro. Legge il registro con l'API a token, chiede il cancello
+sull'ambito a ogni istanza che ha risposto, confronta il desiderato con il
+reale per le sole coppie di cui qualcuno ha chiesto, e scrive solo quando la
+scrittura è richiesta esplicitamente — di default simula. Le ragioni di questa
+divisione, e perché solo l'osservatore doveva restare senza confronto, stanno
+in §2.
+
+**Il giro non ha ancora un'unità di sistema o un timer**: gira quando qualcuno
+lo lancia, da riga di comando sulla macchina del perimetro
+(`dev/runner-canale.R`, installato come per l'osservatore). Programmarlo è un
+lavoro del sotto-progetto 4, non ancora fatto: questa guida non descrive un
+orario che non esiste. Per lo stesso motivo la telemetria oggi riceve un
+record solo dall'osservatore — il giro non emette ancora nulla lì, e il
+diagramma lo dice piuttosto che lasciarlo intuire.
 
 ## 2. I due cancelli, e che cosa fa scattare ciascuno
 
@@ -161,26 +185,41 @@ scritture si degraderebbero a simulazione e si andrebbe a cercare un cambio di
 versione che non c'è stato. È un rischio di diagnosi, non di sicurezza, ed è
 scritto qui perché costa mezza giornata a chi non lo sa.
 
-### Il confronto fra desiderato e reale è spento
+### Il confronto fra desiderato e reale: spento nell'osservatore, acceso nel giro
 
 `provisioning_diff()` esiste, è collaudato, ed è la parte del canale che
-decide che cosa succede. **La lavorazione giornaliera non lo chiama.**
+decide che cosa succede. **L'osservatore non lo chiama, e non deve.**
 
-La ragione è di ordine, non di qualità. Il registro dichiara il desiderato;
-finché il registro non è popolato, il desiderato è vuoto, e un confronto fra
-un desiderato vuoto e un reale pieno classifica **ogni coppia esistente** come
-non più voluta. Non è la chiamata che scrive a essere pericolosa: è il
-confronto che la alimenterebbe. Per questo la versione 1 della lavorazione non
-lo calcola affatto, invece di calcolarlo e non usarlo — e un controllo in
-`tests/testthat/test-runner-guardie.R` sorveglia che resti così.
+La ragione è di ordine, non di qualità. Il registro dichiara il desiderato, e
+l'osservatore legge lo stato di un'istanza **per intero** — nessuno gli chiede
+coppie specifiche, è la sola passata che esiste finché non c'è un registro da
+cui ricavarne una stretta (`dev/runner-osservatore.R` lo dice con queste
+parole). Un confronto fatto lì, fra il desiderato dichiarato dal registro e
+quel reale letto per intero, classificherebbe **ogni coppia esistente** come
+non più voluta, ogni volta che il registro non nomina ancora quella coppia —
+e all'inizio della migrazione del parco non ne nomina quasi nessuna. Non è la
+chiamata che scrive a essere pericolosa: è il confronto che la alimenterebbe.
+Per questo l'osservatore non lo calcola affatto, invece di calcolarlo e non
+usarlo — e un controllo in `tests/testthat/test-runner-guardie.R` sorveglia
+che quel job resti così.
 
-La condizione di accensione è una sola: **il registro popolato**, cioè a fine
-migrazione del parco. Questa guida non descrive come si accende, ed è
-deliberato: una procedura scritta è una procedura che qualcuno esegue.
+**Il giro del canale lo chiama, e può fin da subito.** La differenza non è che
+il registro sia più popolato oggi di quanto lo sarebbe stato ieri: è che il
+giro non legge mai lo stato di un'istanza per intero. Chiede al modulo le sole
+coppie che il registro nomina — quelle desiderate e quelle da revocare, più
+quelle su cui il cancello sull'ambito deve interrogare — e confronta il reale
+con il desiderato solo su quelle. Un registro vuoto o appena iniziato non
+produce righe in più da confrontare: produce meno domande da fare, e zero
+righe è un risultato quieto, non un falso «tutto revocato». Non c'è quindi un
+interruttore da aspettare: la sicurezza non viene dal registro essere pieno,
+viene dal confronto non guardare mai più di quanto qualcuno ha chiesto — una
+proprietà del codice, non una soglia di avanzamento della migrazione.
 
-Va saputo anche che quella guardia è l'unico presidio, e ha un limite noto:
-sta sotto `tests/testthat/` ma sorveglia un file in `dev/`, che è fuori dal
-pacchetto costruito, quindi sotto `R CMD check` non gira.
+**Questo non riguarda la scrittura**, che resta un interruttore separato e
+distinto dal confronto: il giro simula di default, e scrive solo quando la
+scrittura è richiesta esplicitamente (§1). Il confronto sempre acceso dice
+solo che cosa cambierebbe; se scriverlo per davvero è una decisione ulteriore,
+presa altrove.
 
 ## 3. Il protocollo di riqualificazione
 
@@ -536,8 +575,12 @@ normale l'ultima volta che qualcuno ha guardato.
 - **Il caricamento in batch delle richieste.** Passa da IT. Un import per
   identificatore di record permetterebbe a un referente di sovrascrivere le
   righe di un altro, e la difesa nativa non è ancora in piedi.
-- **L'accensione del confronto fra desiderato e reale.** Vedi §2: qui si dice
-  che è spento e perché, non come si accende.
+- **Quando passare dalla simulazione alla scrittura vera.** Vedi §1: il giro
+  del canale simula finché nessuno gli chiede di scrivere per davvero, e il
+  confronto fra desiderato e reale è acceso da subito — non è più lui
+  l'interruttore, vedi §2. Questa guida non descrive quando si decide di
+  girare quell'interruttore, ed è deliberato: una procedura scritta è una
+  procedura che qualcuno esegue prima che sia il momento.
 - **Il cancello sull'ambito delle richieste.** Il pacchetto porta
   `scope_errors()`, che rifiuta una richiesta il cui autore non detiene il
   permesso `user_rights` sul progetto che la richiesta nomina — la regola è che
