@@ -406,11 +406,20 @@ provisioning_reconcile <- function(register_url,
         server = server, raggiunta = TRUE, ambito_leggibile = TRUE,
         errori = NA_character_, stringsAsFactors = FALSE
       ),
-      esiti = do.call(rbind, list(
-        outcome_rows(names(refused), "data_error",
-                     detail = "DATO_AMBITO_NON_AUTORIZZATO"),
-        settled,
-        written
+      esiti = do.call(rbind, c(
+        list(empty_outcomes),
+        # The gate refuses for more than one reason and they do not all belong
+        # to the same person, so the outcome is read off the code's prefix
+        # instead of being fixed here. Writing "data_error" once for every
+        # refusal was the shorter line and the wrong one: it told a referent
+        # whose rights row is unreadable that they are not authorized.
+        lapply(names(refused), function(id) {
+          code <- as.character(refused[[id]])
+          outcome_payload(
+            id, round_outcome_kind(code, dry_run), detail = code, at = at
+          )
+        }),
+        list(settled, written)
       ))
     )
   })

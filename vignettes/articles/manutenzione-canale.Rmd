@@ -596,11 +596,16 @@ normale l'ultima volta che qualcuno ha guardato.
   qualunque riga torna invece `TRASPORTO_AMBITO_NON_LEGGIBILE`. In entrambi i
   casi rimettono in coda le sole righe già risolte in una coppia, mai una
   dichiarazione di fuori ambito — dire «non sei autorizzato» quando la verità
-  è «non ho potuto chiedere» manda a correggere la persona sbagliata. Una
-  singola riga la cui autorizzazione non si lascia risolvere — un ruolo
-  cancellato sotto di lei, su un'istanza che altrove risponde — è invece
-  rifiutata come fuori ambito: l'alternativa sarebbe allargare l'accesso
-  proprio nel momento in cui il canale ha smesso di poterlo vedere.
+  è «non ho potuto chiedere» manda a correggere la persona sbagliata. **La
+  stessa regola vale una grana più sotto**: una singola riga la cui
+  autorizzazione non si lascia risolvere — un ruolo cancellato sotto di lei, su
+  un'istanza che altrove risponde — torna `TRASPORTO_PERMESSO_NON_LEGGIBILE` e
+  rientra in coda. È rifiutata comunque, perché l'alternativa sarebbe allargare
+  l'accesso proprio nel momento in cui il canale ha smesso di poterlo vedere;
+  ma il rifiuto è indirizzato a chi può ripararlo. Chi ha compilato quella
+  richiesta l'ha compilata bene e potrebbe benissimo detenere il permesso: ciò
+  che è rotto sta nella tabella dei diritti di REDCap, dove arriva IT e non
+  lui.
 
   La guardia ha un'eccezione dichiarata: lo strumento di conformità
   (`run_conformance_check()`), che non legge il registro e non ha un

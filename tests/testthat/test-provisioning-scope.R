@@ -89,8 +89,50 @@ test_that("a permission that could not be read refuses, never grants", {
   # underneath a row, and an instance answered by a module too old to report
   # the permission at all. Neither is a permission, and the direction they fail
   # in is the whole reason this function exists.
-  expect_equal(unknown[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
-  expect_equal(old_module[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
+  expect_length(unknown, 1L)
+  expect_length(old_module, 1L)
+})
+
+
+test_that("a permission that could not be read is ours to fix, not theirs", {
+  # eval
+  unknown <- scope_errors(
+    register_rows(list()),
+    rights_rows(list(user_rights = NA_integer_))
+  )
+  old_module <- scope_errors(
+    register_rows(list()),
+    rights_rows(list())[, c("server", "project_id", "username")]
+  )
+
+  # test
+  # Refusing is right and is tested above; what this fixes is the sentence the
+  # refusal carries. The requester filled the form correctly and may well hold
+  # the permission — what is broken is their rights row inside REDCap, which
+  # they cannot repair and IT can. The prefix is an address, not a label: it
+  # decides who receives the alert and whether the row comes back next round,
+  # and both answers are wrong when the code says "you are not authorized" and
+  # the truth is "I could not read it".
+  expect_equal(unknown[["1"]], "TRASPORTO_PERMESSO_NON_LEGGIBILE")
+  expect_equal(old_module[["1"]], "TRASPORTO_PERMESSO_NON_LEGGIBILE")
+})
+
+
+test_that("an unreadable permission on somebody else's row does not travel", {
+  # eval
+  errors <- scope_errors(
+    register_rows(list()),
+    rights_rows(
+      list(username = "mario.rossi@ubep.unipd.it", user_rights = NA_integer_)
+    )
+  )
+
+  # test
+  # The requester has no rights row at all here, which is an ordinary refusal
+  # and belongs to them. A rule keyed on "some NA is present in the frame"
+  # would turn every instance carrying one broken row into a transport error
+  # for everybody, and the rows that deserved a data error would queue forever.
+  expect_equal(errors[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
 })
 
 

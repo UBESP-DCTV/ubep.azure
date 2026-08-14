@@ -121,6 +121,15 @@ scope_pairs <- function(register) {
 #'   read as empty: none of these is a permission, and treating them as one
 #'   would widen access exactly when the channel has stopped being able to see.
 #'
+#' The fourth refuses like the others and is **addressed differently**, which
+#' is the one thing this function says twice. `DATO_` and `TRASPORTO_` are not
+#' labels on an error, they are a delivery address: the first closes the row
+#' against whoever filed it and mails them, the second keeps it queued and
+#' mails us. Someone whose rights row exists and whose permission is
+#' unreadable filed a correct request and may well hold the permission — what
+#' is broken is inside REDCap, where only IT can reach it. Saying "you are not
+#' authorized" there sends the one person who cannot fix it to go and argue.
+#'
 #' @param register The register as a data frame, carrying at least `record_id`,
 #'   `server`, `project_id` and `requested_by`.
 #' @param rights The rights read from the instances, as a data frame with
@@ -129,8 +138,11 @@ scope_pairs <- function(register) {
 #'   once at the top and not on every row.
 #'
 #' @return A named list, one entry per refused row, named by `record_id` and
-#'   holding `"DATO_AMBITO_NON_AUTORIZZATO"`. Empty when every row is in scope.
-#'   The shape matches `register_to_desired()$errors` so the two merge.
+#'   holding `"DATO_AMBITO_NON_AUTORIZZATO"`, or
+#'   `"TRASPORTO_PERMESSO_NON_LEGGIBILE"` when the requester has a rights row
+#'   on that project whose permission could not be read. Empty when every row
+#'   is in scope. The shape matches `register_to_desired()$errors` so the two
+#'   merge, and the caller reads the prefix rather than the whole string.
 #'
 #' @keywords internal
 scope_errors <- function(register, rights) {
@@ -144,21 +156,28 @@ scope_errors <- function(register, rights) {
   )
 
   # A rights table with no permission column is an instance answered by a
-  # module too old to report it. Every row then refuses, which is the loud
-  # failure; the quiet one would be granting them all because a column was
-  # missing, and nobody re-reads a green.
-  columns <- c("server", "project_id", "username", "user_rights")
-  readable <- all(columns %in% names(rights)) && nrow(rights) > 0L
+  # module too old to report it, and it reads here as a column of NAs: every
+  # row then refuses, which is the loud failure. The quiet one would be
+  # granting them all because a column was missing, and nobody re-reads a
+  # green.
+  columns <- c("server", "project_id", "username")
+  keyed <- all(columns %in% names(rights)) && nrow(rights) > 0L
 
   granted <- character()
-  if (readable) {
-    permission <- suppressWarnings(as.integer(rights[["user_rights"]]))
-    grants <- !is.na(permission) & permission == scope_granting_value()
-    granted <- scope_key(
-      rights[["server"]][grants],
-      rights[["project_id"]][grants],
-      rights[["username"]][grants]
+  unreadable <- character()
+
+  if (keyed) {
+    held <- scope_key(
+      rights[["server"]], rights[["project_id"]], rights[["username"]]
     )
+    permission <- if ("user_rights" %in% names(rights)) {
+      suppressWarnings(as.integer(rights[["user_rights"]]))
+    } else {
+      rep(NA_integer_, length(held))
+    }
+
+    granted <- held[!is.na(permission) & permission == scope_granting_value()]
+    unreadable <- held[is.na(permission)]
   }
 
   askable <- scope_filled(register[["server"]]) &
@@ -172,8 +191,17 @@ scope_errors <- function(register, rights) {
   )
   refused <- askable & (!attributed | !(keys %in% granted))
 
+  # The refusal is the same; the address on it is not. A permission nobody
+  # could read is not a verdict about the requester, and the prefix is what
+  # decides who is told and whether the row comes back next round.
+  codes <- ifelse(
+    attributed & keys %in% unreadable,
+    "TRASPORTO_PERMESSO_NON_LEGGIBILE",
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+
   ids <- as.character(register[["record_id"]])
-  out <- rep(list("DATO_AMBITO_NON_AUTORIZZATO"), sum(refused))
+  out <- as.list(codes[refused])
   names(out) <- ids[refused]
 
   out

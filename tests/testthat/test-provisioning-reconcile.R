@@ -335,6 +335,39 @@ test_that("a module too old to report the permission puts the row back in the qu
 })
 
 
+test_that("a permission unreadable on one row alone also queues the row", { # nolint: line_length_linter.
+  # eval
+  senza_valore <- function(data) {
+    body <- istanza_doppia(list())(data)
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]] <- lapply(parsed[["results"]], function(row) {
+      # `[` with list(NULL) keeps the key and empties the value; `[[<- NULL`
+      # would delete it, which is the *other* fault — the one above, where the
+      # module never reports the field at all.
+      row["user_rights"] <- list(NULL)
+      row
+    })
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+  esito <- giro(
+    registro_doppio(record_json(list())), senza_valore, dry_run = FALSE
+  )
+
+  # test
+  # One granularity below the test above, and the same rule: the instance
+  # answered and this row's permission is not an answer. A role deleted
+  # underneath a row reads as null, and calling that "not authorized" sends a
+  # referent who may well hold the permission to argue about an authorization
+  # nobody can see. It is a refusal either way — what changes is who is told
+  # and whether the row comes back.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_PERMESSO_NON_LEGGIBILE"
+  )
+})
+
+
 test_that("a server the channel does not serve is a transport error", {
   # eval
   esito <- giro(

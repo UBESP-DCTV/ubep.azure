@@ -17,8 +17,11 @@ once at the top and not on every row.}
 }
 \value{
 A named list, one entry per refused row, named by \code{record_id} and
-holding \code{"DATO_AMBITO_NON_AUTORIZZATO"}. Empty when every row is in scope.
-The shape matches \code{register_to_desired()$errors} so the two merge.
+holding \code{"DATO_AMBITO_NON_AUTORIZZATO"}, or
+\code{"TRASPORTO_PERMESSO_NON_LEGGIBILE"} when the requester has a rights row
+on that project whose permission could not be read. Empty when every row
+is in scope. The shape matches \code{register_to_desired()$errors} so the two
+merge, and the caller reads the prefix rather than the whole string.
 }
 \description{
 The channel applies a request without anyone reading it, so what bounds a
@@ -42,5 +45,14 @@ to report the permission, a role deleted underneath a row, a column that
 read as empty: none of these is a permission, and treating them as one
 would widen access exactly when the channel has stopped being able to see.
 }
+
+The fourth refuses like the others and is \strong{addressed differently}, which
+is the one thing this function says twice. \code{DATO_} and \code{TRASPORTO_} are not
+labels on an error, they are a delivery address: the first closes the row
+against whoever filed it and mails them, the second keeps it queued and
+mails us. Someone whose rights row exists and whose permission is
+unreadable filed a correct request and may well hold the permission — what
+is broken is inside REDCap, where only IT can reach it. Saying "you are not
+authorized" there sends the one person who cannot fix it to go and argue.
 }
 \keyword{internal}
