@@ -1,3 +1,17 @@
+# httr2::req_body_form() percent-encodes every pre-encoded scalar at build
+# time and marks the result AsIs, so that url_query_build() does not encode
+# it a second time when the request is later rendered onto the wire (see
+# httr2:::format_query_param(): `if (inherits(x, "AsIs")) unclass(x)`). A
+# captured request therefore carries encoded, `AsIs`-classed values, and what
+# these tests assert about is the value a form field will carry on the wire
+# -- not httr2's own bookkeeping for getting it there -- so every read of a
+# captured form field goes through this one place: drop the class, undo the
+# encoding.
+form_field_value <- function(value) {
+  utils::URLdecode(as.character(value))
+}
+
+
 test_that("the export posts to the API endpoint with the token in the body", {
   # eval
   captured <- NULL
@@ -22,9 +36,15 @@ test_that("the export posts to the API endpoint with the token in the body", {
   expect_equal(captured[["method"]], "POST")
   expect_equal(captured[["url"]], "https://registro.example.org/api/")
   expect_false(grepl("t0ken", captured[["url"]], fixed = TRUE))
-  expect_equal(captured[["body"]][["data"]][["token"]], "t0ken")
-  expect_equal(captured[["body"]][["data"]][["content"]], "record")
-  expect_equal(captured[["body"]][["data"]][["rawOrLabel"]], "raw")
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["token"]]), "t0ken"
+  )
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["content"]]), "record"
+  )
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["rawOrLabel"]]), "raw"
+  )
   expect_equal(result[["records"]][["server"]], "edc10")
   expect_type(result[["records"]][["project_id"]], "character")
 })
@@ -202,11 +222,15 @@ test_that("the import asks REDCap to overwrite the outcome fields", {
   # earlier success and read as a run that worked.
   expect_true(result[["ok"]])
   expect_equal(result[["scritte"]], 2L)
-  expect_equal(sent[["action"]], "import")
-  expect_equal(sent[["overwriteBehavior"]], "overwrite")
-  expect_equal(sent[["forceAutoNumber"]], "false")
-  expect_false(grepl("request_status", sent[["data"]], fixed = TRUE))
-  expect_true(grepl('"record_id":"1"', sent[["data"]], fixed = TRUE))
+  expect_equal(form_field_value(sent[["action"]]), "import")
+  expect_equal(form_field_value(sent[["overwriteBehavior"]]), "overwrite")
+  expect_equal(form_field_value(sent[["forceAutoNumber"]]), "false")
+  expect_false(
+    grepl("request_status", form_field_value(sent[["data"]]), fixed = TRUE)
+  )
+  expect_true(
+    grepl('"record_id":"1"', form_field_value(sent[["data"]]), fixed = TRUE)
+  )
 })
 
 

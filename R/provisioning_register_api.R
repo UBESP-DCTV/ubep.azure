@@ -41,26 +41,6 @@ register_call <- function(url, token, params) {
       !!!params
     )
 
-  # req_body_form() marks every scalar with base::I() so url_query_build()
-  # does not re-flatten it at render time; the marker plays no role beyond
-  # that (req_body_render() re-derives the wire body from the raw values
-  # regardless of it, verified against this httr2 version). Left in place, it
-  # makes every element compare unequal to a plain character scalar under
-  # waldo, which is what a caller inspecting the body -- this package's own
-  # tests included -- reasonably expects to hold.
-  #
-  # `request$body$data` is a representation httr2 does not document or
-  # promise to keep, not a public field of the request object. The guard
-  # below is what makes that dependency safe to carry: if a future httr2
-  # restructures `body`, `stopifnot()` raises here, loudly, rather than
-  # `lapply(NULL, ...)` returning `list()` and this function going on to
-  # submit an empty POST body to a live instance without a single error.
-  stopifnot(is.list(request[["body"]][["data"]]))
-  request$body$data <- lapply(request$body$data, function(value) {
-    class(value) <- setdiff(class(value), "AsIs")
-    value
-  })
-
   response <- tryCatch(
     request |>
       httr2::req_error(is_error = function(resp) FALSE) |>
@@ -344,7 +324,7 @@ register_import <- function(url, token, payload) {
     overwriteBehavior = "overwrite",
     forceAutoNumber = "false",
     returnContent = "count",
-    data = I(as.character(jsonlite::toJSON(payload)))
+    data = as.character(jsonlite::toJSON(payload))
   ))
 
   if (!isTRUE(answer[["ok"]])) {
