@@ -1,3 +1,38 @@
+# ubep.azure 0.11.0
+
+* **The channel reads the request register with the token API and writes back
+  only the outcome.** `provisioning_reconcile()` is the one function that
+  holds the register and the instances together, and the only place a write
+  can start from. A `project_id` the register accepted but that is not a
+  number is reported `DATO_PROGETTO_INESISTENTE` before the scope gate ever
+  sees the row — such a row may not be a pair yet, so nothing upstream
+  validated it, and left to the gate it would come back "you may not ask for
+  that project" when the truth is "that is not a project number".
+* **The gate on scope is wired in.** A request is applicable only if whoever
+  filed it holds REDCap's `user_rights` permission on the project it names,
+  and a guard refuses any package function that can write on an instance
+  without naming the gate — with one declared exemption, the conformance
+  tool, which does not read the register and has no requester to gate on. An
+  instance that did not answer, or that answered without carrying the
+  permission, returns the row to the queue instead of declaring it out of
+  scope.
+* **`applied` is a claim about evidence, not about the absence of an
+  error.** A real write is followed by a read-back, and the outcome is
+  `applied` only if the re-read confirms it — the pair present after an
+  apply, absent after a revoke; otherwise the row is reported
+  `TRASPORTO_SCRITTURA_NON_CONFERMATA` and returns to the queue. Confirmation
+  is by presence and not by field-by-field equality, deliberately: REDCap
+  normalizes what it stores, and a rule demanding an exact match could make a
+  row impossible to confirm and retried for ever. What the instance actually
+  shows travels in `applied_as`, and the next round's diff is where a real
+  disagreement gets acted on.
+* Writes on the instances are grouped by `(server, project_id)`: the module
+  refuses a write that touches more than one project, and the refusal arrives
+  before touching anything.
+* The dictionary comparison finally has a caller: the round stops before
+  writing if the register's schema has drifted in a way that changes what it
+  reads.
+
 # ubep.azure 0.10.0
 
 * **A request is bounded by what the person who filed it could already do by
