@@ -131,6 +131,26 @@ scalar_as_character <- function(value) {
 }
 
 
+#' Assemble named character columns into a data frame, untouched by either
+#'
+#' `check.names = FALSE` is what keeps a name like `Variable / Field Name`
+#' from being mangled into a syntactic one, and `stringsAsFactors = FALSE` is
+#' what keeps a character column character instead of becoming a factor.
+#'
+#' @param columns A named list of equal-length character vectors, one per
+#'   column, in the order they should appear.
+#'
+#' @return A data frame built from `columns`, names and types as given.
+#'
+#' @keywords internal
+columns_frame <- function(columns) {
+  do.call(
+    data.frame,
+    c(columns, list(stringsAsFactors = FALSE, check.names = FALSE))
+  )
+}
+
+
 #' Turn a REDCap record export into a frame of character columns
 #'
 #' Every column stays character, `project_id` included. The pure layer already
@@ -158,10 +178,7 @@ records_frame <- function(records) {
   })
   names(columns) <- fields
 
-  do.call(
-    data.frame,
-    c(columns, list(stringsAsFactors = FALSE, check.names = FALSE))
-  )
+  columns_frame(columns)
 }
 
 
@@ -237,10 +254,7 @@ metadata_frame <- function(fields) {
   })
   names(columns) <- names(map)
 
-  do.call(
-    data.frame,
-    c(columns, list(stringsAsFactors = FALSE, check.names = FALSE))
-  )
+  columns_frame(columns)
 }
 
 
