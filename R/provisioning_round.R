@@ -416,3 +416,69 @@ round_changed <- function(register, payload) {
 
   payload[!same, , drop = FALSE]
 }
+
+
+#' Build the record the channel's round leaves behind
+#'
+#' The channel keeps no copy of what it reconciles, so a round leaves no other
+#' trace than the outcomes it writes into the register — and those say nothing
+#' about the round itself. This record is that.
+#'
+#' `registro_letto` is the channel's counterpart of the observer's
+#' `letture_riuscite`, and it exists for the same reason: an alarm that fired
+#' on the absence of a record would be satisfied by a round that started,
+#' stopped on a drifted dictionary and exited. The question the alarm has to
+#' ask is not "did it run?" but "did it get to read the register?".
+#'
+#' It also separates an empty register from an unreachable one. Both give
+#' `righe = 0`, and only one of them needs somebody.
+#'
+#' One counter per word of the closed outcome vocabulary, named after the word
+#' rather than summed into a single "errors": a night of data errors and a
+#' night of transport errors look identical in a total, and they go to
+#' different people — the referent who filled the row, and IT.
+#'
+#' @param esito What `provisioning_reconcile()` returned.
+#' @param scrittura Whether the round was allowed to write, so a reader of the
+#'   telemetry can tell the same counts apart simulated and real.
+#'
+#' @return A named list, ready to be serialized as one JSON object.
+#'
+#' @keywords internal
+round_record <- function(esito, scrittura) {
+  stopifnot(
+    is.list(esito),
+    is.logical(scrittura), length(scrittura) == 1L, !is.na(scrittura)
+  )
+
+  esiti <- esito[["esiti"]]
+  istanze <- esito[["istanze"]]
+  schema <- esito[["schema"]]
+
+  counted <- as.list(vapply(
+    outcome_vocabulary(),
+    function(word) sum(as.character(esiti[["outcome"]]) == word),
+    integer(1)
+  ))
+  names(counted) <- paste0("esiti_", outcome_vocabulary())
+
+  c(
+    list(
+      at = as.character(esito[["at"]]),
+      registro_letto = !isTRUE(esito[["fermato"]]),
+      fermato = isTRUE(esito[["fermato"]]),
+      scrittura = isTRUE(scrittura),
+      schema_ferma = isTRUE(schema[["blocks"]]),
+      schema_differenze = c(
+        schema[["blocking"]] %||% character(),
+        schema[["tolerated"]] %||% character()
+      ),
+      istanze = nrow(istanze),
+      irraggiungibili = sum(!istanze[["raggiunta"]]),
+      righe = nrow(esiti),
+      scritte = as.integer(esito[["scritte"]]),
+      errori = esito[["errori"]] %||% character()
+    ),
+    counted
+  )
+}

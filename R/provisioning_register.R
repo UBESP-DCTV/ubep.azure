@@ -401,6 +401,22 @@ register_to_desired <- function(register) {
 }
 
 
+#' The closed vocabulary of outcomes
+#'
+#' Five words, and the register's `outcome` field offers exactly these. Kept in
+#' one place because two readers already need it — the payload builder, which
+#' refuses anything else, and the run record, which carries one counter per
+#' word. A second copy would let the two drift, and the drift would show as a
+#' counter that silently stops counting a word somebody added.
+#'
+#' @return A character vector of the five outcomes.
+#'
+#' @keywords internal
+outcome_vocabulary <- function() {
+  c("pending", "applied", "data_error", "transport_error", "simulated")
+}
+
+
 #' Build the body that writes an outcome back into the register
 #'
 #' The register holds two kinds of field and they must never mix. What a person
@@ -430,9 +446,7 @@ outcome_payload <- function(record_id,
                             detail = "",
                             at = "",
                             applied_as = "") {
-  vocabulary <- c(
-    "pending", "applied", "data_error", "transport_error", "simulated"
-  )
+  vocabulary <- outcome_vocabulary()
   stopifnot(
     is.character(record_id), length(record_id) == 1L,
     is.character(outcome), length(outcome) == 1L, outcome %in% vocabulary

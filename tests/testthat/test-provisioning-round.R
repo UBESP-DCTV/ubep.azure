@@ -304,3 +304,169 @@ test_that("an outcome that did not change is not written again", {
   # is the thing people stop reading.
   expect_equal(changed[["record_id"]], "2")
 })
+
+
+# The shape provisioning_reconcile() returns, reduced to the fields a record
+# reads. Built here instead of by running a round: this is the pure layer's
+# test, and a real round would drag the register and two instances into it.
+esito_finto <- function(esiti = NULL,
+                        fermato = FALSE,
+                        scritte = 0L,
+                        istanze = NULL,
+                        errori = character()) {
+  if (is.null(esiti)) {
+    esiti <- outcome_payload("", "pending")[0, , drop = FALSE]
+  }
+  if (is.null(istanze)) {
+    istanze <- data.frame(
+      server = character(), raggiunta = logical(),
+      ambito_leggibile = logical(), errori = character(),
+      stringsAsFactors = FALSE
+    )
+  }
+  list(
+    at = "2026-08-14 20:40",
+    fermato = fermato,
+    schema = list(
+      blocks = FALSE, blocking = character(), tolerated = character()
+    ),
+    istanze = istanze, esiti = esiti, scritte = scritte, errori = errori
+  )
+}
+
+
+test_that("the record counts each outcome under its own name", {
+  # eval
+  esiti <- do.call(rbind, list(
+    outcome_payload("1", "applied", at = "2026-08-14 20:40"),
+    outcome_payload("2", "transport_error", at = "2026-08-14 20:40"),
+    outcome_payload("3", "data_error", at = "2026-08-14 20:40"),
+    outcome_payload("4", "transport_error", at = "2026-08-14 20:40"),
+    outcome_payload("5", "simulated", at = "2026-08-14 20:40")
+  ))
+
+  record <- round_record(esito_finto(esiti = esiti, scritte = 5L), TRUE)
+
+  # test
+  # One counter per word of the closed vocabulary, named after the word. A
+  # single "errori" total would let a night of data errors and a night of
+  # transport errors look alike, and those two go to different people.
+  expect_equal(record[["esiti_applied"]], 1L)
+  expect_equal(record[["esiti_transport_error"]], 2L)
+  expect_equal(record[["esiti_data_error"]], 1L)
+  expect_equal(record[["esiti_simulated"]], 1L)
+  expect_equal(record[["esiti_pending"]], 0L)
+  expect_equal(record[["righe"]], 5L)
+})
+
+
+test_that("a halted round does not claim to have read the register", {
+  # eval
+  record <- round_record(
+    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"), TRUE
+  )
+
+  # test
+  # The channel's analogue of `letture_riuscite`. An alarm that fired on the
+  # mere existence of a record would be satisfied by a round that stopped on a
+  # drifted dictionary and did nothing -- a detector the fault can meet, which
+  # is the shape of defect this project has already found three times.
+  expect_false(record[["registro_letto"]])
+})
+
+
+test_that("an empty register is still a register that was read", {
+  # eval
+  record <- round_record(esito_finto(), TRUE)
+
+  # test
+  # `righe = 0` with `registro_letto = TRUE` is a quiet night; `righe = 0`
+  # with `registro_letto = FALSE` is "I could not ask". Collapsing the two
+  # would blind the alarm to the second, which is the one that needs somebody.
+  expect_true(record[["registro_letto"]])
+  expect_equal(record[["righe"]], 0L)
+})
+
+
+test_that("the record counts the instances that did not answer", {
+  # eval
+  istanze <- data.frame(
+    server = c("edc10", "edc12"), raggiunta = c(TRUE, FALSE),
+    ambito_leggibile = c(TRUE, NA),
+    errori = c(NA, "TRASPORTO_NON_RAGGIUNGIBILE"),
+    stringsAsFactors = FALSE
+  )
+
+  record <- round_record(esito_finto(istanze = istanze), TRUE)
+
+  # test
+  expect_equal(record[["istanze"]], 2L)
+  expect_equal(record[["irraggiungibili"]], 1L)
+})
+
+
+test_that("the record says whether the round was allowed to write", {
+  # eval
+  simulato <- round_record(esito_finto(), FALSE)
+  scritto <- round_record(esito_finto(), TRUE)
+
+  # test
+  # Not cosmetic: the same counts mean different things simulated and real,
+  # and a reader of the telemetry cannot tell them apart without this.
+  expect_false(simulato[["scrittura"]])
+  expect_true(scritto[["scrittura"]])
+})
+
+
+test_that("the record's list fields stay arrays when they hold one item", {
+  # eval
+  record <- round_record(
+    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"), TRUE
+  )
+  record[["schema_differenze"]] <- "server"
+
+  json <- run_record_json(record)
+
+  # test
+  # Both columns are `dynamic`. A one-element vector that auto-unboxes to a
+  # bare string makes two runs disagree on the shape of the same field, and an
+  # alarm query using `array_length()` then fails on the scalar one -- quietly,
+  # because a failing scalar comparison in KQL is false and not an error.
+  expect_match(json, '"errori":["DIZIONARIO_DERIVATO"]', fixed = TRUE)
+  expect_match(json, '"schema_differenze":["server"]', fixed = TRUE)
+})
+
+
+test_that("the record's fields are exactly the rule's columns", {
+  # eval
+  # The columns of UbepCanale_CL as created on 2026-08-14, minus
+  # `TimeGenerated`, which the runner adds at emission time: sixteen here,
+  # seventeen in the table.
+  #
+  # Written out rather than read from Azure -- the suite runs without network
+  # and without credentials -- and the point is the order of operations, not
+  # the connection. The ingestion API accepts a payload and drops in silence
+  # every column the collection rule does not know, so a field added here
+  # before the rule knows it does not fail: it arrives empty. This test is what
+  # turns that silence into a red, and its message says which one moves first.
+  #
+  # It also pins the arithmetic that ties the record to the closed vocabulary:
+  # adding a sixth outcome gives `round_record()` a sixth counter for free, and
+  # that free counter is exactly the one the rule would drop.
+  colonne <- c(
+    "at", "registro_letto", "fermato", "scrittura", "schema_ferma",
+    "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
+    "errori", "esiti_pending", "esiti_applied", "esiti_data_error",
+    "esiti_transport_error", "esiti_simulated"
+  )
+
+  record <- round_record(esito_finto(), TRUE)
+
+  # test
+  expect_setequal(names(record), colonne)
+  expect_length(record, length(colonne))
+  expect_setequal(
+    grep("^esiti_", names(record), value = TRUE),
+    paste0("esiti_", outcome_vocabulary())
+  )
+})

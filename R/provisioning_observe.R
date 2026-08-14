@@ -179,12 +179,19 @@ run_record <- function(observations, at, non_osservate = character()) {
 run_record_json <- function(record) {
   stopifnot(is.list(record))
 
+  # Every field whose column is `dynamic`, from both records: the observer's
+  # first, then the channel's. One list rather than two because `intersect()`
+  # below ignores the names the record at hand does not carry, and because the
+  # question each name answers is the same one -- does this field have to
+  # survive as an array when it happens to hold a single item.
   as_array <- c(
     "major_fra_lette",
     "impronte_superficie",
     "impronte_allowlist",
     "cancelli",
-    "non_osservate"
+    "non_osservate",
+    "schema_differenze",
+    "errori"
   )
 
   for (field in intersect(as_array, names(record))) {
