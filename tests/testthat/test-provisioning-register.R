@@ -2,7 +2,7 @@ register_row <- function(...) {
   defaults <- list(
     record_id = "1",
     server = "edc10",
-    project_id = "27",
+    project_id = "9003",
     username = "mario.rossi@ubep.unipd.it",
     first_name = "Mario",
     last_name = "Rossi",
@@ -29,7 +29,7 @@ test_that("request_from_row keeps the field names the pure layer speaks", {
 
   # test
   expect_equal(request[["username"]], "mario.rossi@ubep.unipd.it")
-  expect_equal(request[["project_id"]], "27")
+  expect_equal(request[["project_id"]], "9003")
   expect_equal(request[["role_name"]], "data entry")
   expect_equal(request[["dag_name"]], "centro-01")
   expect_equal(request[["contact_email"]], "mario.rossi@example.org")
@@ -74,7 +74,9 @@ test_that("register_to_desired splits by requested state", {
   # eval
   register <- rbind(
     register_row(record_id = "1"),
-    register_row(record_id = "2", project_id = "28", request_status = "revoked")
+    register_row(
+      record_id = "2", project_id = "9004", request_status = "revoked"
+    )
   )
   split <- register_to_desired(register)
 
@@ -126,8 +128,8 @@ test_that("a pair present in two rows fails closed on both", {
 test_that("the same person in two different projects is not a duplicate", {
   # eval
   register <- rbind(
-    register_row(record_id = "1", project_id = "27"),
-    register_row(record_id = "2", project_id = "28")
+    register_row(record_id = "1", project_id = "9003"),
+    register_row(record_id = "2", project_id = "9004")
   )
   split <- register_to_desired(register)
 
@@ -141,10 +143,10 @@ test_that("the key does not collapse two different pairs", {
   # eval
   register <- rbind(
     register_row(
-      record_id = "1", project_id = "2", username = "7a@ubep.unipd.it"
+      record_id = "1", project_id = "900", username = "3a@ubep.unipd.it"
     ),
     register_row(
-      record_id = "2", project_id = "27", username = "a@ubep.unipd.it"
+      record_id = "2", project_id = "9003", username = "a@ubep.unipd.it"
     )
   )
   split <- register_to_desired(register)
@@ -161,7 +163,9 @@ test_that("register_to_desired reports the data errors of validation", {
   # eval
   register <- rbind(
     register_row(record_id = "1"),
-    register_row(record_id = "2", project_id = "28", expiration = "2020-01-01")
+    register_row(
+      record_id = "2", project_id = "9004", expiration = "2020-01-01"
+    )
   )
   split <- register_to_desired(register)
 

@@ -236,7 +236,7 @@ test_that("the conformance run declares the measured surfaces", {
     },
     run_conformance_check(
       server = "redcap.example.org", secret = "s3cret",
-      project_id = 27L, username = "mario.rossi@ubep.unipd.it",
+      project_id = 9003L, username = "mario.rossi@ubep.unipd.it",
       registry_path = path
     )
   )
@@ -292,7 +292,7 @@ test_that("a baseline missing the fingerprint does not blame transport", {
     function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
     run_conformance_check(
       server = "redcap.example.org", secret = "s3cret",
-      project_id = 27L, username = "mario.rossi@ubep.unipd.it",
+      project_id = 9003L, username = "mario.rossi@ubep.unipd.it",
       registry_path = path
     )
   )

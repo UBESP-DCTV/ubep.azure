@@ -8,7 +8,7 @@ use UbepProvisioning\FieldNames;
 
 $entry = [
     'username' => 'a@example.org',
-    'project_id' => 27,
+    'project_id' => 9003,
     'outcome' => 'aggiornato',
     'before' => ['role_name' => 'read only', 'dag_name' => null,
                  'expiration' => null],
@@ -150,7 +150,7 @@ ubep_assert_same(
 // assertion.
 $refused = [
     'username' => 'a@example.org',
-    'project_id' => 27,
+    'project_id' => 9003,
     'outcome' => 'errore',
     'before' => ['role_name' => 'data entry', 'dag_name' => null,
                  'expiration' => null],
@@ -159,7 +159,7 @@ $refused = [
 ];
 $untouched = [
     'username' => 'b@example.org',
-    'project_id' => 27,
+    'project_id' => 9003,
     'outcome' => 'noop',
     'before' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],
     'after' => ['role_name' => null, 'dag_name' => null, 'expiration' => null],

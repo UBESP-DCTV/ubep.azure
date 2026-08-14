@@ -97,7 +97,7 @@ test_that("a request wanted and present is a noop, and stays one", {
   )
   desired <- list(list(
     server = "a.example.org",
-    username = "ciccio.pasticcio@example.org", project_id = 16L,
+    username = "ciccio.pasticcio@example.org", project_id = 9001L,
     role_name = "data entry", dag_name = "centro-01",
     expiration = "2026-12-31"
   ))
@@ -127,7 +127,7 @@ test_that("desired rows are matched to their own server", {
   )
   desired <- list(list(
     server = "b.example.org",
-    username = "ciccio.pasticcio@example.org", project_id = 16L,
+    username = "ciccio.pasticcio@example.org", project_id = 9001L,
     role_name = "data entry", dag_name = "centro-01",
     expiration = "2026-12-31"
   ))

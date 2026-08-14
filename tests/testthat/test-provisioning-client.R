@@ -13,7 +13,7 @@ test_that("module_state posts to the module endpoint and parses the answer", {
       server = "redcap.example.org",
       secret = "s3cret",
       pairs = list(
-        list(username = "mario.rossi@ubep.unipd.it", project_id = 27L)
+        list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
       )
     )
   )
@@ -42,7 +42,7 @@ test_that("the request travels in the body and not in the URL", {
     module_state(
       "redcap.example.org", "s3cret",
       pairs = list(
-        list(username = "mario.rossi@ubep.unipd.it", project_id = 27L)
+        list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
       )
     )
   )
@@ -58,7 +58,7 @@ test_that("the request travels in the body and not in the URL", {
   expect_equal(
     sent[["requests"]][[1]][["username"]], "mario.rossi@ubep.unipd.it"
   )
-  expect_equal(sent[["requests"]][[1]][["project_id"]], 27L)
+  expect_equal(sent[["requests"]][[1]][["project_id"]], 9003L)
 })
 
 
@@ -222,7 +222,7 @@ test_that("module_apply sends the operation and defaults to a dry run", {
     module_apply(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L,
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
         role_name = "data entry", dag_name = "centro-01",
         expiration = "2027-01-01"
       ))
@@ -275,7 +275,7 @@ test_that("module_revoke carries only the pair", {
     module_revoke(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L,
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
         role_name = "data entry"
       ))
     )
@@ -286,7 +286,7 @@ test_that("module_revoke carries only the pair", {
   # the call cares which one, and it does not.
   expect_equal(sent[["operation"]], "revoke")
   expect_null(sent[["requests"]][[1]][["role_name"]])
-  expect_equal(sent[["requests"]][[1]][["project_id"]], 27L)
+  expect_equal(sent[["requests"]][[1]][["project_id"]], 9003L)
 })
 
 
@@ -319,7 +319,7 @@ test_that("a write against a contract 1 module is refused", {
     module_apply(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
       )),
       dry_run = FALSE
     )
@@ -343,7 +343,7 @@ test_that("a read against a contract 1 module still answers", {
     module_state(
       "redcap.example.org", "s3cret",
       pairs = list(
-        list(username = "mario.rossi@ubep.unipd.it", project_id = 27L)
+        list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
       )
     )
   )
@@ -363,7 +363,7 @@ test_that("a dry run is a read for contract purposes", {
     module_apply(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
       ))
     )
   )
@@ -390,7 +390,7 @@ test_that("the declared fingerprints travel as an array, never as a scalar", {
     module_apply(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
       )),
       dry_run = FALSE,
       declare = "16faf46d5ab1"
@@ -471,7 +471,7 @@ test_that("a write against a contract 3 module is accepted", {
     module_apply(
       "redcap.example.org", "s3cret",
       requests = list(list(
-        username = "mario.rossi@ubep.unipd.it", project_id = 27L
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
       )),
       dry_run = FALSE
     )

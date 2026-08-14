@@ -6,7 +6,7 @@ use UbepProvisioning\Planner;
 
 $current = [
     [
-        'username' => 'a@example.org', 'project_id' => 27,
+        'username' => 'a@example.org', 'project_id' => 9003,
         'role_name' => 'data entry', 'dag_name' => 'centro-01',
         'expiration' => '2027-01-01',
     ],
@@ -14,7 +14,7 @@ $current = [
 
 // unchanged assertion -> noop
 $same = Planner::planApply([[
-    'username' => 'a@example.org', 'project_id' => 27,
+    'username' => 'a@example.org', 'project_id' => 9003,
     'role_name' => 'data entry', 'dag_name' => 'centro-01',
     'expiration' => '2027-01-01',
 ]], $current);
@@ -23,7 +23,7 @@ ubep_assert_same('noop', $same[0]['outcome'], 'identical assertion is a noop');
 
 // absent pair -> creato
 $new = Planner::planApply([[
-    'username' => 'b@example.org', 'project_id' => 27,
+    'username' => 'b@example.org', 'project_id' => 9003,
     'role_name' => 'read only', 'dag_name' => null, 'expiration' => null,
 ]], $current);
 ubep_assert_same('creato', $new[0]['outcome'], 'absent pair is a creation');
@@ -32,7 +32,7 @@ ubep_assert_same('read only', $new[0]['after']['role_name'], 'after is asserted'
 
 // any differing field -> aggiornato
 $changed = Planner::planApply([[
-    'username' => 'a@example.org', 'project_id' => 27,
+    'username' => 'a@example.org', 'project_id' => 9003,
     'role_name' => 'data entry', 'dag_name' => 'centro-01',
     'expiration' => '2027-06-30',
 ]], $current);
@@ -40,7 +40,7 @@ ubep_assert_same('aggiornato', $changed[0]['outcome'], 'changed expiration');
 
 // a DAG present but not asserted must show as a change, never a noop
 $dropDag = Planner::planApply([[
-    'username' => 'a@example.org', 'project_id' => 27,
+    'username' => 'a@example.org', 'project_id' => 9003,
     'role_name' => 'data entry', 'dag_name' => null,
     'expiration' => '2027-01-01',
 ]], $current);
@@ -57,7 +57,7 @@ ubep_assert_same(
 
 // the pair is the unit: same user, another project
 $otherProject = Planner::planApply([[
-    'username' => 'a@example.org', 'project_id' => 99,
+    'username' => 'a@example.org', 'project_id' => 9099,
     'role_name' => 'data entry', 'dag_name' => null, 'expiration' => null,
 ]], $current);
 ubep_assert_same(
@@ -68,7 +68,7 @@ ubep_assert_same(
 
 // revoke
 $revoke = Planner::planRevoke([[
-    'username' => 'a@example.org', 'project_id' => 27,
+    'username' => 'a@example.org', 'project_id' => 9003,
 ]], $current);
 ubep_assert_same('revocato', $revoke[0]['outcome'], 'present pair is revoked');
 ubep_assert_same(
@@ -79,7 +79,7 @@ ubep_assert_same(
 ubep_assert_same(null, $revoke[0]['after']['role_name'], 'after is empty');
 
 $revokeAbsent = Planner::planRevoke([[
-    'username' => 'nobody@example.org', 'project_id' => 27,
+    'username' => 'nobody@example.org', 'project_id' => 9003,
 ]], $current);
 ubep_assert_same(
     'noop',
@@ -94,28 +94,28 @@ ubep_assert_same(
 // batch had no coverage from either side.
 $batchCurrent = [
     [
-        'username' => 'a@example.org', 'project_id' => 27,
+        'username' => 'a@example.org', 'project_id' => 9003,
         'role_name' => 'data entry', 'dag_name' => 'centro-01',
         'expiration' => '2027-01-01',
     ],
     [
-        'username' => 'c@example.org', 'project_id' => 27,
+        'username' => 'c@example.org', 'project_id' => 9003,
         'role_name' => 'data entry', 'dag_name' => 'centro-01',
         'expiration' => '2027-01-01',
     ],
 ];
 $batch = Planner::planApply([
     [
-        'username' => 'a@example.org', 'project_id' => 27,
+        'username' => 'a@example.org', 'project_id' => 9003,
         'role_name' => 'data entry', 'dag_name' => 'centro-01',
         'expiration' => '2027-01-01',
     ],
     [
-        'username' => 'b@example.org', 'project_id' => 27,
+        'username' => 'b@example.org', 'project_id' => 9003,
         'role_name' => 'read only', 'dag_name' => null, 'expiration' => null,
     ],
     [
-        'username' => 'c@example.org', 'project_id' => 27,
+        'username' => 'c@example.org', 'project_id' => 9003,
         'role_name' => 'data entry', 'dag_name' => 'centro-01',
         'expiration' => '2027-06-30',
     ],

@@ -6,9 +6,9 @@ test_that("a reachable instance reports version, fingerprint and counts", {
       version_gate = "collaudata", surface_fingerprint = "16faf46d5ab1",
       allowlist_fingerprint = "aabbccddeeff",
       results = list(
-        list(username = "a", project_id = 16L, expiration = "2020-01-01"),
-        list(username = "b", project_id = 16L, expiration = NULL),
-        list(username = "c", project_id = 18L, expiration = "2099-01-01")
+        list(username = "a", project_id = 9001L, expiration = "2020-01-01"),
+        list(username = "b", project_id = 9001L, expiration = NULL),
+        list(username = "c", project_id = 9002L, expiration = "2099-01-01")
       )
     )
   )
@@ -37,8 +37,8 @@ test_that("the expiration boundary is inclusive, as REDCap applies it", {
       redcap_version = "17.3.3", redcap_major = 17L,
       surface_fingerprint = "16faf46d5ab1",
       results = list(
-        list(username = "a", project_id = 16L, expiration = "2026-08-07"),
-        list(username = "b", project_id = 16L, expiration = "2026-08-08")
+        list(username = "a", project_id = 9001L, expiration = "2026-08-07"),
+        list(username = "b", project_id = 9001L, expiration = "2026-08-08")
       )
     )
   )

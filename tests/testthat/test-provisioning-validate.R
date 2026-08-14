@@ -20,7 +20,7 @@ test_that("validate_request accepts a complete request", {
   request <- list(
     username = "mario.rossi@ubep.unipd.it",
     contact_email = "mario.rossi@example.org",
-    project_id = 27L,
+    project_id = 9003L,
     role_name = "data entry",
     dag_name = "centro-01",
     expiration = "2026-12-31"
@@ -33,18 +33,18 @@ test_that("validate_request accepts a complete request", {
 
 test_that("validate_request reports data errors by code", {
   # eval
-  no_upn <- validate_request(list(username = "not-an-upn", project_id = 27L))
+  no_upn <- validate_request(list(username = "not-an-upn", project_id = 9003L))
   no_project <- validate_request(
     list(username = "mario.rossi@ubep.unipd.it", project_id = "abc")
   )
   past <- validate_request(list(
     username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
+    project_id = 9003L,
     expiration = "1999-01-01"
   ))
   malformed <- validate_request(list(
     username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
+    project_id = 9003L,
     expiration = "31/12/2026"
   ))
 
@@ -80,7 +80,7 @@ test_that("intake_request converts the expiration to the REDCap value", {
   last_day <- Sys.Date() + 30L
   taken <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
+    project_id = 9003L,
     role_name = "data entry",
     expiration = as.character(last_day)
   ))
@@ -99,7 +99,7 @@ test_that("intake_request converts the expiration to the REDCap value", {
 test_that("a request without an expiration keeps none", {
   # eval
   taken <- intake_request(list(
-    username = "mario.rossi@ubep.unipd.it", project_id = 27L
+    username = "mario.rossi@ubep.unipd.it", project_id = 9003L
   ))
 
   # test
@@ -124,12 +124,12 @@ test_that("today is a valid last day of access", {
   # eval
   today <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
+    project_id = 9003L,
     expiration = as.character(Sys.Date())
   ))
   yesterday <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
-    project_id = 27L,
+    project_id = 9003L,
     expiration = as.character(Sys.Date() - 1)
   ))
 
