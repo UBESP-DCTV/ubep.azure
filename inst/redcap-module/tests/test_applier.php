@@ -171,6 +171,21 @@ ubep_assert_same(
     $revoked[0],
     'an entry already in error is left untouched by revoke(), not written'
 );
+// Name resolution runs on every plan and not only on the ones that write, so
+// that a simulation can refuse a role that does not exist instead of echoing
+// it back as `creato`. Only half of that is assertable offline -- resolving a
+// name reaches the database -- and it is the half that decides the cost: an
+// entry that writes nothing must not be resolved at all. The check has teeth
+// for the same reason as the one above: no \ExternalModules class exists here,
+// so a resolution attempted on either entry would fatal instead of failing an
+// assertion.
+$resolved = Applier::resolveNames([$refused, $untouched]);
+ubep_assert_same(
+    [$refused, $untouched],
+    $resolved,
+    'an entry that writes nothing is not resolved, and comes back unchanged'
+);
+
 ubep_assert_same(
     $untouched,
     $revoked[1],

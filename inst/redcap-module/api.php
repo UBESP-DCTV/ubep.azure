@@ -309,6 +309,14 @@ $plan = $operation === 'apply'
 
 $plan = array_merge($plan, $malformed);
 
+// Outside the branch below, and deliberately: resolving a role or a DAG name
+// is a read, and a simulation that skipped it would answer `creato` for a role
+// that does not exist -- the plan is the echo of the request, built before the
+// code that refuses. Measured on the field on 2026-08-14. The caller reads a
+// simulated round to learn what would happen, so a refusal it cannot see is a
+// refusal it will meet for the first time in production.
+$plan = Applier::resolveNames($plan);
+
 if (!$dryRun) {
     // The full plan goes in, error entries included: both apply() and
     // revoke() skip anything whose outcome is not one they write for

@@ -96,6 +96,21 @@ scrittura è richiesta esplicitamente — di default simula. Le ragioni di quest
 divisione, e perché solo l'osservatore doveva restare senza confronto, stanno
 in §2.
 
+**Che cosa garantisce una simulazione, e che cosa no.** Un giro simulato non
+scrive né sulle istanze né in ambito, ma **riporta l'esito nel registro**: è
+`simulated`, con `applied_as` che dice che cosa succederebbe. Fino alla versione
+0.10.0 del modulo quel «che cosa succederebbe» era l'eco della richiesta e non
+un piano verificato: il modulo risolveva il nome di un ruolo e quello di un
+gruppo solo dentro il ramo che scrive, quindi una richiesta che nominava un
+ruolo inesistente usciva `creato` in simulazione e sarebbe stata rifiutata da
+una scrittura vera. Dalla versione successiva le due risoluzioni girano su ogni
+giro — sono letture — e una simulazione rifiuta ciò che rifiuterebbe una
+scrittura. **Resta fuori dalla garanzia l'esistenza dell'utente**: nessun punto
+del modulo verifica che uno username esista, né in simulazione né in scrittura,
+e REDCap accetta diritti per un login che non c'è (è così che nascono le righe
+orfane). Su un'istanza che non abbia ancora la versione nuova, un `simulated`
+va letto come «nessun ostacolo di forma», non come «funzionerà».
+
 **Il giro non ha ancora un'unità di sistema o un timer**: gira quando qualcuno
 lo lancia, da riga di comando sulla macchina del perimetro
 (`dev/runner-canale.R`, installato come per l'osservatore). Programmarlo è un

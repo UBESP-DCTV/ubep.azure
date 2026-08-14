@@ -1,3 +1,16 @@
+# ubep.azure (development version)
+
+* **The module resolves the names a write would need on every run, simulated
+  or not.** A role or a DAG that does not exist was refused only by a real
+  write, because the resolutions lived inside the branch a dry run skips — so
+  a simulation answered `creato` for a role that cannot exist and echoed it
+  back in `after`. Measured on the field on 2026-08-14. Both resolutions are
+  reads, so a dry run can afford them, and a rehearsal that cannot refuse what
+  the performance refuses cannot warn about anything — which is the whole
+  purpose of the phase in which the channel only simulates. The existence of a
+  *user* remains unchecked, there and everywhere: REDCap accepts rights for a
+  login that does not exist, which is how orphan rows are born.
+
 # ubep.azure 0.11.0
 
 * **The channel reads the request register with the token API and writes back

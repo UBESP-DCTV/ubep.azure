@@ -99,6 +99,65 @@ class Applier
     }
 
     /**
+     * Resolve the names a write would need, and write nothing.
+     *
+     * Runs on every plan, simulated or not, and that is the whole point of it
+     * existing separately from apply(). Both resolutions are reads, so a dry
+     * run can afford them; without them a simulation answers `creato` for a
+     * role that does not exist, because the plan is the echo of the request
+     * and is built before the code that would refuse it. Measured on the
+     * field on 2026-08-14, on a request naming a role that cannot exist: the
+     * dry run reported `creato` and echoed the name into `after`.
+     *
+     * A rehearsal that cannot refuse what the performance refuses is a
+     * rehearsal that cannot warn -- and warning is the entire purpose of the
+     * phase in which the channel only simulates.
+     *
+     * Entries that write nothing are skipped rather than resolved: a noop has
+     * no name to check, a revocation removes the row whatever it holds, and an
+     * entry already in error has its answer. That skip is also what keeps this
+     * function callable from an offline suite, which has no database to reach.
+     *
+     * apply() resolves again rather than reading a result stashed here. The
+     * second resolution is the one the write actually uses, so the write path
+     * keeps exactly the window it has today instead of widening it to the
+     * distance between two calls, and the cost is one read per entry that is
+     * about to write anyway.
+     *
+     * @param array $plan entries produced by Planner::planApply()
+     * @return array the same entries, with an error where a name does not resolve
+     */
+    public static function resolveNames(array $plan): array
+    {
+        foreach ($plan as $index => $entry) {
+            if (self::writeKindFor($entry['outcome']) === null) {
+                continue;
+            }
+
+            $roleResolution = self::resolveRole($entry);
+            if ($roleResolution['error'] !== null) {
+                $plan[$index] = self::withError(
+                    $entry,
+                    $roleResolution['error']['code'],
+                    $roleResolution['error']['message']
+                );
+                continue;
+            }
+
+            $dagResolution = self::resolveDag($entry);
+            if ($dagResolution['error'] !== null) {
+                $plan[$index] = self::withError(
+                    $entry,
+                    $dagResolution['error']['code'],
+                    $dagResolution['error']['message']
+                );
+            }
+        }
+
+        return $plan;
+    }
+
+    /**
      * @param array $plan entries produced by Planner::planApply()
      * @return array the same entries, with errors filled in where a write failed
      */
