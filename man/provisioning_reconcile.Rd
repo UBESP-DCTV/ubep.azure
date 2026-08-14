@@ -29,8 +29,7 @@ than left out, so the two failures stay distinguishable.}
 carries it, for the dictionary comparison. \code{NULL} compares the other
 fields and declares the substitution.}
 
-\item{dry_run}{Whether to simulate. Defaults to \code{TRUE}, and the write path
-has to be asked for.}
+\item{dry_run}{Whether to simulate. Defaults to \code{TRUE}.}
 
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }

@@ -42,8 +42,7 @@
 #' @param instances The fleet, in the order the register's `server` field
 #'   carries it, for the dictionary comparison. `NULL` compares the other
 #'   fields and declares the substitution.
-#' @param dry_run Whether to simulate. Defaults to `TRUE`, and the write path
-#'   has to be asked for.
+#' @param dry_run Whether to simulate. Defaults to `TRUE`.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -65,15 +64,6 @@ provisioning_reconcile <- function(register_url,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
     is.character(at), length(at) == 1L
   )
-
-  if (!dry_run) {
-    stop(
-      "provisioning_reconcile(): the write path is not wired yet. A round can ",
-      "simulate correctly and still be wrong about writing, because the ",
-      "read-back that `applied` has to mean does not exist here.",
-      call. = FALSE
-    )
-  }
 
   empty_outcomes <- outcome_payload("", "pending")[0, , drop = FALSE]
   empty_instances <- data.frame(
@@ -311,6 +301,29 @@ provisioning_reconcile <- function(register_url,
           ))
         }
 
+        # What `applied` has to mean. A dry run has nothing to read back — the
+        # instance is unchanged — so it carries the intention the module
+        # planned. A real write carries what the instance says afterwards, and
+        # if that cannot be read the write is not called applied: the write
+        # may well have landed, but `applied` is a claim about evidence, not
+        # about the absence of an error.
+        reread <- NULL
+        if (!dry_run) {
+          seen <- module_state(
+            hosts[[server]], secrets[[server]],
+            pairs = lapply(batch[["requests"]], function(r) {
+              list(username = r[["username"]], project_id = r[["project_id"]])
+            })
+          )
+          if (!isTRUE(seen[["ok"]])) {
+            return(outcome_rows(
+              batch[["record_ids"]], "transport_error",
+              detail = "TRASPORTO_RILETTURA_FALLITA"
+            ))
+          }
+          reread <- seen[["payload"]][["results"]] %||% list()
+        }
+
         # A list, not a character vector: `[[` on an unmatched character
         # subscript raises "subscript out of bounds" on an atomic vector but
         # returns NULL on a list, and the `%||%` right below only ever gets
@@ -341,10 +354,16 @@ provisioning_reconcile <- function(register_url,
               function(error) as.character(error[["code"]]),
               character(1)
             )
+            observed <- if (is.null(reread)) {
+              entry[["after"]]
+            } else {
+              found <- round_actual(reread, list(entry))
+              if (length(found) == 0L) NULL else found[[1]]
+            }
             outcome_payload(
               id, round_outcome_kind(codes, dry_run),
               detail = paste(codes, collapse = ","), at = at,
-              applied_as = round_applied_as(entry[["after"]])
+              applied_as = round_applied_as(observed)
             )
           })
         ))

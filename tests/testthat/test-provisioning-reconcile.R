@@ -160,11 +160,9 @@ istanza_doppia <- function(..., contract = 3L) {
 
 # The only double that changes when it is written to. A write is meant to be
 # followed by a read-back, so a fixture whose reality never moves cannot tell
-# the difference between "read it back" and "reported what it intended".
-# Unused in this task's own tests -- the write path is still refused here.
-# It is Task 5's fixture: no test in this file exercises the read-back
-# discipline it documents, so its presence here must not be read as proof
-# that discipline is already covered.
+# the difference between "read it back" and "reported what it intended". Used
+# below to exercise exactly that discipline: the round has to see the second
+# state read differ from the first before it can call anything applied.
 istanza_che_scrive <- function() {
   written <- FALSE
   requester <- list(
@@ -475,15 +473,97 @@ test_that("a row still waiting for an identity gets no outcome at all", {
 })
 
 
-test_that("the write path refuses to run until it is wired", {
+test_that("a real write is followed by a read-back, and applied_as comes from it", { # nolint: line_length_linter.
   # eval
-  # test
-  # The round can simulate correctly and still be wrong about writing: the
-  # read-back that `applied` has to mean does not exist yet. Failing closed
-  # here is cheaper than an `applied` nobody verified.
-  expect_error(
-    giro(registro_doppio(record_json(list())), istanza_doppia(list()),
-         dry_run = FALSE),
-    "write path"
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
   )
+  riletture <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "state")
+  }, inviate)
+
+  # test
+  # `applied` has to mean "read back", not "no error returned": an outcome that
+  # only said the second would be the same thing as the four spike cases that
+  # reported true while doing something else. So the round asks twice — once to
+  # plan, once to see — and the second read is what applied_as carries.
+  expect_length(scritture(), 1L)
+  expect_length(riletture, 2L)
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_match(esito[["esiti"]][["applied_as"]], "role_name=data entry")
+})
+
+
+test_that("a write that cannot be read back is not called applied", {
+  # eval
+  inviate <<- list()
+  letture <- 0L
+  esito <- httr2::with_mocked_responses(
+    function(req) {
+      inviate[[length(inviate) + 1L]] <<- req
+      data <- req[["body"]][["data"]]
+      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
+        if (identical(data[["operation"]], "state")) {
+          letture <<- letture + 1L
+          if (letture > 1L) stop("Could not resolve host")
+        }
+        return(httr2::response(
+          status_code = 200L,
+          body = charToRaw(istanza_doppia(list())(data))
+        ))
+      }
+      httr2::response(
+        status_code = 200L,
+        body = charToRaw(registro_doppio(record_json(list()))(data))
+      )
+    },
+    provisioning_reconcile(
+      "registro.example.org", "t0ken",
+      hosts = c(edc10 = "edc10.example.org"),
+      secrets = c(edc10 = "s3cret"),
+      instances = c("edc10", "edc12"), at = "2026-08-14 03:00",
+      dry_run = FALSE
+    )
+  )
+
+  # test
+  # The write may well have landed. What is missing is the evidence, and
+  # `applied` is a claim about evidence. The row goes back in the queue and the
+  # next round re-applies it, which is harmless: the diff finds it conforming
+  # and classifies it noop.
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_RILETTURA_FALLITA"
+  )
+  expect_equal(esito[["esiti"]][["applied_as"]], "")
+})
+
+
+test_that("two projects on one instance are two writes, never one", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", project_id = "9003"),
+      list(record_id = "2", project_id = "9004")
+    )),
+    # The requester manages both projects, or the gate would refuse the second
+    # row and there would be one write to count instead of two.
+    istanza_doppia(list(project_id = 9003L), list(project_id = 9004L)),
+    dry_run = FALSE
+  )
+  progetti <- lapply(scritture(), function(req) {
+    unique(vapply(
+      req[["body"]][["data"]][["requests"]],
+      function(r) as.integer(r[["project_id"]]), integer(1)
+    ))
+  })
+
+  # test
+  # api.php refuses a mixed-project write with 400 and INTERNO, before touching
+  # anything. A job that took that refusal would look like a broken instance,
+  # and the diagnosis would start from the wrong end.
+  expect_length(scritture(), 2L)
+  expect_true(all(vapply(progetti, length, integer(1)) == 1L))
 })
