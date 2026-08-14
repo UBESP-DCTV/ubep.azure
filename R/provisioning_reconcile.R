@@ -122,10 +122,13 @@ provisioning_reconcile <- function(register_url,
   # refusal: "you may not ask for that project" instead of "that is not a
   # project number", which sends the referent to ask for a permission they
   # already hold.
-  numbers <- suppressWarnings(
-    as.integer(trimws(as.character(register[["project_id"]])))
-  )
-  malformed <- scope_filled(register[["project_id"]]) & is.na(numbers)
+  trimmed_ids <- trimws(as.character(register[["project_id"]]))
+  numbers <- suppressWarnings(as.integer(trimmed_ids))
+  # `as.integer("9003.7")` is `9003L`, not `NA`: `is.na()` alone lets a
+  # decimal id through as if it were the number it truncates to. The digit
+  # check catches what the coercion silently rounds away.
+  malformed <- scope_filled(register[["project_id"]]) &
+    (is.na(numbers) | !grepl("^[0-9]+$", trimmed_ids))
 
   row_errors <- plan[["errors"]]
   for (id in as.character(register[["record_id"]])[malformed]) {

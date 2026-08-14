@@ -253,6 +253,27 @@ test_that("a project_id that is not a number is named, not turned into a scope r
 })
 
 
+test_that("a decimal project_id is named, not coerced into a real one", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", username = "", project_id = "9003.7")
+    )),
+    istanza_doppia(list())
+  )
+
+  # test
+  # as.integer("9003.7") is 9003L, not NA, so is.na() alone lets it through
+  # as if 9003 had been asked for -- and 9003 exists in the fixture, so the
+  # row would reach the gate and come back a scope refusal on a project
+  # nobody asked about. The digit check is what still names it a data error.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_PROGETTO_INESISTENTE"
+  )
+})
+
+
 test_that("an instance that did not answer is not asked the gate's question", {
   # eval
   inviate <<- list()
