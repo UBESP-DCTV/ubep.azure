@@ -288,3 +288,79 @@ register_metadata <- function(url, token) {
 
   c(answer, list(dictionary = metadata_frame(answer[["payload"]])))
 }
+
+
+#' Write outcomes back into the register
+#'
+#' The register holds two kinds of field and they must never mix: what a person
+#' asked for is intent, what happened is observation, and this writes only the
+#' second. `outcome_payload()` fixes the columns; this refuses anything else at
+#' the door, so the separation is a structural property rather than a promise
+#' kept by whoever assembles the body.
+#'
+#' `overwriteBehavior` is `overwrite` and that is deliberate. The body carries
+#' exactly the five outcome fields, so overwriting can only clear those; with
+#' `normal` an empty `applied_as` would leave the previous one in place, and a
+#' transport error would inherit the read-back of an earlier success — an
+#' outcome that says "it failed" next to a field that says "here is what it
+#' wrote".
+#'
+#' @inheritParams register_call
+#' @param payload A data frame as `outcome_payload()` returns, one row per
+#'   record to update. Zero rows is the ordinary quiet round and calls nobody.
+#'
+#' @return The `register_call()` list plus `scritte`, the number of records
+#'   REDCap reports having taken.
+#'
+#' @keywords internal
+register_import <- function(url, token, payload) {
+  expected <- c(
+    "record_id", "outcome", "outcome_detail", "outcome_at", "applied_as"
+  )
+
+  if (!is.data.frame(payload) || !identical(names(payload), expected)) {
+    stop(
+      "register_import(): the body must carry exactly ",
+      paste(expected, collapse = ", "),
+      ". The register's intent and its outcome must not travel together.",
+      call. = FALSE
+    )
+  }
+
+  if (nrow(payload) == 0L) {
+    return(list(
+      ok = TRUE, errors = character(), payload = NULL, scritte = 0L
+    ))
+  }
+
+  # A missing value would serialize as the string "NA" and land in the register
+  # as a word somebody wrote. An empty cell is the absence this means.
+  payload[is.na(payload)] <- ""
+
+  answer <- register_call(url, token, list(
+    content = "record",
+    action = "import",
+    type = "flat",
+    overwriteBehavior = "overwrite",
+    forceAutoNumber = "false",
+    returnContent = "count",
+    data = I(as.character(jsonlite::toJSON(payload)))
+  ))
+
+  if (!isTRUE(answer[["ok"]])) {
+    return(c(answer, list(scritte = 0L)))
+  }
+
+  taken <- suppressWarnings(as.integer(answer[["payload"]][["count"]]))
+
+  if (is.na(taken) || !identical(taken, nrow(payload))) {
+    return(list(
+      ok = FALSE,
+      errors = "TRASPORTO_REGISTRO_SCRITTURA_PARZIALE",
+      payload = answer[["payload"]],
+      scritte = if (is.na(taken)) 0L else taken
+    ))
+  }
+
+  c(answer, list(scritte = taken))
+}

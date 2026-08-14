@@ -154,3 +154,105 @@ test_that("the live dictionary is read into the shape the comparison expects", {
   expect_true(verdict[["conforms"]])
   expect_equal(verdict[["differences"]], character(0))
 })
+
+
+test_that("the import body carries the outcome fields and nothing else", {
+  # eval
+  payload <- outcome_payload(
+    "1", "applied",
+    detail = "", at = "2026-08-14 03:00",
+    applied_as = "role_name=data entry; dag_name=; expiration=2027-01-01"
+  )
+  intent <- cbind(payload, request_status = "revoked")
+
+  # test
+  # Decision 12 of the contract, enforced at the door instead of scanned after
+  # the fact: the register holds intent and observation, and the job writes
+  # only the second. Without the refusal a bug could switch off legitimate
+  # requests, and nobody could tell "a person removed it" from "a bug removed
+  # it".
+  expect_error(
+    register_import("registro.example.org", "t0ken", intent),
+    "record_id, outcome"
+  )
+})
+
+
+test_that("the import asks REDCap to overwrite the outcome fields", {
+  # eval
+  captured <- NULL
+  payload <- rbind(
+    outcome_payload("1", "applied", at = "2026-08-14 03:00"),
+    outcome_payload("2", "data_error", detail = "DATO_UTENTE_NON_VALIDO",
+                    at = "2026-08-14 03:00")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw('{"count":2}'))
+    },
+    register_import("registro.example.org", "t0ken", payload)
+  )
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  # `overwrite` can only blank the fields the body carries, and the body
+  # carries five. With `normal` an empty applied_as would leave the previous
+  # one in place, so a transport error would inherit the read-back of an
+  # earlier success and read as a run that worked.
+  expect_true(result[["ok"]])
+  expect_equal(result[["scritte"]], 2L)
+  expect_equal(sent[["action"]], "import")
+  expect_equal(sent[["overwriteBehavior"]], "overwrite")
+  expect_equal(sent[["forceAutoNumber"]], "false")
+  expect_false(grepl("request_status", sent[["data"]], fixed = TRUE))
+  expect_true(grepl('"record_id":"1"', sent[["data"]], fixed = TRUE))
+})
+
+
+test_that("a write that lands on fewer records than it sent is not a success", {
+  # eval
+  payload <- rbind(
+    outcome_payload("1", "applied", at = "2026-08-14 03:00"),
+    outcome_payload("2", "applied", at = "2026-08-14 03:00")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      httr2::response(status_code = 200L, body = charToRaw('{"count":1}'))
+    },
+    register_import("registro.example.org", "t0ken", payload)
+  )
+
+  # test
+  # REDCap answers with what it took, and taking one of two is a partial write.
+  # Reported rather than trusted, because the rows that did not land keep an
+  # outcome from a previous run and would read as current.
+  expect_false(result[["ok"]])
+  expect_equal(result[["errors"]], "TRASPORTO_REGISTRO_SCRITTURA_PARZIALE")
+  expect_equal(result[["scritte"]], 1L)
+})
+
+
+test_that("an empty payload writes nothing and calls nobody", {
+  # eval
+  called <- FALSE
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      called <<- TRUE
+      httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
+    },
+    register_import(
+      "registro.example.org", "t0ken",
+      outcome_payload("1", "applied")[0, , drop = FALSE]
+    )
+  )
+
+  # test
+  # A quiet round is the normal case once the register is in exercise, and a
+  # quiet round must not touch the register at all: an import of zero records
+  # is a request REDCap has to answer, and answering it is the only thing it
+  # could go wrong at.
+  expect_true(result[["ok"]])
+  expect_equal(result[["scritte"]], 0L)
+  expect_false(called)
+})
