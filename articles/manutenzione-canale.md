@@ -96,6 +96,23 @@ scrive solo quando la scrittura è richiesta esplicitamente — di default
 simula. Le ragioni di questa divisione, e perché solo l’osservatore
 doveva restare senza confronto, stanno in §2.
 
+**Che cosa garantisce una simulazione, e che cosa no.** Un giro simulato
+non scrive né sulle istanze né in ambito, ma **riporta l’esito nel
+registro**: è `simulated`, con `applied_as` che dice che cosa
+succederebbe. Fino alla versione 0.10.0 del modulo quel «che cosa
+succederebbe» era l’eco della richiesta e non un piano verificato: il
+modulo risolveva il nome di un ruolo e quello di un gruppo solo dentro
+il ramo che scrive, quindi una richiesta che nominava un ruolo
+inesistente usciva `creato` in simulazione e sarebbe stata rifiutata da
+una scrittura vera. Dalla versione successiva le due risoluzioni girano
+su ogni giro — sono letture — e una simulazione rifiuta ciò che
+rifiuterebbe una scrittura. **Resta fuori dalla garanzia l’esistenza
+dell’utente**: nessun punto del modulo verifica che uno username esista,
+né in simulazione né in scrittura, e REDCap accetta diritti per un login
+che non c’è (è così che nascono le righe orfane). Su un’istanza che non
+abbia ancora la versione nuova, un `simulated` va letto come «nessun
+ostacolo di forma», non come «funzionerà».
+
 **Il giro non ha ancora un’unità di sistema o un timer**: gira quando
 qualcuno lo lancia, da riga di comando sulla macchina del perimetro
 (`dev/runner-canale.R`, installato come per l’osservatore). Programmarlo
@@ -642,11 +659,17 @@ guardato.
   `TRASPORTO_AMBITO_NON_LEGGIBILE`. In entrambi i casi rimettono in coda
   le sole righe già risolte in una coppia, mai una dichiarazione di
   fuori ambito — dire «non sei autorizzato» quando la verità è «non ho
-  potuto chiedere» manda a correggere la persona sbagliata. Una singola
-  riga la cui autorizzazione non si lascia risolvere — un ruolo
-  cancellato sotto di lei, su un’istanza che altrove risponde — è invece
-  rifiutata come fuori ambito: l’alternativa sarebbe allargare l’accesso
-  proprio nel momento in cui il canale ha smesso di poterlo vedere.
+  potuto chiedere» manda a correggere la persona sbagliata. **La stessa
+  regola vale una grana più sotto**: una singola riga la cui
+  autorizzazione non si lascia risolvere — un ruolo cancellato sotto di
+  lei, su un’istanza che altrove risponde — torna
+  `TRASPORTO_PERMESSO_NON_LEGGIBILE` e rientra in coda. È rifiutata
+  comunque, perché l’alternativa sarebbe allargare l’accesso proprio nel
+  momento in cui il canale ha smesso di poterlo vedere; ma il rifiuto è
+  indirizzato a chi può ripararlo. Chi ha compilato quella richiesta
+  l’ha compilata bene e potrebbe benissimo detenere il permesso: ciò che
+  è rotto sta nella tabella dei diritti di REDCap, dove arriva IT e non
+  lui.
 
   La guardia ha un’eccezione dichiarata: lo strumento di conformità
   ([`run_conformance_check()`](https://ubesp-dctv.github.io/ubep.azure/reference/run_conformance_check.md)),

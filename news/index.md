@@ -1,5 +1,19 @@
 # Changelog
 
+## ubep.azure (development version)
+
+- **The module resolves the names a write would need on every run,
+  simulated or not.** A role or a DAG that does not exist was refused
+  only by a real write, because the resolutions lived inside the branch
+  a dry run skips — so a simulation answered `creato` for a role that
+  cannot exist and echoed it back in `after`. Measured on the field on
+  2026-08-14. Both resolutions are reads, so a dry run can afford them,
+  and a rehearsal that cannot refuse what the performance refuses cannot
+  warn about anything — which is the whole purpose of the phase in which
+  the channel only simulates. The existence of a *user* remains
+  unchecked, there and everywhere: REDCap accepts rights for a login
+  that does not exist, which is how orphan rows are born.
+
 ## ubep.azure 0.11.0
 
 - **The channel reads the request register with the token API and writes
@@ -25,11 +39,15 @@
   that answered but whose module is too old to carry the permission on
   any row returns `TRASPORTO_AMBITO_NON_LEGGIBILE` instead. Either way
   only the rows already resolved into a pair go back to the queue, never
-  a declaration of out of scope. A single row whose own permission
-  cannot be resolved — a role deleted underneath it, on an instance that
-  otherwise answers — is refused as out of scope: the alternative would
-  be to widen access exactly when the channel has stopped being able to
-  see it.
+  a declaration of out of scope. The same rule holds one granularity
+  down: a single row whose own permission cannot be resolved — a role
+  deleted underneath it, on an instance that otherwise answers — returns
+  `TRASPORTO_PERMESSO_NON_LEGGIBILE` and queues. It is refused either
+  way, because the alternative would be to widen access exactly when the
+  channel has stopped being able to see it; what the code decides is who
+  is told. Whoever filed that request filed it correctly and may well
+  hold the permission — what is broken sits in REDCap’s rights table,
+  which IT can reach and they cannot.
 - **`applied` is a claim about evidence, not about the absence of an
   error.** A real write is followed by a read-back, and the outcome is
   `applied` only if the re-read confirms it — the pair present after an

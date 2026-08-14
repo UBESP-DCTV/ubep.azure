@@ -32,9 +32,11 @@ scope_errors(register, rights)
 ## Value
 
 A named list, one entry per refused row, named by `record_id` and
-holding `"DATO_AMBITO_NON_AUTORIZZATO"`. Empty when every row is in
-scope. The shape matches `register_to_desired()$errors` so the two
-merge.
+holding `"DATO_AMBITO_NON_AUTORIZZATO"`, or
+`"TRASPORTO_PERMESSO_NON_LEGGIBILE"` when the requester has a rights row
+on that project whose permission could not be read. Empty when every row
+is in scope. The shape matches `register_to_desired()$errors` so the two
+merge, and the caller reads the prefix rather than the whole string.
 
 ## Details
 
@@ -54,3 +56,13 @@ cases — every one of them is "the permission was not read as granting":
   column that read as empty: none of these is a permission, and treating
   them as one would widen access exactly when the channel has stopped
   being able to see.
+
+The fourth refuses like the others and is **addressed differently**,
+which is the one thing this function says twice. `DATO_` and
+`TRASPORTO_` are not labels on an error, they are a delivery address:
+the first closes the row against whoever filed it and mails them, the
+second keeps it queued and mails us. Someone whose rights row exists and
+whose permission is unreadable filed a correct request and may well hold
+the permission — what is broken is inside REDCap, where only IT can
+reach it. Saying "you are not authorized" there sends the one person who
+cannot fix it to go and argue.
