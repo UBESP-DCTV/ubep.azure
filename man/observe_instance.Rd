@@ -20,12 +20,13 @@ reason unrelated to the code.}
 A one-row data frame.
 }
 \description{
-Pure: no network. The v1 of the job observes and does not compare, so this
-never touches \code{provisioning_diff()}. That is not a disabled write path but a
-missing comparison: with no register, every real pair would be classified
-\code{revocato}, so the diff is not dangerous but empty of information — while
-version, gate, reachability and expirations are properties of reality alone
-and are available now.
+Pure: no network. The observer never calls \code{provisioning_diff()}, and not
+because the request register does not exist yet: it reads an instance's
+state whole, with no pairs named, so a comparison here would classify
+every real pair \code{revocato} regardless of how populated the register grows
+to be. That is a property of what this job reads, not a stage the register
+will outgrow — version, gate, reachability and expirations are properties
+of reality alone, and stay available without that comparison.
 }
 \details{
 A server that cannot be reached becomes a row rather than an exception, for

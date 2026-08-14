@@ -1,11 +1,12 @@
 #' Turn one instance's `state` reply into a single observation row
 #'
-#' Pure: no network. The v1 of the job observes and does not compare, so this
-#' never touches `provisioning_diff()`. That is not a disabled write path but a
-#' missing comparison: with no register, every real pair would be classified
-#' `revocato`, so the diff is not dangerous but empty of information — while
-#' version, gate, reachability and expirations are properties of reality alone
-#' and are available now.
+#' Pure: no network. The observer never calls `provisioning_diff()`, and not
+#' because the request register does not exist yet: it reads an instance's
+#' state whole, with no pairs named, so a comparison here would classify
+#' every real pair `revocato` regardless of how populated the register grows
+#' to be. That is a property of what this job reads, not a stage the register
+#' will outgrow — version, gate, reachability and expirations are properties
+#' of reality alone, and stay available without that comparison.
 #'
 #' A server that cannot be reached becomes a row rather than an exception, for
 #' the same reason `provisioning_audit()` does it: one instance being down must

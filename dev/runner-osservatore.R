@@ -3,12 +3,15 @@
 # Osservatore della flotta REDCap.
 #
 # Gira una volta al giorno sulla macchina dedicata, legge lo stato di ogni
-# istanza che ha il modulo, e lascia un record della run. Non confronta niente:
-# finche' il progetto-richieste non esiste, il desiderato e' vuoto e ogni coppia
-# reale verrebbe classificata come non piu' voluta. Il pericolo non e' la
-# chiamata che scrive, e' il confronto che la alimenterebbe -- quindi qui il
-# confronto non si calcola affatto, e un controllo in
-# `tests/testthat/test-runner-guardie.R` lo sorveglia.
+# istanza che ha il modulo, e lascia un record della run. Non confronta
+# niente: non perche' il registro delle richieste non esista ancora, ma
+# perche' questo job legge lo stato di un'istanza per intero, senza nominare
+# coppie -- un confronto qui classificherebbe ogni coppia reale come non piu'
+# voluta, quale che sia lo stato del registro. Chi confronta e' il giro del
+# canale (`dev/runner-canale.R`), che chiede al registro le sole coppie che
+# nomina. Il pericolo non e' la chiamata che scrive, e' il confronto che la
+# alimenterebbe -- quindi qui il confronto non si calcola affatto, e un
+# controllo in `tests/testthat/test-runner-guardie.R` lo sorveglia.
 #
 # Che cosa si osserva senza alcun desiderato: versione, major, cancello,
 # impronta di superficie, raggiungibilita', e le coppie la cui scadenza e' gia'

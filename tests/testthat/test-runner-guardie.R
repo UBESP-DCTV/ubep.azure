@@ -21,8 +21,9 @@ test_that("the runner names neither the diff nor the writes", {
   expect_equal(
     found, character(),
     info = paste(
-      "The v1 observes and does not compare. With no register every real pair",
-      "would be classified as revoked, so the danger is not the write call but",
+      "The observer reads an instance's state whole, with no pairs named, so",
+      "a comparison here would classify every real pair as revoked no matter",
+      "how populated the register is -- the danger is not the write call but",
       "the comparison that feeds it. If you are deliberately adding the write",
       "path, change this test in the same commit — not afterwards."
     )
