@@ -449,3 +449,41 @@ test_that("the internal typo is named even when a homonym holds the UPN", {
   expect_equal(answer[["identity"]], "")
   expect_equal(answer[["errors"]], "DATO_RECAPITO_INTERNO_INESISTENTE")
 })
+
+
+test_that("the gate admits only a confirmed identity", {
+  # test
+  expect_true(identity_actionable("existing"))
+  expect_true(identity_actionable("created"))
+  expect_false(identity_actionable("absent"))
+  expect_false(identity_actionable("collision"))
+  expect_false(identity_actionable("ambiguous"))
+})
+
+
+test_that("the gate refuses the empty verdict, which is the case of today", {
+  # test
+  # `identity` is empty on every row of the live register, because nothing has
+  # ever written it. A gate that admitted the empty one would be a gate that
+  # admits everything the day it is switched on, and it is the case that gets
+  # forgotten precisely because it is the current one.
+  expect_false(identity_actionable(""))
+  expect_false(identity_actionable(NA_character_))
+  # No rows, no answers: the gate is a per-row question, so an empty column
+  # gets an empty verdict rather than a scalar `FALSE` that would then be
+  # recycled against something.
+  expect_equal(identity_actionable(character()), logical(0))
+})
+
+
+test_that("the gate folds case and spaces, and answers per row", {
+  # eval
+  verdicts <- c(" Existing ", "AMBIGUOUS", "created", "")
+
+  # test
+  # Read straight out of a register column, so it meets whatever REDCap hands
+  # back rather than a value this package normalized on the way in.
+  expect_equal(
+    identity_actionable(verdicts), c(TRUE, FALSE, TRUE, FALSE)
+  )
+})

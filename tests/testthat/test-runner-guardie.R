@@ -220,3 +220,28 @@ test_that("the guard on the package is coarse enough to catch a rename", {
   expect_true(scan(named))
   expect_false(scan(gated))
 })
+
+
+test_that("the gate on the identity cannot exist without the writer", {
+  # eval
+  # Guard B of the design. The two have to ship together: a package that gates
+  # on `identity` without being able to write it is the state in which the
+  # channel refuses every row and says nothing about why -- `identity` is empty
+  # on every row of the live register, so every row would be refused, quietly
+  # and for ever.
+  namespace <- asNamespace("ubep.azure")
+  present <- function(name) {
+    exists(name, envir = namespace, inherits = FALSE)
+  }
+
+  # test
+  expect_equal(
+    present("identity_actionable"), present("register_identity_import"),
+    info = paste(
+      "The gate and the writer of `identity` must exist together. If you are",
+      "removing one, remove the other in the same commit; if you are renaming",
+      "one, this test is where the pair is declared."
+    )
+  )
+  expect_true(present("identity_actionable"))
+})
