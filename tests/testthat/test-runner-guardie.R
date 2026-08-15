@@ -130,46 +130,59 @@ test_that("the guard is coarse on purpose and catches a mention in a comment", {
 })
 
 
-test_that("nothing in the package writes on an instance without naming the gate", { # nolint: line_length_linter.
-  # eval
-  # This one bites under `R CMD check` too, unlike the two guards above: it
-  # reads the installed function bodies instead of the source tree, so `dev/`
-  # not shipping cannot make it skip.
+# The write primitives, plus the one deliberate second write path. Read by both
+# guards below rather than written out twice, because what must not drift is
+# the list of what counts as a write: a fourth primitive added to one copy and
+# not to the other would leave one of the two rules quietly scanning less than
+# it claims to.
+#
+# run_conformance_check is itself a write path -- it calls both module_apply()
+# and module_revoke() with dry_run = FALSE -- so it belongs here and not only
+# among the exemptions: a new function whose body calls run_conformance_check()
+# writes on an instance too, and without its name here nothing would stop a
+# caller from routing around the two primitives through this one, with no
+# allowlist edit and nothing for a reviewer to catch in a diff.
+percorsi_di_scrittura <- function() {
+  c("module_apply", "module_revoke", "run_conformance_check")
+}
+
+
+# Every function of the namespace that can write on an instance and does not
+# name `cancello`. Coarse on purpose -- a plain text search over the deparsed
+# body instead of a parse of the call graph -- because a false red costs a
+# minute and a false green costs a grant applied while nobody was looking.
+#
+# The three write paths are never scanned against themselves.
+# run_conformance_check predates both gates and is the deliberate exception: a
+# calibration tool an operator runs by hand against a dedicated conformance
+# project and a dedicated test account, to certify a module version before its
+# ceiling can advance -- never against register-derived data, never unattended.
+# It carries no requester and no register row, so neither rule has anything to
+# ask of it.
+scrive_senza_nominare <- function(cancello) {
   namespace <- asNamespace("ubep.azure")
   functions <- Filter(
     function(name) is.function(get(name, envir = namespace)),
     ls(namespace, all.names = TRUE)
   )
+  writes <- percorsi_di_scrittura()
 
-  # run_conformance_check is itself a write path -- it calls both
-  # module_apply() and module_revoke() with dry_run = FALSE -- so it belongs
-  # in `writes`, not only in `exempt`: a new function whose body calls
-  # run_conformance_check() writes on an instance too, and without its name
-  # here nothing would stop a caller from routing around the two write
-  # primitives through this one, with no allowlist edit and nothing for a
-  # reviewer to catch in a diff.
-  writes <- c("module_apply", "module_revoke", "run_conformance_check")
-  # run_conformance_check predates this gate and is the one deliberate second
-  # write path: a calibration tool an operator runs by hand against a
-  # dedicated conformance project and a dedicated test account to certify a
-  # module version before its ceiling can advance -- never against
-  # register-derived data, never unattended. It carries no requester and no
-  # register row to gate on, so the rule this guard enforces ("could the
-  # requester have granted this by hand") does not apply to it. Named here, in
-  # the same commit that wires the gate, exactly as this test's own message
-  # asks of a deliberate second write path -- and it stays out of `offending`
-  # below because it is also in `exempt`, so it is never scanned against
-  # itself. It is already in `writes` above, so it needs no second mention
-  # here: the exemption this guard grants beyond the write primitives
-  # themselves is exactly one name, not two copies of it.
-  exempt <- writes
-  offending <- Filter(function(name) {
+  Filter(function(name) {
     body <- paste(deparse(body(get(name, envir = namespace))), collapse = " ")
     calls_write <- any(vapply(
       writes, function(symbol) grepl(symbol, body, fixed = TRUE), logical(1)
     ))
-    calls_write && !grepl("scope_errors", body, fixed = TRUE)
-  }, setdiff(functions, exempt))
+    calls_write && !grepl(cancello, body, fixed = TRUE)
+  }, setdiff(functions, writes))
+}
+
+
+test_that("nothing in the package writes on an instance without naming the gate", { # nolint: line_length_linter.
+  # eval
+  # This one bites under `R CMD check` too, unlike the two guards above: it
+  # reads the installed function bodies instead of the source tree, so `dev/`
+  # not shipping cannot make it skip.
+  offending <- scrive_senza_nominare("scope_errors")
 
   # test
   expect_equal(
@@ -188,37 +201,77 @@ test_that("nothing in the package writes on an instance without naming the gate"
       "this test in the same commit — not afterwards."
     )
   )
-  # `writes` now names run_conformance_check itself, so `setdiff(exempt,
-  # writes)` is empty by construction and cannot tell a stale exemption from
-  # a correct one; the base primitives are the only fixed point to measure
-  # `exempt` against. If this ever reports more than run_conformance_check,
-  # either a second gate-free tool was exempted deliberately (name it above,
-  # in the same commit) or the exemption drifted.
+  # The exemption list and the write list are the same list by construction, so
+  # the base primitives are the only fixed point to measure it against. If this
+  # ever reports more than run_conformance_check, either a second gate-free
+  # tool was exempted deliberately (name it above, in the same commit) or the
+  # exemption drifted.
   expect_equal(
-    setdiff(exempt, c("module_apply", "module_revoke")),
+    setdiff(percorsi_di_scrittura(), c("module_apply", "module_revoke")),
     "run_conformance_check"
   )
 })
 
 
-test_that("the guard on the package is coarse enough to catch a rename", {
+test_that("nothing writes on an instance without naming the gate on the identity", { # nolint: line_length_linter.
   # eval
-  # Same shape as the guard above, run against two hand-written bodies so the
-  # test that guards the guard cannot pass by finding nothing.
+  # Guard A of the design, twin of the one above and in the same family. The
+  # rule the scope gate enforces is "could the requester have granted this by
+  # hand"; this one is "is this the person they meant", and until this
+  # sub-project nothing asked it at all -- the channel decided by looking at
+  # whether somebody had typed a name into the form.
+  offending <- scrive_senza_nominare("identity_actionable")
+
+  # test
+  expect_equal(
+    offending, character(),
+    info = paste(
+      "A function that can write on an instance must name the gate on the",
+      "identity. Rights are granted to a username, and a username nobody",
+      "confirmed is a username that may belong to somebody else -- or to",
+      "nobody, in which case the grant sits in REDCap waiting for whoever one",
+      "day logs in under that name. The failure is silent in the direction",
+      "that matters: the row reports `applied` and the mail goes out saying",
+      "so. Coarse on purpose, like its twin: a false red costs a minute, a",
+      "false green costs a grant on an identity nobody checked. If you are",
+      "deliberately adding a second write path, change this test in the same",
+      "commit — not afterwards."
+    )
+  )
+})
+
+
+test_that("the guards on the package are coarse enough to catch a rename", {
+  # eval
+  # Same shape as the two guards above, run against hand-written bodies so the
+  # test that guards the guards cannot pass by finding nothing.
   named <- function() module_apply(server, secret, requests)
   gated <- function() {
     errors <- scope_errors(register, rights)
     module_apply(server, secret, requests)
   }
-  scan <- function(f) {
+  # Passes the scope guard and fails the identity one, which is the state this
+  # sub-project found the channel in: a write bounded by what the requester
+  # could do by hand, on a username nobody had checked.
+  mezzo <- function() {
+    errors <- scope_errors(register, rights)
+    admitted <- identity_confirmed(verdicts)
+    module_apply(server, secret, requests)
+  }
+  scan <- function(f, cancello) {
     body <- paste(deparse(body(f)), collapse = " ")
     grepl("module_apply", body, fixed = TRUE) &&
-      !grepl("scope_errors", body, fixed = TRUE)
+      !grepl(cancello, body, fixed = TRUE)
   }
 
   # test
-  expect_true(scan(named))
-  expect_false(scan(gated))
+  expect_true(scan(named, "scope_errors"))
+  expect_false(scan(gated, "scope_errors"))
+  expect_true(scan(named, "identity_actionable"))
+  # The rename is what the coarseness is for: a gate called something else is
+  # a gate this search cannot see, and the body reads as if it had none.
+  expect_true(scan(mezzo, "identity_actionable"))
+  expect_false(scan(mezzo, "scope_errors"))
 })
 
 

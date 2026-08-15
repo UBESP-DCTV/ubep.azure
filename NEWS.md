@@ -1,5 +1,44 @@
 # ubep.azure (development version)
 
+* **The round resolves who a row is talking about before deciding what to do
+  with it.** `provisioning_reconcile()` gains a step between reading the
+  register and building the desired state: it sweeps the tenant whole, resolves
+  every row against it, writes `username` and `identity` back through the door
+  that takes nothing else, and hands on to the desired state only what the gate
+  admits. The order of the questions is the design, and the function's own
+  documentation carries the new one.
+
+  **The gate has no window.** It asks after the verdict the round has just
+  computed, never after the one the register carries: a round that read the
+  stored value would be looking at something up to four hours old, and after a
+  failed sweep at something nothing had confirmed this pass at all.
+
+  **A sweep that failed is a transport error on every row, and no instance is
+  interrogated.** "I could not ask" is not "you are not the one", so the rows
+  go back in the queue instead of closing against whoever filed them — and
+  nothing is acted on, because acting would mean granting under a verdict
+  nobody produced this round.
+
+  **What the gate stops, and what the register then says.** `ambiguous` and
+  `collision` close the row as data errors, so `A-13` mails the referent, under
+  codes that name what they can correct rather than what the round observed:
+  `DATO_RECAPITO_NON_IDENTIFICA` — give a contact address that picks out this
+  person and nobody else — and `DATO_IDENTITA_IN_COLLISIONE`, whose proposal
+  travels beside it in `username`. `absent` stays `pending`, because the round
+  will create the account itself and mailing somebody about a row nobody has to
+  touch is how an alert stops being read.
+
+  Guard A ships in the same commit: no function that can write on an instance
+  may do so without naming the gate on the identity, the twin of the rule that
+  has guarded the gate on scope since 0.10.0. Both now read one list of what
+  counts as a write, so a fourth write path cannot be added to one rule and
+  missed by the other.
+
+  `round_changed()` takes a `fields` argument so the same "only what changed"
+  filter serves both families of field rather than being copied, and the Graph
+  token and endpoint are arguments of the round with no defaults — this
+  repository is public, and an endpoint written in is an endpoint published.
+
 * **The resolution no longer mistakes its own handwriting for a declaration.**
   `resolve_identity()` treated the register's `username` as a claim by whoever
   filed the row, every pass. That is right until the round has answered, and

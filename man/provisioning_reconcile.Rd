@@ -9,6 +9,8 @@ provisioning_reconcile(
   register_token,
   hosts,
   secrets,
+  graph_token,
+  graph_url,
   instances = NULL,
   dry_run = TRUE,
   at = format(Sys.time(), "\%Y-\%m-\%d \%H:\%M", tz = "UTC")
@@ -25,6 +27,14 @@ carrying the path REDCap is mounted under. The register names instances
 instance whose secret could not be read is named here with \code{NA} rather
 than left out, so the two failures stay distinguishable.}
 
+\item{graph_token, graph_url}{The Microsoft Graph access token and endpoint
+the sweep of step 3 is made with. Both are arguments and neither has a
+default: this repository is public, and an endpoint written in is an
+endpoint published. An empty endpoint is not an error here but a sweep
+that could not start, which is what the parameters sheet says a missing
+\code{UBEP_GRAPH} does — every row takes a transport error instead of a
+verdict, rather than the round dying with a message nobody reads.}
+
 \item{instances}{The fleet, in the order the register's \code{server} field
 carries it, for the dictionary comparison. \code{NULL} compares the other
 fields and declares the substitution.}
@@ -35,7 +45,9 @@ fields and declares the substitution.}
 }
 \value{
 A list with \code{at}, \code{fermato}, \code{schema}, \code{istanze}, \code{esiti},
-\code{scritte} and \code{errori}.
+\code{scritte} and \code{errori}. \code{scritte} counts the outcomes REDCap took and not
+the identities: they are two writes into two field families, and one
+counter for both would be a number nobody could read back into either.
 }
 \description{
 The only function that holds the register and the instances at the same
@@ -48,7 +60,10 @@ and the order is the design:
 \item compare the register's dictionary and stop if the drift changes what a
 round reads;
 \item read the register;
-\item turn it into the desired state, keeping the form errors;
+\item resolve \strong{who each row is talking about}, against the tenant read whole,
+and write the verdict back;
+\item turn what the gate admits into the desired state, keeping the form
+errors;
 \item per instance, read the state \strong{once} for the grantees and the requesters
 together;
 \item ask the scope gate about the instances that answered, and only those;
@@ -58,6 +73,14 @@ together;
 \item write back the outcome, and only what changed.
 }
 
+\strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
+the design — and the reason is latency: resolving and acting have the same
+cadence and the second consumes the first, so a resolver on a timer of its
+own would make every new row wait one more cycle to be looked at. It follows
+that the gate has no window at all: it asks after the verdict it has just
+computed, never after the one the register carries, and writing \code{identity}
+back is the minutes of the verdict rather than the input to the next step.
+
 Idempotent by construction: a round interrupted between applying and writing
 the outcome leaves the row as still to do, and the next round applies it
 again. That is harmless because the diff finds it already conforming and
@@ -66,12 +89,12 @@ moment without repair.
 
 A \code{project_id} the register accepted but that is not a number is named here
 with \code{DATO_PROGETTO_INESISTENTE} right after the pure layer runs, and before
-the scope gate ever sees the row. The row may not be a pair yet — \code{username}
-stays blank until the identity is resolved, which is the ordinary state in
-this version — so \code{register_to_desired()} never validated it, while
-\code{scope_pairs()} admits it on \code{requested_by} alone. Left to the gate it would
-come back as a scope refusal, "you may not ask for that project", when the
-truth is "that is not a project number" — a data error the referent can act
-on, not a permission they are sent to go ask for when they already hold it.
+the scope gate ever sees the row. \code{validate_request()} catches the ones that
+will not coerce; this catches the ones that coerce to something else, since
+\code{as.integer("9003.7")} is \code{9003L} and not \code{NA}, while \code{scope_pairs()} admits
+the row on \code{requested_by} alone. Left to the gate it would come back as a
+scope refusal, "you may not ask for that project", when the truth is "that
+is not a project number" — a data error the referent can act on, not a
+permission they are sent to go ask for when they already hold it.
 }
 \keyword{internal}

@@ -10,19 +10,24 @@ form_field_value <- function(value) {
 }
 
 
-# One mock stands in for both adapters and dispatches on the URL: the register
-# speaks to /api/ with a token in the body, the instances to the module
-# endpoint. Keeping a single mock is what lets a test assert "no write ever
-# left this machine" — two separate doubles could each only speak for
-# themselves.
+# One mock stands in for all three adapters and dispatches on the URL: the
+# register speaks to /api/ with a token in the body, the instances to the
+# module endpoint, Microsoft Graph to its own host. Keeping a single mock is
+# what lets a test assert "no write ever left this machine" — three separate
+# doubles could each only speak for themselves.
 inviate <- list()
 
 
-canale_mock <- function(registro, istanza) {
+canale_mock <- function(registro, istanza, directory) {
   function(req) {
     # A mock lives inside httr2's request loop, so this is the one place the
     # captured wire log has to reach out of its own call frame.
     inviate[[length(inviate) + 1L]] <<- req # nolint: assignment_linter.
+    if (grepl("graph.example.org", req[["url"]], fixed = TRUE)) {
+      return(httr2::response(
+        status_code = 200L, body = charToRaw(directory())
+      ))
+    }
     body <- if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
       istanza(req[["body"]][["data"]])
     } else {
@@ -42,10 +47,101 @@ scritture <- function() {
 }
 
 
-importazioni <- function() {
+# Everything the round sent to an instance, whatever it asked for. The
+# distinction from `scritture()` is what lets a test say "this row was never
+# even looked up", which is the claim the identity gate makes.
+interrogazioni <- function() {
   Filter(function(req) {
-    identical(form_field_value(req[["body"]][["data"]][["action"]]), "import")
+    grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)
   }, inviate)
+}
+
+
+# The register now takes two kinds of import through the same API call, and
+# they must stay tellable apart on the wire: what the round resolved about who
+# a row means, and what happened to it. `campi` is how a test names which one
+# it is asking about, and passing none keeps the old meaning, any import at
+# all.
+importazioni <- function(campi = NULL) {
+  Filter(function(req) {
+    data <- req[["body"]][["data"]]
+    if (!identical(form_field_value(data[["action"]]), "import")) {
+      return(FALSE)
+    }
+    if (is.null(campi)) {
+      return(TRUE)
+    }
+    sent <- jsonlite::fromJSON(
+      form_field_value(data[["data"]]), simplifyVector = FALSE
+    )
+    length(sent) > 0L && setequal(names(sent[[1]]), campi)
+  }, inviate)
+}
+
+
+# What the register was actually told about the identities, as a frame. A test
+# that asserted only on what the round returned would be reading the round's
+# own account of itself.
+identita_scritte <- function() {
+  bodies <- lapply(
+    importazioni(c("record_id", "username", "identity")),
+    function(req) {
+      jsonlite::fromJSON(
+        form_field_value(req[["body"]][["data"]][["data"]]),
+        simplifyVector = TRUE
+      )
+    }
+  )
+  if (length(bodies) == 0L) {
+    return(NULL)
+  }
+  do.call(rbind, bodies)
+}
+
+
+# One directory record, in the shape Graph puts on the wire. `auto_unbox` makes
+# a length-one value a scalar, which is how Graph writes it, and `I()` is what
+# keeps `otherMails` an array even when it holds exactly one address.
+graph_user <- function(...) {
+  utils::modifyList(
+    list(
+      id = "00000000-0000-0000-0000-000000000001",
+      userPrincipalName = "mario.rossi@ubep.unipd.it",
+      givenName = "Mario",
+      surname = "Rossi",
+      mail = NULL,
+      otherMails = I(character()),
+      officeLocation = "mario.rossi@example.org",
+      jobTitle = NULL,
+      createdDateTime = "2026-01-01T00:00:00Z",
+      accountEnabled = TRUE,
+      userType = "Member"
+    ),
+    list(...)
+  )
+}
+
+
+# The tenant a round sweeps. The default holds exactly the person the default
+# register row names, so a test that is not about the identity gets a row that
+# resolves and reaches the instance, which is what every test written before
+# this step assumed without being able to say so.
+directory_doppia <- function(...) {
+  users <- list(...)
+  if (length(users) == 0L) {
+    users <- list(graph_user())
+  }
+  function() {
+    as.character(jsonlite::toJSON(list(value = users), auto_unbox = TRUE))
+  }
+}
+
+
+# A tenant that holds nobody. Not an error and not the same as a sweep that
+# failed: every row resolves `absent`, which is the verdict that would open the
+# creation branch.
+directory_vuota <- function() {
+  function() '{"value":[]}'
 }
 
 
@@ -90,9 +186,15 @@ registro_doppio <- function(records) {
 record_json <- function(...) {
   rows <- list(...)
   as.character(jsonlite::toJSON(lapply(rows, function(row) {
+    # `username` and `identity` are blank, which is the ordinary state of a
+    # freshly filed row and what the work instruction asks for: the round fills
+    # them in from the tenant. A fixture that carried the UPN would be a row
+    # that had already been resolved, and would test the round against its own
+    # output instead of against what a referent writes.
     defaults <- list(
       record_id = "1", server = "edc10", project_id = "9003",
-      username = "mario.rossi@ubep.unipd.it",
+      username = "", identity = "",
+      first_name = "Mario", last_name = "Rossi",
       contact_email = "mario.rossi@example.org",
       role_name = "data entry", dag_name = "", expiration = "",
       requested_by = "anna.bianchi@ubep.unipd.it",
@@ -191,20 +293,45 @@ istanza_che_scrive <- function() {
 }
 
 
-giro <- function(registro, istanza, ...) {
+giro <- function(registro, istanza, directory = directory_doppia(), ...) {
   inviate <<- list() # nolint: assignment_linter.
   httr2::with_mocked_responses(
-    canale_mock(registro, istanza),
+    canale_mock(registro, istanza, directory),
     provisioning_reconcile(
       register_url = "registro.example.org",
       register_token = "t0ken",
       hosts = c(edc10 = "edc10.example.org", edc12 = "edc12.example.org"),
       secrets = c(edc10 = "s3cret", edc12 = "s3cret"),
+      graph_token = "gr4ph",
+      graph_url = "graph.example.org/v1.0",
       instances = c("edc10", "edc12"),
       at = "2026-08-14 03:00",
       ...
     )
   )
+}
+
+
+# An instance that cannot be reached at all. Written as a double rather than as
+# a mock of its own so that Graph and the register keep being served from the
+# one place they are served from everywhere else.
+istanza_muta <- function() {
+  function(data) stop("Could not resolve host")
+}
+
+
+# An instance that answers the planning read and loses the one that follows a
+# write. The counter is what makes the two reads distinguishable: `applied` is
+# a claim about the second, and there is no other way to take it away.
+istanza_senza_rilettura <- function() {
+  letture <- 0L
+  function(data) {
+    if (identical(data[["operation"]], "state")) {
+      letture <<- letture + 1L # nolint: assignment_linter.
+      if (letture > 1L) stop("Could not resolve host")
+    }
+    istanza_doppia(list())(data)
+  }
 }
 
 
@@ -276,27 +403,7 @@ test_that("a decimal project_id is named, not coerced into a real one", {
 
 test_that("an instance that did not answer is not asked the gate's question", {
   # eval
-  inviate <<- list()
-  esito <- httr2::with_mocked_responses(
-    function(req) {
-      inviate[[length(inviate) + 1L]] <<- req
-      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
-        stop("Could not resolve host")
-      }
-      httr2::response(
-        status_code = 200L,
-        body = charToRaw(registro_doppio(record_json(list()))(
-          req[["body"]][["data"]]
-        ))
-      )
-    },
-    provisioning_reconcile(
-      "registro.example.org", "t0ken",
-      hosts = c(edc10 = "edc10.example.org"),
-      secrets = c(edc10 = "s3cret"),
-      instances = c("edc10", "edc12"), at = "2026-08-14 03:00"
-    )
-  )
+  esito <- giro(registro_doppio(record_json(list())), istanza_muta())
 
   # test
   # Writing this as a data error would tell a referent "you are not authorized"
@@ -498,11 +605,15 @@ test_that("an instance that echoes an entry nobody asked for does not abort the 
 
 test_that("no record is written twice in one round", {
   # eval
+  # Three projects rather than one, because the resolution now fills the same
+  # UPN into every row that names the same person: two rows on one project
+  # would be a duplicated pair, which is a fourth verdict and not the one this
+  # test is about.
   esito <- giro(
     registro_doppio(record_json(
-      list(record_id = "1", username = ""),
-      list(record_id = "2", server = "edc07"),
-      list(record_id = "3", expiration = "1999-01-01")
+      list(record_id = "1", project_id = "9003"),
+      list(record_id = "2", server = "edc07", project_id = "9004"),
+      list(record_id = "3", project_id = "9005", expiration = "1999-01-01")
     )),
     istanza_doppia(list())
   )
@@ -516,48 +627,179 @@ test_that("no record is written twice in one round", {
 })
 
 
-test_that("a row still waiting for an identity gets no outcome at all", {
+test_that("the round fills the username from the tenant and the row becomes a pair", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(registro_doppio(record_json(list())), istanza_doppia(list()))
+  scritte <- identita_scritte()
+  chieste <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+
+  # test
+  # What the whole sub-project is for. The referent leaves `username` blank,
+  # which is what the work instruction asks of them; the round resolves who the
+  # row means against the tenant, writes the canonical UPN beside the verdict
+  # that authorizes it, and only then is there a pair to act on. Before this
+  # the row simply sat there, because the channel's only test of a pair was
+  # whether somebody had typed a name into the form.
+  expect_equal(scritte[["identity"]], "existing")
+  expect_equal(scritte[["username"]], "mario.rossi@ubep.unipd.it")
+  expect_length(chieste, 1L)
+  expect_equal(
+    chieste[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+})
+
+
+test_that("an identity nobody confirmed keeps the row away from every instance", { # nolint: line_length_linter.
+  # eval
+  # A namesake is enough, and it is the criterion of 2026-08-15: an account
+  # carrying this surname whose contact address is not the one given. Nothing
+  # here can tell "the same person, with an address we did not know" from
+  # "somebody else with the same name", and only the referent can.
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(officeLocation = "altro.rossi@example.org"))
+  )
+
+  # test
+  # The gate is what this task exists to install, and this is the claim it
+  # makes: not "the write was refused" but "the instance was never asked". A
+  # row whose identity nobody has confirmed is not a pair, so there is nothing
+  # to look up and nothing to compare against.
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_RECAPITO_NON_IDENTIFICA"
+  )
+  expect_equal(identita_scritte()[["identity"]], "ambiguous")
+  expect_equal(identita_scritte()[["username"]], "")
+})
+
+
+test_that("a collision stops the row and leaves the proposal where a person reads it", { # nolint: line_length_linter.
+  # eval
+  # Under the surname criterion a collision is no longer a namesake — that is
+  # caught earlier and comes back `ambiguous`. What is left is crooked data in
+  # the tenant: an account whose UPN reads `mario.rossi` while its surname says
+  # somebody else, so the UPN this row would compose is taken by a record that
+  # does not answer to the name.
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "anna.bianchi@example.org"
+    ))
+  )
+
+  # test
+  # The proposal goes into the register beside the verdict, which is decision
+  # 11: without it the row hands a person two questions and no material. The
+  # gate still stops it — a proposal is not a confirmation — and the code is
+  # the one sub-project 5 will write the message from.
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_IDENTITA_IN_COLLISIONE"
+  )
+  expect_equal(identita_scritte()[["identity"]], "collision")
+  expect_equal(
+    identita_scritte()[["username"]], "mario.rossi.2@ubep.unipd.it"
+  )
+})
+
+
+test_that("an absence leaves the row pending and mails nobody about it", {
   # eval
   esito <- giro(
-    registro_doppio(record_json(list(record_id = "1", username = ""))),
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # An empty tenant is not a failed sweep: it answered, and what it said is
+  # "nobody is there". `absent` is a verdict the round will act on by itself
+  # once task 6 lands, so closing the row as a data error would mail a referent
+  # about something nobody has to touch — which is how an alert stops being
+  # read.
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "")
+  expect_equal(identita_scritte()[["identity"]], "absent")
+})
+
+
+test_that("a row the resolution stopped reports the reason, and sheds the username it had", { # nolint: line_length_linter.
+  # eval
+  # A row that resolved on some earlier round and whose contact address has
+  # since been emptied. The register therefore carries a username and a verdict
+  # this round can no longer stand behind.
+  esito <- giro(
+    registro_doppio(record_json(list(
+      contact_email = "",
+      username = "mario.rossi@ubep.unipd.it", identity = "existing"
+    ))),
     istanza_doppia(list())
   )
 
   # test
-  # It is not a pair yet (decision 9), so there is nothing to report. Writing
-  # `pending` into it every night would be the noise the alert exists to stand
-  # out from.
-  expect_equal(nrow(esito[["esiti"]]), 0L)
-  expect_length(importazioni(), 0L)
+  # The resolution's own code travels through instead of a generic summary: a
+  # row stopped before any verdict already knows exactly what is wrong with it,
+  # and `DATO_RECAPITO_ASSENTE` is a sentence the referent can act on in one
+  # gesture. And the empty verdict is written, not skipped: it is what takes
+  # away the username the row earned back when it still resolved, which is the
+  # value that has become false.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RECAPITO_ASSENTE")
+  expect_equal(identita_scritte()[["identity"]], "")
+  expect_equal(identita_scritte()[["username"]], "")
+})
 
-  # The claim has to hold when the instance is down too, not only on the
-  # happy path: a row that is not a pair was never in `wanted` or `revoked`,
-  # so there is nothing for an unreachable instance to have failed at either.
-  # Before restricting the transport outcome to actionable record ids, `ids`
-  # was every register row for the server, and this row collected
-  # TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been asked for.
-  inviate <<- list() # nolint: assignment_linter.
-  fermo <- httr2::with_mocked_responses(
-    function(req) {
-      inviate[[length(inviate) + 1L]] <<- req # nolint: assignment_linter.
-      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
-        stop("Could not resolve host")
-      }
-      httr2::response(
-        status_code = 200L,
-        body = charToRaw(registro_doppio(record_json(
-          list(record_id = "1", username = "")
-        ))(req[["body"]][["data"]]))
-      )
-    },
-    provisioning_reconcile(
-      "registro.example.org", "t0ken",
-      hosts = c(edc10 = "edc10.example.org"),
-      secrets = c(edc10 = "s3cret"),
-      instances = c("edc10", "edc12"), at = "2026-08-14 03:00"
-    )
+
+test_that("the gate reads the verdict the round just computed, never the stored one", { # nolint: line_length_linter.
+  # eval
+  # Decision 2, and the reason the resolution is a step of this round rather
+  # than a job of its own: the register says this row was resolved four hours
+  # ago and the tenant now says it is ambiguous.
+  esito <- giro(
+    registro_doppio(record_json(list(identity = "existing"))),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(officeLocation = "altro.rossi@example.org"))
   )
-  expect_equal(nrow(fermo[["esiti"]]), 0L)
+
+  # test
+  # A round that gated on the stored value would act on a verdict nobody
+  # confirmed this pass — and on a failed sweep, on one nobody confirmed at
+  # all. It is also the renamed-login case of sub-project 6 seen from here: the
+  # row was `existing` and stops being so, and detecting that is all this
+  # sub-project owes it.
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(identita_scritte()[["identity"]], "ambiguous")
+})
+
+
+test_that("an identity that did not move is not written back", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      username = "mario.rossi@ubep.unipd.it", identity = "existing"
+    ))),
+    istanza_doppia(list())
+  )
+
+  # test
+  # The same filter the outcomes have had since the beginning, over the other
+  # family of fields: without it every quiet night rewrites every row, and the
+  # register's Logging — which is where this project keeps the history of who
+  # changed what — fills up with edits nobody made.
+  expect_length(importazioni(c("record_id", "username", "identity")), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
 })
 
 
@@ -588,34 +830,10 @@ test_that("a real write is followed by a read-back, and applied_as comes from it
 
 test_that("a write that cannot be read back is not called applied", {
   # eval
-  inviate <<- list()
-  letture <- 0L
-  esito <- httr2::with_mocked_responses(
-    function(req) {
-      inviate[[length(inviate) + 1L]] <<- req
-      data <- req[["body"]][["data"]]
-      if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
-        if (identical(data[["operation"]], "state")) {
-          letture <<- letture + 1L
-          if (letture > 1L) stop("Could not resolve host")
-        }
-        return(httr2::response(
-          status_code = 200L,
-          body = charToRaw(istanza_doppia(list())(data))
-        ))
-      }
-      httr2::response(
-        status_code = 200L,
-        body = charToRaw(registro_doppio(record_json(list()))(data))
-      )
-    },
-    provisioning_reconcile(
-      "registro.example.org", "t0ken",
-      hosts = c(edc10 = "edc10.example.org"),
-      secrets = c(edc10 = "s3cret"),
-      instances = c("edc10", "edc12"), at = "2026-08-14 03:00",
-      dry_run = FALSE
-    )
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_senza_rilettura(),
+    dry_run = FALSE
   )
 
   # test
@@ -768,4 +986,60 @@ test_that("a simulated write carries the module's own intention in applied_as", 
   # done, not from a state nobody wrote.
   expect_equal(esito[["esiti"]][["outcome"]], "simulated")
   expect_match(esito[["esiti"]][["applied_as"]], "role_name=data entry")
+})
+
+
+test_that("a sweep that failed is a transport error on every row, and nobody is asked", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"),
+      list(record_id = "2", server = "edc12", project_id = "9004")
+    )),
+    istanza_doppia(list()),
+    function() stop("Could not resolve host")
+  )
+
+  # test
+  # "I could not ask" is not "you are not the one". Every row goes back in the
+  # queue and the next round picks it up, and no instance is interrogated at
+  # all: the identity the register still carries was confirmed by some earlier
+  # round and by nothing in this one, so acting on it would be acting on a
+  # verdict nobody produced this pass. It is decision 2 read in the direction
+  # that costs something.
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], rep("transport_error", 2L))
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]],
+    rep("TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE", 2L)
+  )
+  expect_null(identita_scritte())
+  expect_equal(nrow(esito[["istanze"]]), 0L)
+})
+
+
+test_that("a stopped row takes no transport error from its neighbour's instance", { # nolint: line_length_linter.
+  # eval
+  # Two rows on one instance, one resolved and one the gate stops, and the
+  # instance is down. This is what the old "a row still waiting for an
+  # identity" test protected, restated for the world where the round resolves
+  # instead of waiting: before the transport outcome was restricted to rows the
+  # round could actually have acted on, every register row for the server
+  # collected TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been
+  # asked for.
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"),
+      list(record_id = "2", first_name = "Giulia", last_name = "Verdi",
+           contact_email = "giulia.verdi@example.org", project_id = "9004")
+    )),
+    istanza_muta()
+  )
+  esiti <- esito[["esiti"]]
+
+  # test
+  expect_equal(
+    esiti[["outcome"]][esiti[["record_id"]] == "1"], "transport_error"
+  )
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "pending")
 })

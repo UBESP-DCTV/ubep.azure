@@ -32,6 +32,14 @@ INVENTARIO <- Sys.getenv(
 )
 KEYVAULT <- Sys.getenv("UBEP_KEYVAULT")
 
+# L'endpoint di Microsoft Graph, da cui il giro legge la directory per sapere
+# chi e' la persona che una riga nomina. Senza, la spazzata non parte e ogni
+# riga prende un errore di trasporto invece di un verdetto -- e' il pacchetto a
+# dirlo, non questo file, che si limita a passare quello che trova. Nessun
+# valore di riserva: e' un endpoint, e un endpoint scritto dentro un
+# repository pubblico e' un endpoint pubblicato.
+GRAPH <- Sys.getenv("UBEP_GRAPH")
+
 if (!nzchar(KEYVAULT)) {
   stop(
     "UBEP_KEYVAULT non e' impostata: senza il nome del Key Vault non si ",
@@ -104,6 +112,20 @@ flotta <- if (is.null(flotta)) {
 
 token <- token_imds("https://vault.azure.net")
 
+# La stessa identita' gestita, un'altra risorsa: i due permessi su Graph sono
+# `User.Read.All` e `User.Create`, e nessuno dei due consente di modificare,
+# disabilitare o cancellare un utente che esiste gia'.
+#
+# Il token si chiede solo se c'e' l'endpoint su cui spenderlo. Senza, chiederlo
+# lo stesso sposterebbe il guasto sull'IMDS: il giro morirebbe qui con un
+# messaggio che nessuno legge, invece di riportare su ogni riga che la spazzata
+# non e' partita.
+token_graph <- if (nzchar(GRAPH)) {
+  token_imds("https://graph.microsoft.com")
+} else {
+  ""
+}
+
 nomi <- vapply(con_modulo, function(i) as.character(i[["nome"]]), character(1))
 host <- vapply(con_modulo, function(i) as.character(i[["host"]]), character(1))
 names(host) <- nomi
@@ -126,6 +148,8 @@ esito <- ubep.azure:::provisioning_reconcile(
   register_token = registro_token,
   hosts = host,
   secrets = segreti,
+  graph_token = token_graph,
+  graph_url = GRAPH,
   instances = flotta,
   dry_run = !SCRITTURA,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")

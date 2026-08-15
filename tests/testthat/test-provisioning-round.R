@@ -306,6 +306,62 @@ test_that("an outcome that did not change is not written again", {
 })
 
 
+test_that("an identity that did not change is not written again either", {
+  # eval
+  # The same filter over the other family of fields the round owns. It is one
+  # function with a `fields` argument rather than a second copy: two copies
+  # would be a place to fix a defect once and leave it standing in the other,
+  # which is the reason `register_field_import()` is one transport for two
+  # doors.
+  register <- data.frame(
+    record_id = c("1", "2", "3"),
+    username = c("mario.rossi@ubep.unipd.it", "", "anna.bianchi@ubep.unipd.it"),
+    identity = c("existing", "", "existing"),
+    stringsAsFactors = FALSE
+  )
+  payload <- rbind(
+    identity_payload("1", "mario.rossi@ubep.unipd.it", "existing"),
+    identity_payload("2", "giulia.verdi@ubep.unipd.it", "created"),
+    identity_payload("3", "", "ambiguous")
+  )
+  changed <- round_changed(
+    register, payload, fields = c("username", "identity")
+  )
+
+  # test
+  # Row 3 is the renamed-login case and it has to come through: it loses a
+  # username that became false, and a filter that compared only the verdict --
+  # or only the username -- would have to be wrong on one of the two to let
+  # this row pass.
+  expect_equal(changed[["record_id"]], c("2", "3"))
+})
+
+
+test_that("the default fields are the three an outcome can differ in", {
+  # eval
+  # Not a restatement of the test above: this pins the default itself, which
+  # is the thing a `fields` argument makes it possible to change by accident.
+  # `outcome_at` in the default would make every row differ every night, and
+  # `record_id` is the key the comparison looks the row up by.
+  register <- data.frame(
+    record_id = "1",
+    outcome = "applied", outcome_detail = "", outcome_at = "2026-08-13 03:00",
+    applied_as = "", stringsAsFactors = FALSE
+  )
+  payload <- outcome_payload("1", "applied", at = "2026-08-14 03:00")
+
+  # test
+  expect_equal(nrow(round_changed(register, payload)), 0L)
+  expect_equal(
+    nrow(round_changed(
+      register, payload,
+      fields = c("outcome", "outcome_detail", "outcome_at", "applied_as")
+    )),
+    1L
+  )
+})
+
+
 # The shape provisioning_reconcile() returns, reduced to the fields a record
 # reads. Built here instead of by running a round: this is the pure layer's
 # test, and a real round would drag the register and two instances into it.

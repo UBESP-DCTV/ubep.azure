@@ -2,23 +2,41 @@
 % Please edit documentation in R/provisioning_round.R
 \name{round_changed}
 \alias{round_changed}
-\title{Keep only the outcomes that are not what the register already says}
+\title{Keep only the rows that are not what the register already says}
 \usage{
-round_changed(register, payload)
+round_changed(
+  register,
+  payload,
+  fields = c("outcome", "outcome_detail", "applied_as")
+)
 }
 \arguments{
-\item{register}{The register as read.}
+\item{register}{The register as read, before the round rewrote anything in
+it. Handed the frame the round has already mutated, this compares a value
+against itself and reports that nothing ever changes.}
 
-\item{payload}{The outcome rows this round produced.}
+\item{payload}{The rows this round produced, from \code{outcome_payload()} or
+from \code{identity_payload()}.}
+
+\item{fields}{The columns a change can show in. The default is the three an
+outcome can differ in; the identity body passes its own two.}
 }
 \value{
 \code{payload}, reduced to the rows that changed something.
 }
 \description{
-\code{outcome_at} is deliberately outside the comparison: it changes every run by
-construction, so including it would make every row differ and the filter
-would filter nothing. Without the filter every quiet night rewrites every
-row, and the alert on the outcome field becomes background noise — which is
-the thing people stop reading, and the alert exists to be read.
+\code{outcome_at} is deliberately outside the default comparison: it changes
+every run by construction, so including it would make every row differ and
+the filter would filter nothing. Without the filter every quiet night
+rewrites every row, and the alert on the outcome field becomes background
+noise — which is the thing people stop reading, and the alert exists to be
+read.
+}
+\details{
+One function with a \code{fields} argument rather than a copy per family, for the
+reason \code{register_field_import()} is one transport for two doors: two copies
+of the same comparison are a place to fix a defect once and leave it
+standing in the other. What differs between the families is which columns
+can carry a change, and that is exactly what the argument says.
 }
 \keyword{internal}

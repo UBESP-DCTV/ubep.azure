@@ -620,6 +620,82 @@ test_that("a row with no surname has no criterion either", {
 })
 
 
+test_that("an ambiguity is reported with the code that names what to correct", { # nolint: line_length_linter.
+  # eval
+  codes <- identity_stop_codes("ambiguous")
+
+  # test
+  # The code is what sub-project 5 will write the mail from, so it has to name
+  # the field the referent can act on and the property it has to acquire --
+  # "give a contact address that identifies only her" -- and not the state the
+  # round observed, which is already in `identity` and tells nobody what to do.
+  expect_equal(codes, "DATO_RECAPITO_NON_IDENTIFICA")
+})
+
+
+test_that("a collision is reported under its own code", {
+  # eval
+  codes <- identity_stop_codes("collision")
+
+  # test
+  # A different question with a different owner: not "which of these people",
+  # but "is the account already there the one you mean". The proposal the
+  # referent is answering about travels beside it, in the row's `username`.
+  expect_equal(codes, "DATO_IDENTITA_IN_COLLISIONE")
+})
+
+
+test_that("both refusals are addressed to whoever filed the row", {
+  # eval
+  codes <- c(identity_stop_codes("ambiguous"), identity_stop_codes("collision"))
+
+  # test
+  # The prefix is a delivery address and not a label, so this is where the
+  # decision of 2026-08-15 is pinned: both go back to the referent as data
+  # errors, which is what makes A-13 mail them. A code renamed with another
+  # prefix would silently turn into a transport error and go to IT instead --
+  # a change nothing else in the package would notice.
+  expect_equal(round_outcome_kind(codes, dry_run = TRUE), "data_error")
+  expect_equal(round_outcome_kind(codes, dry_run = FALSE), "data_error")
+})
+
+
+test_that("an absence is not an error and carries no code", {
+  # eval
+
+  # test
+  # `absent` is a verdict the round acts on by itself: the account is created
+  # in the same pass and the row becomes `created`. Reporting it as an error
+  # would mail a referent about a row nobody has to touch.
+  expect_equal(identity_stop_codes("absent"), character())
+})
+
+
+test_that("a resolution's own codes are what a stopped row reports", {
+  # eval
+  codes <- identity_stop_codes("", c("DATO_RECAPITO_ASSENTE"))
+
+  # test
+  # The specific reason wins over the generic one. A row stopped before any
+  # verdict already knows exactly what is wrong with it, and replacing that
+  # with the three-word summary would cost the referent the one sentence they
+  # can act on.
+  expect_equal(codes, "DATO_RECAPITO_ASSENTE")
+})
+
+
+test_that("a verdict the gate admits is not a refusal at all", {
+  # eval
+
+  # test
+  # Never reached from the round, which asks this only of what the gate
+  # refused. Pinned anyway: it is the answer that keeps a misplaced call from
+  # inventing an error for a row that resolved.
+  expect_equal(identity_stop_codes("existing"), character())
+  expect_equal(identity_stop_codes("created"), character())
+})
+
+
 test_that("a username the round itself wrote is not read back as a declaration", { # nolint: line_length_linter.
   # eval
   answer <- resolve_identity(

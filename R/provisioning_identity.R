@@ -47,6 +47,57 @@ identity_actionable <- function(identity) {
 }
 
 
+#' What a row the gate refused reports about itself
+#'
+#' The gate says which rows stop; this says what the register then carries in
+#' `outcome_detail`, which is the only sentence the referent gets. Decided by
+#' Corrado on 2026-08-15: `ambiguous` and `collision` close the row as data
+#' errors, so `A-13` mails whoever filed it, while `absent` carries no code at
+#' all — the round creates the account in the same pass, and mailing somebody
+#' about a row nobody has to touch is how an alert stops being read.
+#'
+#' **The two codes name what to correct rather than what was observed**, and
+#' the reason is that sub-project 5 writes its message from the code. What was
+#' observed is already in `identity`, where a person can read it; a code that
+#' repeated it would hand the referent a diagnosis and no instruction.
+#' `DATO_RECAPITO_NON_IDENTIFICA` says the one thing they can do — give a
+#' contact address that picks out this person and nobody else — and it is true
+#' of both ways an ambiguity arises: the address that sits on two accounts, and
+#' the address that matched nothing while a namesake exists.
+#'
+#' The collision keeps its own code because it is a different question with a
+#' different owner: not "which of these people", but "is the account that is
+#' already there the one you mean". The proposal they are answering about
+#' travels beside it, in the row's `username`, which is why decision 11 writes
+#' it into the register instead of leaving it inside an e-mail.
+#'
+#' The `DATO_` prefix on both is a delivery address and not a label, the way
+#' `scope_errors()` uses it: it is what `round_outcome_kind()` reads to close
+#' the row against whoever filed it rather than keeping it in the queue for us.
+#'
+#' @param identity The verdict the resolution has just computed.
+#' @param errors The codes the resolution itself produced, which win: a row
+#'   stopped before any verdict already knows exactly what is wrong with it,
+#'   and the generic summary would cost the referent the sentence they can act
+#'   on.
+#'
+#' @return A character vector of codes, empty when there is nothing to report.
+#'
+#' @keywords internal
+identity_stop_codes <- function(identity, errors = character()) {
+  if (length(errors) > 0L) {
+    return(as.character(errors))
+  }
+
+  switch(
+    identity_normalize(identity),
+    ambiguous = "DATO_RECAPITO_NON_IDENTIFICA",
+    collision = "DATO_IDENTITA_IN_COLLISIONE",
+    character()
+  )
+}
+
+
 #' The addresses a directory row can be found by
 #'
 #' Both carriers are read: `officeLocation`, where the historical flow put the
