@@ -231,3 +231,62 @@ test_that("outcome_payload ignores a request field handed to it by mistake", {
   expect_false("request_status" %in% names(payload))
   expect_false("username" %in% names(payload))
 })
+
+
+test_that("identity_payload fixes the three columns the job owns", {
+  # eval
+  body <- identity_payload("7", "mario.rossi@ubep.unipd.it", "existing")
+
+  # test
+  # The columns are fixed here and not assembled by the caller, so that a bug
+  # cannot rewrite intent. It is decision 12 of the contract applied a second
+  # time, to the second family of fields the round owns.
+  expect_equal(names(body), c("record_id", "username", "identity"))
+  expect_equal(nrow(body), 1L)
+  expect_equal(body[["identity"]], "existing")
+})
+
+
+test_that("identity_payload refuses a word outside the vocabulary", {
+  # test
+  # Matched on a phrase the message owns rather than on the field name: with
+  # the field name alone this assertion also passes on "could not find
+  # function identity_payload", which is to say before the function exists.
+  expect_error(
+    identity_payload("7", "", "resolved"),
+    "is not one of the five verdicts"
+  )
+})
+
+
+test_that("identity_payload takes the empty verdict, which is not a missing", {
+  # eval
+  body <- identity_payload("7", "", "")
+
+  # test
+  # `""` is not an absent value here: it is the verdict "not resolved", which
+  # is what a row stopped by a data error carries. It has to be writable, or a
+  # row that stops would keep the username it earned back when it still
+  # resolved -- and that username is exactly the thing that has become false.
+  expect_equal(body[["identity"]], "")
+  expect_equal(body[["username"]], "")
+})
+
+
+test_that("a collision carries its proposal rather than an empty username", {
+  # eval
+  body <- identity_payload("7", "mario.rossi.2@ubep.unipd.it", "collision")
+
+  # test
+  # Decision 5 was revised on 2026-08-15: its first draft blanked the username
+  # on all three unresolved verdicts, as a second belt beyond the gate.
+  # Decision 11 takes that reason away -- on a collision there **is** a
+  # determined value to show, and it is the one a person has to act on. Keeping
+  # it out of the register would have left it living only inside an e-mail.
+  #
+  # So the invariant is conditional, and it is the same condition the gate
+  # checks: a username is authoritative if and only if `identity` is
+  # `existing` or `created`.
+  expect_equal(body[["username"]], "mario.rossi.2@ubep.unipd.it")
+  expect_equal(body[["identity"]], "collision")
+})

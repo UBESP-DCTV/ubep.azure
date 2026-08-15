@@ -280,3 +280,106 @@ test_that("an empty payload writes nothing and calls nobody", {
   expect_equal(result[["scritte"]], 0L)
   expect_false(called)
 })
+
+
+test_that("the identity import refuses a body carrying anything else", {
+  # eval
+  outcome <- outcome_payload("1", "applied", at = "2026-08-14 03:00")
+  wider <- identity_payload("1", "", "ambiguous")
+  wider[["contact_email"]] <- "mario.rossi@example.org"
+
+  # test
+  # Two doors, and neither takes the other's body. The register holds three
+  # families of field -- what a person asked for, what the round resolved, what
+  # happened -- and the separation is structural rather than a promise kept by
+  # whoever assembles the body.
+  expect_error(
+    register_identity_import("registro.example.org", "t0ken", outcome),
+    "record_id, username, identity"
+  )
+  expect_error(
+    register_identity_import("registro.example.org", "t0ken", wider),
+    "record_id, username, identity"
+  )
+  expect_error(
+    register_import("registro.example.org", "t0ken", wider),
+    "record_id, outcome"
+  )
+})
+
+
+test_that("the identity import overwrites, so a false username is cleared", {
+  # eval
+  captured <- NULL
+  payload <- rbind(
+    identity_payload("1", "", "ambiguous"),
+    identity_payload("2", "mario.rossi.2@ubep.unipd.it", "collision")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw('{"count":2}'))
+    },
+    register_identity_import("registro.example.org", "t0ken", payload)
+  )
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  # The reason `overwrite` is right here is not the one it is right for the
+  # outcomes. The body carries the totality of what the round owns, so
+  # overwriting can only blank the round's own fields -- and the blanking is
+  # needed: a row that was `existing` and becomes `ambiguous`, which is the
+  # renamed-login case, has to lose the username that became false rather than
+  # keep it.
+  expect_true(result[["ok"]])
+  expect_equal(result[["scritte"]], 2L)
+  expect_equal(form_field_value(sent[["overwriteBehavior"]]), "overwrite")
+  expect_true(grepl(
+    '"username":""', form_field_value(sent[["data"]]), fixed = TRUE
+  ))
+  expect_false(grepl(
+    "contact_email", form_field_value(sent[["data"]]), fixed = TRUE
+  ))
+})
+
+
+test_that("an identity write that lands on fewer records is not a success", {
+  # eval
+  payload <- rbind(
+    identity_payload("1", "mario.rossi@ubep.unipd.it", "existing"),
+    identity_payload("2", "", "absent")
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      httr2::response(status_code = 200L, body = charToRaw('{"count":1}'))
+    },
+    register_identity_import("registro.example.org", "t0ken", payload)
+  )
+
+  # test
+  expect_false(result[["ok"]])
+  expect_equal(result[["errors"]], "TRASPORTO_REGISTRO_SCRITTURA_PARZIALE")
+})
+
+
+test_that("an empty identity body calls nobody", {
+  # eval
+  called <- FALSE
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      called <<- TRUE
+      httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
+    },
+    register_identity_import(
+      "registro.example.org", "t0ken",
+      identity_payload("1", "", "")[0L, , drop = FALSE]
+    )
+  )
+
+  # test
+  # The ordinary quiet round: nothing resolved differently, so nothing is
+  # written. A call with an empty body would be a write REDCap logs as a write.
+  expect_false(called)
+  expect_true(result[["ok"]])
+  expect_equal(result[["scritte"]], 0L)
+})

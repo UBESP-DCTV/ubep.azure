@@ -294,15 +294,81 @@ register_metadata <- function(url, token) {
 #'
 #' @keywords internal
 register_import <- function(url, token, payload) {
-  expected <- c(
-    "record_id", "outcome", "outcome_detail", "outcome_at", "applied_as"
+  register_field_import(
+    url, token, payload,
+    expected = c(
+      "record_id", "outcome", "outcome_detail", "outcome_at", "applied_as"
+    ),
+    caller = "register_import",
+    reason = paste(
+      "The register's intent and its outcome must not travel together."
+    )
   )
+}
 
+
+#' Write the resolved identity back into the register
+#'
+#' The twin of `register_import()`, and separate from it at the door for the
+#' same reason that one exists: the register holds three families of field —
+#' what a person asked for, what the round resolved about who they mean, and
+#' what happened — and no body may carry two of them. Neither door accepts the
+#' other's body, which makes the separation structural rather than a promise
+#' kept by whoever assembles it.
+#'
+#' `overwriteBehavior` is `overwrite`, and the reason here is **not** the one
+#' it is right for the outcomes. The body carries the totality of what the
+#' round owns on this axis, so overwriting can only blank the round's own two
+#' fields — and the blanking is the point: a row that was `existing` and
+#' becomes `ambiguous`, which is the renamed-login case, has to lose the
+#' username that became false rather than keep it beside a verdict that no
+#' longer supports it.
+#'
+#' @inheritParams register_call
+#' @param payload A data frame as `identity_payload()` returns, one row per
+#'   record to update. Zero rows is the ordinary quiet round and calls nobody.
+#'
+#' @return The `register_call()` list plus `scritte`, the number of records
+#'   REDCap reports having taken.
+#'
+#' @keywords internal
+register_identity_import <- function(url, token, payload) {
+  register_field_import(
+    url, token, payload,
+    expected = c("record_id", "username", "identity"),
+    caller = "register_identity_import",
+    reason = paste(
+      "What the register was asked and what the round resolved about who it",
+      "means must not travel together, and neither may ride with an outcome."
+    )
+  )
+}
+
+
+#' Send a body REDCap will overwrite, and check it took all of it
+#'
+#' The transport both writers share, and one copy of it rather than two. What
+#' keeps the field families apart is the door each writer fixes — its own
+#' column list, refused at the threshold — and not the mechanics of the call,
+#' which are the same question asked of the same API. Two copies of the
+#' partial-write check would be a place to fix a defect once and leave it
+#' standing in the other.
+#'
+#' @inheritParams register_call
+#' @param payload The body, already shaped by its builder.
+#' @param expected The exact column names this writer accepts, in order.
+#' @param caller The writer's name, so a refusal names the door that refused.
+#' @param reason The sentence that says why this body may carry nothing else.
+#'
+#' @return The `register_call()` list plus `scritte`.
+#'
+#' @keywords internal
+register_field_import <- function(url, token, payload, expected, caller,
+                                  reason) {
   if (!is.data.frame(payload) || !identical(names(payload), expected)) {
     stop(
-      "register_import(): the body must carry exactly ",
-      paste(expected, collapse = ", "),
-      ". The register's intent and its outcome must not travel together.",
+      caller, "(): the body must carry exactly ",
+      paste(expected, collapse = ", "), ". ", reason,
       call. = FALSE
     )
   }

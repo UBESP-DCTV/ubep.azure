@@ -435,6 +435,67 @@ identity_vocabulary <- function() {
 }
 
 
+#' Build the body that writes a resolved identity back into the register
+#'
+#' The twin of `outcome_payload()`, for the second family of fields the round
+#' owns, and separate from it for the reason `register_import()` states in its
+#' own refusal: the register's intent and what the round decided must not
+#' travel together. The columns are fixed here rather than assembled by the
+#' caller, so that a bug cannot rewrite what a person asked for.
+#'
+#' **Neither field is ever written without the other.** A username written
+#' without the verdict that authorizes it is exactly the state this sub-project
+#' exists to close: the channel today decides by looking at whether `username`
+#' is non-empty, and nothing has ever put a verdict beside it.
+#'
+#' The invariant this establishes is **conditional**, and it is the same
+#' condition the gate checks: *a username is authoritative if and only if
+#' `identity` is `existing` or `created`*.
+#'
+#' It is conditional rather than absolute because a collision carries the
+#' proposal of decision 11 — there is a determined value to show, and it is the
+#' one a person has to act on, so keeping it out of the register would leave it
+#' living only inside an e-mail. On `absent` and `ambiguous` there is nothing
+#' to propose and the username is empty. What the referent had typed does not
+#' survive the resolution either way; REDCap's Logging keeps it.
+#'
+#' @param record_id The register record to write to.
+#' @param username The confirmed UPN, the proposal of a collision, or `""`.
+#' @param identity One of the five verdicts, or `""` for a row the resolution
+#'   stopped. The empty string is not a missing value here: it is the verdict
+#'   "not resolved", and it has to be writable, or a row that stops would keep
+#'   the username it earned when it still resolved — which is precisely the
+#'   value that has become false.
+#'
+#' @return A one-row data frame with exactly the identity columns.
+#'
+#' @keywords internal
+identity_payload <- function(record_id, username, identity) {
+  stopifnot(
+    is.character(record_id), length(record_id) == 1L,
+    is.character(username), length(username) == 1L,
+    is.character(identity), length(identity) == 1L
+  )
+
+  if (!(identity %in% c(identity_vocabulary(), ""))) {
+    stop(
+      "identity_payload(): \"", identity,
+      "\" is not one of the five verdicts, nor the empty one a stopped row ",
+      "carries. The five are ",
+      paste(identity_vocabulary(), collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+
+  data.frame(
+    record_id = record_id,
+    username = username,
+    identity = identity,
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' The closed vocabulary of outcomes
 #'
 #' Five words, and the register's `outcome` field offers exactly these. Kept in

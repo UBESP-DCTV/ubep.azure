@@ -1,5 +1,43 @@
 # ubep.azure (development version)
 
+* **The resolved identity has a body of its own, and a door that takes nothing
+  else.** `identity_payload()` fixes the three columns — `record_id`,
+  `username`, `identity` — and `register_identity_import()` refuses at the
+  threshold anything that is not exactly those, the way `register_import()`
+  already refuses anything that is not the five outcome fields. The register
+  holds three families of field: what a person asked for, what the round
+  resolved about who they mean, and what happened. No body may carry two of
+  them, and neither door accepts the other's, so the separation is structural
+  rather than a promise kept by whoever assembles the body.
+
+  **Neither field is written without the other.** A username written without
+  the verdict that authorizes it is the state this sub-project exists to close:
+  the channel decides by looking at whether `username` is filled, and nothing
+  has ever put a verdict beside it. The invariant that follows is
+  **conditional**, and it is the condition the gate will check — a username is
+  authoritative if and only if `identity` is `existing` or `created`. It is
+  conditional rather than absolute because a collision carries its proposal:
+  there is a determined value to show, and it is the one a person has to act
+  on, so keeping it out of the register would leave it living only inside an
+  e-mail.
+
+  `overwriteBehavior` is `overwrite`, and the reason is not the one it is right
+  for the outcomes. The body carries the totality of what the round owns on
+  this axis, so overwriting can only blank the round's own two fields — and the
+  blanking is the point: a row that was `existing` and becomes `ambiguous`,
+  which is the renamed-login case, has to lose the username that became false
+  rather than keep it beside a verdict that no longer supports it. The empty
+  verdict is writable for the same reason. It is not a missing value: it is
+  "not resolved", which is what a row stopped by a data error carries, and a
+  row that stops has to shed the username it earned back when it still
+  resolved.
+
+  The transport the two writers share now has one copy rather than two.
+  `register_field_import()` holds the mechanics — the JSON body, the overwrite,
+  the check that REDCap took every row it was sent — while each writer fixes
+  its own column list and its own refusal. What keeps the families apart is the
+  door, not the call.
+
 * **The package can say who a register row is talking about.**
   `resolve_identity()` is pure — a function of the row and of the swept
   directory, in the same shape as `provisioning_diff()` and `scope_errors()` —
@@ -33,9 +71,9 @@
   the account does not carry at all, and an account whose `userType` cannot be
   read, are ours: neither is something the filer could fix, and telling the one
   person who cannot reach a directory attribute that they are not authorized
-  sends them to go and argue. The unclassifiable account still matches, on
-  purpose — dropped instead, it would become "nobody matched" and earn its
-  person a second account.
+  sends them to go and argue. The account that cannot be classified still
+  matches, on purpose — dropped instead, it would become "nobody matched" and
+  earn its person a second account.
 
   The declared username is confirmed as an identity and not as a string. An
   alias, an `@unipd.it` address that is the same institution but not the
