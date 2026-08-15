@@ -23,5 +23,12 @@ enough for this list: it carries neither \code{officeLocation}, \code{otherMails
 \code{createdDateTime} nor \code{userType}, which are the four the resolution decides
 on. The select list is therefore also the reason \code{User.Read.All} is the
 permission asked for.
+
+\code{givenName} and \code{surname} are here because the resolution refuses a match
+whose name diverges from the one the request declares, and it cannot refuse
+on a field the sweep never asked for. They were missing from the plan's
+select, which was written before that confirmation was traced through; the
+historical flow populates both, through \code{-GivenName} and \code{-Surname} in
+\code{ps1_creators.R}.
 }
 \keyword{internal}

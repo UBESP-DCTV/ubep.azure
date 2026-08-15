@@ -12,14 +12,22 @@
 #' on. The select list is therefore also the reason `User.Read.All` is the
 #' permission asked for.
 #'
+#' `givenName` and `surname` are here because the resolution refuses a match
+#' whose name diverges from the one the request declares, and it cannot refuse
+#' on a field the sweep never asked for. They were missing from the plan's
+#' select, which was written before that confirmation was traced through; the
+#' historical flow populates both, through `-GivenName` and `-Surname` in
+#' `ps1_creators.R`.
+#'
 #' @return A character vector of Graph field names, in the order the frame's
 #'   columns take.
 #'
 #' @keywords internal
 directory_fields <- function() {
   c(
-    "id", "userPrincipalName", "mail", "otherMails", "officeLocation",
-    "jobTitle", "createdDateTime", "accountEnabled", "userType"
+    "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
+    "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
+    "userType"
   )
 }
 

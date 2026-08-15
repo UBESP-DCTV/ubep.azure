@@ -7,6 +7,8 @@ graph_user <- function(...) {
     list(
       id = "00000000-0000-0000-0000-000000000001",
       userPrincipalName = "mario.rossi@ubep.unipd.it",
+      givenName = "Mario",
+      surname = "Rossi",
       mail = NULL,
       otherMails = I(character()),
       officeLocation = "mario.rossi@example.org",
@@ -58,16 +60,22 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
   expect_equal(answer[["errors"]], character())
   expect_equal(nrow(answer[["users"]]), 2L)
 
-  # The nine fields are the sweep's contract with the resolution that consumes
-  # it: `User.ReadBasic.All` would have been the smaller permission and does not
-  # carry four of them, so the select list is also the reason the wider one is
-  # asked for. A column dropped here reads downstream as a person who has no
-  # contact address, which is `absent` — a verdict, not an error.
+  # The eleven fields are the sweep's contract with the resolution that
+  # consumes it: `User.ReadBasic.All` would have been the smaller permission
+  # and does not carry four of them, so the select list is also the reason the
+  # wider one is asked for. A column dropped here reads downstream as a person
+  # who has no contact address, which is `absent` — a verdict, not an error.
+  #
+  # `givenName` and `surname` are here because the resolution refuses a match
+  # whose name diverges from the declared one, and it cannot refuse on a field
+  # the sweep never asked for. The historical flow populates both, through
+  # `-GivenName` and `-Surname` in `ps1_creators.R`.
   expect_equal(
     names(answer[["users"]]),
     c(
-      "id", "userPrincipalName", "mail", "otherMails", "officeLocation",
-      "jobTitle", "createdDateTime", "accountEnabled", "userType"
+      "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
+      "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
+      "userType"
     )
   )
   expect_equal(
@@ -109,8 +117,8 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
     captured[["url"]],
     paste0(
       "https://graph.example.org/v1.0/users?$select=id,userPrincipalName,",
-      "mail,otherMails,officeLocation,jobTitle,createdDateTime,",
-      "accountEnabled,userType&$top=999"
+      "givenName,surname,mail,otherMails,officeLocation,jobTitle,",
+      "createdDateTime,accountEnabled,userType&$top=999"
     ),
     fixed = TRUE
   )
@@ -302,8 +310,9 @@ test_that("an empty directory is an answer and not a failure", {
   expect_equal(
     names(answer[["users"]]),
     c(
-      "id", "userPrincipalName", "mail", "otherMails", "officeLocation",
-      "jobTitle", "createdDateTime", "accountEnabled", "userType"
+      "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
+      "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
+      "userType"
     )
   )
 })
