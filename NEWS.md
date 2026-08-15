@@ -1,5 +1,28 @@
 # ubep.azure (development version)
 
+* **The `identity` field gains a fifth choice, `absent`, and the register's
+  packaged dictionary changes with it.** The four approved on 2026-08-07 are
+  not exhaustive over what the identity resolution can observe: they assume
+  resolving a person and creating them are a single act, so "nobody matches
+  and the composed UPN is free" becomes `created` at once. It does not — a
+  creation can fail, and a person can be looking at the row in between — and a
+  state that lasts needs a name. `absent` is a verdict rather than an
+  instruction, the way `outcome` reports what happened rather than what to do.
+  `identity_vocabulary()` holds the five words, next to `outcome_vocabulary()`
+  and for the same reason: more than one reader needs them, and a second copy
+  drifts. A test binds every field whose vocabulary this package owns to the
+  choices the packaged dictionary offers, in order — order included, because
+  `compare_dictionary()` matches the whole choices string, so a reordering
+  reads as drift against the live project. Without that binding, a word added
+  on one side only is silent in both directions: one the package never emits,
+  the other one the project refuses to store.
+
+  **This changes a schema, so it stops the channel until the live project is
+  re-imported**, in either order: `DIZIONARIO_SCELTE_DIVERSE` blocks a round,
+  and the comparison is symmetric. The halt is safe — it happens before the
+  register is read, writes nothing, and raises a severity-1 alarm — but it is
+  not silent, and the two acts belong to one maintenance window.
+
 * **The channel's round leaves a record, and it goes in a table of its own.**
   A round left no trace but the outcomes it wrote into the register, and those
   say nothing about the round itself. `round_record()` builds that trace and

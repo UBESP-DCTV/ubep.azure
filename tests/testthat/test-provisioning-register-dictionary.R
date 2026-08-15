@@ -39,6 +39,58 @@ test_that("every coded field uses its label as its own code", {
 })
 
 
+test_that("a field whose vocabulary the package holds offers exactly it", {
+  # eval
+  # The map is the point. Some coded fields are the fleet, which lives outside
+  # the package; others are the contract's own vocabulary, and for those the
+  # package is the authority. Only the second kind belongs here, and naming
+  # them one by one is what makes a third one impossible to add silently: a
+  # vocabulary function with no entry here is a vocabulary nothing checks.
+  held <- list(
+    identity = identity_vocabulary(),
+    outcome = outcome_vocabulary()
+  )
+  dictionary <- register_dictionary()
+
+  # test
+  # Two readers already need each of these words, so a copy in the CSV and a
+  # copy in R can drift, and the drift is silent in both directions. A word
+  # added to the CSV alone is a value the package never emits. A word added to
+  # the vocabulary alone is one the live project refuses to store, and the
+  # round would learn it from an import failure against the register instead of
+  # from here.
+  #
+  # Order is compared, not just membership: compare_dictionary() matches the
+  # whole choices string, so a reordering reads as drift against the live
+  # project — the same reason the fleet choices carry their order as part of
+  # the value.
+  for (field in names(held)) {
+    parsed <- dictionary_choices(
+      dictionary[["Choices, Calculations, OR Slider Labels"]][
+        dictionary[["Variable / Field Name"]] == field
+      ]
+    )
+    expect_equal(parsed[["code"]], held[[field]], info = field)
+    expect_equal(parsed[["label"]], held[[field]], info = field)
+  }
+})
+
+
+test_that("the identity vocabulary names the state nobody had named", {
+  # test
+  # Four words were approved on 2026-08-07 and they are not exhaustive: they
+  # assume resolving and creating are one act, so "nobody matches and the
+  # composed UPN is free" becomes `created` at once. Once a person can be in
+  # between — and once a creation can fail — that state lasts, and a state that
+  # lasts needs a name. `absent` is a verdict, not an instruction: it says what
+  # was observed, the way `outcome` says what happened.
+  expect_equal(
+    identity_vocabulary(),
+    c("existing", "created", "absent", "collision", "ambiguous")
+  )
+})
+
+
 test_that("the job-written fields are the ones marked read-only", {
   # eval
   dictionary <- register_dictionary()

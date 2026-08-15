@@ -6,7 +6,7 @@ username,request_register,,text,"Username (UPN)",,"Leave blank unless you alread
 first_name,request_register,"The person",text,"First name",,,,,,,,y,,,,,
 last_name,request_register,,text,"Last name",,,,,,,,y,,,,,
 contact_email,request_register,,text,"Contact e-mail",,"The address we write to before the first login, and the one that tells two people with the same name apart. Not the e-mail REDCap will notify them at, which they choose themselves.",email,,,,,y,,,,,
-identity,request_register,,radio,"Identity resolution","existing, existing | created, created | collision, collision | ambiguous, ambiguous",,,,,,,,,,,,@READONLY
+identity,request_register,,radio,"Identity resolution","existing, existing | created, created | absent, absent | collision, collision | ambiguous, ambiguous",,,,,,,,,,,,@READONLY
 role_name,request_register,"The authorization",text,"Role name",,"Must already exist in the project: this channel never creates roles.",,,,,,y,,,,,
 dag_name,request_register,,text,"Data access group",,"Optional. Must already exist in the project.",,,,,,,,,,,
 expiration,request_register,,text,"Last day of access",,"The last day the person may still get in. Leave blank for no end date.",date_ymd,,,,,,,,,,
