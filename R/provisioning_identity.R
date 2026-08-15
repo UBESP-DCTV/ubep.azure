@@ -108,6 +108,40 @@ directory_identifiers <- function(account) {
 }
 
 
+#' The rows that carry this person's name
+#'
+#' The surname is the criterion and the given name confirms it **only when the
+#' account carries one**. An account with a surname and no given name stays in
+#' play: it is not a different person, it is a person we know less about, and
+#' dropping it would let a homonym through unseen.
+#'
+#' An account with no surname at all matches nobody. The name is what this
+#' question is asked with, and an account that does not answer it cannot be the
+#' one — which is why the sweep asks Graph for `givenName` and `surname`.
+#'
+#' Folded with `clean_string()`, the same way `compose_upn()` folds a name, so
+#' what counts as the same name here and what a composed UPN looks like cannot
+#' drift apart.
+#'
+#' @param directory A directory frame as `directory_users()` returns.
+#' @param first_name,last_name The names the register row declares.
+#'
+#' @return A logical vector, one per row.
+#'
+#' @keywords internal
+directory_named <- function(directory, first_name, last_name) {
+  wanted_first <- clean_string(as.character(first_name))
+  wanted_last <- clean_string(as.character(last_name))
+
+  surnames <- vapply(directory[["surname"]], clean_string, character(1))
+  givens <- vapply(directory[["givenName"]], clean_string, character(1))
+
+  nzchar(surnames) &
+    surnames == wanted_last &
+    (!nzchar(givens) | givens == wanted_first)
+}
+
+
 #' The rows the resolution is allowed to match against
 #'
 #' Guests are excluded, and by invariant rather than by measurement: whoever is
@@ -230,6 +264,13 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
     return(identity_verdict("", errors = "DATO_RECAPITO_ASSENTE"))
   }
 
+  # The surname is the other half of the criterion, and its absence is the same
+  # kind of hole: with nothing to match on, every account the directory has no
+  # surname for would answer, and a UPN composed from a blank would be created.
+  if (!nzchar(clean_string(as.character(request[["last_name"]] %||% "")))) {
+    return(identity_verdict("", errors = "DATO_COGNOME_ASSENTE"))
+  }
+
   suffix <- paste0("@", identity_normalize(domain))
   internal <- function(address) nzchar(address) && endsWith(address, suffix)
 
@@ -247,28 +288,74 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
   }
 
   candidate <- directory_is_candidate(directory)
-  contacts <- directory_contacts(directory)
-  matched <- candidate &
-    vapply(contacts, function(addresses) contact %in% addresses, logical(1))
+  named <- candidate & directory_named(
+    directory, request[["first_name"]] %||% "", request[["last_name"]] %||% ""
+  )
+  carries <- vapply(
+    directory_contacts(directory),
+    function(addresses) contact %in% addresses,
+    logical(1)
+  )
+
+  # Decision 12: an address in the domain **is** a UPN, so it names one account
+  # outright instead of being searched for. The name rule below would not find
+  # that account when the row's surname is somebody else's, and the row would
+  # fall through to a creation.
+  if (internal(contact)) {
+    held <- candidate &
+      identity_normalize(directory[["userPrincipalName"]]) == contact
+
+    if (any(held)) {
+      if (!any(held & named)) {
+        # The row makes two claims of identity that cannot both hold: this
+        # login, and that surname. Only the filer knows which human they meant.
+        return(identity_verdict("", errors = "DATO_NOME_DIVERGENTE"))
+      }
+      return(confirm_identity(
+        directory[held & named, , drop = FALSE], declared, previous
+      ))
+    }
+
+    # The one place `absent` is suppressed, and it is counter-intuitive enough
+    # to be worth the sentence: the general rule says "not there, so create",
+    # and here it says "not there, so somebody mistyped". An address in the
+    # domain that does not exist is a typo, and creating it would fabricate the
+    # account the typo describes.
+    return(identity_verdict("", errors = "DATO_RECAPITO_INTERNO_INESISTENTE"))
+  }
+
+  # A contact address on an account whose surname is unknown is the one case
+  # the name rule cannot judge. It is not a different person — it is a person
+  # the directory says nothing about — and letting it fall through would create
+  # a second account for somebody who already has one.
+  if (any(candidate & carries & !nzchar(
+    vapply(directory[["surname"]], clean_string, character(1))
+  ))) {
+    return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
+  }
+
+  matched <- named & carries
 
   if (sum(matched) > 1L) {
+    # Same surname and the same contact address on more than one account: a
+    # duplicate record rather than an ambiguity about who is meant. Choosing
+    # which of the two to grant under is still not ours to make.
     return(identity_verdict("ambiguous"))
   }
 
   if (sum(matched) == 1L) {
     return(confirm_identity(
-      request, directory[matched, , drop = FALSE], declared, previous
+      directory[matched, , drop = FALSE], declared, previous
     ))
   }
 
-  # The one place `absent` is suppressed, and it is counter-intuitive enough to
-  # be worth the sentence: the general rule says "not there, so create", and
-  # here it says "not there, so somebody mistyped". An address in the domain
-  # that does not exist is a typo, and creating it would fabricate the account
-  # the typo describes. It is asked before the collision so that the diagnosis
-  # names the typo rather than a homonym that has nothing to do with it.
-  if (internal(contact)) {
-    return(identity_verdict("", errors = "DATO_RECAPITO_INTERNO_INESISTENTE"))
+  # One homonym is enough. There is an account carrying this surname whose
+  # contact address is not the one given, and nothing here can tell "the same
+  # person, with an address we did not know" from "somebody else with the same
+  # name". Only the referent can, and until they do the round must not create a
+  # second account for a person who may already have one.
+  if (any(named)) {
+    return(identity_verdict("ambiguous"))
   }
 
   # Uniqueness is tenant-wide, so the second query looks at every row and not
@@ -300,7 +387,6 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
 #' attribute that they are not authorized sends them to go and argue — which is
 #' the same reasoning `scope_errors()` gives for its fourth case.
 #'
-#' @param request The register row.
 #' @param account The single matching row of the directory frame.
 #' @param declared The declared UPN, normalized and possibly filled in from an
 #'   internal contact address.
@@ -309,7 +395,7 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
 #' @return A list with `identity`, `username` and `errors`.
 #'
 #' @keywords internal
-confirm_identity <- function(request, account, declared, previous) {
+confirm_identity <- function(account, declared, previous) {
   # It stayed a candidate so that it could not silently become "nobody
   # matched", which would create a second account for a person who already has
   # one. Having matched, it still does not grant: it could be a guest, and the
@@ -318,28 +404,6 @@ confirm_identity <- function(request, account, declared, previous) {
     return(identity_verdict(
       "", errors = "TRASPORTO_TIPO_UTENTE_NON_LEGGIBILE"
     ))
-  }
-
-  # Same normalizer the UPN is composed with, so what counts as the same name
-  # and what a composed UPN looks like cannot drift apart.
-  given <- clean_string(account[["givenName"]][[1L]])
-  family <- clean_string(account[["surname"]][[1L]])
-
-  # A name that is absent does not diverge, but it does not confirm either, and
-  # the name is the only thing that confirms here.
-  if (!nzchar(given) || !nzchar(family)) {
-    return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
-  }
-
-  # Decision 7 of the contract seen from the other side: granting to a person
-  # other than the one meant. The row does not fall through to `absent` either,
-  # which would create an account whose contact address belongs to somebody
-  # else — and mail that person the credential.
-  diverges <-
-    !identical(given, clean_string(as.character(request[["first_name"]]))) ||
-    !identical(family, clean_string(as.character(request[["last_name"]])))
-  if (diverges) {
-    return(identity_verdict("", errors = "DATO_NOME_DIVERGENTE"))
   }
 
   # Decision 6: the comparison is between identities and not between strings.

@@ -102,12 +102,16 @@ test_that("an empty directory is absent for everybody and not an error", {
 
 test_that("no match but the composed UPN is taken is a collision", {
   # eval
-  # Two people with the same name. Nobody carries this contact address, so as
-  # far as we know this person is not in the tenant — but the UPN we would
-  # compose already belongs to somebody else.
+  # Not a homonym: a homonym carries the surname, and the rule above would have
+  # caught it as an ambiguity. Reaching here means the UPN this package would
+  # compose is held by an account that does **not** carry that surname, which
+  # is odd data in the tenant rather than two people with one name.
   answer <- resolve_identity(
     a_request(),
-    dir_frame(dir_user(officeLocation = "someone.else@example.org"))
+    dir_frame(dir_user(
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "someone.else@example.org"
+    ))
   )
 
   # test
@@ -124,15 +128,20 @@ test_that("a collision proposal takes the first free suffix, not always .2", {
   answer <- resolve_identity(
     a_request(),
     dir_frame(
-      dir_user(officeLocation = "someone.else@example.org"),
+      dir_user(
+        givenName = "Anna", surname = "Bianchi",
+        officeLocation = "someone.else@example.org"
+      ),
       dir_user(
         id = "00000000-0000-0000-0000-000000000002",
         userPrincipalName = "mario.rossi.2@ubep.unipd.it",
+        givenName = "Carla", surname = "Verdi",
         officeLocation = "another.one@example.org"
       ),
       dir_user(
         id = "00000000-0000-0000-0000-000000000003",
         userPrincipalName = "mario.rossi.3@ubep.unipd.it",
+        givenName = "Dario", surname = "Neri",
         officeLocation = "a.third.one@example.org"
       )
     )
@@ -228,21 +237,127 @@ test_that("a guest carrying the same address is not a candidate", {
 })
 
 
-test_that("a match whose name diverges stops the row instead of granting", {
+test_that("a contact address on a differently named account is irrelevant", {
   # eval
+  # Two hundred accounts may carry one address -- a shared mailbox, a lab whose
+  # collaborators were all filed under the head's address, a bulk import that
+  # repeated a cell. None of them is this person, and the surname says so at
+  # once. Measured: 99 contact addresses sit on more than one account, 221
+  # accounts involved. Read as matches, that is 3% of the population stopped
+  # for an ambiguity that does not exist.
   answer <- resolve_identity(
     a_request(),
-    dir_frame(dir_user(givenName = "Anna", surname = "Bianchi"))
+    dir_frame(
+      dir_user(
+        userPrincipalName = "anna.bianchi@ubep.unipd.it",
+        givenName = "Anna", surname = "Bianchi"
+      ),
+      dir_user(
+        id = "00000000-0000-0000-0000-000000000002",
+        userPrincipalName = "carla.verdi@ubep.unipd.it",
+        givenName = "Carla", surname = "Verdi"
+      )
+    )
   )
 
   # test
-  # Decision 7 of the contract seen from the other side: granting to a person
-  # other than the one meant. The row does not fall through to `absent`
-  # either, which would create an account whose contact address belongs to
-  # somebody else -- and mail that person the credential.
-  expect_equal(answer[["identity"]], "")
+  expect_equal(answer[["identity"]], "absent")
+  expect_equal(answer[["errors"]], character())
+})
+
+
+test_that("one account with the surname and another address is ambiguous", {
+  # eval
+  # One homonym is enough. Nothing here tells "the same person, with an address
+  # we did not know" from "somebody else with the same name", and the second
+  # reading is the one that would have the round create a duplicate.
+  answer <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(officeLocation = "an.older.address@example.org"))
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "ambiguous")
   expect_equal(answer[["username"]], "")
+})
+
+
+test_that("an account with a surname and no given name still counts", {
+  # eval
+  # The historical flow did not always fill both. An account carrying the
+  # surname and nothing else is not a different person, it is a person the
+  # directory says less about -- and the given name confirms only when it is
+  # there.
+  matched <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(givenName = NULL))
+  )
+  homonym <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(
+      givenName = NULL, officeLocation = "an.older.address@example.org"
+    ))
+  )
+
+  # test
+  expect_equal(matched[["identity"]], "existing")
+  expect_equal(homonym[["identity"]], "ambiguous")
+})
+
+
+test_that("the same surname and the same address twice is ambiguous", {
+  # eval
+  answer <- resolve_identity(
+    a_request(),
+    dir_frame(
+      dir_user(),
+      dir_user(
+        id = "00000000-0000-0000-0000-000000000002",
+        userPrincipalName = "mario.rossi.old@ubep.unipd.it"
+      )
+    )
+  )
+
+  # test
+  # A duplicate record rather than a question about who is meant. Choosing
+  # which of the two to grant under is still not ours.
+  expect_equal(answer[["identity"]], "ambiguous")
+})
+
+
+test_that("an internal contact on a differently named account is an error", {
+  # eval
+  answer <- resolve_identity(
+    a_request(contact_email = "anna.bianchi@ubep.unipd.it"),
+    dir_frame(dir_user(
+      userPrincipalName = "anna.bianchi@ubep.unipd.it",
+      givenName = "Anna", surname = "Bianchi"
+    ))
+  )
+
+  # test
+  # An address in the domain names one account outright, so this row makes two
+  # claims of identity that cannot both hold: this login, and that surname.
+  # Only the filer knows which human they meant.
+  expect_equal(answer[["identity"]], "")
   expect_equal(answer[["errors"]], "DATO_NOME_DIVERGENTE")
+})
+
+
+test_that("a contact on an account with no surname cannot be judged", {
+  # eval
+  answer <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(givenName = NULL, surname = NULL))
+  )
+
+  # test
+  # The one case the surname rule cannot answer. Not a different person -- a
+  # person the directory says nothing about -- and letting it fall through
+  # would create a second account for somebody who already has one. Addressed
+  # to us, because a filer cannot fill in an attribute on a directory account.
+  expect_equal(answer[["identity"]], "")
+  expect_equal(answer[["errors"]], "TRASPORTO_NOME_NON_LEGGIBILE")
 })
 
 
@@ -486,4 +601,20 @@ test_that("the gate folds case and spaces, and answers per row", {
   expect_equal(
     identity_actionable(verdicts), c(TRUE, FALSE, TRUE, FALSE)
   )
+})
+
+
+test_that("a row with no surname has no criterion either", {
+  # eval
+  answer <- resolve_identity(
+    a_request(last_name = ""),
+    dir_frame(dir_user(givenName = NULL, surname = NULL))
+  )
+
+  # test
+  # The other half of the criterion. Without it every account the directory
+  # has no surname for would answer at once, and the round would go on to
+  # create an account whose UPN is composed from a blank.
+  expect_equal(answer[["identity"]], "")
+  expect_equal(answer[["errors"]], "DATO_COGNOME_ASSENTE")
 })

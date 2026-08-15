@@ -4,11 +4,9 @@
 \alias{confirm_identity}
 \title{Decide whether the single match really is the person the row means}
 \usage{
-confirm_identity(request, account, declared, previous)
+confirm_identity(account, declared, previous)
 }
 \arguments{
-\item{request}{The register row.}
-
 \item{account}{The single matching row of the directory frame.}
 
 \item{declared}{The declared UPN, normalized and possibly filled in from an

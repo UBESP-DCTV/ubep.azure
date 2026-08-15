@@ -50,30 +50,42 @@
   because that is how the two stop being confused: `ambiguous` is too many
   people with one identity, `collision` is two people with one name.
 
-  The criterion is the contact address, not the name and not the declared
-  username. Both carriers are read — `officeLocation`, where the historical
-  flow put it and where 6.494 accounts still carry it, and `otherMails` — plus
-  the UPN, because an address in the tenant's domain **is** a UPN. Both sides
-  are normalized, and that is not tidiness: 74 accounts carry the address with
-  spaces at the edges, and an exact comparison would report `absent` for people
-  who exist, which is the verdict that opens the creation branch. Guests are
-  excluded from the candidates, by invariant rather than by measurement, or one
-  of the tenant's 760 guests carrying a member's address would produce an
-  `ambiguous` that is not an ambiguity.
+  **The surname is the criterion and the contact address confirms it.** An
+  account carrying the surname — and the given name too, when the account
+  carries one — is a candidate for being this person; whether it is *the* one
+  is settled by the contact address. Read the other way round, the resolution
+  would call an ambiguity what is merely a shared address: 99 addresses in the
+  tenant sit on more than one account, 221 accounts involved, and a mailbox
+  shared by a lab says nothing about who anybody is. It would also miss the
+  failure that matters most — a person who exists under a UPN this package
+  would not have composed, whose contact address has since changed, read as
+  "nobody matched" and given a second account.
 
-  A match is where the confirmation starts, not where it ends. **Three things
-  stop a row that matched**, and the prefix on each is a delivery address
-  rather than a label. A name that diverges from the one declared is the
-  filer's error: it is decision 7 of the contract seen from the other side,
-  granting to a person other than the one meant, and the row does not fall
-  through to `absent` either — that would create an account whose contact
-  address belongs to somebody else and mail that person the credential. A name
-  the account does not carry at all, and an account whose `userType` cannot be
-  read, are ours: neither is something the filer could fix, and telling the one
-  person who cannot reach a directory attribute that they are not authorized
-  sends them to go and argue. The account that cannot be classified still
-  matches, on purpose — dropped instead, it would become "nobody matched" and
-  earn its person a second account.
+  So one homonym is enough to stop the row. An account with this surname whose
+  contact address is not the one given is `ambiguous`: nothing here tells "the
+  same person, with an address we did not know" from "somebody else with the
+  same name", and the second reading is the one that creates a duplicate. The
+  addresses are read from `officeLocation`, where the historical flow put them
+  and where 6.494 accounts still carry them, from `otherMails`, and from the
+  UPN, because an address in the tenant's domain **is** a UPN. Both sides are
+  normalized: 74 accounts carry the address with spaces at the edges, and an
+  exact comparison would report `absent` for people who exist. Guests are
+  excluded by invariant, not by measurement.
+
+  `collision` therefore means something narrower than it looks. A homonym is
+  caught by the surname rule and never reaches it, so reaching it means the UPN
+  this package would compose is held by an account that does **not** carry that
+  surname — odd data in the tenant rather than two people with one name. The
+  numeric-suffix proposal stands, because a free UPN is still needed.
+
+  **Two things stop a row that matched**, and the prefix on each is a delivery
+  address rather than a label. An account whose `userType` cannot be read, and
+  a contact address sitting on an account with no surname at all, are ours:
+  neither is something the filer could fix, and telling the one person who
+  cannot reach a directory attribute that they are not authorized sends them to
+  go and argue. The unclassified account still matches, on purpose — dropped
+  instead, it would become "nobody matched" and earn its person a second
+  account.
 
   The declared username is confirmed as an identity and not as a string. An
   alias, an `@unipd.it` address that is the same institution but not the
