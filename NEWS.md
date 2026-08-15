@@ -1,5 +1,65 @@
 # ubep.azure (development version)
 
+* **The package can say who a register row is talking about.**
+  `resolve_identity()` is pure — a function of the row and of the swept
+  directory, in the same shape as `provisioning_diff()` and `scope_errors()` —
+  and it asks **two questions, not one**. `ambiguous` is read off the number of
+  matches on the identity criterion; `collision` off the composed UPN being
+  held by somebody else. A resolver asking one question could not tell
+  `collision` from `absent`, and would either create a duplicate or take a
+  uniqueness refusal from Entra and report it as a transport error, that is, as
+  something that will pass by itself next round. It will not. Said in one line,
+  because that is how the two stop being confused: `ambiguous` is too many
+  people with one identity, `collision` is two people with one name.
+
+  The criterion is the contact address, not the name and not the declared
+  username. Both carriers are read — `officeLocation`, where the historical
+  flow put it and where 6.494 accounts still carry it, and `otherMails` — plus
+  the UPN, because an address in the tenant's domain **is** a UPN. Both sides
+  are normalized, and that is not tidiness: 74 accounts carry the address with
+  spaces at the edges, and an exact comparison would report `absent` for people
+  who exist, which is the verdict that opens the creation branch. Guests are
+  excluded from the candidates, by invariant rather than by measurement, or one
+  of the tenant's 760 guests carrying a member's address would produce an
+  `ambiguous` that is not an ambiguity.
+
+  A match is where the confirmation starts, not where it ends. **Three things
+  stop a row that matched**, and the prefix on each is a delivery address
+  rather than a label. A name that diverges from the one declared is the
+  filer's error: it is decision 7 of the contract seen from the other side,
+  granting to a person other than the one meant, and the row does not fall
+  through to `absent` either — that would create an account whose contact
+  address belongs to somebody else and mail that person the credential. A name
+  the account does not carry at all, and an account whose `userType` cannot be
+  read, are ours: neither is something the filer could fix, and telling the one
+  person who cannot reach a directory attribute that they are not authorized
+  sends them to go and argue. The unclassifiable account still matches, on
+  purpose — dropped instead, it would become "nobody matched" and earn its
+  person a second account.
+
+  The declared username is confirmed as an identity and not as a string. An
+  alias, an `@unipd.it` address that is the same institution but not the
+  tenant's domain, a shared mailbox: divergence between the UPN and an address
+  the same person writes from is the ordinary case, and a string comparison
+  would refuse it. When the account carries the declared value among its own
+  identifiers the canonical UPN replaces it; when it does not, the row holds
+  two incompatible claims and goes back to whoever filed it.
+
+  The internal-address rule holds in both directions, and its third branch is
+  the counter-intuitive one: an address in the domain that matches nobody is a
+  typo rather than an absence, so the creation branch does not open — creating
+  it would fabricate the account the typo describes. It is the one place
+  `absent` is suppressed, and it is asked before the collision so that the
+  diagnosis names the typo instead of a homonym who has nothing to do with it.
+  The symmetric case stays ordinary: an external address matching nobody is
+  `absent`, and somebody from outside is a row to create rather than one to
+  refuse.
+
+  On a collision the round **proposes** rather than decides: `nome.cognome.2`,
+  `.3`, the first free one. Without a proposal the row hands a person two
+  questions and no material; with it exactly one is left, and it is the one
+  only the referent can close.
+
 * **The package can read the tenant's directory, and it reads all of it.**
   `directory_users()` is the only function that speaks to Microsoft Graph, and
   it does one thing: it sweeps. It does not filter, and that is a measurement
