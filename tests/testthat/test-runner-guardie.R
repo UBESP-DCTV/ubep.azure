@@ -31,6 +31,43 @@ test_that("the runner names neither the diff nor the writes", {
 })
 
 
+test_that("the measurement script only reads", {
+  # Same limit as the runner guard above: `dev/` is not in the built package,
+  # so this bites in the source tree rather than in CI.
+  #
+  # It is a guard of its own rather than a widening of the runner one, because
+  # the runner pattern cannot simply be loosened to every dev script:
+  # `riqualifica-superficie.R` calls run_conformance_check(), which writes on
+  # an instance deliberately. The rule is per-script, so the exemption is too.
+  script <- testthat::test_path("..", "..", "dev", "misura-canale.R")
+  skip_if_not(file.exists(script), "dev/ is not in the built package")
+  lines <- readLines(script, warn = FALSE)
+
+  forbidden <- c(
+    "provisioning_diff", "module_apply", "module_revoke",
+    "run_conformance_check", "register_import"
+  )
+  found <- forbidden[vapply(
+    forbidden,
+    function(symbol) any(grepl(symbol, lines, fixed = TRUE)),
+    logical(1)
+  )]
+
+  expect_equal(
+    found, character(),
+    info = paste(
+      "This script exists to say what the served instances currently look",
+      "like, and it is run precisely when somebody is unsure of that -- after",
+      "an upgrade, after a module release, while diagnosing an alert. A",
+      "measurement that could also change what it measures would make its own",
+      "output unreadable: nobody could tell a value that was already there",
+      "from one this run produced. If you are deliberately adding a write,",
+      "it belongs in another script, not in this one."
+    )
+  )
+})
+
+
 test_that("no dev script carries a resource name as a fallback value", {
   # Same limit as the guard above, and for the same reason: `dev/` is not in
   # the built package, so this skips under `R CMD check` and bites in the

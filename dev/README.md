@@ -29,6 +29,37 @@ alcun errore), se l'istanza è fuori dalla finestra di major, e se l'impronta
 **non** è cambiata — che è il caso di un lancio anticipato, e senza quel
 cancello aggiungerebbe una riga doppia e rifarebbe una conformità inutile.
 
+## `misura-canale.R`
+
+Legge le istanze che hanno il modulo e stampa le righe che il foglio dei
+parametri tiene sotto «La flotta osservata»: versione di REDCap, cancello di
+major, impronta di superficie, impronta delle liste di indirizzi, coppie,
+coppie con una scadenza, versione del modulo e del contratto.
+
+```sh
+Rscript dev/misura-canale.R            # la misura intera
+Rscript dev/misura-canale.R --breve    # una riga per istanza
+```
+
+**Gira sulla macchina di provisioning, non dalla postazione.** Le liste di
+indirizzi delle istanze ammettono un indirizzo solo, quello statico della VM;
+da altrove ogni istanza risulterebbe non raggiunta e il guasto somiglierebbe a
+una flotta rotta. Lo script lo dice prima di provarci, riconoscendo la
+macchina dall'endpoint dell'identità gestita.
+
+Sola lettura, e la guardia in `tests/testthat/test-runner-guardie.R` lo tiene
+tale: una misura che potesse cambiare ciò che misura renderebbe illeggibile il
+proprio esito.
+
+Nasce il 2026-08-15 dalla fusione di due script che stavano fuori da git —
+`verifica-canale.R` sulla macchina e `misura-canale.R` in `/tmp`. Il secondo
+era un soprainsieme del primo, e il foglio dei parametri aveva dovuto scrivere
+che quello corto «da solo non basta, e va detto perché il nome invita a
+crederlo». Due nomi di cui uno contiene l'altro sono la trappola: chi ha fretta
+lancia quello corto. Il modo `--breve` conserva l'unica proprietà che il corto
+aveva davvero — non passa da `observe_instance()`, quindi risponde anche
+quando un'istanza restituisce un payload che l'osservatore non sa leggere.
+
 ## Dove sono finiti gli spec e i piani
 
 I documenti di design e i piani di implementazione **non stanno più qui**.
