@@ -1,5 +1,54 @@
 # ubep.azure (development version)
 
+* **The package can read the tenant's directory, and it reads all of it.**
+  `directory_users()` is the only function that speaks to Microsoft Graph, and
+  it does one thing: it sweeps. It does not filter, and that is a measurement
+  rather than a preference — `officeLocation`, where the historical flow put
+  the contact address and where 6.494 accounts still carry it, is not
+  filterable server-side at all, and `mail`, which would be, is `null` on
+  6.412 accounts out of 7.664. The obvious attribute is empty on exactly the
+  population to be found. Reading in full costs 8 pages and 3,5 seconds
+  measured on 2026-08-15, less than the round that will consume it, and it
+  yields decision 4 of the channel's design by construction rather than by
+  discipline: no local copy of the state, the real one re-read every round. It
+  also buys a property a server-side filter could not have given — the
+  comparison is ours, so it can normalize, and it has to, because 74 accounts
+  carry the address with spaces at the edges and an `eq` would have missed
+  them in silence.
+
+  It answers in the shape the other adapters answer in — `ok`, `errors`,
+  `payload` — plus `users`, the frame, and the shape is what keeps "I could
+  not ask" apart from "nobody is there": the first is `ok = FALSE` with no
+  frame at all, the second is a clean read of zero rows. **A failure at any
+  page returns no rows whatsoever.** A half-read directory is not a small
+  directory: every account on a page that did not arrive is missing, a missing
+  account resolves to `absent`, and `absent` is the verdict that opens the
+  creation branch — so partial rows escaping would turn a transport failure
+  into duplicate people.
+
+  Two bounds beyond what the plan asked for, both on the continuation Graph
+  hands back. The sweep stops after 100 pages rather than following a
+  continuation that never ends: the measured shape is 8 pages, and the failure
+  avoided is the one this project can least afford, a round that never returns
+  and so leaves no record, with the severity-1 alarm reporting that the channel
+  is not running while it runs very hard. And a continuation is followed only
+  when it is https on the host the caller named, compared on the parsed host
+  rather than on a prefix, because `https://graph.example.org@elsewhere.test/`
+  starts with the right text and resolves to the wrong machine. Following it
+  blindly would hand an application credential to whatever host the other end
+  names.
+
+  The token travels as a redacted bearer header, so it is a weak reference
+  inside the request object and cannot be spilled by printing it while
+  diagnosing a round; it never reaches a URL, on the first page or on any
+  continuation; and it is scrubbed out of a refusal's message before that
+  message is kept. Graph does not echo it today, and relying on that would be
+  trusting the other end to keep our credential. The refusal keeps Graph's
+  `code` as well as its prose, because `Authorization_RequestDenied` and
+  `Request_UnsupportedQuery` send whoever reads them to different places — the
+  consent and the query — and a 403 on every row is precisely the shape a
+  missing consent takes.
+
 * **The `identity` field gains a fifth choice, `absent`, and the register's
   packaged dictionary changes with it.** The four approved on 2026-08-07 are
   not exhaustive over what the identity resolution can observe: they assume
