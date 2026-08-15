@@ -10,7 +10,9 @@ confirm_identity(account, declared, previous)
 \item{account}{The single matching row of the directory frame.}
 
 \item{declared}{The declared UPN, normalized and possibly filled in from an
-internal contact address.}
+internal contact address. Empty once a verdict exists on the row, because
+then the register's \code{username} is this round's own earlier answer and not
+a declaration to confirm.}
 
 \item{previous}{The previous verdict, normalized.}
 }

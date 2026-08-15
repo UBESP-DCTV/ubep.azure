@@ -234,7 +234,10 @@ identity_verdict <- function(identity, username = "", errors = character()) {
 #'   **previous** verdict, and it is the only memory `created` needs: a row
 #'   that was `absent` and now matches is one whose account came into being
 #'   because of this request. The memory lives in the register, which is where
-#'   this project keeps memory.
+#'   this project keeps memory. It also says what `username` is: a claim by
+#'   whoever filed the row while the verdict is empty, and this round's own
+#'   earlier answer once one sits beside it, because the two are never written
+#'   apart.
 #' @param directory A directory frame as `directory_users()` returns.
 #' @param domain The tenant's verified domain, defaulting as `compose_upn()`
 #'   does, so that what counts as an internal address and what a composed UPN
@@ -254,8 +257,32 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
   )
 
   contact <- identity_normalize(request[["contact_email"]] %||% "")
-  declared <- identity_normalize(request[["username"]] %||% "")
   previous <- identity_normalize(request[["identity"]] %||% "")
+
+  # `username` is a claim by whoever filed the row only until the round has
+  # answered it. The two fields are never written apart — decision 5, and
+  # `identity_payload()` is the single door — so a row carrying a verdict
+  # carries a username this round wrote, and reading it back as a declaration
+  # is reading our own handwriting as somebody else's.
+  #
+  # It is not a nicety. The round writes the canonical UPN, which is in the
+  # tenant's domain, next to a contact address which ordinarily is not: read as
+  # a declaration that is exactly the shape decision 12 refuses, so the row
+  # oscillated with period two — resolved, then closed against the referent
+  # with `DATO_RECAPITO_INTERNO_DIVERGENTE`, then resolved again — and every
+  # other round mailed them about it. Invisible until the round read its own
+  # writing back, which is why it survived the pure layer's own tests.
+  #
+  # Nothing is lost by dropping it. Decision 6 confirms the declared UPN on the
+  # first resolution, which is the one that has a declaration to confirm; from
+  # then on the round re-derives the account from the criterion every pass,
+  # which is also what makes a renamed login show up as a changed verdict
+  # instead of as `DATO_UTENTE_DICHIARATO_DIVERSO` blamed on the referent.
+  declared <- if (nzchar(previous)) {
+    ""
+  } else {
+    identity_normalize(request[["username"]] %||% "")
+  }
 
   # No criterion, so nothing to resolve against. `absent` here would create an
   # account for a row that carries no address to send the credential to. The
@@ -389,7 +416,9 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
 #'
 #' @param account The single matching row of the directory frame.
 #' @param declared The declared UPN, normalized and possibly filled in from an
-#'   internal contact address.
+#'   internal contact address. Empty once a verdict exists on the row, because
+#'   then the register's `username` is this round's own earlier answer and not
+#'   a declaration to confirm.
 #' @param previous The previous verdict, normalized.
 #'
 #' @return A list with `identity`, `username` and `errors`.

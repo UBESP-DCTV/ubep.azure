@@ -1,5 +1,27 @@
 # ubep.azure (development version)
 
+* **The resolution no longer mistakes its own handwriting for a declaration.**
+  `resolve_identity()` treated the register's `username` as a claim by whoever
+  filed the row, every pass. That is right until the round has answered, and
+  wrong from then on: the two fields are never written apart, so a row carrying
+  a verdict carries a username this package wrote. Read as a declaration it is
+  the very shape decision 12 refuses — a UPN in the tenant's domain beside a
+  contact address that ordinarily is not — so a resolved row oscillated with
+  period two: `existing`, then closed against the referent with
+  `DATO_RECAPITO_INTERNO_DIVERGENTE`, then `existing` again, mailing them about
+  it every other round.
+
+  `identity` is what tells the two apart, and it can, because nothing writes a
+  username without writing it. Nothing is lost: the declared UPN is confirmed
+  on the first resolution, which is the only pass that has a declaration to
+  confirm, and re-deriving the account every pass afterwards is also what makes
+  a renamed login surface as a changed verdict instead of as
+  `DATO_UTENTE_DICHIARATO_DIVERSO` blamed on the person who filed the row.
+
+  Invisible to the pure layer's own tests, which hand the resolution rows
+  written by hand: the loop only closes when the round writes back and reads
+  again.
+
 * **The resolved identity has a body of its own, and a door that takes nothing
   else.** `identity_payload()` fixes the three columns — `record_id`,
   `username`, `identity` — and `register_identity_import()` refuses at the

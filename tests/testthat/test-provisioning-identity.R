@@ -618,3 +618,63 @@ test_that("a row with no surname has no criterion either", {
   expect_equal(answer[["identity"]], "")
   expect_equal(answer[["errors"]], "DATO_COGNOME_ASSENTE")
 })
+
+
+test_that("a username the round itself wrote is not read back as a declaration", { # nolint: line_length_linter.
+  # eval
+  answer <- resolve_identity(
+    a_request(username = "mario.rossi@ubep.unipd.it", identity = "existing"),
+    dir_frame(dir_user())
+  )
+
+  # test
+  # `username` and `identity` are only ever written together -- decision 5, and
+  # `identity_payload()` is the one door -- so a row carrying a verdict carries
+  # a username this round wrote. Read as a declaration it is our own
+  # handwriting taken for somebody else's, and decision 12 then refuses the
+  # ordinary case: an internal UPN beside an external contact address, which is
+  # the two-address model the spike settled on and not a badly filled row.
+  expect_equal(answer[["identity"]], "existing")
+  expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(answer[["errors"]], character())
+})
+
+
+test_that("the resolution is a fixed point once the round has written it back", { # nolint: line_length_linter.
+  # eval
+  # The property the round needs and that a pure test on a hand-built row
+  # cannot see: feed the answer back into the row it came from, the way
+  # `provisioning_reconcile()` does through the register, and it has to stop
+  # moving. Before this it oscillated with period two -- `existing`, then
+  # `DATO_RECAPITO_INTERNO_DIVERGENTE`, then `existing` again -- so every other
+  # round closed the row against the referent and mailed them about it.
+  directory <- dir_frame(dir_user())
+  row <- a_request()
+  verdicts <- character()
+  for (round in 1:4) {
+    answer <- resolve_identity(row, directory)
+    verdicts <- c(verdicts, answer[["identity"]])
+    row[["username"]] <- answer[["username"]]
+    row[["identity"]] <- answer[["identity"]]
+  }
+
+  # test
+  expect_equal(verdicts, rep("existing", 4L))
+  expect_equal(row[["username"]], "mario.rossi@ubep.unipd.it")
+})
+
+
+test_that("a declaration is still a declaration before the first verdict", {
+  # eval
+  answer <- resolve_identity(
+    a_request(username = "mario.rossi@ubep.unipd.it", identity = ""),
+    dir_frame(dir_user())
+  )
+
+  # test
+  # The other side of the rule above, and the one that must not move: with no
+  # verdict beside it the username is what the referent typed, and decision 12
+  # judges it. What tells the two apart is `identity`, because nothing can
+  # write a username without writing it.
+  expect_equal(answer[["errors"]], "DATO_RECAPITO_INTERNO_DIVERGENTE")
+})

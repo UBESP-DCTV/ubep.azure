@@ -12,7 +12,10 @@ resolve_identity(request, directory, domain = "ubep.unipd.it")
 \strong{previous} verdict, and it is the only memory \code{created} needs: a row
 that was \code{absent} and now matches is one whose account came into being
 because of this request. The memory lives in the register, which is where
-this project keeps memory.}
+this project keeps memory. It also says what \code{username} is: a claim by
+whoever filed the row while the verdict is empty, and this round's own
+earlier answer once one sits beside it, because the two are never written
+apart.}
 
 \item{directory}{A directory frame as \code{directory_users()} returns.}
 
