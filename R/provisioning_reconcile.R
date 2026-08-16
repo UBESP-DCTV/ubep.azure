@@ -18,7 +18,8 @@
 #' 7. diff against the real rows somebody asked about;
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
-#' 10. write back the outcome, and only what changed.
+#' 10. **create the accounts the gate allowed and the tenant does not hold**;
+#' 11. write back the outcome, and only what changed.
 #'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
@@ -27,6 +28,22 @@
 #' that the gate has no window at all: it asks after the verdict it has just
 #' computed, never after the one the register carries, and writing `identity`
 #' back is the minutes of the verdict rather than the input to the next step.
+#'
+#' **Step 10 is last because it needs step 6's answer**, and that is the whole
+#' shape of it. A row whose verdict is `absent` is not a pair — there is nobody
+#' to grant a right to — so it never enters the desired state; but it does
+#' travel as far as the scope question, because whoever could not have granted
+#' that project by hand must not be able to make the person to grant it to
+#' either. An instance that did not answer has neither allowed nor refused, and
+#' the row waits.
+#'
+#' **The row it creates stays `absent` for this pass** and becomes `created` at
+#' the next one, which is decision 4 working as written rather than a delay
+#' being tolerated: `created` is the row whose previous verdict was `absent` and
+#' that now matches, and that memory lives in the register. A round that wrote
+#' `created` on the strength of having just made the account would be keeping a
+#' second source of truth beside the sweep, which is the thing decision 4 of the
+#' channel's design forbids.
 #'
 #' Idempotent by construction: a round interrupted between applying and writing
 #' the outcome leaves the row as still to do, and the next round applies it
@@ -65,9 +82,11 @@
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
-#'   `scritte` and `errori`. `scritte` counts the outcomes REDCap took and not
-#'   the identities: they are two writes into two field families, and one
-#'   counter for both would be a number nobody could read back into either.
+#'   `credenziali`, `scritte` and `errori`. `scritte` counts the outcomes
+#'   REDCap took and not the identities: they are two writes into two field
+#'   families, and one counter for both would be a number nobody could read
+#'   back into either. `credenziali` carries what the accounts created this
+#'   round were born with, and it is the only road those take.
 #'
 #' @keywords internal
 provisioning_reconcile <- function(register_url,
@@ -221,16 +240,29 @@ provisioning_reconcile <- function(register_url,
   )
 
   # What the gate refuses stops here and enters nothing that follows: not the
-  # desired state, not the scope question, not an instance. `absent` waits
-  # rather than closing -- the round will create the account itself once task 6
-  # lands -- and the other two come back to whoever filed the row, under a code
-  # that names what they can correct.
+  # desired state, not the scope question, not an instance. `ambiguous` and
+  # `collision` come back to whoever filed the row, under a code that names
+  # what they can correct.
+  #
+  # `absent` is neither of those and is the reason this is two tests and not
+  # one. It is not actionable -- there is nobody to grant a right to -- but it
+  # is the one verdict the round closes by itself, by creating. So it stays
+  # standing: it goes on to the scope question, because whoever could not have
+  # granted that project by hand must not be able to make the person to grant
+  # it to either, and that question is answered by an instance.
   admitted <- identity_actionable(verdicts)
+  awaiting <- !admitted & identity_normalize(verdicts) == "absent"
+  standing <- admitted | awaiting
+
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
-    lapply(which(!admitted), function(i) {
+    lapply(which(!standing), function(i) {
       codes <- identity_stop_codes(verdicts[[i]], resolutions[[i]][["errors"]])
       if (length(codes) == 0L) {
+        # A verdict that is neither actionable nor `absent` and has nothing to
+        # say about why is a word this function was never taught. `pending`
+        # holds the row, where letting the empty code list reach
+        # `round_outcome_kind()` would have it read as "nothing went wrong".
         return(outcome_payload(record_ids[[i]], "pending", at = at))
       }
       outcome_payload(
@@ -240,14 +272,15 @@ provisioning_reconcile <- function(register_url,
     })
   ))
 
-  # From here on the round works on the rows it may act on, carrying the UPN
-  # this pass confirmed rather than the one somebody typed:
+  # From here on the round works on the rows it may still serve, carrying the
+  # UPN this pass confirmed rather than the one somebody typed:
   # `register_to_desired()` builds a pair out of `username`, and the value it
-  # must build it out of is the resolved one.
+  # must build it out of is the resolved one. An `absent` row travels with an
+  # empty one, so it reaches the scope question without ever becoming a pair.
   resolved <- register
   resolved[["username"]] <- resolved_names
   resolved[["identity"]] <- verdicts
-  resolved <- resolved[admitted, , drop = FALSE]
+  resolved <- resolved[standing, , drop = FALSE]
 
   # 4. the pure layer
   plan <- register_to_desired(resolved)
@@ -530,6 +563,11 @@ provisioning_reconcile <- function(register_url,
         server = server, raggiunta = TRUE, ambito_leggibile = TRUE,
         errori = NA_character_, stringsAsFactors = FALSE
       ),
+      # The rows this instance was asked about and did not refuse. Only present
+      # when the instance answered: the early returns above carry no such key,
+      # and their silence is what keeps a creation from happening on a question
+      # nobody got to ask.
+      in_scope = setdiff(ids, names(refused)),
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -548,9 +586,65 @@ provisioning_reconcile <- function(register_url,
     )
   })
 
+  # 10. make exist whoever the gate allowed and the tenant does not hold.
+  # `User.Create` is the whole permission this runs under: it cannot modify an
+  # account that already exists, reset a credential, disable or delete one. So
+  # the worst a wrong creation can do is leave an account nobody has used, with
+  # the request that caused it written in the register next to the name of
+  # whoever filed it.
+  #
+  # A simulated round creates nobody. It is the same line the instance writes
+  # are on, and the one place it could have been forgotten: a creation is not a
+  # write on an instance, so nothing else in the round would have stopped it.
+  in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
+  creations <- if (dry_run) {
+    list()
+  } else {
+    lapply(which(awaiting & record_ids %in% in_scope), function(i) {
+      c(
+        directory_create_user(
+          graph_token, graph_url,
+          as.list(register[i, , drop = FALSE]),
+          # The name the resolution found free, carried out of the verdict
+          # rather than composed a second time here. Two compositions would let
+          # the round check that one name is free and create another.
+          resolutions[[i]][["composed"]]
+        ),
+        list(record_id = record_ids[[i]])
+      )
+    })
+  }
+
+  # A creation that failed leaves the row exactly as it was -- there is still
+  # nobody there, so the verdict is still `absent` -- and adds the reason, so
+  # the next round retries. Idempotent by construction rather than by a check:
+  # if the account did come into being despite the error, the next sweep finds
+  # it by its surname and contact address and the row becomes `created` without
+  # anything being created twice.
+  refused_creations <- Filter(function(a) !isTRUE(a[["ok"]]), creations)
+  born <- Filter(function(a) isTRUE(a[["ok"]]), creations)
+
+  created_outcomes <- do.call(rbind, c(
+    list(empty_outcomes),
+    lapply(refused_creations, function(answer) {
+      outcome_payload(
+        answer[["record_id"]],
+        round_outcome_kind(answer[["errors"]], dry_run),
+        detail = paste(answer[["errors"]], collapse = ","), at = at
+      )
+    })
+  ))
+
+  # The default for a row that is waiting to be created and has nothing more
+  # specific to say: refused on scope, or a creation that failed, both come
+  # first in the merge below and win. It is last so that it can only ever fill
+  # a silence.
+  waiting <- outcome_rows(record_ids[awaiting], "pending")
+
   outcomes <- do.call(rbind, c(
     list(stopped, form_errors),
-    lapply(per_instance, function(answer) answer[["esiti"]])
+    lapply(per_instance, function(answer) answer[["esiti"]]),
+    list(created_outcomes, waiting)
   ))
   # One outcome per record, and the first one wins: the identity verdict comes
   # first because a row the gate stopped never entered anything below it, and a
@@ -559,7 +653,7 @@ provisioning_reconcile <- function(register_url,
   # whose result depends on the order REDCap applies them in.
   outcomes <- outcomes[!duplicated(outcomes[["record_id"]]), , drop = FALSE]
 
-  # 10. only what changed, against the register as it was read and not as this
+  # 11. only what changed, against the register as it was read and not as this
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
   import <- register_import(register_url, register_token, changed)
@@ -572,6 +666,19 @@ provisioning_reconcile <- function(register_url,
       rbind, lapply(per_instance, function(answer) answer[["stato"]])
     ) %||% empty_instances,
     esiti = outcomes,
+    # The credentials the accounts were born with, and the only road they take.
+    # Sub-project 5 will deliver them from here. Everywhere else is a place a
+    # credential would outlive the act that made it: the register is read by
+    # referents, the telemetry record is shipped to a workspace and kept, and
+    # standard output is what the timer collects. `round_record()` builds from
+    # named fields and this is not one of them, which is what keeps it out
+    # rather than a promise that nobody will add it.
+    credenziali = data.frame(
+      record_id = vapply(born, function(a) a[["record_id"]], character(1)),
+      username = vapply(born, function(a) a[["upn"]], character(1)),
+      credential = vapply(born, function(a) a[["credential"]], character(1)),
+      stringsAsFactors = FALSE
+    ),
     scritte = import[["scritte"]],
     # Both writes report here. An identity body REDCap refused is not visible
     # in any outcome -- the round went on gating on what it computed, which is

@@ -696,6 +696,30 @@ test_that("a verdict the gate admits is not a refusal at all", {
 })
 
 
+test_that("an absence carries the very name the creation has to use", {
+  # eval
+  answer <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(
+      userPrincipalName = "anna.bianchi@ubep.unipd.it",
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "anna.bianchi@example.org"
+    ))
+  )
+
+  # test
+  # The verdict is `absent` **because** that name was free, so the creation has
+  # to create that one. Composing it a second time on the way to Graph would be
+  # two paths to one answer: the day somebody hands a domain to one and not to
+  # the other, the round checks that one name is free and creates another --
+  # a UPN nobody has checked for a collision. The register still gets an empty
+  # `username`, because a name that does not exist yet is not a confirmation.
+  expect_equal(answer[["identity"]], "absent")
+  expect_equal(answer[["username"]], "")
+  expect_equal(answer[["composed"]], compose_upn("Mario", "Rossi"))
+})
+
+
 test_that("a username the round itself wrote is not read back as a declaration", { # nolint: line_length_linter.
   # eval
   answer <- resolve_identity(

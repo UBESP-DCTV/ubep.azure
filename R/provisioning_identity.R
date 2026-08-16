@@ -257,12 +257,23 @@ upn_proposal <- function(composed, taken) {
 #'   resolved and has to stop.
 #' @param username The UPN, the proposal, or `""`.
 #' @param errors Codes, addressed by their prefix.
+#' @param composed The name `compose_upn()` built for this row, carried out of
+#'   here so that the creation can create **the one that was checked**. It is
+#'   read only on `absent`, which is the verdict that says it was free, and it
+#'   is not the same thing as `username`: a name that does not exist yet is not
+#'   a confirmation and does not belong in the register.
 #'
-#' @return A list with `identity`, `username` and `errors`.
+#' @return A list with `identity`, `username`, `errors` and `composed`.
 #'
 #' @keywords internal
-identity_verdict <- function(identity, username = "", errors = character()) {
-  list(identity = identity, username = username, errors = errors)
+identity_verdict <- function(identity,
+                             username = "",
+                             errors = character(),
+                             composed = "") {
+  list(
+    identity = identity, username = username, errors = errors,
+    composed = composed
+  )
 }
 
 
@@ -446,10 +457,12 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
   )
 
   if (identity_normalize(composed) %in% taken) {
-    return(identity_verdict("collision", upn_proposal(composed, taken)))
+    return(identity_verdict(
+      "collision", upn_proposal(composed, taken), composed = composed
+    ))
   }
 
-  identity_verdict("absent")
+  identity_verdict("absent", composed = composed)
 }
 
 

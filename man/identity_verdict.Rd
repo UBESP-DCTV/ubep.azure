@@ -4,7 +4,7 @@
 \alias{identity_verdict}
 \title{Say what the resolution decided about one row}
 \usage{
-identity_verdict(identity, username = "", errors = character())
+identity_verdict(identity, username = "", errors = character(), composed = "")
 }
 \arguments{
 \item{identity}{One of the five words, or \code{""} when the row could not be
@@ -13,9 +13,15 @@ resolved and has to stop.}
 \item{username}{The UPN, the proposal, or \code{""}.}
 
 \item{errors}{Codes, addressed by their prefix.}
+
+\item{composed}{The name \code{compose_upn()} built for this row, carried out of
+here so that the creation can create \strong{the one that was checked}. It is
+read only on \code{absent}, which is the verdict that says it was free, and it
+is not the same thing as \code{username}: a name that does not exist yet is not
+a confirmation and does not belong in the register.}
 }
 \value{
-A list with \code{identity}, \code{username} and \code{errors}.
+A list with \code{identity}, \code{username}, \code{errors} and \code{composed}.
 }
 \description{
 Say what the resolution decided about one row

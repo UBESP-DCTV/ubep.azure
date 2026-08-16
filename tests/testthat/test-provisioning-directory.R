@@ -483,3 +483,261 @@ test_that("the token never appears in a URL nor in what comes back", {
     answer[["payload"]][["message"]], "CompactToken  is malformed."
   )
 })
+
+
+test_that("the credential does not come from R's random number generator", {
+  # eval
+  withr::local_seed(42L)
+  first <- directory_credential()
+  withr::local_seed(42L)
+  second <- directory_credential()
+
+  # test
+  # The property that tells a cryptographic generator from `sample()`, and the
+  # reason it is worth one: the account is created enabled and with no second
+  # factor enrolled yet, so whoever guesses this string enrols their own. R
+  # seeds its generator from the clock and the process id, and this round runs
+  # on a timer at six known times a day -- which is a search space, not a
+  # secret. `generate_password()` is left alone: it feeds the deprecated `.ps1`
+  # path, where the credential is written into a file that survives the act,
+  # and predictability is the least of that one's problems.
+  expect_false(identical(first, second))
+})
+
+
+test_that("the credential covers the four classes Entra asks for", {
+  # eval
+  credential <- directory_credential()
+  chars <- strsplit(credential, "")[[1]]
+
+  # test
+  expect_equal(nchar(credential), 24L)
+  expect_true(any(chars %in% letters))
+  expect_true(any(chars %in% LETTERS))
+  expect_true(any(chars %in% as.character(0:9)))
+  expect_true(any(chars %in% strsplit("!@#$%^&*()-_=+", "")[[1]]))
+})
+
+
+test_that("no two credentials are the same, because there is no batch", {
+  # eval
+  credentials <- vapply(1:20, function(i) directory_credential(), character(1))
+
+  # test
+  # One credential per person and never one per batch. The historical flow put
+  # a single password at the top of a `.ps1` and fifteen people shared it; here
+  # there is no batch to be the password of, which is the property obtained by
+  # construction rather than by discipline.
+  expect_length(unique(credentials), 20L)
+})
+
+
+# One register row, reduced to what a creation reads from it.
+da_creare <- function(...) {
+  utils::modifyList(
+    list(
+      first_name = "Mario",
+      last_name = "Rossi",
+      contact_email = "mario.rossi@example.org"
+    ),
+    list(...)
+  )
+}
+
+
+crea <- function(handler) {
+  httr2::with_mocked_responses(
+    handler,
+    directory_create_user(
+      "t0ken", "https://graph.example.org/v1.0",
+      da_creare(), "mario.rossi@ubep.unipd.it"
+    )
+  )
+}
+
+
+risposta <- function(status, body) {
+  httr2::response(
+    status_code = status,
+    headers = list(`Content-Type` = "application/json"),
+    body = charToRaw(body)
+  )
+}
+
+
+test_that("a creation sends the minimum body and hands the credential back", {
+  # eval
+  captured <- NULL
+  answer <- crea(function(req) {
+    captured <<- req
+    risposta(201L, '{"id":"00000000-0000-0000-0000-00000000000a"}')
+  })
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  expect_true(answer[["ok"]])
+  expect_equal(answer[["upn"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(sent[["userPrincipalName"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(sent[["displayName"]], "Mario Rossi")
+  expect_equal(sent[["mailNickname"]], "mario.rossi")
+  expect_true(sent[["accountEnabled"]])
+  expect_equal(sent[["otherMails"]], list("mario.rossi@example.org"))
+  expect_true(sent[["passwordProfile"]][["forceChangePasswordNextSignIn"]])
+  # The credential the caller gets has to be the one the account was born with.
+  # Two draws would leave an account nobody can open, and nothing downstream
+  # could tell that from one that works.
+  expect_equal(
+    answer[["credential"]], sent[["passwordProfile"]][["password"]]
+  )
+})
+
+
+test_that("the body carries the name, because the surname is the criterion", {
+  # eval
+  captured <- NULL
+  crea(function(req) {
+    captured <<- req
+    risposta(201L, "{}")
+  })
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  # The plan's list of fields does not name these two, and it predates the
+  # reversal of 2026-08-15. Without them the account is created and then never
+  # found again: `directory_named()` matches on `surname`, so the next round
+  # sees nobody carrying that name while the composed UPN is now taken -- which
+  # is `collision`, with a proposal. The round would create the person and then
+  # tell them for ever that their name belongs to somebody else.
+  expect_equal(sent[["givenName"]], "Mario")
+  expect_equal(sent[["surname"]], "Rossi")
+})
+
+
+test_that("the new path writes neither of the carriers it is replacing", {
+  # eval
+  captured <- NULL
+  crea(function(req) {
+    captured <<- req
+    risposta(201L, "{}")
+  })
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  # `jobTitle` is a live mechanism, not a fossil: 2.828 accounts carry the
+  # serialized authorization and 254 of them were created in 2026, because it
+  # is still the only channel of the three machines on major 11. What has to be
+  # armed is the not-inheriting. `officeLocation` is the other half: the
+  # contact address goes in the field that means contact address, and the old
+  # one is read for as long as 6.494 accounts carry it and written never again.
+  expect_false("jobTitle" %in% names(sent))
+  expect_false("officeLocation" %in% names(sent))
+})
+
+
+test_that("the token travels in the header and never in the URL", {
+  # eval
+  captured <- NULL
+  crea(function(req) {
+    captured <<- req
+    risposta(201L, "{}")
+  })
+
+  # test
+  expect_false(grepl("t0ken", captured[["url"]], fixed = TRUE))
+  expect_equal(
+    httr2::req_get_headers(captured, "reveal")[["Authorization"]],
+    "Bearer t0ken"
+  )
+})
+
+
+test_that("a refusal keeps Graph's own code and hands back no credential", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(403L, paste0(
+      '{"error":{"code":"Authorization_RequestDenied",',
+      '"message":"Insufficient privileges t0ken"}}'
+    ))
+  })
+
+  # test
+  # The code is the machine-readable half and the one a diagnosis wants:
+  # `Authorization_RequestDenied` says the consent was never given, which sends
+  # whoever reads it somewhere quite different from a malformed body. The
+  # message is scrubbed of the token first -- Graph does not echo it today, and
+  # relying on that would be trusting the other end to keep our credential.
+  expect_false(answer[["ok"]])
+  expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_RIFIUTATA")
+  expect_equal(answer[["payload"]][["code"]], "Authorization_RequestDenied")
+  expect_false(grepl("t0ken", answer[["payload"]][["message"]], fixed = TRUE))
+  expect_null(answer[["credential"]])
+})
+
+
+test_that("being asked to come back later is not the same as being refused", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(429L, '{"error":{"code":"activityLimitReached"}}')
+  })
+
+  # test
+  # A throttle says "not now", a refusal says "not you", and only one of them
+  # passes by itself. Nothing sleeps here on purpose: a round that waited
+  # inside itself might not return, and a round that does not return leaves no
+  # record at all -- at which point `ubep-canale-assenza` reports at severity 1
+  # that the channel is not running while it is running very hard. The next
+  # round is four hours away and re-reads reality anyway.
+  expect_false(answer[["ok"]])
+  expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_RIMANDATA")
+  expect_null(answer[["credential"]])
+})
+
+
+test_that("a UPN taken between two rounds fails and heals itself", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(400L, paste0(
+      '{"error":{"code":"Request_BadRequest",',
+      '"message":"Another object with the same value already exists"}}'
+    ))
+  })
+
+  # test
+  # It must not arrive here: the resolution would have called it `collision`.
+  # The branch exists for the race between two rounds, and it needs no special
+  # handling -- the row stays `absent`, the next round sweeps, finds the
+  # account by its surname and contact address, and writes `created` without
+  # creating anything. Idempotent by construction rather than by a check.
+  expect_false(answer[["ok"]])
+  expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_RIFIUTATA")
+  expect_null(answer[["credential"]])
+})
+
+
+test_that("a creation that never reached Graph is not a refusal either", {
+  # eval
+  answer <- crea(function(req) stop("Could not resolve host"))
+
+  # test
+  expect_false(answer[["ok"]])
+  expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE")
+  expect_null(answer[["credential"]])
+})
+
+
+test_that("a 201 that is not JSON is not a creation anybody can act on", {
+  # eval
+  answer <- crea(function(req) {
+    httr2::response(status_code = 201L, body = charToRaw("<html>ciao</html>"))
+  })
+
+  # test
+  # Same discipline as the sweep and the register's client: the answer is
+  # recognized by its shape and not by its status. An endpoint that is not the
+  # one meant can answer 2xx with anything, and a caller that inferred success
+  # from the status would hand back a credential for an account that was never
+  # created.
+  expect_false(answer[["ok"]])
+  expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_RISPOSTA_INATTESA")
+  expect_null(answer[["credential"]])
+})

@@ -18,12 +18,18 @@ form_field_value <- function(value) {
 inviate <- list()
 
 
-canale_mock <- function(registro, istanza, directory) {
+canale_mock <- function(registro, istanza, directory, creazione) {
   function(req) {
     # A mock lives inside httr2's request loop, so this is the one place the
     # captured wire log has to reach out of its own call frame.
     inviate[[length(inviate) + 1L]] <<- req # nolint: assignment_linter.
     if (grepl("graph.example.org", req[["url"]], fixed = TRUE)) {
+      # The sweep and the creation share a host and are told apart by their
+      # method, which is also how a test says "nothing was created" without
+      # having to say "nothing spoke to Graph" -- the sweep speaks every round.
+      if (identical(req[["method"]], "POST")) {
+        return(creazione(req))
+      }
       return(httr2::response(
         status_code = 200L, body = charToRaw(directory())
       ))
@@ -293,10 +299,34 @@ istanza_che_scrive <- function() {
 }
 
 
-giro <- function(registro, istanza, directory = directory_doppia(), ...) {
+# Everything the round sent to Graph asking it to make somebody exist.
+creazioni <- function() {
+  Filter(function(req) {
+    grepl("graph.example.org", req[["url"]], fixed = TRUE) &&
+      identical(req[["method"]], "POST")
+  }, inviate)
+}
+
+
+creazione_riuscita <- function() {
+  function(req) {
+    httr2::response(
+      status_code = 201L,
+      headers = list(`Content-Type` = "application/json"),
+      body = charToRaw('{"id":"00000000-0000-0000-0000-00000000000a"}')
+    )
+  }
+}
+
+
+giro <- function(registro,
+                 istanza,
+                 directory = directory_doppia(),
+                 creazione = creazione_riuscita(),
+                 ...) {
   inviate <<- list() # nolint: assignment_linter.
   httr2::with_mocked_responses(
-    canale_mock(registro, istanza, directory),
+    canale_mock(registro, istanza, directory, creazione),
     provisioning_reconcile(
       register_url = "registro.example.org",
       register_token = "t0ken",
@@ -723,11 +753,18 @@ test_that("an absence leaves the row pending and mails nobody about it", {
 
   # test
   # An empty tenant is not a failed sweep: it answered, and what it said is
-  # "nobody is there". `absent` is a verdict the round will act on by itself
-  # once task 6 lands, so closing the row as a data error would mail a referent
-  # about something nobody has to touch — which is how an alert stops being
-  # read.
-  expect_length(interrogazioni(), 0L)
+  # "nobody is there". `absent` is the one verdict the round acts on by itself,
+  # so closing the row as a data error would mail a referent about something
+  # nobody has to touch — which is how an alert stops being read.
+  #
+  # The instance **is** asked, and that is the difference `absent` makes among
+  # the three verdicts the gate holds back: the question is about the
+  # requester's rights, not about the person, and the answer is what decides
+  # whether anybody may be made to exist. What must not happen is a write, and
+  # a simulated round does not create either.
+  expect_gt(length(interrogazioni()), 0L)
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
   expect_equal(esito[["esiti"]][["outcome"]], "pending")
   expect_equal(esito[["esiti"]][["outcome_detail"]], "")
   expect_equal(identita_scritte()[["identity"]], "absent")
@@ -1042,4 +1079,155 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
     esiti[["outcome"]][esiti[["record_id"]] == "1"], "transport_error"
   )
   expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "pending")
+})
+
+
+test_that("an absence in scope is created, under the name the round found free", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The name has to be the one the resolution checked, and the way to be sure
+  # of that is that nothing composes it twice: the verdict carries it out and
+  # the adapter is handed it. A second composition would let a round check that
+  # one name is free and create another.
+  expect_length(creazioni(), 1L)
+  expect_equal(
+    creazioni()[[1]][["body"]][["data"]][["userPrincipalName"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  # The row stays `absent` this pass and becomes `created` at the next one,
+  # which is decision 4 working as written: `created` is the row whose previous
+  # verdict was `absent` and that now matches, and that memory lives in the
+  # register. Nothing here has to remember anything.
+  expect_equal(identita_scritte()[["identity"]], "absent")
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("a simulated round makes nobody exist", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # `UBEP_SCRITTURA` off means the round says what it would do, and creating a
+  # person is not saying anything. It is the same line the instance writes are
+  # on, and the one place it could have been forgotten: a creation is not a
+  # write on an instance, so nothing else in the round would have stopped it.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("nobody is created for a row whose requester could not have granted it", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(
+      list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
+    ),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Guard D on the wire. Making an identity exist is a bigger act than granting
+  # a right on one, so it cannot be bounded by less. This is also why the round
+  # had to be rearranged: an `absent` row is not a pair, so before this it
+  # stopped at the identity gate and never reached the instance that answers
+  # the scope question at all.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
+test_that("nobody is created while the instance that would say so is silent", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_muta(),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # An instance that did not answer has not said "yes" and has not said "no".
+  # Fail closed: the row waits, and the next round asks again. Creating on an
+  # unanswered question would make the gate a thing that holds only while the
+  # network does.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("a creation that failed leaves the row absent, with the reason on it", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) {
+      httr2::response(
+        status_code = 403L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
+      )
+    },
+    dry_run = FALSE
+  )
+
+  # test
+  # The row keeps the verdict it had -- there is still nobody there -- and
+  # carries the reason, so the next round retries. Idempotent by construction:
+  # if the account did come into being despite the error, the sweep finds it
+  # and the row becomes `created` without anything being created twice.
+  expect_equal(identita_scritte()[["identity"]], "absent")
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_CREAZIONE_RIFIUTATA"
+  )
+})
+
+
+test_that("the credential leaves by one road and is on none of the others", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+  credenziale <- esito[["credenziali"]][["credential"]][[1]]
+  record <- round_record(esito, scrittura = TRUE)
+  altrove <- c(
+    unlist(esito[["esiti"]]),
+    unlist(lapply(importazioni(), function(req) {
+      form_field_value(req[["body"]][["data"]][["data"]])
+    })),
+    unlist(record)
+  )
+
+  # test
+  # It comes out of the call that made the account and goes to sub-project 5,
+  # which will deliver it. Everywhere else is a place it would outlive the act:
+  # the register is read by referents, the telemetry record is shipped to a
+  # workspace and kept, and standard output is what the timer collects. Checked
+  # against what actually left the machine rather than against a branch, the
+  # way the guard on out-of-scope writes is.
+  expect_equal(nchar(credenziale), 24L)
+  expect_equal(esito[["credenziali"]][["record_id"]], "1")
+  expect_false(any(grepl(credenziale, altrove, fixed = TRUE)))
+  expect_false("credenziali" %in% names(record))
 })

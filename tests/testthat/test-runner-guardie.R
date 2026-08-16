@@ -11,7 +11,9 @@ test_that("the runner names neither the diff nor the writes", {
   skip_if(length(runners) == 0L, "dev/ is not in the built package")
   lines <- unlist(lapply(runners, readLines, warn = FALSE))
 
-  forbidden <- c("provisioning_diff", "module_apply", "module_revoke")
+  forbidden <- c(
+    "provisioning_diff", "module_apply", "module_revoke", "credenziali"
+  )
   found <- forbidden[vapply(
     forbidden,
     function(symbol) any(grepl(symbol, lines, fixed = TRUE)),
@@ -24,8 +26,12 @@ test_that("the runner names neither the diff nor the writes", {
       "The observer reads an instance's state whole, with no pairs named, so",
       "a comparison here would classify every real pair as revoked no matter",
       "how populated the register is -- the danger is not the write call but",
-      "the comparison that feeds it. If you are deliberately adding the write",
-      "path, change this test in the same commit — not afterwards."
+      "the comparison that feeds it. And a runner that names `credenziali`",
+      "has a credential in a file whose whole job is to print things: what",
+      "this one prints is collected by the timer and kept. Sub-project 5 will",
+      "deliver them, and this is where that decision gets made again. If you",
+      "are deliberately adding either, change this test in the same commit —",
+      "not afterwards."
     )
   )
 })
@@ -159,21 +165,25 @@ percorsi_di_scrittura <- function() {
 # ceiling can advance -- never against register-derived data, never unattended.
 # It carries no requester and no register row, so neither rule has anything to
 # ask of it.
-scrive_senza_nominare <- function(cancello) {
+chiama_senza_nominare <- function(chiamate, cancello) {
   namespace <- asNamespace("ubep.azure")
   functions <- Filter(
     function(name) is.function(get(name, envir = namespace)),
     ls(namespace, all.names = TRUE)
   )
-  writes <- percorsi_di_scrittura()
 
   Filter(function(name) {
     body <- paste(deparse(body(get(name, envir = namespace))), collapse = " ")
-    calls_write <- any(vapply(
-      writes, function(symbol) grepl(symbol, body, fixed = TRUE), logical(1)
+    reaches <- any(vapply(
+      chiamate, function(symbol) grepl(symbol, body, fixed = TRUE), logical(1)
     ))
-    calls_write && !grepl(cancello, body, fixed = TRUE)
-  }, setdiff(functions, writes))
+    reaches && !grepl(cancello, body, fixed = TRUE)
+  }, setdiff(functions, chiamate))
+}
+
+
+scrive_senza_nominare <- function(cancello) {
+  chiama_senza_nominare(percorsi_di_scrittura(), cancello)
 }
 
 
@@ -297,4 +307,78 @@ test_that("the gate on the identity cannot exist without the writer", {
     )
   )
   expect_true(present("identity_actionable"))
+})
+
+
+test_that("nothing creates an account without naming the gate on scope", {
+  # eval
+  # Guard D. Making an identity exist is a bigger act than granting a right on
+  # one, so it cannot be bounded by less: whoever could not have granted that
+  # project by hand must not be able to make the person to grant it to. The
+  # gate answers about the requester and not about the person being created,
+  # which is why an `absent` row has to reach it at all -- and reaching it is
+  # what the round had to be rearranged for.
+  offending <- chiama_senza_nominare("directory_create_user", "scope_errors")
+
+  # test
+  expect_equal(
+    offending, character(),
+    info = paste(
+      "A function that can create an account on Entra must name the scope",
+      "gate. `User.Create` cannot touch an account that already exists, so",
+      "the blast radius of a wrong creation is small and reversible -- but it",
+      "is an identity in the tenant, made by somebody filling in a form, and",
+      "the only thing standing between the two is this rule. If you are",
+      "deliberately adding a second creation path, change this test in the",
+      "same commit — not afterwards."
+    )
+  )
+})
+
+
+test_that("the creation path does not take over the carriers it replaces", {
+  # eval
+  # Guard C. The failure to fear is not "we forgot to delete compose_jobtitle",
+  # which is harmless, but "the new path has started writing jobTitle again",
+  # which puts two transports back on the same thing. And it is not a
+  # hypothetical: the serialized form sits on 2.828 accounts, 254 of them
+  # created in 2026, because it is still the only channel of the three machines
+  # on major 11. What is being prevented is a live mechanism entering the new
+  # path, not a fossil being tidied away.
+  namespace <- asNamespace("ubep.azure")
+  body_of <- function(name) {
+    paste(deparse(body(get(name, envir = namespace))), collapse = " ")
+  }
+  creators <- c("directory_create_user", Filter(function(name) {
+    is.function(get(name, envir = namespace)) &&
+      grepl("directory_create_user", body_of(name), fixed = TRUE)
+  }, ls(namespace, all.names = TRUE)))
+
+  forbidden <- c("compose_jobtitle", "jobTitle", "officeLocation")
+  offending <- Filter(function(name) {
+    any(vapply(
+      forbidden, function(field) grepl(field, body_of(name), fixed = TRUE),
+      logical(1)
+    ))
+  }, unique(creators))
+
+  # test
+  # An assertion that read nothing is not a passing assertion: the way this
+  # guard goes quiet is a rename of the creator, not a codebase that got
+  # cleaner.
+  expect_true("directory_create_user" %in% creators)
+  expect_gt(length(creators), 1L)
+  expect_equal(
+    offending, character(),
+    info = paste(
+      "The creation path may write neither `jobTitle` nor `officeLocation`.",
+      "The authorization has one channel and it is the channel; the contact",
+      "address goes in the field that means contact address. The old carrier",
+      "is read for as long as accounts carry it -- the sweep counts them, and",
+      "the day the count is zero the fallback is dead -- and written never",
+      "again. `build_ps1_from_xlsx()` and `compose_jobtitle()` stay alive and",
+      "deprecated for edc01, mst01 and edc-redcap, where that field is still",
+      "the only channel there is."
+    )
+  )
 })

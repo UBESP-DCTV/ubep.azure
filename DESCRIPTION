@@ -23,6 +23,7 @@ Imports:
     glue,
     httr2,
     jsonlite,
+    openssl,
     readr,
     readxl,
     stringi,

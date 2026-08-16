@@ -1,5 +1,61 @@
 # ubep.azure (development version)
 
+* **The round makes the accounts that are missing, under a permission that can
+  do nothing else.** `directory_create_user()` is the second and last thing
+  this package does on Microsoft Graph, and `User.Create` is what it runs
+  under: it cannot modify an account that already exists, reset a credential,
+  disable or delete one. So the worst a wrong creation can do is leave an
+  account nobody has used, with the request that caused it written in the
+  register beside the name of whoever filed it.
+
+  **It does not compose the name it creates.** The UPN is an argument, and the
+  round takes it from the verdict that found it free. Composing it a second
+  time on the way to Graph would be two paths to one answer: the day somebody
+  hands a domain to the resolution and not to the creation, the round would
+  check that one name is free and create another — a UPN nobody has checked for
+  a collision, which is the failure this whole sub-project is about.
+
+  **`givenName` and `surname` are in the body because the criterion is the
+  surname.** An account created without a surname is one the next sweep cannot
+  find, while the UPN it would compose is now taken — so the row comes back
+  `collision`, and the round would have created the person and then told them
+  for ever that their name is another person's.
+
+  **Neither `jobTitle` nor `officeLocation`.** The authorization has one
+  channel and it is the channel; the contact address goes in the field that
+  means contact address. The old carrier is read for as long as accounts carry
+  it — the sweep counts them, and the day the count is zero the fallback is
+  dead — and written never again. A guard arms the not-inheriting, because the
+  serialized authorization is a live mechanism and not a fossil: 2.828 accounts
+  carry it, 254 of them created in 2026.
+
+  **The row it creates stays `absent` for that pass** and becomes `created` at
+  the next one. That is not a delay being tolerated: `created` is defined as
+  the row whose previous verdict was `absent` and that now matches, and the
+  memory lives in the register. A round that wrote `created` on the strength of
+  having just made the account would keep a second source of truth beside the
+  sweep.
+
+  **Making somebody exist is bounded by the same gate as granting them a
+  right**, and by a guard. An `absent` row is not a pair, so before this it
+  stopped at the identity gate and never reached the instance that answers the
+  scope question — the round was rearranged so that it does. An instance that
+  did not answer has neither allowed nor refused, and the row waits. A
+  simulated round creates nobody: a creation is not a write on an instance, so
+  nothing else in the round would have stopped it.
+
+  **One credential per person, drawn from `openssl` and not from `sample()`.**
+  There is no batch to be the password of, which is the property the historical
+  flow lacked — one password at the top of a generated `.ps1`, shared by
+  fifteen people, in a file that outlived the act. The generator matters
+  because the account is created enabled and with no second factor enrolled:
+  what a guess buys is the enrollment of another person's, which is the tenant's
+  whole defense. R seeds its own generator from the clock and the process id
+  and this round runs on a timer at six known times a day, which is a search
+  space rather than a secret. The credential leaves by the return value and by
+  no other road — not the register, not the telemetry record, not standard
+  output — and a guard forbids the runner from naming it at all.
+
 * **The round resolves who a row is talking about before deciding what to do
   with it.** `provisioning_reconcile()` gains a step between reading the
   register and building the desired state: it sweeps the tenant whole, resolves

@@ -45,9 +45,11 @@ fields and declares the substitution.}
 }
 \value{
 A list with \code{at}, \code{fermato}, \code{schema}, \code{istanze}, \code{esiti},
-\code{scritte} and \code{errori}. \code{scritte} counts the outcomes REDCap took and not
-the identities: they are two writes into two field families, and one
-counter for both would be a number nobody could read back into either.
+\code{credenziali}, \code{scritte} and \code{errori}. \code{scritte} counts the outcomes
+REDCap took and not the identities: they are two writes into two field
+families, and one counter for both would be a number nobody could read
+back into either. \code{credenziali} carries what the accounts created this
+round were born with, and it is the only road those take.
 }
 \description{
 The only function that holds the register and the instances at the same
@@ -70,6 +72,7 @@ together;
 \item diff against the real rows somebody asked about;
 \item batch by \verb{(server, project_id)}, never across two projects;
 \item read back what a real write did, before calling it applied;
+\item \strong{create the accounts the gate allowed and the tenant does not hold};
 \item write back the outcome, and only what changed.
 }
 
@@ -80,6 +83,22 @@ own would make every new row wait one more cycle to be looked at. It follows
 that the gate has no window at all: it asks after the verdict it has just
 computed, never after the one the register carries, and writing \code{identity}
 back is the minutes of the verdict rather than the input to the next step.
+
+\strong{Step 10 is last because it needs step 6's answer}, and that is the whole
+shape of it. A row whose verdict is \code{absent} is not a pair — there is nobody
+to grant a right to — so it never enters the desired state; but it does
+travel as far as the scope question, because whoever could not have granted
+that project by hand must not be able to make the person to grant it to
+either. An instance that did not answer has neither allowed nor refused, and
+the row waits.
+
+\strong{The row it creates stays \code{absent} for this pass} and becomes \code{created} at
+the next one, which is decision 4 working as written rather than a delay
+being tolerated: \code{created} is the row whose previous verdict was \code{absent} and
+that now matches, and that memory lives in the register. A round that wrote
+\code{created} on the strength of having just made the account would be keeping a
+second source of truth beside the sweep, which is the thing decision 4 of the
+channel's design forbids.
 
 Idempotent by construction: a round interrupted between applying and writing
 the outcome leaves the row as still to do, and the next round applies it

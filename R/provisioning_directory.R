@@ -32,6 +32,60 @@ directory_fields <- function() {
 }
 
 
+#' Draw the credential an account is born with
+#'
+#' One credential per person, and there is no batch to be the password of: the
+#' historical flow put a single one at the top of a generated `.ps1` and fifteen
+#' people shared it, in a file that outlived the act. Here the property is
+#' obtained by construction rather than by discipline, because the credential is
+#' drawn inside the call that creates the account.
+#'
+#' **Drawn from `openssl` and not from `sample()`**, which is the one thing
+#' about it worth a paragraph. R seeds its own generator from the clock and the
+#' process id; this round runs on a timer at six known times a day, so an
+#' attacker who knows the schedule is searching a space rather than guessing a
+#' secret. What that buys them is not the account's data — it is the enrollment
+#' of their own second factor on an account created enabled and with none, which
+#' is the tenant's whole defense. `openssl` costs nothing to depend on: `httr2`
+#' already does.
+#'
+#' `generate_password()` is deliberately left alone. It feeds the deprecated
+#' `.ps1` path, where the credential is written into a file that survives in a
+#' shared folder, and predictability is the least of that one's problems.
+#'
+#' @param length How many characters. The default clears the floor Entra sets
+#'   by a wide margin, and the four classes below are guaranteed one each
+#'   because the policy asks for three of them.
+#'
+#' @return A single string.
+#'
+#' @keywords internal
+directory_credential <- function(length = 24L) {
+  stopifnot(is.numeric(length), length(length) == 1L, length >= 8L)
+
+  classes <- list(
+    letters, LETTERS, as.character(0:9),
+    strsplit("!@#$%^&*()-_=+", "")[[1]]
+  )
+  pool <- unlist(classes)
+
+  draw <- function(from, n) {
+    if (n == 0L) {
+      return(character())
+    }
+    from[floor(openssl::rand_num(n) * length(from)) + 1L]
+  }
+
+  guaranteed <- vapply(classes, function(class) draw(class, 1L), character(1))
+  chars <- c(guaranteed, draw(pool, as.integer(length) - length(guaranteed)))
+
+  # Shuffled from the same source. A permutation drawn from R's generator would
+  # put the four guaranteed characters at positions somebody could work out,
+  # which is a smaller hole than a predictable pool and a hole all the same.
+  paste(chars[order(openssl::rand_num(length(chars)))], collapse = "")
+}
+
+
 #' Turn parsed Graph user records into a frame of one row per account
 #'
 #' Every column keeps the type the wire gives it, which is not the same as
@@ -187,6 +241,176 @@ directory_page <- function(token, url) {
 }
 
 
+#' The endpoint this package talks to, from the base it was handed
+#'
+#' One place builds the URL for both calls. A scheme is dropped rather than
+#' honored, so a base handed over as http is corrected instead of sending a
+#' bearer token in clear — and it is corrected once, where two copies would be
+#' the place to fix that in one call and leave it standing in the other.
+#'
+#' @inheritParams directory_users
+#'
+#' @return The endpoint, always https and with no trailing slash.
+#'
+#' @keywords internal
+directory_endpoint <- function(base_url) {
+  base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", base_url)
+  paste0("https://", sub("/+$", "", base))
+}
+
+
+#' Say what went wrong creating an account, and hand back no credential
+#'
+#' The credential is `NULL` on every failure, and that is the whole reason this
+#' exists rather than a list literal at four call sites: a credential
+#' traveling beside a failure is a secret nobody will ever use, kept for an
+#' account that may not exist.
+#'
+#' A creation that failed after Graph accepted it — a timeout on the way back —
+#' leaves an account whose credential this round has just discarded. It is the
+#' honest cost of not keeping one: the next round finds the account by its
+#' surname and contact address and writes `created`, and whoever needs to let
+#' that person in resets it once. Keeping a secret for a creation we cannot
+#' confirm is worse in the direction that matters.
+#'
+#' @param code The transport code, one of the `TRASPORTO_CREAZIONE_*` family.
+#' @param payload Anything worth keeping for a diagnosis, or `NULL`.
+#'
+#' @return A list with `ok`, `errors`, `payload`, `credential` and `upn`.
+#'
+#' @keywords internal
+creation_failure <- function(code, payload = NULL) {
+  list(
+    ok = FALSE, errors = code, payload = payload,
+    credential = NULL, upn = NULL
+  )
+}
+
+
+#' Create on Entra the account a request needs and nobody has
+#'
+#' The second and last thing this package does on Microsoft Graph, and it does
+#' one thing: it creates. `User.Create` is what it runs under, and that
+#' permission cannot modify an existing account, reset a credential, disable or
+#' delete — which is why the round can hold it without holding everything else.
+#'
+#' **It does not compose the name it creates.** The UPN is an argument, and the
+#' caller takes it from the verdict that found it free. Composing it again here
+#' would be two paths to one answer: the day somebody hands a domain to the
+#' resolution and not to this, the round would check that one name is free and
+#' create another — a UPN nobody has checked for a collision, which is the
+#' failure this whole sub-project is about.
+#'
+#' **`givenName` and `surname` are in the body because the criterion is the
+#' surname.** They are not decoration and they are not in the plan's list, which
+#' predates the reversal of 2026-08-15: an account created without a surname is
+#' an account the next sweep cannot find, while the UPN it would compose is now
+#' taken — so the row comes back `collision`, and the round would have created
+#' the person and then told them for ever that their name is another person's.
+#'
+#' **No `jobTitle` and no `officeLocation`.** The first is a live mechanism and
+#' not a fossil — 2.828 accounts carry the serialized authorization, 254 of them
+#' created in 2026 — so what has to be armed is the not-inheriting, and a guard
+#' does it. The second is the legacy carrier of the contact address: read for as
+#' long as accounts carry it, written never again.
+#'
+#' @inheritParams directory_users
+#' @param request The register row, read only for `first_name`, `last_name` and
+#'   `contact_email`.
+#' @param upn The name to create, which the resolution found free.
+#'
+#' @return A list with `ok`, `errors`, `payload`, `upn`, and `credential` — the
+#'   one the account was born with, present only on success. It leaves by the
+#'   return value and by no other road: not the register, not the telemetry
+#'   record, not standard output.
+#'
+#' @keywords internal
+directory_create_user <- function(token, base_url, request, upn) {
+  stopifnot(
+    is.character(token), length(token) == 1L, nzchar(token),
+    is.character(base_url), length(base_url) == 1L, nzchar(base_url),
+    is.list(request),
+    is.character(upn), length(upn) == 1L, nzchar(upn)
+  )
+
+  field <- function(name) {
+    trimws(as.character(request[[name]] %||% ""))
+  }
+  credential <- directory_credential()
+
+  profile <- list(forceChangePasswordNextSignIn = TRUE)
+  profile[["password"]] <- credential
+
+  body <- list(
+    accountEnabled = TRUE,
+    displayName = trimws(paste(field("first_name"), field("last_name"))),
+    givenName = field("first_name"),
+    surname = field("last_name"),
+    mailNickname = sub("@.*$", "", upn),
+    userPrincipalName = upn,
+    otherMails = list(field("contact_email")),
+    passwordProfile = profile
+  )
+
+  response <- tryCatch(
+    httr2::request(paste0(directory_endpoint(base_url), "/users")) |>
+      httr2::req_method("POST") |>
+      httr2::req_auth_bearer_token(token) |>
+      httr2::req_body_json(body, auto_unbox = TRUE) |>
+      httr2::req_error(is_error = function(resp) FALSE) |>
+      httr2::req_perform(),
+    error = function(e) NULL
+  )
+
+  if (is.null(response)) {
+    return(creation_failure("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE"))
+  }
+
+  payload <- tryCatch(
+    jsonlite::fromJSON(
+      httr2::resp_body_string(response),
+      simplifyVector = FALSE
+    ),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+
+  if (is.null(payload) || !is.list(payload)) {
+    return(creation_failure("TRASPORTO_CREAZIONE_RISPOSTA_INATTESA"))
+  }
+
+  status <- as.integer(httr2::resp_status(response))
+
+  if (!identical(status, 201L)) {
+    error <- payload[["error"]]
+    scrub <- function(value) {
+      gsub(token, "", as.character(value %||% ""), fixed = TRUE)
+    }
+    # A throttle says "not now", a refusal says "not you", and only one of them
+    # passes by itself. Nothing sleeps here: a round that waited inside itself
+    # might not return, and a round that does not return leaves no record at
+    # all -- at which point the alarm on absence reports that the channel is
+    # not running while it is running very hard. The next round is four hours
+    # away and re-reads reality anyway.
+    return(creation_failure(
+      if (identical(status, 429L)) {
+        "TRASPORTO_CREAZIONE_RIMANDATA"
+      } else {
+        "TRASPORTO_CREAZIONE_RIFIUTATA"
+      },
+      payload = list(
+        code = scrub(error[["code"]]), message = scrub(error[["message"]])
+      )
+    ))
+  }
+
+  list(
+    ok = TRUE, errors = character(), payload = payload,
+    credential = credential, upn = upn
+  )
+}
+
+
 #' Read the whole directory of the tenant
 #'
 #' The only function in the package that speaks to Microsoft Graph, and the
@@ -233,10 +457,7 @@ directory_users <- function(token, base_url) {
     is.character(base_url), length(base_url) == 1L, nzchar(base_url)
   )
 
-  base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", base_url)
-  base <- sub("/+$", "", base)
-
-  endpoint <- paste0("https://", base)
+  endpoint <- directory_endpoint(base_url)
   url <- paste0(
     endpoint,
     "/users?$select=", paste(directory_fields(), collapse = ","),
