@@ -251,12 +251,37 @@ provisioning_reconcile <- function(register_url,
   # granted that project by hand must not be able to make the person to grant
   # it to either, and that question is answered by an instance.
   admitted <- identity_actionable(verdicts)
-  awaiting <- !admitted & identity_normalize(verdicts) == "absent"
+  absent <- !admitted & identity_normalize(verdicts) == "absent"
+
+  # A request revoked before it was ever served. Until now `request_status`
+  # reached only `register_to_desired()`, so the creation branch hung off the
+  # verdict alone and a row somebody had revoked still made the person exist.
+  # The two are not the same question -- a revocation speaks about the access
+  # and the verdict about who somebody is -- but nobody who revokes an unserved
+  # request expects an account to come of it. The only other answer available
+  # was to tell people to delete the record instead, and that contradicts what
+  # the form itself promises: absence is not a request.
+  withdrawn <- absent &
+    trimws(as.character(register[["request_status"]])) == "revoked"
+
+  awaiting <- absent & !withdrawn
   standing <- admitted | awaiting
 
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(which(!standing), function(i) {
+      # Nothing to take away and nobody to make: the state this row asks for is
+      # the one the tenant is already in. Settled the way `already_gone` settles
+      # a revocation of a right that is not there -- the same word and the same
+      # read-back -- because `pending` on a row nobody will ever touch again is
+      # a row left open for ever.
+      if (withdrawn[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]], round_outcome_kind(character(), dry_run),
+          at = at, applied_as = round_applied_as(NULL)
+        ))
+      }
+
       codes <- identity_stop_codes(verdicts[[i]], resolutions[[i]][["errors"]])
       if (length(codes) == 0L) {
         # A verdict that is neither actionable nor `absent` and has nothing to

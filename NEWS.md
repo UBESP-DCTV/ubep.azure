@@ -1,5 +1,21 @@
 # ubep.azure (development version)
 
+* **A request revoked before it was ever served no longer makes the person
+  exist.** `request_status` reached only `register_to_desired()`, so the
+  creation branch hung off the identity verdict alone and revoking a row that
+  had not yet been served left the account to be born from it anyway. The two
+  are not the same question — a revocation speaks about the access and the
+  verdict about who somebody is — but nobody who revokes a request that has not
+  been served expects an identity to come of it, and the only answer left was to
+  tell people to delete the record instead, which contradicts what the form
+  itself promises: absence is not a request.
+
+  **The row closes rather than waiting**, under the word this round already uses
+  for the same shape: a revocation of a right that is not there is settled as
+  `applied`, with the read-back saying `absent`. Asking for absence and finding
+  it is a success, and `pending` would have left open for ever a row nobody is
+  going to touch again.
+
 * **The round makes the accounts that are missing, under a permission that can
   do nothing else.** `directory_create_user()` is the second and last thing
   this package does on Microsoft Graph, and `User.Create` is what it runs

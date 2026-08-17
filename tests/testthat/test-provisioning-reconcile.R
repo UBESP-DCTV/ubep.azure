@@ -1153,6 +1153,53 @@ test_that("nobody is created for a row whose requester could not have granted it
 })
 
 
+test_that("nobody is born from a request revoked before it was ever served", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(request_status = "revoked"))),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # `request_status` used to reach only `register_to_desired()`, so the creation
+  # branch hung off the verdict alone and a row somebody had revoked still made
+  # the person exist. The two are not the same question -- a revocation speaks
+  # about the access and the verdict about who somebody is -- but nobody who
+  # revokes an unserved request expects an account to be born from it, and the
+  # register's own field note promises the opposite of a deletion: "absence is
+  # not a request".
+  #
+  # It closes rather than waiting, and `applied` is the word this round already
+  # uses for it: a revocation of a right that is not there is settled the same
+  # way, with the read-back saying `absent`. Asking for absence and finding it
+  # is a success, and `pending` would leave open for ever a row nobody will
+  # touch again.
+  expect_length(creazioni(), 0L)
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_equal(esito[["esiti"]][["applied_as"]], "absent")
+})
+
+
+test_that("a revocation of somebody who was never made is simulated on a dry run", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(request_status = "revoked"))),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # The outcome is read off `dry_run` like every other settled row and is not
+  # fixed at `applied` here: a simulated round reports what it would have
+  # concluded, and a register that said `applied` while `UBEP_SCRITTURA` was off
+  # would carry a success no round produced.
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+})
+
+
 test_that("nobody is created while the instance that would say so is silent", {
   # eval
   esito <- giro(
