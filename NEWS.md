@@ -16,6 +16,30 @@
   it is a success, and `pending` would have left open for ever a row nobody is
   going to touch again.
 
+* **The round erases the username it wrote itself and keeps the one it did
+  not.** This is the writing half of the rule that stopped a resolved row from
+  being read as a declaration of its own handwriting, and it hangs on the same
+  discriminator, the previous verdict. Read in both directions it is a single
+  sentence: an empty `identity` means the `username` beside it belongs to
+  whoever filed the row, and a filled one means it belongs to the round.
+
+  **Why it must not empty a declaration.** A row that an error of data stops
+  carries an empty `identity` by construction, so the earlier rule never spoke
+  for it. The round emptied the username; the next pass read that emptiness back
+  as a field the referent had left blank, took the other branch of the rule on
+  internal contact addresses, filled the username in from the contact and found
+  the account's surname was another person's. One row collected two different
+  diagnoses without anybody touching it — and the field it was being asked to
+  correct had been blanked, so the mistake was no longer in front of the person
+  who made it.
+
+  **Why it must still empty its own.** Emptying nothing at all is the wrong fix
+  and the tests now say so: a row that was `existing` carries the canonical UPN,
+  in the tenant's domain, beside a contact address that ordinarily is not. Kept
+  past the verdict that backed it, that value is read as a declaration on the
+  next pass and the row closes against the referent for a word the round wrote.
+  Both branches settle in one step.
+
 * **The round makes the accounts that are missing, under a permission that can
   do nothing else.** `directory_create_user()` is the second and last thing
   this package does on Microsoft Graph, and `User.Create` is what it runs

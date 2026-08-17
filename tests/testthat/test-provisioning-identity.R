@@ -764,6 +764,102 @@ test_that("the resolution is a fixed point once the round has written it back", 
 })
 
 
+test_that("the resolution is a fixed point on a row an error of data stopped", { # nolint: line_length_linter.
+  # eval
+  # The row the test above could not be. It iterates the ordinary row, which
+  # resolves and converges anyway, so it asserted the property where it could
+  # not break: erasing a username only ever happens to a row that stops, and
+  # that row is the one nothing iterated.
+  #
+  # This one stops. Its contact address is in the domain and the username its
+  # filer typed is a different address in the domain, which is the shape
+  # decision 12 refuses in both directions.
+  directory <- dir_frame(dir_user(
+    userPrincipalName = "spike.uno@ubep.unipd.it",
+    givenName = "Spike", surname = "Uno",
+    officeLocation = "spike.uno@example.org"
+  ))
+  row <- a_request(
+    contact_email = "spike.uno@ubep.unipd.it",
+    username = "altro.utente@ubep.unipd.it"
+  )
+  codes <- character()
+  for (round in 1:4) {
+    answer <- resolve_identity(row, directory)
+    codes <- c(codes, answer[["errors"]])
+    row[["username"]] <- answer[["username"]]
+    row[["identity"]] <- answer[["identity"]]
+  }
+
+  # test
+  # Measured on rows 2 to 4 of the live register on 2026-08-16: the first round
+  # emptied the username, and the second read that emptiness back as a field
+  # the referent had left blank -- because a row an error stops carries an empty
+  # `identity` by construction, so the rule of `51602c1` does not speak. From
+  # there decision 12 took its other branch, filled the username in from the
+  # internal contact, and found the account's surname was somebody else's:
+  # `DATO_NOME_DIVERGENTE`. Two different diagnoses for a row nobody touched.
+  expect_equal(codes, rep("DATO_RECAPITO_INTERNO_DIVERGENTE", 4L))
+  # And what the referent typed is still in the field they have to correct.
+  # Blanking it leaves them a row to fix and no sight of the mistake.
+  expect_equal(row[["username"]], "altro.utente@ubep.unipd.it")
+})
+
+
+test_that("a username the round wrote does not outlive the verdict behind it", { # nolint: line_length_linter.
+  # eval
+  # The other half, and the reason the rule is not "never empty it on an error
+  # of data". This row is `existing`, so its username is the canonical UPN the
+  # round itself wrote -- in the tenant's domain, beside an external contact
+  # address, which is the ordinary two-address shape. Then the account's
+  # `userType` stops being readable and the round can no longer stand behind
+  # the verdict.
+  directory <- dir_frame(dir_user(userType = ""))
+  row <- a_request(
+    username = "mario.rossi@ubep.unipd.it", identity = "existing"
+  )
+  codes <- character()
+  for (round in 1:3) {
+    answer <- resolve_identity(row, directory)
+    codes <- c(codes, answer[["errors"]])
+    row[["username"]] <- answer[["username"]]
+    row[["identity"]] <- answer[["identity"]]
+  }
+
+  # test
+  # Kept, that username would be read back as a declaration the moment its
+  # verdict went -- an internal address beside an external contact -- and
+  # decision 12 would close the row with `DATO_RECAPITO_INTERNO_DIVERGENTE`,
+  # blaming the referent for a word the round wrote. That is the oscillation of
+  # `51602c1` again, moved from the reading side to the writing side.
+  #
+  # So the discriminator is not the verdict but `previous`, exactly as it is
+  # when the username is read: the round erases its own handwriting and keeps
+  # whatever it did not write.
+  expect_equal(codes, rep("TRASPORTO_TIPO_UTENTE_NON_LEGGIBILE", 3L))
+  expect_equal(row[["username"]], "")
+})
+
+
+test_that("a username the register hands back as missing goes back as a string", { # nolint: line_length_linter.
+  # eval
+  # A field REDCap left unset arrives as `NA` and not as `""`, and giving the
+  # row back what it came with is a road that value could not travel before:
+  # every stopped verdict used to carry the empty string this function makes.
+  answer <- resolve_identity(
+    a_request(contact_email = "", username = NA),
+    dir_frame(dir_user())
+  )
+
+  # test
+  # `identity_payload()` takes a string and would accept `NA_character_`
+  # without complaining, and what a referent would then read in the field is
+  # the two letters of a missing value.
+  expect_equal(answer[["errors"]], "DATO_RECAPITO_ASSENTE")
+  expect_identical(answer[["username"]], "")
+})
+
+
 test_that("a declaration is still a declaration before the first verdict", {
   # eval
   answer <- resolve_identity(

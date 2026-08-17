@@ -24,20 +24,36 @@ does, so that what counts as an internal address and what a composed UPN
 looks like cannot drift apart.}
 }
 \value{
-A list with \code{identity}, \code{username} and \code{errors}.
+A list with \code{identity}, \code{username}, \code{errors} and \code{composed}.
 }
 \description{
-Pure: a function of the row and of the swept directory, in the same shape as
-\code{provisioning_diff()} and \code{scope_errors()}. It reads no network, writes
-nothing, and knows the register only as a row.
+The door, and the one rule that is about the round rather than about the
+directory: \strong{on a verdict that did not resolve, the round erases the
+username it wrote itself and keeps the one it did not.}
 }
 \details{
-\strong{Two queries, not one}, and the whole vocabulary rests on it: \code{ambiguous}
-is read off the number of matches on the identity criterion, \code{collision} off
-the composed UPN being held by somebody else. A resolver asking one question
-could not tell \code{collision} from \code{absent}, and would either create a
-duplicate or take a uniqueness refusal from Entra and report it as a
-transport error — that is, as something that will pass by itself next round.
-It will not.
+It is the writing half of the rule \verb{51602c1} installed for reading, and it
+hangs on the same discriminator, the previous verdict. Read in both
+directions it is a single sentence: an empty \code{identity} means the \code{username}
+beside it belongs to whoever filed the row, and a filled one means it
+belongs to the round.
+
+\strong{Why the round must not empty a declaration.} Measured on rows 2 to 4 of
+the live register on 2026-08-16. Emptying it, the next round reads the blank
+as a field the referent left empty -- a row an error stops carries an empty
+\code{identity} by construction, so the rule of \verb{51602c1} never speaks -- and
+decision 12 takes its other branch, fills the username from the internal
+contact and finds the account's surname is another person's. Two different
+diagnoses reach the referent for a row they never touched, and the field
+they are being asked to correct has been blanked, so the mistake is no
+longer in front of them.
+
+\strong{Why it must still empty its own.} A row that was \code{existing} carries the
+canonical UPN, which is in the tenant's domain, beside a contact address
+which ordinarily is not. Kept past the verdict that backed it, that value
+would be read as a declaration on the next pass and closed as
+\code{DATO_RECAPITO_INTERNO_DIVERGENTE} -- the referent blamed for a word the
+round wrote, which is the oscillation of \verb{51602c1} again with the sides
+swapped. Both branches settle in one step.
 }
 \keyword{internal}

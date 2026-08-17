@@ -798,6 +798,41 @@ test_that("a row the resolution stopped reports the reason, and sheds the userna
 })
 
 
+test_that("a row stopped before any verdict keeps the username its filer typed", { # nolint: line_length_linter.
+  # eval
+  # The mirror of the test above, and the half that was missing. There the row
+  # carried a verdict, so its username was the round's own writing and had to
+  # go with it. Here nothing has ever resolved this row, so what sits in the
+  # field is what the referent typed -- an address in the domain that is not
+  # the contact address, also in the domain, which decision 12 refuses.
+  esito <- giro(
+    registro_doppio(record_json(list(
+      contact_email = "spike.uno@ubep.unipd.it",
+      username = "altro.utente@ubep.unipd.it"
+    ))),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(
+      userPrincipalName = "spike.uno@ubep.unipd.it",
+      givenName = "Spike", surname = "Uno",
+      officeLocation = "spike.uno@example.org"
+    ))
+  )
+
+  # test
+  # Nothing is written back at all, and that is the property rather than a
+  # side effect: the row is already where the resolution leaves it, so there is
+  # no change to import. Before this the round emptied the field every pass and
+  # then read its own emptiness back as a blank the referent had left, which is
+  # how one row collected two different diagnoses without anybody touching it.
+  expect_null(identita_scritte())
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_RECAPITO_INTERNO_DIVERGENTE"
+  )
+})
+
+
 test_that("the gate reads the verdict the round just computed, never the stored one", { # nolint: line_length_linter.
   # eval
   # Decision 2, and the reason the resolution is a step of this round rather

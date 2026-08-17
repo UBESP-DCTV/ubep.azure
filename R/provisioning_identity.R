@@ -279,6 +279,69 @@ identity_verdict <- function(identity,
 
 #' Resolve who a register row is talking about
 #'
+#' The door, and the one rule that is about the round rather than about the
+#' directory: **on a verdict that did not resolve, the round erases the
+#' username it wrote itself and keeps the one it did not.**
+#'
+#' It is the writing half of the rule `51602c1` installed for reading, and it
+#' hangs on the same discriminator, the previous verdict. Read in both
+#' directions it is a single sentence: an empty `identity` means the `username`
+#' beside it belongs to whoever filed the row, and a filled one means it
+#' belongs to the round.
+#'
+#' **Why the round must not empty a declaration.** Measured on rows 2 to 4 of
+#' the live register on 2026-08-16. Emptying it, the next round reads the blank
+#' as a field the referent left empty -- a row an error stops carries an empty
+#' `identity` by construction, so the rule of `51602c1` never speaks -- and
+#' decision 12 takes its other branch, fills the username from the internal
+#' contact and finds the account's surname is another person's. Two different
+#' diagnoses reach the referent for a row they never touched, and the field
+#' they are being asked to correct has been blanked, so the mistake is no
+#' longer in front of them.
+#'
+#' **Why it must still empty its own.** A row that was `existing` carries the
+#' canonical UPN, which is in the tenant's domain, beside a contact address
+#' which ordinarily is not. Kept past the verdict that backed it, that value
+#' would be read as a declaration on the next pass and closed as
+#' `DATO_RECAPITO_INTERNO_DIVERGENTE` -- the referent blamed for a word the
+#' round wrote, which is the oscillation of `51602c1` again with the sides
+#' swapped. Both branches settle in one step.
+#'
+#' @inheritParams resolve_against_directory
+#'
+#' @return A list with `identity`, `username`, `errors` and `composed`.
+#'
+#' @keywords internal
+resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
+  answer <- resolve_against_directory(request, directory, domain)
+
+  if (nzchar(answer[["identity"]])) {
+    return(answer)
+  }
+
+  if (nzchar(identity_normalize(request[["identity"]] %||% ""))) {
+    answer[["username"]] <- ""
+    return(answer)
+  }
+
+  # Kept as it was written and not normalized: this is the referent's own
+  # value going back into the field they have to correct, not a comparison.
+  # The register can hand a field back as `NA`, and what this feeds takes a
+  # string -- without the guard the round would write the two letters of a
+  # missing value into a field a person reads.
+  own <- request[["username"]] %||% ""
+  answer[["username"]] <- if (length(own) != 1L || is.na(own)) {
+    ""
+  } else {
+    as.character(own)
+  }
+
+  answer
+}
+
+
+#' Ask the swept directory who a register row is talking about
+#'
 #' Pure: a function of the row and of the swept directory, in the same shape as
 #' `provisioning_diff()` and `scope_errors()`. It reads no network, writes
 #' nothing, and knows the register only as a row.
@@ -305,10 +368,15 @@ identity_verdict <- function(identity,
 #'   does, so that what counts as an internal address and what a composed UPN
 #'   looks like cannot drift apart.
 #'
-#' @return A list with `identity`, `username` and `errors`.
+#' @return A list with `identity`, `username` and `errors`. The username is
+#'   what the **directory** says, so it is empty on every verdict that did not
+#'   resolve; giving the row back what its filer typed is `resolve_identity()`,
+#'   which is the only caller and the only place that knows whose the value is.
 #'
 #' @keywords internal
-resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
+resolve_against_directory <- function(request,
+                                      directory,
+                                      domain = "ubep.unipd.it") {
   stopifnot(
     is.list(request),
     is.data.frame(directory),
