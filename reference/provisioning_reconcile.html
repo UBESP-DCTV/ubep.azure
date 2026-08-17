@@ -56,6 +56,8 @@ and the order is the design:</p>
 <span>  <span class="va">register_token</span>,</span>
 <span>  <span class="va">hosts</span>,</span>
 <span>  <span class="va">secrets</span>,</span>
+<span>  <span class="va">graph_token</span>,</span>
+<span>  <span class="va">graph_url</span>,</span>
 <span>  instances <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dry_run <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  at <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"%Y-%m-%d %H:%M"</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span></span>
@@ -82,6 +84,16 @@ instance whose secret could not be read is named here with <code>NA</code> rathe
 than left out, so the two failures stay distinguishable.</p></dd>
 
 
+<dt id="arg-graph-token-graph-url">graph_token, graph_url<a class="anchor" aria-label="anchor" href="#arg-graph-token-graph-url"></a></dt>
+<dd><p>The Microsoft Graph access token and endpoint
+the sweep of step 3 is made with. Both are arguments and neither has a
+default: this repository is public, and an endpoint written in is an
+endpoint published. An empty endpoint is not an error here but a sweep
+that could not start, which is what the parameters sheet says a missing
+<code>UBEP_GRAPH</code> does — every row takes a transport error instead of a
+verdict, rather than the round dying with a message nobody reads.</p></dd>
+
+
 <dt id="arg-instances">instances<a class="anchor" aria-label="anchor" href="#arg-instances"></a></dt>
 <dd><p>The fleet, in the order the register's <code>server</code> field
 carries it, for the dictionary comparison. <code>NULL</code> compares the other
@@ -99,7 +111,11 @@ fields and declares the substitution.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with <code>at</code>, <code>fermato</code>, <code>schema</code>, <code>istanze</code>, <code>esiti</code>,
-<code>scritte</code> and <code>errori</code>.</p>
+<code>credenziali</code>, <code>scritte</code> and <code>errori</code>. <code>scritte</code> counts the outcomes
+REDCap took and not the identities: they are two writes into two field
+families, and one counter for both would be a number nobody could read
+back into either. <code>credenziali</code> carries what the accounts created this
+round were born with, and it is the only road those take.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -107,28 +123,53 @@ fields and declares the substitution.</p></dd>
 <ol><li><p>compare the register's dictionary and stop if the drift changes what a
 round reads;</p></li>
 <li><p>read the register;</p></li>
-<li><p>turn it into the desired state, keeping the form errors;</p></li>
+<li><p>resolve <strong>who each row is talking about</strong>, against the tenant read whole,
+and write the verdict back;</p></li>
+<li><p>turn what the gate admits into the desired state, keeping the form
+errors;</p></li>
 <li><p>per instance, read the state <strong>once</strong> for the grantees and the requesters
 together;</p></li>
 <li><p>ask the scope gate about the instances that answered, and only those;</p></li>
 <li><p>diff against the real rows somebody asked about;</p></li>
 <li><p>batch by <code>(server, project_id)</code>, never across two projects;</p></li>
 <li><p>read back what a real write did, before calling it applied;</p></li>
+<li><p><strong>create the accounts the gate allowed and the tenant does not hold</strong>;</p></li>
 <li><p>write back the outcome, and only what changed.</p></li>
-</ol><p>Idempotent by construction: a round interrupted between applying and writing
+</ol><p><strong>Step 3 is a step of this round and not a job of its own</strong> — decision 2 of
+the design — and the reason is latency: resolving and acting have the same
+cadence and the second consumes the first, so a resolver on a timer of its
+own would make every new row wait one more cycle to be looked at. It follows
+that the gate has no window at all: it asks after the verdict it has just
+computed, never after the one the register carries, and writing <code>identity</code>
+back is the minutes of the verdict rather than the input to the next step.</p>
+<p><strong>Step 10 is last because it needs step 6's answer</strong>, and that is the whole
+shape of it. A row whose verdict is <code>absent</code> is not a pair — there is nobody
+to grant a right to — so it never enters the desired state; but it does
+travel as far as the scope question, because whoever could not have granted
+that project by hand must not be able to make the person to grant it to
+either. An instance that did not answer has neither allowed nor refused, and
+the row waits.</p>
+<p><strong>The row it creates stays <code>absent</code> for this pass</strong> and becomes <code>created</code> at
+the next one, which is decision 4 working as written rather than a delay
+being tolerated: <code>created</code> is the row whose previous verdict was <code>absent</code> and
+that now matches, and that memory lives in the register. A round that wrote
+<code>created</code> on the strength of having just made the account would be keeping a
+second source of truth beside the sweep, which is the thing decision 4 of the
+channel's design forbids.</p>
+<p>Idempotent by construction: a round interrupted between applying and writing
 the outcome leaves the row as still to do, and the next round applies it
 again. That is harmless because the diff finds it already conforming and
 classifies it <code>noop</code> — and it is the reason the job can be killed at any
 moment without repair.</p>
 <p>A <code>project_id</code> the register accepted but that is not a number is named here
 with <code>DATO_PROGETTO_INESISTENTE</code> right after the pure layer runs, and before
-the scope gate ever sees the row. The row may not be a pair yet — <code>username</code>
-stays blank until the identity is resolved, which is the ordinary state in
-this version — so <code><a href="register_to_desired.html">register_to_desired()</a></code> never validated it, while
-<code><a href="scope_pairs.html">scope_pairs()</a></code> admits it on <code>requested_by</code> alone. Left to the gate it would
-come back as a scope refusal, "you may not ask for that project", when the
-truth is "that is not a project number" — a data error the referent can act
-on, not a permission they are sent to go ask for when they already hold it.</p>
+the scope gate ever sees the row. <code><a href="validate_request.html">validate_request()</a></code> catches the ones that
+will not coerce; this catches the ones that coerce to something else, since
+<code>as.integer("9003.7")</code> is <code>9003L</code> and not <code>NA</code>, while <code><a href="scope_pairs.html">scope_pairs()</a></code> admits
+the row on <code>requested_by</code> alone. Left to the gate it would come back as a
+scope refusal, "you may not ask for that project", when the truth is "that
+is not a project number" — a data error the referent can act on, not a
+permission they are sent to go ask for when they already hold it.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

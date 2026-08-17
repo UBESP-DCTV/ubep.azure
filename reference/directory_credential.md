@@ -1,0 +1,42 @@
+# Draw the credential an account is born with
+
+One credential per person, and there is no batch to be the password of:
+the historical flow put a single one at the top of a generated `.ps1`
+and fifteen people shared it, in a file that outlived the act. Here the
+property is obtained by construction rather than by discipline, because
+the credential is drawn inside the call that creates the account.
+
+## Usage
+
+``` r
+directory_credential(length = 24L)
+```
+
+## Arguments
+
+- length:
+
+  How many characters. The default clears the floor Entra sets by a wide
+  margin, and the four classes below are guaranteed one each because the
+  policy asks for three of them.
+
+## Value
+
+A single string.
+
+## Details
+
+**Drawn from `openssl` and not from
+[`sample()`](https://rdrr.io/r/base/sample.html)**, which is the one
+thing about it worth a paragraph. R seeds its own generator from the
+clock and the process id; this round runs on a timer at six known times
+a day, so an attacker who knows the schedule is searching a space rather
+than guessing a secret. What that buys them is not the account's data —
+it is the enrollment of their own second factor on an account created
+enabled and with none, which is the tenant's whole defense. `openssl`
+costs nothing to depend on: `httr2` already does.
+
+`generate_password()` is deliberately left alone. It feeds the
+deprecated `.ps1` path, where the credential is written into a file that
+survives in a shared folder, and predictability is the least of that
+one's problems.

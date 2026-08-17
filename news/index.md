@@ -2,6 +2,410 @@
 
 ## ubep.azure (development version)
 
+- **A request revoked before it was ever served no longer makes the
+  person exist.** `request_status` reached only
+  [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md),
+  so the creation branch hung off the identity verdict alone and
+  revoking a row that had not yet been served left the account to be
+  born from it anyway. The two are not the same question — a revocation
+  speaks about the access and the verdict about who somebody is — but
+  nobody who revokes a request that has not been served expects an
+  identity to come of it, and the only answer left was to tell people to
+  delete the record instead, which contradicts what the form itself
+  promises: absence is not a request.
+
+  **The row closes rather than waiting**, under the word this round
+  already uses for the same shape: a revocation of a right that is not
+  there is settled as `applied`, with the read-back saying `absent`.
+  Asking for absence and finding it is a success, and `pending` would
+  have left open for ever a row nobody is going to touch again.
+
+- **The round erases the username it wrote itself and keeps the one it
+  did not.** This is the writing half of the rule that stopped a
+  resolved row from being read as a declaration of its own handwriting,
+  and it hangs on the same discriminator, the previous verdict. Read in
+  both directions it is a single sentence: an empty `identity` means the
+  `username` beside it belongs to whoever filed the row, and a filled
+  one means it belongs to the round.
+
+  **Why it must not empty a declaration.** A row that an error of data
+  stops carries an empty `identity` by construction, so the earlier rule
+  never spoke for it. The round emptied the username; the next pass read
+  that emptiness back as a field the referent had left blank, took the
+  other branch of the rule on internal contact addresses, filled the
+  username in from the contact and found the account’s surname was
+  another person’s. One row collected two different diagnoses without
+  anybody touching it — and the field it was being asked to correct had
+  been blanked, so the mistake was no longer in front of the person who
+  made it.
+
+  **Why it must still empty its own.** Emptying nothing at all is the
+  wrong fix and the tests now say so: a row that was `existing` carries
+  the canonical UPN, in the tenant’s domain, beside a contact address
+  that ordinarily is not. Kept past the verdict that backed it, that
+  value is read as a declaration on the next pass and the row closes
+  against the referent for a word the round wrote. Both branches settle
+  in one step.
+
+- **The round makes the accounts that are missing, under a permission
+  that can do nothing else.**
+  [`directory_create_user()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_create_user.md)
+  is the second and last thing this package does on Microsoft Graph, and
+  `User.Create` is what it runs under: it cannot modify an account that
+  already exists, reset a credential, disable or delete one. So the
+  worst a wrong creation can do is leave an account nobody has used,
+  with the request that caused it written in the register beside the
+  name of whoever filed it.
+
+  **It does not compose the name it creates.** The UPN is an argument,
+  and the round takes it from the verdict that found it free. Composing
+  it a second time on the way to Graph would be two paths to one answer:
+  the day somebody hands a domain to the resolution and not to the
+  creation, the round would check that one name is free and create
+  another — a UPN nobody has checked for a collision, which is the
+  failure this whole sub-project is about.
+
+  **`givenName` and `surname` are in the body because the criterion is
+  the surname.** An account created without a surname is one the next
+  sweep cannot find, while the UPN it would compose is now taken — so
+  the row comes back `collision`, and the round would have created the
+  person and then told them for ever that their name is another
+  person’s.
+
+  **Neither `jobTitle` nor `officeLocation`.** The authorization has one
+  channel and it is the channel; the contact address goes in the field
+  that means contact address. The old carrier is read for as long as
+  accounts carry it — the sweep counts them, and the day the count is
+  zero the fallback is dead — and written never again. A guard arms the
+  not-inheriting, because the serialized authorization is a live
+  mechanism and not a fossil: 2.828 accounts carry it, 254 of them
+  created in 2026.
+
+  **The row it creates stays `absent` for that pass** and becomes
+  `created` at the next one. That is not a delay being tolerated:
+  `created` is defined as the row whose previous verdict was `absent`
+  and that now matches, and the memory lives in the register. A round
+  that wrote `created` on the strength of having just made the account
+  would keep a second source of truth beside the sweep.
+
+  **Making somebody exist is bounded by the same gate as granting them a
+  right**, and by a guard. An `absent` row is not a pair, so before this
+  it stopped at the identity gate and never reached the instance that
+  answers the scope question — the round was rearranged so that it does.
+  An instance that did not answer has neither allowed nor refused, and
+  the row waits. A simulated round creates nobody: a creation is not a
+  write on an instance, so nothing else in the round would have stopped
+  it.
+
+  **One credential per person, drawn from `openssl` and not from
+  [`sample()`](https://rdrr.io/r/base/sample.html).** There is no batch
+  to be the password of, which is the property the historical flow
+  lacked — one password at the top of a generated `.ps1`, shared by
+  fifteen people, in a file that outlived the act. The generator matters
+  because the account is created enabled and with no second factor
+  enrolled: what a guess buys is the enrollment of another person’s,
+  which is the tenant’s whole defense. R seeds its own generator from
+  the clock and the process id and this round runs on a timer at six
+  known times a day, which is a search space rather than a secret. The
+  credential leaves by the return value and by no other road — not the
+  register, not the telemetry record, not standard output — and a guard
+  forbids the runner from naming it at all.
+
+- **The round resolves who a row is talking about before deciding what
+  to do with it.**
+  [`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md)
+  gains a step between reading the register and building the desired
+  state: it sweeps the tenant whole, resolves every row against it,
+  writes `username` and `identity` back through the door that takes
+  nothing else, and hands on to the desired state only what the gate
+  admits. The order of the questions is the design, and the function’s
+  own documentation carries the new one.
+
+  **The gate has no window.** It asks after the verdict the round has
+  just computed, never after the one the register carries: a round that
+  read the stored value would be looking at something up to four hours
+  old, and after a failed sweep at something nothing had confirmed this
+  pass at all.
+
+  **A sweep that failed is a transport error on every row, and no
+  instance is interrogated.** “I could not ask” is not “you are not the
+  one”, so the rows go back in the queue instead of closing against
+  whoever filed them — and nothing is acted on, because acting would
+  mean granting under a verdict nobody produced this round.
+
+  **What the gate stops, and what the register then says.** `ambiguous`
+  and `collision` close the row as data errors, so `A-13` mails the
+  referent, under codes that name what they can correct rather than what
+  the round observed: `DATO_RECAPITO_NON_IDENTIFICA` — give a contact
+  address that picks out this person and nobody else — and
+  `DATO_IDENTITA_IN_COLLISIONE`, whose proposal travels beside it in
+  `username`. `absent` stays `pending`, because the round will create
+  the account itself and mailing somebody about a row nobody has to
+  touch is how an alert stops being read.
+
+  Guard A ships in the same commit: no function that can write on an
+  instance may do so without naming the gate on the identity, the twin
+  of the rule that has guarded the gate on scope since 0.10.0. Both now
+  read one list of what counts as a write, so a fourth write path cannot
+  be added to one rule and missed by the other.
+
+  [`round_changed()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_changed.md)
+  takes a `fields` argument so the same “only what changed” filter
+  serves both families of field rather than being copied, and the Graph
+  token and endpoint are arguments of the round with no defaults — this
+  repository is public, and an endpoint written in is an endpoint
+  published.
+
+- **The resolution no longer mistakes its own handwriting for a
+  declaration.**
+  [`resolve_identity()`](https://ubesp-dctv.github.io/ubep.azure/reference/resolve_identity.md)
+  treated the register’s `username` as a claim by whoever filed the row,
+  every pass. That is right until the round has answered, and wrong from
+  then on: the two fields are never written apart, so a row carrying a
+  verdict carries a username this package wrote. Read as a declaration
+  it is the very shape decision 12 refuses — a UPN in the tenant’s
+  domain beside a contact address that ordinarily is not — so a resolved
+  row oscillated with period two: `existing`, then closed against the
+  referent with `DATO_RECAPITO_INTERNO_DIVERGENTE`, then `existing`
+  again, mailing them about it every other round.
+
+  `identity` is what tells the two apart, and it can, because nothing
+  writes a username without writing it. Nothing is lost: the declared
+  UPN is confirmed on the first resolution, which is the only pass that
+  has a declaration to confirm, and re-deriving the account every pass
+  afterwards is also what makes a renamed login surface as a changed
+  verdict instead of as `DATO_UTENTE_DICHIARATO_DIVERSO` blamed on the
+  person who filed the row.
+
+  Invisible to the pure layer’s own tests, which hand the resolution
+  rows written by hand: the loop only closes when the round writes back
+  and reads again.
+
+- **The resolved identity has a body of its own, and a door that takes
+  nothing else.**
+  [`identity_payload()`](https://ubesp-dctv.github.io/ubep.azure/reference/identity_payload.md)
+  fixes the three columns — `record_id`, `username`, `identity` — and
+  [`register_identity_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_identity_import.md)
+  refuses at the threshold anything that is not exactly those, the way
+  [`register_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_import.md)
+  already refuses anything that is not the five outcome fields. The
+  register holds three families of field: what a person asked for, what
+  the round resolved about who they mean, and what happened. No body may
+  carry two of them, and neither door accepts the other’s, so the
+  separation is structural rather than a promise kept by whoever
+  assembles the body.
+
+  **Neither field is written without the other.** A username written
+  without the verdict that authorizes it is the state this sub-project
+  exists to close: the channel decides by looking at whether `username`
+  is filled, and nothing has ever put a verdict beside it. The invariant
+  that follows is **conditional**, and it is the condition the gate will
+  check — a username is authoritative if and only if `identity` is
+  `existing` or `created`. It is conditional rather than absolute
+  because a collision carries its proposal: there is a determined value
+  to show, and it is the one a person has to act on, so keeping it out
+  of the register would leave it living only inside an e-mail.
+
+  `overwriteBehavior` is `overwrite`, and the reason is not the one it
+  is right for the outcomes. The body carries the totality of what the
+  round owns on this axis, so overwriting can only blank the round’s own
+  two fields — and the blanking is the point: a row that was `existing`
+  and becomes `ambiguous`, which is the renamed-login case, has to lose
+  the username that became false rather than keep it beside a verdict
+  that no longer supports it. The empty verdict is writable for the same
+  reason. It is not a missing value: it is “not resolved”, which is what
+  a row stopped by a data error carries, and a row that stops has to
+  shed the username it earned back when it still resolved.
+
+  The transport the two writers share now has one copy rather than two.
+  [`register_field_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_field_import.md)
+  holds the mechanics — the JSON body, the overwrite, the check that
+  REDCap took every row it was sent — while each writer fixes its own
+  column list and its own refusal. What keeps the families apart is the
+  door, not the call.
+
+- **The package can say who a register row is talking about.**
+  [`resolve_identity()`](https://ubesp-dctv.github.io/ubep.azure/reference/resolve_identity.md)
+  is pure — a function of the row and of the swept directory, in the
+  same shape as
+  [`provisioning_diff()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_diff.md)
+  and
+  [`scope_errors()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_errors.md)
+  — and it asks **two questions, not one**. `ambiguous` is read off the
+  number of matches on the identity criterion; `collision` off the
+  composed UPN being held by somebody else. A resolver asking one
+  question could not tell `collision` from `absent`, and would either
+  create a duplicate or take a uniqueness refusal from Entra and report
+  it as a transport error, that is, as something that will pass by
+  itself next round. It will not. Said in one line, because that is how
+  the two stop being confused: `ambiguous` is too many people with one
+  identity, `collision` is two people with one name.
+
+  **The surname is the criterion and the contact address confirms it.**
+  An account carrying the surname — and the given name too, when the
+  account carries one — is a candidate for being this person; whether it
+  is *the* one is settled by the contact address. Read the other way
+  round, the resolution would call an ambiguity what is merely a shared
+  address: 99 addresses in the tenant sit on more than one account, 221
+  accounts involved, and a mailbox shared by a lab says nothing about
+  who anybody is. It would also miss the failure that matters most — a
+  person who exists under a UPN this package would not have composed,
+  whose contact address has since changed, read as “nobody matched” and
+  given a second account.
+
+  So one homonym is enough to stop the row. An account with this surname
+  whose contact address is not the one given is `ambiguous`: nothing
+  here tells “the same person, with an address we did not know” from
+  “somebody else with the same name”, and the second reading is the one
+  that creates a duplicate. The addresses are read from
+  `officeLocation`, where the historical flow put them and where 6.494
+  accounts still carry them, from `otherMails`, and from the UPN,
+  because an address in the tenant’s domain **is** a UPN. Both sides are
+  normalized: 74 accounts carry the address with spaces at the edges,
+  and an exact comparison would report `absent` for people who exist.
+  Guests are excluded by invariant, not by measurement.
+
+  `collision` therefore means something narrower than it looks. A
+  homonym is caught by the surname rule and never reaches it, so
+  reaching it means the UPN this package would compose is held by an
+  account that does **not** carry that surname — odd data in the tenant
+  rather than two people with one name. The numeric-suffix proposal
+  stands, because a free UPN is still needed.
+
+  **Two things stop a row that matched**, and the prefix on each is a
+  delivery address rather than a label. An account whose `userType`
+  cannot be read, and a contact address sitting on an account with no
+  surname at all, are ours: neither is something the filer could fix,
+  and telling the one person who cannot reach a directory attribute that
+  they are not authorized sends them to go and argue. The unclassified
+  account still matches, on purpose — dropped instead, it would become
+  “nobody matched” and earn its person a second account.
+
+  The declared username is confirmed as an identity and not as a string.
+  An alias, an `@unipd.it` address that is the same institution but not
+  the tenant’s domain, a shared mailbox: divergence between the UPN and
+  an address the same person writes from is the ordinary case, and a
+  string comparison would refuse it. When the account carries the
+  declared value among its own identifiers the canonical UPN replaces
+  it; when it does not, the row holds two incompatible claims and goes
+  back to whoever filed it.
+
+  The internal-address rule holds in both directions, and its third
+  branch is the counter-intuitive one: an address in the domain that
+  matches nobody is a typo rather than an absence, so the creation
+  branch does not open — creating it would fabricate the account the
+  typo describes. It is the one place `absent` is suppressed, and it is
+  asked before the collision so that the diagnosis names the typo
+  instead of a homonym who has nothing to do with it. The symmetric case
+  stays ordinary: an external address matching nobody is `absent`, and
+  somebody from outside is a row to create rather than one to refuse.
+
+  On a collision the round **proposes** rather than decides:
+  `nome.cognome.2`, `.3`, the first free one. Without a proposal the row
+  hands a person two questions and no material; with it exactly one is
+  left, and it is the one only the referent can close.
+
+- **The package can read the tenant’s directory, and it reads all of
+  it.**
+  [`directory_users()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_users.md)
+  is the only function that speaks to Microsoft Graph, and it does one
+  thing: it sweeps. It does not filter, and that is a measurement rather
+  than a preference — `officeLocation`, where the historical flow put
+  the contact address and where 6.494 accounts still carry it, is not
+  filterable server-side at all, and `mail`, which would be, is `null`
+  on 6.412 accounts out of 7.664. The obvious attribute is empty on
+  exactly the population to be found. Reading in full costs 8 pages and
+  3,5 seconds measured on 2026-08-15, less than the round that will
+  consume it, and it yields decision 4 of the channel’s design by
+  construction rather than by discipline: no local copy of the state,
+  the real one re-read every round. It also buys a property a
+  server-side filter could not have given — the comparison is ours, so
+  it can normalize, and it has to, because 74 accounts carry the address
+  with spaces at the edges and an `eq` would have missed them in
+  silence.
+
+  It answers in the shape the other adapters answer in — `ok`, `errors`,
+  `payload` — plus `users`, the frame, and the shape is what keeps “I
+  could not ask” apart from “nobody is there”: the first is `ok = FALSE`
+  with no frame at all, the second is a clean read of zero rows. **A
+  failure at any page returns no rows whatsoever.** A half-read
+  directory is not a small directory: every account on a page that did
+  not arrive is missing, a missing account resolves to `absent`, and
+  `absent` is the verdict that opens the creation branch — so partial
+  rows escaping would turn a transport failure into duplicate people.
+
+  Two bounds beyond what the plan asked for, both on the continuation
+  Graph hands back. The sweep stops after 100 pages rather than
+  following a continuation that never ends: the measured shape is 8
+  pages, and the failure avoided is the one this project can least
+  afford, a round that never returns and so leaves no record, with the
+  severity-1 alarm reporting that the channel is not running while it
+  runs very hard. And a continuation is followed only when it is https
+  on the host the caller named, compared on the parsed host rather than
+  on a prefix, because `https://graph.example.org@elsewhere.test/`
+  starts with the right text and resolves to the wrong machine.
+  Following it blindly would hand an application credential to whatever
+  host the other end names.
+
+  The token travels as a redacted bearer header, so it is a weak
+  reference inside the request object and cannot be spilled by printing
+  it while diagnosing a round; it never reaches a URL, on the first page
+  or on any continuation; and it is scrubbed out of a refusal’s message
+  before that message is kept. Graph does not echo it today, and relying
+  on that would be trusting the other end to keep our credential. The
+  refusal keeps Graph’s `code` as well as its prose, because
+  `Authorization_RequestDenied` and `Request_UnsupportedQuery` send
+  whoever reads them to different places — the consent and the query —
+  and a 403 on every row is precisely the shape a missing consent takes.
+
+- **The `identity` field gains a fifth choice, `absent`, and the
+  register’s packaged dictionary changes with it.** The four approved on
+  2026-08-07 are not exhaustive over what the identity resolution can
+  observe: they assume resolving a person and creating them are a single
+  act, so “nobody matches and the composed UPN is free” becomes
+  `created` at once. It does not — a creation can fail, and a person can
+  be looking at the row in between — and a state that lasts needs a
+  name. `absent` is a verdict rather than an instruction, the way
+  `outcome` reports what happened rather than what to do.
+  [`identity_vocabulary()`](https://ubesp-dctv.github.io/ubep.azure/reference/identity_vocabulary.md)
+  holds the five words, next to
+  [`outcome_vocabulary()`](https://ubesp-dctv.github.io/ubep.azure/reference/outcome_vocabulary.md)
+  and for the same reason: more than one reader needs them, and a second
+  copy drifts. A test binds every field whose vocabulary this package
+  owns to the choices the packaged dictionary offers, in order — order
+  included, because
+  [`compare_dictionary()`](https://ubesp-dctv.github.io/ubep.azure/reference/compare_dictionary.md)
+  matches the whole choices string, so a reordering reads as drift
+  against the live project. Without that binding, a word added on one
+  side only is silent in both directions: one the package never emits,
+  the other one the project refuses to store.
+
+  **This changes a schema, so it stops the channel until the live
+  project is re-imported**, in either order: `DIZIONARIO_SCELTE_DIVERSE`
+  blocks a round, and the comparison is symmetric. The halt is safe — it
+  happens before the register is read, writes nothing, and raises a
+  severity-1 alarm — but it is not silent, and the two acts belong to
+  one maintenance window.
+
+- **The channel’s round leaves a record, and it goes in a table of its
+  own.** A round left no trace but the outcomes it wrote into the
+  register, and those say nothing about the round itself.
+  [`round_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_record.md)
+  builds that trace and `dev/runner-canale.R` emits it. It carries
+  `registro_letto` — the channel’s counterpart of the observer’s
+  `letture_riuscite` — because an alarm firing on the absence of a
+  record would be satisfied by a round that started, stopped on a
+  drifted dictionary and exited; and because an empty register and an
+  unreachable one both give `righe = 0`, while only one of them needs
+  somebody. One counter per word of the closed outcome vocabulary rather
+  than a single total, since a night of data errors and a night of
+  transport errors go to different people. **A second table rather than
+  a column in the observer’s**: the observer’s alarm rules read its
+  table without asking who wrote the record, and five of the seven read
+  whichever record is the most recent — so a channel record in there
+  would have made one of them a standing red and three of them silently
+  green, masking the observer’s findings instead of reporting them.
+
 - **The module resolves the names a write would need on every run,
   simulated or not.** A role or a DAG that does not exist was refused
   only by a real write, because the resolutions lived inside the branch
