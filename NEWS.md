@@ -1,5 +1,47 @@
 # ubep.azure (development version)
 
+* **A duplicated pair no longer takes the older row's access out of reach.**
+  `register_to_desired()` marked every row of a repeated pair, and a marked row
+  never reaches the plan — so a revocation written on the row that had granted
+  the access was not carried out. The access stayed on the instance, its
+  mandate read `data_error`, and nothing anybody could write in the register
+  would remove it. That is a right standing with its mandate marked invalid,
+  which is the failure this register exists to prevent, arriving from the side
+  nobody was watching.
+
+  **The oldest row keeps its mandate**, and only the rows filed after it carry
+  `DATO_COPPIA_DUPLICATA`. The two were never equals: the older one may already
+  have been served, and the newer is the one that did what the work instruction
+  says not to do, which is to file a second request instead of changing the
+  first. What looked like refusing to guess was picking the outcome that leaves
+  no way out — the referent could not delete the row, could not revoke it, and
+  could not change the three fields the key is made of, because the round
+  rewrites the username at every pass.
+
+  **Age is the `record_id`, which REDCap auto-numbers, and not the order the
+  rows arrive in.** The API promises no order, and a register read newest-first
+  would otherwise reverse who keeps the mandate. Non-numeric ids still get a
+  definite order rather than an accidental one, and `"10"` sorts after `"9"`.
+
+  **Putting `request_status` in the key would have been the smaller change and
+  is unsafe**, which is worth recording because it is the obvious one to reach
+  for. It would stop an `active` and a `revoked` row for one pair from being
+  duplicates, and then both enter the plan: `provisioning_reconcile()` builds
+  its apply batches before its revoke batches and reads the real state before
+  either, so the round would grant the pair and remove it in the same pass. And
+  it would be silent — `round_changed()` compares outcome, detail and
+  `applied_as`, all three identical from one round to the next — so the
+  instance would be written to twice every four hours with nothing in the
+  register to show for it. A test now states the invariant that no pair lands
+  in both lists.
+
+  **What it does not fix, stated because the next person will ask.** Two
+  `active` rows disagreeing about the role still resolve to the older one, and
+  whoever filed the newer must change the older instead. The
+  alternative is a third `request_status` that retires a row without revoking
+  the access it stands for, and that costs a dictionary import on the register
+  project — worth it only if the case turns up.
+
 * **A request revoked before it was ever served no longer makes the person
   exist.** `request_status` reached only `register_to_desired()`, so the
   creation branch hung off the identity verdict alone and revoking a row that

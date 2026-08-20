@@ -106,7 +106,7 @@ test_that("a row without a username is not a pair, nor an error", {
 })
 
 
-test_that("a pair present in two rows fails closed on both", {
+test_that("the oldest row of a repeated pair keeps its mandate", {
   # eval
   register <- rbind(
     register_row(record_id = "1", role_name = "data entry"),
@@ -115,13 +115,114 @@ test_that("a pair present in two rows fails closed on both", {
   split <- register_to_desired(register)
 
   # test
-  # Guessing which row wins is what a ledger does; a register refuses. Both
-  # rows carry the error, because either one of them is the mistake and there
-  # is no way to tell which.
-  expect_length(split[["desired"]], 0L)
-  expect_setequal(names(split[["errors"]]), c("1", "2"))
-  expect_equal(split[["errors"]][["1"]], "DATO_COPPIA_DUPLICATA")
+  # The register still refuses to guess, but the guess it refused to make was
+  # never between two equals: the first row is the one that may already hold a
+  # granted access, and the second is the one that disobeyed "change the
+  # existing request, do not file a second one". Failing closed on both put the
+  # older row's access beyond reach of a revocation, which is the one thing a
+  # register of mandates must never do.
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "1")
+  expect_setequal(names(split[["errors"]]), "2")
   expect_equal(split[["errors"]][["2"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("a revocation is not blocked by a request filed after it", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "1", request_status = "revoked"),
+    register_row(record_id = "2")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # The case the old rule got wrong, and the reason this one exists: an access
+  # granted by row 1 could not be taken away once row 2 existed, because a
+  # marked row never reaches the plan at all. Absence of a mandate with the
+  # right still standing is the failure this whole register is built against.
+  expect_length(split[["revoked"]], 1L)
+  expect_equal(split[["revoked"]][[1]][["record_id"]], "1")
+  expect_length(split[["desired"]], 0L)
+  expect_equal(split[["errors"]][["2"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("one pair never lands in both desired and revoked", {
+  # eval
+  # Two rows, same pair, disagreeing about what should happen to it. This is
+  # the combination that made `request_status` in the key unsafe: the round
+  # builds its apply batches before its revoke batches and reads the real
+  # state before either, so a pair in both lists is granted and then removed
+  # in the same pass, silently, every four hours.
+  register <- rbind(
+    register_row(record_id = "1"),
+    register_row(record_id = "2", request_status = "revoked")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  key <- function(e) paste(e[["server"]], e[["project_id"]], e[["username"]])
+  expect_length(
+    intersect(
+      vapply(split[["desired"]], key, character(1)),
+      vapply(split[["revoked"]], key, character(1))
+    ),
+    0L
+  )
+})
+
+
+test_that("age is the record id, not the order the rows arrive in", {
+  # eval
+  # The API does not promise an order, and a register read newest-first would
+  # otherwise reverse who keeps the mandate.
+  register <- rbind(
+    register_row(record_id = "2", role_name = "read only"),
+    register_row(record_id = "1", role_name = "data entry")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "1")
+  expect_setequal(names(split[["errors"]]), "2")
+})
+
+
+test_that("record ids that are not numbers still order deterministically", {
+  # eval
+  # Auto-numbering makes them integers today, and nothing in the contract says
+  # they must stay that way. A non-numeric id must not crash the comparison
+  # nor make the winner depend on the read order.
+  register <- rbind(
+    register_row(record_id = "b"),
+    register_row(record_id = "a")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "a")
+  expect_setequal(names(split[["errors"]]), "b")
+})
+
+
+test_that("three rows on one pair leave the oldest and mark the two after it", {
+  # eval
+  register <- rbind(
+    register_row(record_id = "7"),
+    register_row(record_id = "10"),
+    register_row(record_id = "9")
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # Ten beside nine and seven is the case a string comparison gets wrong:
+  # "10" sorts before "7".
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "7")
+  expect_setequal(names(split[["errors"]]), c("9", "10"))
 })
 
 
