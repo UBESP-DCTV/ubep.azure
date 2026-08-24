@@ -58,3 +58,151 @@ mail_local_time <- function(at) {
 
   format(moment, "%Y-%m-%d %H:%M", tz = "Europe/Rome")
 }
+
+
+#' Say a value, or say why it is not there
+#'
+#' REDCap has no conditional piping, so the alert bodies gave every field a
+#' line of its own and explained in prose that an empty one meant something.
+#' Composing here, the empty case can change the sentence instead, which is a
+#' large part of why the text moved out of REDCap at all.
+#'
+#' @param value The field as the register carries it.
+#' @param absent What to say when it carries nothing.
+#'
+#' @return One string, never empty.
+#'
+#' @keywords internal
+mail_said_or <- function(value, absent) {
+  value <- if (is.null(value) || is.na(value)) "" else as.character(value)
+  if (nzchar(value)) value else absent
+}
+
+
+#' Say what `applied` did, which is not the same thing twice
+#'
+#' `applied` is one word for two opposite facts and the module has no second
+#' word: it means "what the row asked for was done", and what it asked for is
+#' in `request_status`. The alert body had to print the vocabulary and ask the
+#' reader to apply it. The mail of record 9 in the collaudo is what this exists
+#' to prevent -- it said `applied` on a revocation, naming nobody, and whoever
+#' read it understood that an access had been granted.
+#'
+#' @param request_status The row's `request_status`.
+#'
+#' @return A character vector named `it` and `en`.
+#'
+#' @keywords internal
+mail_status_words <- function(request_status) {
+  if (identical(as.character(request_status), "revoked")) {
+    c(it = "l'accesso e' stato tolto", en = "the access has been removed")
+  } else {
+    c(it = "l'accesso e' stato concesso", en = "the access has been granted")
+  }
+}
+
+
+#' Compose the message that tells whoever filed a row how it went
+#'
+#' Both languages in one message, Italian above and English below: the channel
+#' does not know which one the recipient reads -- `requested_by` is a UPN and
+#' says nothing about it -- so sending two would double the post without
+#' knowing which of them could be dropped.
+#'
+#' @param row One register row as a list, carrying the dictionary's fields.
+#'
+#' @return A list with `subject` and `body`, both length one.
+#'
+#' @keywords internal
+mail_outcome_message <- function(row) {
+  stopifnot(is.list(row), !is.null(row[["record_id"]]))
+
+  said <- mail_outcome_words(as.character(row[["outcome"]]))
+  status <- mail_status_words(row[["request_status"]])
+  id <- as.character(row[["record_id"]])
+  locale <- mail_said_or(mail_local_time(row[["outcome_at"]]), "non nota")
+
+  # Only an executed row gets the sentence that says which of the two opposite
+  # things `applied` meant. On every other outcome nothing was done, and the
+  # sentence would be answering a question nobody asked.
+  fatto <- if (identical(as.character(row[["outcome"]]), "applied")) {
+    list(
+      it = paste0("Che cosa e' successo: ", status[["it"]], "."),
+      en = paste0("What happened: ", status[["en"]], ".")
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
+  it <- c(
+    paste0("La richiesta ", id, " del registro di provisioning ha un esito."),
+    "",
+    paste0("Esito: ", said[["it"]], " (", row[["outcome"]], ")"),
+    fatto[["it"]],
+    paste0("Dettaglio: ", mail_said_or(row[["outcome_detail"]], "nessuno")),
+    paste0("Quando: ", locale, ", ora italiana."),
+    "",
+    paste0(
+      "Riguarda: ", row[["first_name"]], " ", row[["last_name"]],
+      " - ", row[["contact_email"]]
+    ),
+    paste0(
+      "Su: ", row[["server"]], ", progetto ", row[["project_id"]],
+      ", ruolo ", row[["role_name"]]
+    ),
+    paste0("Stato richiesto: ", row[["request_status"]]),
+    paste0("Nome utente risolto: ", mail_said_or(
+      row[["username"]], "non ancora stabilito dalla lavorazione"
+    )),
+    paste0("Letto sull'istanza: ", mail_said_or(
+      row[["applied_as"]], "l'istanza non ha risposto"
+    )),
+    "",
+    paste0(
+      "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
+      "compilato, e va corretto nel registro. Uno che comincia per ",
+      "TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve ",
+      "rifarla, ma se dura piu' di un giorno segnalalo a IT."
+    )
+  )
+
+  en <- c(
+    paste0("Request ", id, " in the provisioning register has an outcome."),
+    "",
+    paste0("Outcome: ", said[["en"]], " (", row[["outcome"]], ")"),
+    fatto[["en"]],
+    paste0("Detail: ", mail_said_or(row[["outcome_detail"]], "none")),
+    paste0("When: ", locale, ", Italian local time."),
+    "",
+    paste0(
+      "Concerns: ", row[["first_name"]], " ", row[["last_name"]],
+      " - ", row[["contact_email"]]
+    ),
+    paste0(
+      "On: ", row[["server"]], ", project ", row[["project_id"]],
+      ", role ", row[["role_name"]]
+    ),
+    paste0("Requested status: ", row[["request_status"]]),
+    paste0("Resolved user name: ", mail_said_or(
+      row[["username"]], "not established yet"
+    )),
+    paste0("Read back on the instance: ", mail_said_or(
+      row[["applied_as"]], "the instance did not answer"
+    )),
+    "",
+    paste0(
+      "A detail starting with DATO_ concerns what was filled in, and has to ",
+      "be corrected in the register. One starting with TRASPORTO_ is ours: ",
+      "the row returns to the queue by itself and does not need refiling, ",
+      "but if it lasts more than a day, report it to IT."
+    )
+  )
+
+  list(
+    subject = paste0(
+      "Richiesta ", id, ": ", said[["it"]],
+      " / Request ", id, ": ", said[["en"]]
+    ),
+    body = paste(c(it, "", "---", "", en), collapse = "\n")
+  )
+}
