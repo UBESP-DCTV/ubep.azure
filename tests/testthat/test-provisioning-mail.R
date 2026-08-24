@@ -87,3 +87,64 @@ test_that("l'ora nel corpo e' quella italiana, e nomina il fuso", {
   expect_match(detto, "2026-08-24 14:04", fixed = TRUE)
   expect_match(detto, "ora italiana", fixed = TRUE)
 })
+
+
+test_that("le istruzioni di primo accesso non portano nessun segreto", {
+  # eval
+  detto <- mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+
+  # test
+  expect_match(detto, "sara.collaudozeta@ubep.unipd.it", fixed = TRUE)
+  expect_match(detto, "cinzia@ubep.unipd.it", fixed = TRUE)
+  expect_match(detto, "second factor", fixed = TRUE)
+  expect_false(grepl(finti[["parola"]], detto, fixed = TRUE))
+})
+
+
+test_that("il messaggio d'ingresso non nomina istanza, progetto, ruolo", {
+  # eval
+  detto <- mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  expect_match(detto, finti[["parola"]], fixed = TRUE)
+  expect_false(grepl("edc10", detto, fixed = TRUE))
+  expect_false(grepl("29", detto, fixed = TRUE))
+  expect_false(grepl("collaudo-canale", detto, fixed = TRUE))
+})
+
+
+test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
+  # eval
+  riga <- riga_di_prova()
+  altri <- list(
+    mail_outcome_message(riga)[["body"]],
+    mail_welcome_message(riga, upn = "sara@ubep.unipd.it")[["body"]]
+  )
+
+  # test
+  for (corpo in altri) {
+    expect_false(grepl(finti[["parola"]], corpo, fixed = TRUE))
+  }
+})
+
+
+test_that("i due messaggi nuovi portano le due lingue", {
+  # eval
+  riga <- riga_di_prova()
+  corpi <- c(
+    mail_welcome_message(riga, upn = "sara@ubep.unipd.it")[["body"]],
+    mail_credential_message(
+      riga, upn = "sara@ubep.unipd.it", credential = finti[["parola"]]
+    )[["body"]]
+  )
+
+  # test
+  for (corpo in corpi) {
+    expect_match(corpo, "\n---\n", fixed = TRUE)
+  }
+})

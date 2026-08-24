@@ -206,3 +206,138 @@ mail_outcome_message <- function(row) {
     body = paste(c(it, "", "---", "", en), collapse = "\n")
   )
 }
+
+
+#' Tell a person an account now exists for them, and what stands in the way
+#'
+#' It carries no way in, and that is the decision rather than an omission:
+#' `contact_email` is chosen by whoever fills the form and verified by nobody,
+#' so a secret sent there would let anyone who can file a request have an
+#' account born in the tenant and its key delivered to an address of their own
+#' choosing. The referent who asked for the account hands it over instead; this
+#' message says so, and names them.
+#'
+#' @param row One register row as a list.
+#' @param upn The account's user principal name, as created.
+#'
+#' @return A list with `subject` and `body`.
+#'
+#' @keywords internal
+mail_welcome_message <- function(row, upn) {
+  stopifnot(is.list(row), is.character(upn), length(upn) == 1L, nzchar(upn))
+
+  referente <- mail_said_or(
+    row[["requested_by"]], "chi ha compilato la richiesta"
+  )
+
+  it <- c(
+    paste0("Ciao ", row[["first_name"]], ","),
+    "",
+    paste0(
+      "e' stato creato per te un account UBEP. Il nome con cui ti autentichi ",
+      "e': ", upn
+    ),
+    "",
+    paste0(
+      "La chiave d'ingresso non e' in questo messaggio: te la consegna ",
+      referente, ", che e' la persona che ha chiesto l'account per te."
+    ),
+    "",
+    "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
+    "",
+    "- registrare un secondo fattore di autenticazione, con un tuo",
+    "  dispositivo. Si fa una volta sola.",
+    "- compilare il modulo con i tuoi dati di base.",
+    "- confermare il tuo indirizzo di posta seguendo un link.",
+    "",
+    "Se qualcosa non torna, rispondi a questo messaggio."
+  )
+
+  en <- c(
+    paste0("Hello ", row[["first_name"]], ","),
+    "",
+    paste0(
+      "a UBEP account has been created for you. The name you sign in with ",
+      "is: ", upn
+    ),
+    "",
+    paste0(
+      "The way in is not in this message: ", referente,
+      " will hand it to you, as the person who requested the account."
+    ),
+    "",
+    "At first sign-in you will be asked three things, in this order:",
+    "",
+    "- register a second factor of authentication, with a device of your",
+    "  own. This is done once.",
+    "- fill in the basic user information form.",
+    "- confirm your e-mail address by following a link.",
+    "",
+    "If anything looks wrong, reply to this message."
+  )
+
+  list(
+    subject = paste0("Il tuo account UBEP / Your UBEP account: ", upn),
+    body = paste(c(it, "", "---", "", en), collapse = "\n")
+  )
+}
+
+
+#' Hand the way in to the person who asked for the account
+#'
+#' It carries the UPN, the key, and nothing else. No project, no role, no
+#' instance, nobody in copy: a message with a way in must not also carry the
+#' context that makes it spendable.
+#'
+#' This message has no second chance, and that is what separates it from every
+#' other one the round sends. The account is already born and the round does
+#' not create it twice, so a send that fails leaves an account nobody can get
+#' into -- and the managed identity cannot repair that, because `User.Create`
+#' and `User.Read.All` do not touch an account that exists. `mail_round()`
+#' reports the failure under its own code, so an alarm can tell it apart from a
+#' message that will simply be retried.
+#'
+#' @param row One register row as a list.
+#' @param upn The account's user principal name.
+#' @param credential What the account was born with.
+#'
+#' @return A list with `subject` and `body`.
+#'
+#' @keywords internal
+mail_credential_message <- function(row, upn, credential) {
+  stopifnot(
+    is.list(row),
+    is.character(upn), length(upn) == 1L, nzchar(upn),
+    is.character(credential), length(credential) == 1L, nzchar(credential)
+  )
+
+  it <- c(
+    "Hai chiesto un account, ed e' stato creato. Ecco come entrarci.",
+    "",
+    paste0("Nome utente: ", upn),
+    paste0("Chiave d'ingresso: ", credential),
+    "",
+    paste0(
+      "Consegnala alla persona per una via sicura, e non inoltrare questo ",
+      "messaggio. Va cambiata al primo accesso, e chi la usa per prima si ",
+      "prende l'account."
+    )
+  )
+
+  en <- c(
+    "You requested an account, and it now exists. Here is how to get in.",
+    "",
+    paste0("User name: ", upn),
+    paste0("Way in: ", credential),
+    "",
+    paste0(
+      "Hand it over securely, and do not forward this message. It must be ",
+      "changed at first sign-in, and whoever uses it first takes the account."
+    )
+  )
+
+  list(
+    subject = "Accesso al nuovo account / New account access",
+    body = paste(c(it, "", "---", "", en), collapse = "\n")
+  )
+}
