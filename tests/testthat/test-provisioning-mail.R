@@ -133,6 +133,69 @@ test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
 })
 
 
+test_that("manda al servizio di posta, col mittente e la chiave che riceve", {
+  # eval
+  catturata <- NULL
+  detto <- httr2::with_mocked_responses(
+    function(req) {
+      catturata <<- req
+      httr2::response(status_code = 202L)
+    },
+    mail_send(
+      api_key = finti[["chiave"]], from = "mittente@example.org",
+      to = "destinatario@example.org", subject = "oggetto", body = "corpo",
+      cc = "copia@example.org", reply_to = "risposte@example.org"
+    )
+  )
+
+  # test
+  expect_true(detto[["ok"]])
+  expect_equal(detto[["errors"]], character())
+  expect_match(catturata[["url"]], "api.sendgrid.com", fixed = TRUE)
+  expect_equal(catturata[["method"]], "POST")
+  # `httr2` redige `Authorization` da se': letto come lista, l'header e' un
+  # riferimento debole e non una stringa. `req_get_headers(redact = FALSE)` e'
+  # la via pubblica per rivederlo, ed e' anche la prova che la redazione c'e' --
+  # cioe' che la chiave non finisce in un `print()` della richiesta.
+  expect_equal(
+    httr2::req_get_headers(catturata, redacted = "reveal")[["Authorization"]],
+    paste("Bearer", finti[["chiave"]])
+  )
+})
+
+
+test_that("un rifiuto del servizio non e' un giro rotto, e' un esito", {
+  # eval
+  detto <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 403L),
+    mail_send(
+      api_key = finti[["chiave"]], from = "m@example.org",
+      to = "d@example.org", subject = "o", body = "c"
+    )
+  )
+
+  # test
+  expect_false(detto[["ok"]])
+  expect_equal(detto[["errors"]], "TRASPORTO_POSTA_RIFIUTATA")
+})
+
+
+test_that("il servizio irraggiungibile si distingue dal servizio che rifiuta", {
+  # eval
+  detto <- httr2::with_mocked_responses(
+    function(req) stop("rete assente"),
+    mail_send(
+      api_key = finti[["chiave"]], from = "m@example.org",
+      to = "d@example.org", subject = "o", body = "c"
+    )
+  )
+
+  # test
+  expect_false(detto[["ok"]])
+  expect_equal(detto[["errors"]], "TRASPORTO_POSTA_NON_RAGGIUNGIBILE")
+})
+
+
 test_that("i due messaggi nuovi portano le due lingue", {
   # eval
   riga <- riga_di_prova()

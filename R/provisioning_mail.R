@@ -341,3 +341,84 @@ mail_credential_message <- function(row, upn, credential) {
     body = paste(c(it, "", "---", "", en), collapse = "\n")
   )
 }
+
+
+#' Hand one message to the mail service
+#'
+#' REDCap on the register's instance does not send over SMTP: it sends through
+#' its mail provider's HTTP API. So does this, which is why no new dependency
+#' appears -- the call is a JSON POST, the same shape `module_call()` already
+#' uses.
+#'
+#' `202` is what success looks like, and it means "accepted", not "delivered".
+#' A bounce happens afterwards and asynchronously, and never comes back into
+#' the round. What the round can promise is that it did not lose the message
+#' through a fault of its own; it cannot promise the referent read it.
+#'
+#' `from` is not a choice: the account has one verified sender identity and any
+#' other address is refused. It arrives as an argument all the same, because a
+#' resource name written into a public repository is a resource name published.
+#'
+#' @param api_key The service key, which the runner reads from Key Vault.
+#' @param from The verified sender identity.
+#' @param to Recipient address.
+#' @param subject,body The composed message.
+#' @param cc Optional address in copy.
+#' @param reply_to Optional address replies should reach.
+#'
+#' @return A list with `ok` and `errors`.
+#'
+#' @keywords internal
+mail_send <- function(api_key,
+                      from,
+                      to,
+                      subject,
+                      body,
+                      cc = NULL,
+                      reply_to = NULL) {
+  stopifnot(
+    is.character(api_key), length(api_key) == 1L, nzchar(api_key),
+    is.character(from), length(from) == 1L, nzchar(from),
+    is.character(to), length(to) == 1L, nzchar(to),
+    is.character(subject), length(subject) == 1L,
+    is.character(body), length(body) == 1L
+  )
+
+  destinatari <- list(to = list(list(email = to)))
+  if (!is.null(cc) && nzchar(cc)) {
+    destinatari[["cc"]] <- list(list(email = cc))
+  }
+
+  payload <- list(
+    personalizations = list(destinatari),
+    from = list(email = from),
+    subject = subject,
+    content = list(list(type = "text/plain", value = body))
+  )
+  if (!is.null(reply_to) && nzchar(reply_to)) {
+    payload[["reply_to"]] <- list(email = reply_to)
+  }
+
+  # Same shape as `module_call()`, and for the same reasons: a transport that
+  # cannot be reached is not an exception to propagate but an outcome to
+  # report, and an HTTP error is read here rather than thrown by httr2.
+  response <- tryCatch(
+    httr2::request("https://api.sendgrid.com/v3/mail/send") |>
+      httr2::req_method("POST") |>
+      httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
+      httr2::req_body_json(payload, auto_unbox = TRUE) |>
+      httr2::req_error(is_error = function(resp) FALSE) |>
+      httr2::req_perform(),
+    error = function(e) NULL
+  )
+
+  if (is.null(response)) {
+    return(list(ok = FALSE, errors = "TRASPORTO_POSTA_NON_RAGGIUNGIBILE"))
+  }
+
+  if (!identical(httr2::resp_status(response), 202L)) {
+    return(list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA"))
+  }
+
+  list(ok = TRUE, errors = character())
+}
