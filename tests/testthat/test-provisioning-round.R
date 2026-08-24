@@ -369,7 +369,9 @@ esito_finto <- function(esiti = NULL,
                         fermato = FALSE,
                         scritte = 0L,
                         istanze = NULL,
-                        errori = character()) {
+                        errori = character(),
+                        posta = NULL,
+                        credenziali = NULL) {
   if (is.null(esiti)) {
     esiti <- outcome_payload("", "pending")[0, , drop = FALSE]
   }
@@ -380,13 +382,34 @@ esito_finto <- function(esiti = NULL,
       stringsAsFactors = FALSE
     )
   }
-  list(
-    at = "2026-08-14 20:40",
-    fermato = fermato,
-    schema = list(
-      blocks = FALSE, blocking = character(), tolerated = character()
+  fuori <- list(at = "2026-08-14 20:40")
+  # `posta` and `credenziali` stay absent unless a test asks for them: the
+  # rounds that ran before this file existed did not carry either, and a helper
+  # that always supplied them would hide whether `round_record()` copes with a
+  # result that has neither.
+  if (!is.null(posta)) fuori[["posta"]] <- posta
+  if (!is.null(credenziali)) fuori[["credenziali"]] <- credenziali
+  c(
+    fuori,
+    list(
+      fermato = fermato,
+      schema = list(
+        blocks = FALSE, blocking = character(), tolerated = character()
+      ),
+      istanze = istanze, esiti = esiti, scritte = scritte, errori = errori
+    )
+  )
+}
+
+
+posta_finta <- function(...) {
+  utils::modifyList(
+    list(
+      posta_partite = 1L, posta_fallite = 0L,
+      credenziali_recapitate = 0L, credenziali_perse = 0L,
+      posta_dirottata = FALSE
     ),
-    istanze = istanze, esiti = esiti, scritte = scritte, errori = errori
+    list(...)
   )
 }
 
@@ -495,9 +518,16 @@ test_that("the record's list fields stay arrays when they hold one item", {
 
 test_that("the record's fields are exactly the rule's columns", {
   # eval
-  # The columns of UbepCanale_CL as created on 2026-08-14, minus
-  # `TimeGenerated`, which the runner adds at emission time: sixteen here,
-  # seventeen in the table.
+  # The columns of UbepCanale_CL, minus `TimeGenerated`, which the runner adds
+  # at emission time: twenty-one here, twenty-two in the table.
+  #
+  # Five of them were added on 2026-08-24 with the round's own post, and they
+  # are the reason to read the next paragraph before releasing: the collection
+  # rule has to learn them FIRST. Ship the package first and the five arrive
+  # empty, which means `ubep-canale-posta` and
+  # `ubep-canale-credenziale-persa` would both be watching a column that is
+  # never written -- two alarms that can never fire, installed in the belief
+  # that they are watching something.
   #
   # Written out rather than read from Azure -- the suite runs without network
   # and without credentials -- and the point is the order of operations, not
@@ -512,8 +542,9 @@ test_that("the record's fields are exactly the rule's columns", {
   colonne <- c(
     "at", "registro_letto", "fermato", "scrittura", "schema_ferma",
     "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
-    "errori", "esiti_pending", "esiti_applied", "esiti_data_error",
-    "esiti_transport_error", "esiti_simulated"
+    "errori", "posta_partite", "posta_fallite", "credenziali_recapitate",
+    "credenziali_perse", "posta_dirottata", "esiti_pending", "esiti_applied",
+    "esiti_data_error", "esiti_transport_error", "esiti_simulated"
   )
 
   record <- round_record(esito_finto(), TRUE)
@@ -525,4 +556,69 @@ test_that("the record's fields are exactly the rule's columns", {
     grep("^esiti_", names(record), value = TRUE),
     paste0("esiti_", outcome_vocabulary())
   )
+})
+
+
+test_that("il record del giro porta i contatori della posta", {
+  # eval
+  record <- round_record(
+    esito_finto(posta = posta_finta(posta_fallite = 2L)), TRUE
+  )
+
+  # test
+  # One counter per condition, not summed into a single "failures": a message
+  # that did not leave has a next round, and a credential that did not leave
+  # has a person. They go to two alarms for the same reason the outcome
+  # counters do.
+  expect_equal(record[["posta_partite"]], 1L)
+  expect_equal(record[["posta_fallite"]], 2L)
+  expect_equal(record[["credenziali_perse"]], 0L)
+  expect_false(record[["posta_dirottata"]])
+})
+
+
+test_that("un giro senza posta porta i contatori a zero, non li omette", {
+  # eval
+  record <- round_record(esito_finto(), TRUE)
+
+  # test
+  # The alarm on the record's shape counts columns, so a round that sent
+  # nothing has to look like a round that sent nothing -- not like a record
+  # from a version that did not know about the post.
+  expect_equal(record[["posta_partite"]], 0L)
+  expect_equal(record[["posta_fallite"]], 0L)
+  expect_false(record[["posta_dirottata"]])
+})
+
+
+test_that("un dirottamento dimenticato si vede nella telemetria", {
+  # eval
+  record <- round_record(
+    esito_finto(posta = posta_finta(posta_dirottata = TRUE)), TRUE
+  )
+
+  # test
+  expect_true(record[["posta_dirottata"]])
+})
+
+
+test_that("la chiave d'ingresso non entra mai nel record del giro", {
+  # eval
+  record <- round_record(
+    esito_finto(
+      posta = posta_finta(credenziali_recapitate = 1L),
+      credenziali = data.frame(
+        record_id = "1", username = "sara@ubep.unipd.it",
+        credential = finti[["parola"]], stringsAsFactors = FALSE
+      )
+    ),
+    TRUE
+  )
+
+  # test
+  # `round_record()` builds from named fields, so this holds by construction
+  # rather than by anybody remembering. The test is what makes the construction
+  # a promise: the record is shipped to a workspace and kept.
+  expect_false("credenziali" %in% names(record))
+  expect_false(any(grepl(finti[["parola"]], unlist(record), fixed = TRUE)))
 })

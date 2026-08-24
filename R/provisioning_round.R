@@ -472,6 +472,7 @@ round_record <- function(esito, scrittura) {
   esiti <- esito[["esiti"]]
   istanze <- esito[["istanze"]]
   schema <- esito[["schema"]]
+  posta <- esito[["posta"]] %||% list()
 
   counted <- as.list(vapply(
     outcome_vocabulary(),
@@ -495,7 +496,24 @@ round_record <- function(esito, scrittura) {
       irraggiungibili = sum(!istanze[["raggiunta"]]),
       righe = nrow(esiti),
       scritte = as.integer(esito[["scritte"]]),
-      errori = esito[["errori"]] %||% character()
+      errori = esito[["errori"]] %||% character(),
+      # One counter per condition rather than a single "failures" total, for
+      # the same reason the outcome counters are named after the words: a
+      # message that did not leave has a next round, and a credential that did
+      # not leave has a person. Two conditions, two alarms.
+      #
+      # They are always present, zeroed when the round sent nothing. The alarm
+      # on the record's shape counts columns, so a quiet night has to look like
+      # a quiet night and not like a record from a version that predates the
+      # post.
+      posta_partite = as.integer(posta[["posta_partite"]] %||% 0L),
+      posta_fallite = as.integer(posta[["posta_fallite"]] %||% 0L),
+      credenziali_recapitate =
+        as.integer(posta[["credenziali_recapitate"]] %||% 0L),
+      credenziali_perse = as.integer(posta[["credenziali_perse"]] %||% 0L),
+      # A redirect left on by mistake would otherwise be silent: every referent
+      # would stop hearing from the channel and nothing would say so.
+      posta_dirottata = isTRUE(posta[["posta_dirottata"]])
     ),
     counted
   )
