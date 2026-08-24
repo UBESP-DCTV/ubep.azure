@@ -36,8 +36,8 @@ mail_outcome_words <- function(outcome) {
 #'
 #' The register keeps UTC, which is the machine's truth and the one value the
 #' comparison in `round_changed()` ignores by design. A person reading a mail
-#' does not hold that convention, and the collaudo measured the cost: two hours
-#' counted three times as latency before somebody read the code.
+#' does not hold that convention, and the field test measured the cost: two
+#' hours counted three times as latency before somebody read the code.
 #'
 #' The conversion belongs here, in the text a person reads, and not in the
 #' field the code compares.
@@ -84,9 +84,9 @@ mail_said_or <- function(value, absent) {
 #' `applied` is one word for two opposite facts and the module has no second
 #' word: it means "what the row asked for was done", and what it asked for is
 #' in `request_status`. The alert body had to print the vocabulary and ask the
-#' reader to apply it. The mail of record 9 in the collaudo is what this exists
-#' to prevent -- it said `applied` on a revocation, naming nobody, and whoever
-#' read it understood that an access had been granted.
+#' reader to apply it. The mail of record 9 in the field test is what this
+#' exists to prevent -- it said `applied` on a revocation, naming nobody, and
+#' whoever read it understood that an access had been granted.
 #'
 #' @param request_status The row's `request_status`.
 #'
@@ -426,8 +426,8 @@ mail_send <- function(api_key,
 
 #' Put a redirected message's real recipient into the message
 #'
-#' Collaudo runs on real data with every recipient replaced by one address. The
-#' line saying who it would have gone to is what makes the run readable; the
+#' A field test runs on real data with every recipient replaced by one address.
+#' The line saying who it would have gone to is what makes the run readable; the
 #' counter saying the round was redirected is what keeps a forgotten redirect
 #' from being silent.
 #'
@@ -471,7 +471,7 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
 #' @param dry_run When `TRUE` nothing is sent and every row comes back
 #'   writable -- the round behaves as it did before this file existed.
-#' @param redirect_to One address replacing every recipient, for collaudo.
+#' @param redirect_to One address replacing every recipient, for a field test.
 #' @param copy_to Address in copy, on the outcome message only.
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
