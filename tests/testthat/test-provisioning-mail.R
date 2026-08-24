@@ -295,7 +295,7 @@ test_that("una riga la cui mail non parte non si puo' scrivere", {
 })
 
 
-test_that("il messaggio porta l'esito di questo giro, non quello del registro", {
+test_that("il messaggio porta l'esito di questo giro, non quello vecchio", {
   # eval
   registro <- registro_di_prova(
     outcome = "data_error", outcome_detail = "DATO_RUOLO_INESISTENTE"

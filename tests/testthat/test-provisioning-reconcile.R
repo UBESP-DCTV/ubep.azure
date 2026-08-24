@@ -1313,3 +1313,71 @@ test_that("the credential leaves by one road and is on none of the others", {
   expect_false(any(grepl(credenziale, altrove, fixed = TRUE)))
   expect_false("credenziali" %in% names(record))
 })
+
+
+campi_esito <- c(
+  "record_id", "outcome", "outcome_detail", "outcome_at", "applied_as"
+)
+
+
+posta_che_rifiuta <- function(to, cc, subject, body) {
+  list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+}
+
+
+test_that("una riga la cui mail non parte non entra nel corpo dell'import", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = posta_che_rifiuta
+  )
+
+  # test
+  # This is the invariant of the whole file: send first, write after. A row the
+  # referent was not told about does not become history in the register, so the
+  # next round finds it changed again and tries once more. The queue is the
+  # register itself.
+  expect_length(importazioni(campi_esito), 0L)
+  expect_equal(esito[["scritte"]], 0L)
+  expect_true("TRASPORTO_POSTA_RIFIUTATA" %in% esito[["errori"]])
+  expect_equal(esito[["posta"]][["posta_fallite"]], 1L)
+})
+
+
+test_that("senza mailer il giro si comporta come prima di questo file", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The default has to be silence, or installing the package would start a
+  # mail on the next timer.
+  expect_length(importazioni(campi_esito), 1L)
+  expect_equal(esito[["posta"]][["posta_partite"]], 0L)
+  expect_false(esito[["posta"]][["posta_dirottata"]])
+})
+
+
+test_that("una mail partita apre la strada alla scrittura della sua riga", {
+  # eval
+  mandate <- 0L
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      mandate <<- mandate + 1L # nolint: assignment_linter.
+      list(ok = TRUE, errors = character())
+    }
+  )
+
+  # test
+  expect_equal(mandate, 1L)
+  expect_length(importazioni(campi_esito), 1L)
+  expect_equal(esito[["posta"]][["posta_partite"]], 1L)
+})

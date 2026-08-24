@@ -97,6 +97,10 @@ provisioning_reconcile <- function(register_url,
                                    graph_url,
                                    instances = NULL,
                                    dry_run = TRUE,
+                                   mailer = NULL,
+                                   redirect_to = NULL,
+                                   copy_to = NULL,
+                                   reply_to = NULL,
                                    at = format(
                                      Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"
                                    )) {
@@ -108,6 +112,37 @@ provisioning_reconcile <- function(register_url,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
     is.character(at), length(at) == 1L
   )
+
+  # Send first, write after. A row whose message did not leave stays as the
+  # register has it, so the next round finds it changed again and retries --
+  # the queue is the register, and no second state exists to keep aligned. The
+  # cost accepted in exchange is a duplicate, never a loss.
+  #
+  # With no mailer the round behaves exactly as it did before the mail existed:
+  # everything changed is written, nothing is sent. That is the default on
+  # purpose, because installing the package must not start a mail on the next
+  # timer.
+  #
+  # It is a function and not two call sites because the round writes to the
+  # register in two places -- here and on a failed sweep -- and a notification
+  # that skipped one of them would be a `transport_error` nobody was told
+  # about.
+  posted <- function(changed, born = list()) {
+    if (is.null(mailer)) {
+      return(list(
+        recapitate = changed, errori = character(),
+        contatori = list(
+          posta_partite = 0L, posta_fallite = 0L,
+          credenziali_recapitate = 0L, credenziali_perse = 0L,
+          posta_dirottata = FALSE
+        )
+      ))
+    }
+    mail_round(
+      changed, register, born, mailer, dry_run,
+      redirect_to = redirect_to, copy_to = copy_to, reply_to = reply_to
+    )
+  }
 
   empty_outcomes <- outcome_payload("", "pending")[0, , drop = FALSE]
   empty_instances <- data.frame(
@@ -198,13 +233,18 @@ provisioning_reconcile <- function(register_url,
     outcomes <- outcome_rows(
       record_ids, "transport_error", detail = sweep[["errors"]]
     )
+    # This branch writes into the register too, so it goes through the same
+    # door: a notification that skipped it would be a transport error the
+    # referent was never told about.
+    posta <- posted(round_changed(register, outcomes))
     import <- register_import(
-      register_url, register_token, round_changed(register, outcomes)
+      register_url, register_token, posta[["recapitate"]]
     )
     return(list(
       at = at, fermato = FALSE, schema = schema, istanze = empty_instances,
       esiti = outcomes, scritte = import[["scritte"]],
-      errori = import[["errors"]]
+      posta = posta[["contatori"]],
+      errori = c(import[["errors"]], posta[["errori"]])
     ))
   }
 
@@ -681,7 +721,10 @@ provisioning_reconcile <- function(register_url,
   # 11. only what changed, against the register as it was read and not as this
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
-  import <- register_import(register_url, register_token, changed)
+  posta <- posted(changed, born)
+  import <- register_import(
+    register_url, register_token, posta[["recapitate"]]
+  )
 
   list(
     at = at,
@@ -705,10 +748,17 @@ provisioning_reconcile <- function(register_url,
       stringsAsFactors = FALSE
     ),
     scritte = import[["scritte"]],
-    # Both writes report here. An identity body REDCap refused is not visible
+    # What the post did this round. It travels beside `scritte` because the two
+    # are now bound: a row is written only if its message left, so a reader who
+    # saw one without the other could not tell a quiet night from a mute one.
+    posta = posta[["contatori"]],
+    # Every write reports here. An identity body REDCap refused is not visible
     # in any outcome -- the round went on gating on what it computed, which is
     # right -- so without this the register would silently stop carrying the
-    # verdicts while every row still reported its own fate correctly.
-    errori = c(identity_written[["errors"]], import[["errors"]])
+    # verdicts while every row still reported its own fate correctly. A message
+    # that did not leave is here for the same reason: nothing else says it.
+    errori = c(
+      identity_written[["errors"]], import[["errors"]], posta[["errori"]]
+    )
   )
 }
