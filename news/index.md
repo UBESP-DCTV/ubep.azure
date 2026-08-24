@@ -2,6 +2,90 @@
 
 ## ubep.azure (development version)
 
+- **The round sends the post itself, in Italian and in English.** Three
+  messages: the outcome of a request to whoever filed it, first-access
+  instructions to the person the request is about, and the way into a
+  newly created account to the referent who asked for it. It replaces
+  the REDCap alerts, which deliver once per record and cannot be made to
+  do otherwise — the trigger that sees writes arriving through the API
+  is the one that has no “every time” to offer. A row whose outcome
+  changed twice therefore warned once, and the last word a referent was
+  left with could be the wrong one.
+
+- **A row enters the register only once its message has left.** The
+  round sends first and writes after, so a message that did not go out
+  leaves the row as the register has it — the next round finds it
+  changed again and retries. The queue is the register itself: no second
+  state, no file, nothing to keep aligned. What this buys is that a
+  notification cannot be lost; what it costs is that one can arrive
+  twice, and that trade was chosen deliberately.
+
+  The message about a new account’s access is the exception, and it says
+  so. The account is already created and the round does not create it
+  twice, so a failure there is not retried: it is reported under its own
+  code, because nobody but a person can repair it.
+
+- **`UBEP_POSTA` and `UBEP_POSTA_A` govern the post.** Without the first
+  the round behaves exactly as it did in 0.11.0 — it computes, it
+  writes, it sends nothing — so installing this version changes no
+  behavior on its own. The second replaces every recipient with one
+  address so a field test can run on, real data, and the round record
+  reports that it is on.
+
+- **The round record carries five new columns**: `posta_partite`,
+  `posta_fallite`, `credenziali_recapitate`, `credenziali_perse` and
+  `posta_dirottata`. The collection rule has to learn them before this
+  version ships, or they arrive empty and any alarm watching them is
+  watching nothing.
+
+- **A duplicated pair no longer takes the older row’s access out of
+  reach.**
+  [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md)
+  marked every row of a repeated pair, and a marked row never reaches
+  the plan — so a revocation written on the row that had granted the
+  access was not carried out. The access stayed on the instance, its
+  mandate read `data_error`, and nothing anybody could write in the
+  register would remove it. That is a right standing with its mandate
+  marked invalid, which is the failure this register exists to prevent,
+  arriving from the side nobody was watching.
+
+  **The oldest row keeps its mandate**, and only the rows filed after it
+  carry `DATO_COPPIA_DUPLICATA`. The two were never equals: the older
+  one may already have been served, and the newer is the one that did
+  what the work instruction says not to do, which is to file a second
+  request instead of changing the first. What looked like refusing to
+  guess was picking the outcome that leaves no way out — the referent
+  could not delete the row, could not revoke it, and could not change
+  the three fields the key is made of, because the round rewrites the
+  username at every pass.
+
+  **Age is the `record_id`, which REDCap auto-numbers, and not the order
+  the rows arrive in.** The API promises no order, and a register read
+  newest-first would otherwise reverse who keeps the mandate.
+  Non-numeric ids still get a definite order rather than an accidental
+  one, and `"10"` sorts after `"9"`.
+
+  **Putting `request_status` in the key would have been the smaller
+  change and is unsafe**, which is worth recording because it is the
+  obvious one to reach for. It would stop an `active` and a `revoked`
+  row for one pair from being duplicates, and then both enter the plan:
+  [`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md)
+  builds its apply batches before its revoke batches and reads the real
+  state before either, so the round would grant the pair and remove it
+  in the same pass. And it would be silent —
+  [`round_changed()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_changed.md)
+  compares outcome, detail and `applied_as`, all three identical from
+  one round to the next — so the instance would be written to twice
+  every four hours with nothing in the register to show for it. A test
+  now states the invariant that no pair lands in both lists.
+
+  **What it does not fix, stated because the next person will ask.** Two
+  `active` rows disagreeing about the role still resolve to the older
+  one, and whoever filed the newer must change the older instead. The
+  alternative is a third `request_status` that retires a row without
+  revoking the access it stands for, and that costs a dictionary import
+  on the register project — worth it only if the case turns up.
+
 - **A request revoked before it was ever served no longer makes the
   person exist.** `request_status` reached only
   [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md),

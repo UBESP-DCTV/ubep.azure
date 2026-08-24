@@ -44,6 +44,16 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_vocabulary.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/index.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/intake_request.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_message.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_local_time.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_outcome_message.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_outcome_words.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_redirect_note.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_round.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_said_or.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_send.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_status_words.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_welcome_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/metadata_frame.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/module_apply.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/module_call.html</loc></url>
