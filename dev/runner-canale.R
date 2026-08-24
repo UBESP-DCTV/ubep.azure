@@ -50,6 +50,43 @@ if (!nzchar(KEYVAULT)) {
 
 SCRITTURA <- identical(Sys.getenv("UBEP_SCRITTURA"), "1")
 
+# La posta non e' un interruttore, e' un contratto, e la differenza va detta
+# perche' non e' intuitiva: con "manda prima, scrivi dopo" una posta
+# semplicemente spenta bloccherebbe ogni scrittura nel registro. Quindi senza
+# questa variabile il giro fa esattamente quello che faceva prima -- calcola,
+# scrive, non manda -- e con essa una riga entra nel registro solo se la sua
+# notizia e' partita. E' spenta di default, cosi' installare il pacchetto non
+# fa partire nessuna mail al timer successivo.
+POSTA <- identical(Sys.getenv("UBEP_POSTA"), "1")
+
+# Il dirottamento serve a collaudare sui dati veri senza scrivere a nessun
+# referente: ogni destinatario diventa questo indirizzo, e il corpo dichiara a
+# chi sarebbe andato. Il record del giro riporta che e' attivo, cosi' un
+# dirottamento dimenticato si vede nella telemetria invece di far smettere in
+# silenzio la posta a tutti.
+POSTA_A <- Sys.getenv("UBEP_POSTA_A")
+
+# Il mittente e' obbligato: e' l'unica identita' verificata sull'account del
+# servizio di posta, e qualunque altro indirizzo viene rifiutato. Nessun valore
+# di riserva, qui come per il resto: un indirizzo scritto dentro un repository
+# pubblico e' un indirizzo pubblicato.
+POSTA_DA <- Sys.getenv("UBEP_POSTA_DA")
+POSTA_COPIA <- Sys.getenv("UBEP_POSTA_COPIA")
+POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
+
+# Ci si ferma qui e non alla prima mail rifiutata. Senza mittente ogni
+# messaggio verrebbe respinto, quindi nessuna riga sarebbe scritta: il giro
+# girerebbe a vuoto riportando esiti che non arrivano da nessuna parte, e il
+# guasto somiglierebbe a un servizio di posta rotto invece che a una variabile
+# che manca.
+if (POSTA && !nzchar(POSTA_DA)) {
+  stop(
+    "UBEP_POSTA=1 senza UBEP_POSTA_DA: senza mittente ogni messaggio ",
+    "verrebbe rifiutato, e con esso si fermerebbe la scrittura nel registro.",
+    call. = FALSE
+  )
+}
+
 # --- identita' gestita ------------------------------------------------------
 
 token_imds <- function(risorsa) {
@@ -143,6 +180,25 @@ names(segreti) <- nomi
 
 registro_token <- segreto_da_keyvault(registro[["segreto"]], token)
 
+# Il nome della chiave sta nell'inventario come gli altri segreti, e il valore
+# resta in Key Vault. Il mailer e' una chiusura, e la forma non e' un vezzo: il
+# pacchetto sa che esiste una funzione a cui chiedere di mandare e non sa da
+# dove esce la posta, mentre questo file sa da dove esce la posta e non vede
+# mai che cosa ci passa dentro. E' cio' che permette alla guardia sul runner di
+# restare com'e' -- la credenziale non esce dalla funzione che la genera.
+mailer <- if (POSTA) {
+  chiave <- segreto_da_keyvault(registro[["segreto_posta"]], token)
+  function(to, cc, subject, body) {
+    ubep.azure:::mail_send(
+      api_key = chiave, from = POSTA_DA, to = to, subject = subject,
+      body = body, cc = cc,
+      reply_to = if (nzchar(POSTA_RISPOSTE)) POSTA_RISPOSTE else NULL
+    )
+  }
+} else {
+  NULL
+}
+
 esito <- ubep.azure:::provisioning_reconcile(
   register_url = as.character(registro[["host"]]),
   register_token = registro_token,
@@ -152,6 +208,10 @@ esito <- ubep.azure:::provisioning_reconcile(
   graph_url = GRAPH,
   instances = flotta,
   dry_run = !SCRITTURA,
+  mailer = mailer,
+  redirect_to = if (nzchar(POSTA_A)) POSTA_A else NULL,
+  copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
+  reply_to = if (nzchar(POSTA_RISPOSTE)) POSTA_RISPOSTE else NULL,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 
