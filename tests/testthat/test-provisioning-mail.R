@@ -211,3 +211,178 @@ test_that("i due messaggi nuovi portano le due lingue", {
     expect_match(corpo, "\n---\n", fixed = TRUE)
   }
 })
+
+
+raccoglitore <- function(riesce = TRUE) {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list(
+        to = to, cc = cc, subject = subject, body = body
+      )
+      if (isTRUE(riesce)) {
+        list(ok = TRUE, errors = character())
+      } else {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      }
+    },
+    mandate = function() mandate
+  )
+}
+
+
+colonne_cambiate <- c("record_id", "outcome", "outcome_detail", "applied_as")
+
+
+registro_di_prova <- function(...) {
+  as.data.frame(riga_di_prova(...), stringsAsFactors = FALSE)
+}
+
+
+test_that("l'esito va a chi ha compilato, non alla persona nominata", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE, copy_to = "it@example.org"
+  )
+
+  # test
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], "cinzia@ubep.unipd.it")
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+})
+
+
+test_that("un giro che simula non manda niente, e scrive tutto", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = TRUE
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 0L)
+  expect_equal(nrow(detto[["recapitate"]]), 1L)
+})
+
+
+test_that("una riga la cui mail non parte non si puo' scrivere", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = list(),
+    mailer = raccoglitore(riesce = FALSE)[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  expect_equal(nrow(detto[["recapitate"]]), 0L)
+  expect_equal(detto[["errori"]], "TRASPORTO_POSTA_RIFIUTATA")
+  expect_equal(detto[["contatori"]][["posta_fallite"]], 1L)
+})
+
+
+test_that("il messaggio porta l'esito di questo giro, non quello del registro", {
+  # eval
+  registro <- registro_di_prova(
+    outcome = "data_error", outcome_detail = "DATO_RUOLO_INESISTENTE"
+  )
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  changed[["outcome"]] <- "applied"
+  changed[["outcome_detail"]] <- ""
+  posta <- raccoglitore()
+
+  # eval
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, "eseguita", fixed = TRUE)
+  expect_false(grepl("DATO_RUOLO_INESISTENTE", corpo, fixed = TRUE))
+})
+
+
+test_that("una nascita produce due messaggi, a due destinatari diversi", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]]
+  ))
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nati, mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 2L)
+  expect_setequal(
+    vapply(mandate, function(m) m[["to"]], character(1)),
+    c("sara.esterna@example.org", "cinzia@ubep.unipd.it")
+  )
+  expect_equal(detto[["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("una chiave d'ingresso non recapitata ha un codice suo", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]]
+  ))
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nati,
+    mailer = raccoglitore(riesce = FALSE)[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  expect_true("POSTA_CREDENZIALE_PERSA" %in% detto[["errori"]])
+  expect_equal(detto[["contatori"]][["credenziali_perse"]], 1L)
+})
+
+
+test_that("il dirottamento sostituisce i destinatari e lo dichiara nel corpo", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE, redirect_to = "corrado@example.org",
+    copy_to = "it@example.org"
+  )
+
+  # test
+  mandata <- posta[["mandate"]]()[[1L]]
+  expect_equal(mandata[["to"]], "corrado@example.org")
+  expect_null(mandata[["cc"]])
+  expect_match(mandata[["body"]], "cinzia@ubep.unipd.it", fixed = TRUE)
+  expect_true(detto[["contatori"]][["posta_dirottata"]])
+})

@@ -422,3 +422,161 @@ mail_send <- function(api_key,
 
   list(ok = TRUE, errors = character())
 }
+
+
+#' Put a redirected message's real recipient into the message
+#'
+#' Collaudo runs on real data with every recipient replaced by one address. The
+#' line saying who it would have gone to is what makes the run readable; the
+#' counter saying the round was redirected is what keeps a forgotten redirect
+#' from being silent.
+#'
+#' @param body The composed body.
+#' @param to,cc Who the message was addressed to before the redirect.
+#'
+#' @return The body, with the declaration on top.
+#'
+#' @keywords internal
+mail_redirect_note <- function(body, to, cc) {
+  paste(
+    c(
+      "[PROVA] Questo messaggio e' stato dirottato.",
+      paste0("[PROVA] Sarebbe andato a: ", to),
+      if (!is.null(cc) && nzchar(cc)) paste0("[PROVA] In copia a: ", cc),
+      "",
+      body
+    ),
+    collapse = "\n"
+  )
+}
+
+
+#' Send this round's messages, and say which rows may now be written
+#'
+#' The order is the decision: send first, write after. A row whose message did
+#' not leave stays as the register has it, so the next round finds it changed
+#' again and retries -- the queue is the register, and no second state exists
+#' to keep aligned. The cost accepted in exchange is a duplicate, never a loss.
+#'
+#' The credential message is the asymmetry. The account is already born, the
+#' round does not create it twice, and the managed identity cannot repair it.
+#' So its failure is not a retry: it is a person's job, and it goes out under
+#' its own code so an alarm can tell the two apart.
+#'
+#' @param changed The rows this round would write, from `round_changed()`.
+#' @param register The register as read, carrying every field the messages
+#'   name.
+#' @param born The accounts created this round: lists with `record_id`, `upn`
+#'   and `credential`.
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
+#' @param dry_run When `TRUE` nothing is sent and every row comes back
+#'   writable -- the round behaves as it did before this file existed.
+#' @param redirect_to One address replacing every recipient, for collaudo.
+#' @param copy_to Address in copy, on the outcome message only.
+#' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
+#'   mailer closure is what carries it to the transport.
+#'
+#' @return A list with `recapitate`, `errori` and `contatori`.
+#'
+#' @keywords internal
+mail_round <- function(changed,
+                       register,
+                       born,
+                       mailer,
+                       dry_run,
+                       redirect_to = NULL,
+                       copy_to = NULL,
+                       reply_to = NULL) {
+  stopifnot(
+    is.data.frame(changed), is.data.frame(register), is.list(born),
+    is.function(mailer),
+    is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run)
+  )
+
+  conto <- list(
+    posta_partite = 0L, posta_fallite = 0L,
+    credenziali_recapitate = 0L, credenziali_perse = 0L,
+    posta_dirottata = !is.null(redirect_to)
+  )
+
+  if (isTRUE(dry_run)) {
+    return(list(recapitate = changed, errori = character(), contatori = conto))
+  }
+
+  riga_di <- function(record_id) {
+    at <- match(as.character(record_id), as.character(register[["record_id"]]))
+    if (is.na(at)) NULL else as.list(register[at, , drop = FALSE])
+  }
+
+  consegna <- function(to, cc, message) {
+    if (is.null(to) || is.na(to) || !nzchar(to)) {
+      return(list(ok = FALSE, errors = "POSTA_SENZA_DESTINATARIO"))
+    }
+    corpo <- message[["body"]]
+    if (!is.null(redirect_to)) {
+      corpo <- mail_redirect_note(corpo, to, cc)
+      cc <- NULL
+      to <- redirect_to
+    }
+    mailer(to = to, cc = cc, subject = message[["subject"]], body = corpo)
+  }
+
+  errori <- character()
+  partite <- logical(nrow(changed))
+
+  for (i in seq_len(nrow(changed))) {
+    riga <- riga_di(changed[["record_id"]][[i]])
+    if (is.null(riga)) {
+      errori <- c(errori, "POSTA_RIGA_NON_TROVATA")
+      next
+    }
+    # The message describes THIS round's answer, not the one the register still
+    # carries: `register` is what `changed` was measured against, so it holds
+    # the previous outcome and would tell the referent yesterday's news.
+    for (campo in intersect(names(changed), names(riga))) {
+      riga[[campo]] <- changed[[campo]][[i]]
+    }
+    esito <- consegna(
+      riga[["requested_by"]], copy_to, mail_outcome_message(riga)
+    )
+    partite[[i]] <- isTRUE(esito[["ok"]])
+    if (!partite[[i]]) errori <- c(errori, esito[["errors"]])
+  }
+
+  for (nato in born) {
+    riga <- riga_di(nato[["record_id"]])
+    if (is.null(riga)) {
+      errori <- c(errori, "POSTA_CREDENZIALE_PERSA")
+      conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
+      next
+    }
+    consegna(
+      riga[["contact_email"]], NULL,
+      mail_welcome_message(riga, upn = nato[["upn"]])
+    )
+    segreto <- consegna(
+      riga[["requested_by"]], NULL,
+      mail_credential_message(
+        riga, upn = nato[["upn"]], credential = nato[["credential"]]
+      )
+    )
+    if (isTRUE(segreto[["ok"]])) {
+      conto[["credenziali_recapitate"]] <-
+        conto[["credenziali_recapitate"]] + 1L
+    } else {
+      conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
+      # The code carries no value with it: this string reaches the telemetry
+      # record, which is shipped to a workspace and kept.
+      errori <- c(errori, "POSTA_CREDENZIALE_PERSA")
+    }
+  }
+
+  conto[["posta_partite"]] <- sum(partite)
+  conto[["posta_fallite"]] <- sum(!partite)
+
+  list(
+    recapitate = changed[partite, , drop = FALSE],
+    errori = errori,
+    contatori = conto
+  )
+}
