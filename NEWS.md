@@ -28,6 +28,14 @@
   second replaces every recipient with one address so a field test can run on
   real data, and the round record reports that it is on.
 
+* **A refused message says why, on stderr.** The outcome keeps the closed
+  vocabulary the telemetry counts — `TRASPORTO_POSTA_RIFIUTATA` — and the
+  service's own answer now goes to the journal beside the HTTP status. Neither
+  half carries the diagnosis alone: on 2026-08-27 a single condition returned
+  403 from one endpoint and 401 from another, both saying the requesting
+  address was not on the allowlist, and the status by itself would have sent
+  the reader looking for a network fault.
+
 * **The round record carries five new columns**: `posta_partite`,
   `posta_fallite`, `credenziali_recapitate`, `credenziali_perse` and
   `posta_dirottata`. The collection rule has to learn them before this version

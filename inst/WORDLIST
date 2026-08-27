@@ -19,6 +19,7 @@ SMTP
 UBEP
 UPN
 Ubep
+allowlist
 chr
 deduplicated
 distributable
@@ -37,6 +38,7 @@ reachability
 requester's
 requesters
 sayable
+stderr
 syntaxes
 ubep
 unattributable

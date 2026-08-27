@@ -166,13 +166,15 @@ test_that("manda al servizio di posta, col mittente e la chiave che riceve", {
 
 test_that("un rifiuto del servizio non e' un giro rotto, e' un esito", {
   # eval
-  detto <- httr2::with_mocked_responses(
+  # Silenziato di proposito: le parole del servizio hanno i loro test qui
+  # sotto, e questo prova che un rifiuto resta un esito e non un giro rotto.
+  detto <- suppressMessages(httr2::with_mocked_responses(
     function(req) httr2::response(status_code = 403L),
     mail_send(
       api_key = finti[["chiave"]], from = "m@example.org",
       to = "d@example.org", subject = "o", body = "c"
     )
-  )
+  ))
 
   # test
   expect_false(detto[["ok"]])
@@ -193,6 +195,86 @@ test_that("il servizio irraggiungibile si distingue dal servizio che rifiuta", {
   # test
   expect_false(detto[["ok"]])
   expect_equal(detto[["errors"]], "TRASPORTO_POSTA_NON_RAGGIUNGIBILE")
+})
+
+
+test_that("un rifiuto riporta le parole del servizio, non solo il suo codice", {
+  # eval
+  corpo <- paste0(
+    '{"errors":[{"message":"The requestor\'s IP Address is not whitelisted",',
+    '"field":null,"help":null}]}'
+  )
+
+  detto <- NULL
+  avviso <- testthat::capture_messages(
+    detto <- httr2::with_mocked_responses(
+      function(req) {
+        httr2::response(status_code = 403L, body = charToRaw(corpo))
+      },
+      mail_send(
+        api_key = finti[["chiave"]], from = "m@example.org",
+        to = "d@example.org", subject = "o", body = "c"
+      )
+    )
+  )
+
+  # test
+  # Il codice del vocabolario chiuso e' cio' che la telemetria conta, e non
+  # cambia. Le parole del servizio sono cio' che dice PERCHE', e vanno sullo
+  # standard di errore, cioe' nel journal, dove chi diagnostica un giro sta
+  # gia' guardando. Il 2026-08-27 quella stessa condizione ha dato 403 su un
+  # endpoint e 401 su un altro, con dentro la stessa frase: senza questa riga
+  # si va a cercare un guasto di rete.
+  expect_equal(detto[["errors"]], "TRASPORTO_POSTA_RIFIUTATA")
+  expect_match(avviso, "not whitelisted", fixed = TRUE, all = FALSE)
+  expect_match(avviso, "403", fixed = TRUE, all = FALSE)
+})
+
+
+test_that("le parole del servizio non portano con se' la chiave", {
+  # eval
+  avviso <- testthat::capture_messages(
+    httr2::with_mocked_responses(
+      function(req) {
+        httr2::response(
+          status_code = 401L, body = charToRaw("chiave non valida")
+        )
+      },
+      mail_send(
+        api_key = finti[["chiave"]], from = "m@example.org",
+        to = "d@example.org", subject = "o", body = "c"
+      )
+    )
+  )
+
+  # test
+  # Il corpo della risposta e' del servizio e non nostro, quindi non riecheggia
+  # la richiesta. Questa guardia lo verifica invece di darlo per buono, ed e' la
+  # sorella di quella sull'header che `httr2` redige.
+  expect_false(any(grepl(finti[["chiave"]], avviso, fixed = TRUE)))
+})
+
+
+test_that("un rifiuto senza corpo resta un esito, non un errore", {
+  # eval
+  detto <- NULL
+  avviso <- testthat::capture_messages(
+    detto <- httr2::with_mocked_responses(
+      function(req) httr2::response(status_code = 500L),
+      mail_send(
+        api_key = finti[["chiave"]], from = "m@example.org",
+        to = "d@example.org", subject = "o", body = "c"
+      )
+    )
+  )
+
+  # test
+  # Un corpo assente o illeggibile -- un proxy che risponde HTML, una risposta
+  # troncata -- non deve trasformare un esito in un'eccezione: sarebbe un
+  # guasto nuovo introdotto dalla diagnosi che doveva renderne leggibile un
+  # altro. Lo stato resta, ed e' gia' meta' della risposta.
+  expect_equal(detto[["errors"]], "TRASPORTO_POSTA_RIFIUTATA")
+  expect_match(avviso, "500", fixed = TRUE, all = FALSE)
 })
 
 

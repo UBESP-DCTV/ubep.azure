@@ -417,6 +417,28 @@ mail_send <- function(api_key,
   }
 
   if (!identical(httr2::resp_status(response), 202L)) {
+    # `errors` carries a closed vocabulary: that is what telemetry counts and
+    # what the alarms watch, so it stays exactly as it is. What says *why* is
+    # the service's own answer, and until now it was thrown away. On
+    # 2026-08-27 that same condition gave 403 on one endpoint and 401 on
+    # another, both carrying "The requestor's IP Address is not whitelisted" --
+    # without that sentence one goes looking for a network fault instead. It
+    # goes to stderr, hence to the journal, which is where whoever is
+    # diagnosing a round is already looking, and not into the outcome, so the
+    # vocabulary the alarms count keeps its shape.
+    detto <- tryCatch(
+      httr2::resp_body_string(response),
+      error = function(e) ""
+    )
+    message(
+      "Il servizio di posta ha rifiutato (HTTP ",
+      httr2::resp_status(response), "): ",
+      if (nzchar(detto)) {
+        substr(gsub("[[:space:]]+", " ", detto), 1L, 500L)
+      } else {
+        "nessun corpo nella risposta"
+      }
+    )
     return(list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA"))
   }
 
