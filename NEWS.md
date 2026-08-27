@@ -1,4 +1,4 @@
-# ubep.azure (development version)
+# ubep.azure 0.12.0
 
 * **The round sends the post itself, in Italian and in English.** Three
   messages: the outcome of a request to whoever filed it, first-access
@@ -25,7 +25,7 @@
 * **`UBEP_POSTA` and `UBEP_POSTA_A` govern the post.** Without the first the
   round behaves exactly as it did in 0.11.0 — it computes, it writes, it sends
   nothing — so installing this version changes no behavior on its own. The
-  second replaces every recipient with one address so a field test can run on,
+  second replaces every recipient with one address so a field test can run on
   real data, and the round record reports that it is on.
 
 * **The round record carries five new columns**: `posta_partite`,
