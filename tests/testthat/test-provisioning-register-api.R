@@ -438,3 +438,29 @@ test_that("an empty event log is a frame with no rows, not an absence", {
   expect_true(result[["ok"]])
   expect_equal(nrow(result[["log"]]), 0L)
 })
+
+
+test_that("the log window is asked for in the instance's clock, not in UTC", {
+  # eval
+  detto <- log_since("2026-09-01 21:03", hours = 0L)
+
+  # test
+  # Measured on 2026-09-01: a round that ran at 21:03 UTC appears in the log
+  # at 23:03. Handing the round's own stamp straight through would ask for a
+  # window shifted by two hours in summer and one in winter -- a discrepancy
+  # that is not a constant, so it cannot be corrected by a constant either.
+  expect_equal(detto, "2026-09-01 23:03")
+})
+
+
+test_that("the log window reaches back far enough to be wrong about the hour", {
+  # eval
+  detto <- log_since("2026-09-01 21:03", hours = 24L)
+
+  # test
+  # The margin is what makes the conversion above a convenience rather than a
+  # load-bearing assumption: an hour out in either direction still leaves the
+  # window covering every round since yesterday. A log window is cheap to
+  # widen, and the filtering that decides anything is done on the rows.
+  expect_equal(detto, "2026-08-31 23:03")
+})

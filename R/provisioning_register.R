@@ -184,6 +184,57 @@ request_seal <- function(register) {
 }
 
 
+#' The closed vocabulary of what the round thinks of a row
+#'
+#' Named here for the reason `outcome_vocabulary()` is: the CSV holds a copy,
+#' and a word added to one and not the other is a value the live project
+#' refuses to store or one the package never emits. The dictionary test walks
+#' both.
+#'
+#' @return A character vector of the three states.
+#'
+#' @keywords internal
+seal_state_vocabulary <- function() {
+  c("intact", "modified", "approved")
+}
+
+
+#' Build the body that writes a seal back into the register
+#'
+#' A third door beside the outcome and the identity, and it exists for the
+#' reason those two are separate rather than for a new one: the columns are
+#' fixed here so a bug cannot rewrite anything else.
+#'
+#' It could not be a column of `outcome_payload()`, and the reason is worth
+#' keeping. That body is written on every outcome, so a seal column would carry
+#' a value on every outcome too — and the honest default is empty. A
+#' `data_error` on an already applied row would then blank the seal, quietly
+#' taking the protection off the one kind of row that has any.
+#'
+#' @param record_id The register record to write to.
+#' @param seal The seal of what was applied, `""` when nothing was.
+#' @param state One of `seal_state_vocabulary()`.
+#'
+#' @return A one-row data frame with exactly the seal columns.
+#'
+#' @keywords internal
+seal_payload <- function(record_id, seal, state) {
+  stopifnot(
+    is.character(record_id), length(record_id) == 1L,
+    is.character(seal), length(seal) == 1L,
+    is.character(state), length(state) == 1L,
+    state %in% seal_state_vocabulary()
+  )
+
+  data.frame(
+    record_id = record_id,
+    applied_seal = seal,
+    seal_state = state,
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' Who last wrote one of these fields on this row
 #'
 #' Reads `details`, which REDCap fills with the fields an edit touched and the

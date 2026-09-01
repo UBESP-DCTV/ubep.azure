@@ -48,7 +48,8 @@ test_that("a field whose vocabulary the package holds offers exactly it", {
   # vocabulary function with no entry here is a vocabulary nothing checks.
   held <- list(
     identity = identity_vocabulary(),
-    outcome = outcome_vocabulary()
+    outcome = outcome_vocabulary(),
+    seal_state = seal_state_vocabulary()
   )
   dictionary <- register_dictionary()
 

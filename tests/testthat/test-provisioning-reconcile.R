@@ -105,6 +105,29 @@ identita_scritte <- function() {
 }
 
 
+# What the register was actually told about the seals, as a frame. A third
+# door beside the outcome and the identity, and separate for the reason the
+# other two are separate: the seal must never ride with an outcome. An outcome
+# body carrying a seal column would rewrite the seal on every outcome -- and a
+# `data_error` on an already applied row would blank it, quietly taking the
+# protection off the one kind of row that has it.
+sigilli_scritti <- function() {
+  bodies <- lapply(
+    importazioni(c("record_id", "applied_seal", "seal_state")),
+    function(req) {
+      jsonlite::fromJSON(
+        form_field_value(req[["body"]][["data"]][["data"]]),
+        simplifyVector = TRUE
+      )
+    }
+  )
+  if (length(bodies) == 0L) {
+    return(NULL)
+  }
+  do.call(rbind, bodies)
+}
+
+
 # One directory record, in the shape Graph puts on the wire. `auto_unbox` makes
 # a length-one value a scalar, which is how Graph writes it, and `I()` is what
 # keeps `otherMails` an array even when it holds exactly one address.
@@ -173,10 +196,17 @@ dizionario_json <- function() {
 }
 
 
-registro_doppio <- function(records) {
+# `eventi` defaults to an empty log rather than to no answer at all: a round
+# that could not read the log and a round that read an empty one decide
+# opposite things, and every test written before row protection existed means
+# the second.
+registro_doppio <- function(records, eventi = "[]") {
   function(data) {
     if (identical(form_field_value(data[["content"]]), "metadata")) {
       return(dizionario_json())
+    }
+    if (identical(form_field_value(data[["content"]]), "log")) {
+      return(eventi)
     }
     if (identical(form_field_value(data[["action"]]), "import")) {
       sent <- jsonlite::fromJSON(
@@ -205,7 +235,8 @@ record_json <- function(...) {
       role_name = "data entry", dag_name = "", expiration = "",
       requested_by = "anna.bianchi@ubep.unipd.it",
       request_status = "active",
-      outcome = "", outcome_detail = "", outcome_at = "", applied_as = ""
+      outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
+      applied_seal = "", seal_state = "", approved_seal = ""
     )
     defaults[names(row)] <- row
     defaults
@@ -1404,4 +1435,49 @@ test_that("il messaggio nomina l'identita' che questo giro ha stabilito", {
   # contradicting a value this same round produced.
   expect_match(corpo, "mario.rossi@ubep.unipd.it", fixed = TRUE)
   expect_false(grepl("non ancora stabilito", corpo, fixed = TRUE))
+})
+
+
+test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      record_id = "1", outcome = "applied",
+      applied_seal = "000000000000"
+    ))),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The seal the round wrote does not match what the row asks for now, so
+  # somebody edited it after it was applied. Applying again would grant
+  # whatever the edit says, on the authority of a round that ran before the
+  # edit existed -- and REDCap has no per-row ownership to stop it, which is
+  # the whole reason this branch exists.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  # Not merely "nothing was written": the row never reached an instance at
+  # all. A held row is stopped where `withdrawn` is stopped, before the desired
+  # state is built, so no instance is ever asked about it.
+  expect_length(scritture(), 0L)
+  expect_length(interrogazioni(), 0L)
+})
+
+
+test_that("il giro sigilla la riga che ha appena applicato", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(record_id = "1"))),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+  scritto <- sigilli_scritti()
+
+  # test
+  # Without this the protection never starts: a row carrying no seal is a row
+  # that cannot have been modified after it was applied, so every row would
+  # stay unprotected for ever and the branch above would never fire once.
+  expect_equal(as.character(scritto[["record_id"]]), "1")
+  expect_true(nzchar(as.character(scritto[["applied_seal"]])))
+  expect_equal(as.character(scritto[["seal_state"]]), "intact")
 })

@@ -245,6 +245,46 @@ log_frame <- function(entries) {
 }
 
 
+#' Where a log window starts, in the clock the instance stamps with
+#'
+#' Two jobs in one small function, and the second is what makes the first safe.
+#'
+#' It converts, because REDCap stamps the log with the server clock while the
+#' channel keeps UTC: measured on 2026-09-01, a round that ran at 21:03 UTC
+#' appears in the log at 23:03. And it reaches back, because that conversion
+#' assumes the instance sits in Italian civil time — true of the three served
+#' today, and not a property this package can check. With a day of margin an
+#' hour out in either direction still leaves every round since yesterday
+#' inside the window.
+#'
+#' The margin costs a longer answer and nothing else. What decides anything is
+#' the filtering done on the rows, never the boundary.
+#'
+#' @param at When the round ran, `"%Y-%m-%d %H:%M"` in UTC.
+#' @param hours How far back to reach.
+#'
+#' @return The start of the window as REDCap writes it, or `NA_character_` if
+#'   `at` does not parse — a window starting at a wrong hour is worse than a
+#'   caller that has to say it could not build one.
+#'
+#' @keywords internal
+log_since <- function(at, hours = 24L) {
+  stopifnot(
+    is.character(at), length(at) == 1L,
+    is.numeric(hours), length(hours) == 1L, !is.na(hours)
+  )
+
+  moment <- as.POSIXct(at, tz = "UTC", format = "%Y-%m-%d %H:%M")
+  if (is.na(moment)) {
+    return(NA_character_)
+  }
+
+  format(
+    moment - hours * 3600, "%Y-%m-%d %H:%M", tz = "Europe/Rome"
+  )
+}
+
+
 #' Read who touched the register, and when
 #'
 #' The one question the register's own fields cannot answer. `requested_by`
@@ -463,6 +503,28 @@ register_identity_import <- function(url, token, payload) {
 #' @return The `register_call()` list plus `scritte`.
 #'
 #' @keywords internal
+#' Write the seals back, and nothing else
+#'
+#' @inheritParams register_call
+#' @param payload A frame of exactly `record_id`, `applied_seal`, `seal_state`.
+#'
+#' @return The `register_call()` list plus `scritte`.
+#'
+#' @keywords internal
+register_seal_import <- function(url, token, payload) {
+  register_field_import(
+    url, token, payload,
+    expected = c("record_id", "applied_seal", "seal_state"),
+    caller = "register_seal_import",
+    reason = paste(
+      "What the round applied and what happened to the row are two",
+      "statements, and the seal must not ride with an outcome: an outcome",
+      "body carrying a seal column would rewrite the seal on every outcome."
+    )
+  )
+}
+
+
 register_field_import <- function(url, token, payload, expected, caller,
                                   reason) {
   if (!is.data.frame(payload) || !identical(names(payload), expected)) {
