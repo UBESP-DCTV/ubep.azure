@@ -312,7 +312,7 @@ test_that("the packaged dictionary is a template with no fleet in it", {
   # release of this package to every movement of the fleet, and published the
   # list in a public repository. The other coded fields are the contract's own
   # vocabulary and stay.
-  expect_equal(nrow(dictionary), 17L)
+  expect_equal(nrow(dictionary), 20L)
   expect_true(is.na(choices) || !nzchar(choices))
   for (name in c("identity", "request_status", "outcome")) {
     kept <- dictionary[["Choices, Calculations, OR Slider Labels"]][
@@ -337,7 +337,7 @@ test_that("an instance list fills the template's choices", {
   # shift that map in silence.
   expect_equal(parsed[["code"]], c("srvA", "srvB"))
   expect_equal(parsed[["label"]], c("srvA", "srvB"))
-  expect_equal(nrow(dictionary), 17L)
+  expect_equal(nrow(dictionary), 20L)
 })
 
 
@@ -513,4 +513,41 @@ test_that("what the job writes is declared in the dictionary too", {
   expect_true(all(written %in% register_readonly_fields()))
   declared <- register_dictionary()[["Variable / Field Name"]]
   expect_true(all(written %in% declared))
+})
+
+
+test_that("the dictionary carries the three fields row protection needs", {
+  # eval
+  dictionary <- register_dictionary()
+  fields <- dictionary[["Variable / Field Name"]]
+
+  # test
+  # Three and not one, because they answer three different questions: what the
+  # round applied, what the round thinks of the row now, and what a person has
+  # approved. Folding them into one would make the last of the three -- the
+  # only one a human writes -- indistinguishable from the two the channel owns.
+  expect_true(all(
+    c("applied_seal", "seal_state", "approved_seal") %in% fields
+  ))
+})
+
+
+test_that("the protection fields stay hidden until a row has been applied", {
+  # eval
+  dictionary <- register_dictionary()
+  rows <- dictionary[
+    dictionary[["Variable / Field Name"]] %in%
+      c("applied_seal", "seal_state", "approved_seal"), ,
+    drop = FALSE
+  ]
+
+  # test
+  # A request nobody has applied yet has nothing to protect, and three empty
+  # boxes on the form would be three questions a referent cannot answer. They
+  # also would age the seven figures of the work instruction the day they
+  # landed: those show a fresh request, and a fresh request must keep looking
+  # exactly as it does.
+  expect_true(all(nzchar(
+    rows[["Branching Logic (Show field only if...)"]]
+  )))
 })

@@ -13,9 +13,10 @@ mail_outcome_words(outcome)
 A character vector named \code{it} and \code{en}.
 }
 \description{
-The vocabulary of outcomes is closed and counts five words. This function
-names all five, and a test walks \code{outcome_vocabulary()} to say so: adding a
-sixth outcome without a translation stops the suite instead of shipping a
-message with an English gap in the middle of an Italian sentence.
+The vocabulary of outcomes is closed and counts six words. This function
+names all six, and a test walks \code{outcome_vocabulary()} to say so: adding a
+seventh outcome without a translation stops the suite instead of shipping a
+message with an English gap in the middle of an Italian sentence. That gate
+fired when \code{held} was added, which is what it is for.
 }
 \keyword{internal}

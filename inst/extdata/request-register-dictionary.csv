@@ -1,18 +1,21 @@
-"Variable / Field Name","Form Name","Section Header","Field Type","Field Label","Choices, Calculations, OR Slider Labels","Field Note","Text Validation Type OR Show Slider Number","Text Validation Min","Text Validation Max",Identifier?,"Branching Logic (Show field only if...)","Required Field?","Custom Alignment","Question Number (surveys only)","Matrix Group Name","Matrix Ranking?","Field Annotation"
-record_id,request_register,,text,"Record ID",,,,,,,,,,,,,
-server,request_register,"The pair",radio,"REDCap instance",,,,,,,,y,,,,,
-project_id,request_register,,text,"Project PID",,"The identifier shown in the project's own URL.",integer,,,,,y,,,,,
-username,request_register,,text,"Username (UPN)",,"Leave blank unless you already know it: it is filled in once the identity is resolved.",email,,,,,,,,,,
-first_name,request_register,"The person",text,"First name",,,,,,,,y,,,,,
-last_name,request_register,,text,"Last name",,,,,,,,y,,,,,
-contact_email,request_register,,text,"Contact e-mail",,"The address we write to before the first login, and the one that tells two people with the same name apart. Not the e-mail REDCap will notify them at, which they choose themselves.",email,,,,,y,,,,,
-identity,request_register,,radio,"Identity resolution","existing, existing | created, created | absent, absent | collision, collision | ambiguous, ambiguous",,,,,,,,,,,,@READONLY
-role_name,request_register,"The authorization",text,"Role name",,"Must already exist in the project: this channel never creates roles.",,,,,,y,,,,,
-dag_name,request_register,,text,"Data access group",,"Optional. Must already exist in the project.",,,,,,,,,,,
-expiration,request_register,,text,"Last day of access",,"The last day the person may still get in. Leave blank for no end date.",date_ymd,,,,,,,,,,
-requested_by,request_register,"Provenance",text,"Requested by",,,,,,,,,,,,,"@USERNAME @READONLY"
-request_status,request_register,,radio,"Requested state","active, active | revoked, revoked","Set to revoked to have the access removed. Deleting the record does nothing: absence is not a request.",,,,,,y,,,,,
-outcome,request_register,"Outcome",radio,"Outcome","pending, pending | applied, applied | data_error, data_error | transport_error, transport_error | simulated, simulated | held, held",,,,,,,,,,,,@READONLY
-outcome_detail,request_register,,notes,"Outcome detail",,,,,,,,,,,,,@READONLY
-outcome_at,request_register,,text,"Outcome recorded at",,,datetime_ymd,,,,,,,,,,@READONLY
-applied_as,request_register,,notes,"Read back as",,,,,,,,,,,,,@READONLY
+Variable / Field Name,Form Name,Section Header,Field Type,Field Label,"Choices, Calculations, OR Slider Labels",Field Note,Text Validation Type OR Show Slider Number,Text Validation Min,Text Validation Max,Identifier?,Branching Logic (Show field only if...),Required Field?,Custom Alignment,Question Number (surveys only),Matrix Group Name,Matrix Ranking?,Field Annotation
+record_id,request_register,,text,Record ID,,,,,,,,,,,,,
+server,request_register,The pair,radio,REDCap instance,,,,,,,,y,,,,,
+project_id,request_register,,text,Project PID,,The identifier shown in the project's own URL.,integer,,,,,y,,,,,
+username,request_register,,text,Username (UPN),,Leave blank unless you already know it: it is filled in once the identity is resolved.,email,,,,,,,,,,
+first_name,request_register,The person,text,First name,,,,,,,,y,,,,,
+last_name,request_register,,text,Last name,,,,,,,,y,,,,,
+contact_email,request_register,,text,Contact e-mail,,"The address we write to before the first login, and the one that tells two people with the same name apart. Not the e-mail REDCap will notify them at, which they choose themselves.",email,,,,,y,,,,,
+identity,request_register,,radio,Identity resolution,"existing, existing | created, created | absent, absent | collision, collision | ambiguous, ambiguous",,,,,,,,,,,,@READONLY
+role_name,request_register,The authorization,text,Role name,,Must already exist in the project: this channel never creates roles.,,,,,,y,,,,,
+dag_name,request_register,,text,Data access group,,Optional. Must already exist in the project.,,,,,,,,,,,
+expiration,request_register,,text,Last day of access,,The last day the person may still get in. Leave blank for no end date.,date_ymd,,,,,,,,,,
+requested_by,request_register,Provenance,text,Requested by,,,,,,,,,,,,,@USERNAME @READONLY
+request_status,request_register,,radio,Requested state,"active, active | revoked, revoked",Set to revoked to have the access removed. Deleting the record does nothing: absence is not a request.,,,,,,y,,,,,
+outcome,request_register,Outcome,radio,Outcome,"pending, pending | applied, applied | data_error, data_error | transport_error, transport_error | simulated, simulated | held, held",,,,,,,,,,,,@READONLY
+outcome_detail,request_register,,notes,Outcome detail,,,,,,,,,,,,,@READONLY
+outcome_at,request_register,,text,Outcome recorded at,,,datetime_ymd,,,,,,,,,,@READONLY
+applied_as,request_register,,notes,Read back as,,,,,,,,,,,,,@READONLY
+applied_seal,request_register,Row protection,text,Seal of what was applied,,"Twelve characters the channel writes when it applies the row. It covers what was asked and not what happened, so it does not move when the outcome is written.",,,,,"[applied_seal] <> """"",,,,,,@READONLY
+seal_state,request_register,,radio,Row protection,"intact, intact | modified, modified | approved, approved",modified means the row was edited after it was applied. The channel stops there until somebody approves the change.,,,,,"[applied_seal] <> """"",,,,,,@READONLY
+approved_seal,request_register,,text,Approve this change,,Paste the seal the notification gives you. It approves that one change and nothing later. Approving a change you made yourself does nothing: the event log says who wrote this.,,,,,"[applied_seal] <> """"",,,,,,

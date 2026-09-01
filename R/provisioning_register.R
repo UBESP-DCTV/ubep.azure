@@ -89,17 +89,42 @@ dictionary_choices <- function(text) {
 register_readonly_fields <- function() {
   c(
     "identity", "requested_by", "outcome", "outcome_detail",
-    "outcome_at", "applied_as"
+    "outcome_at", "applied_as", "applied_seal", "seal_state"
   )
+}
+
+
+#' The fields the seal does not cover
+#'
+#' Every read-only field, plus the one a person writes that must still stay out
+#' of the seal.
+#'
+#' The two lists were the same until row protection needed them apart, and the
+#' reason they were the same is worth keeping: a field the channel writes is a
+#' field a requester must not, and a field the channel writes must not move the
+#' seal, or the round would accuse itself one pass after every write.
+#'
+#' `approved_seal` breaks that coincidence. It carries the seal it approves, so
+#' if writing it moved the seal it would never match the row it was written
+#' for — the comparison would chase itself and no change could ever be
+#' approved. But a person writes it, so it cannot be `@READONLY`, and
+#' `register_readonly_fields()` is also what the dictionary test checks the
+#' tags against. Two questions, two lists.
+#'
+#' @return A character vector of field names.
+#'
+#' @keywords internal
+register_unsealed_fields <- function() {
+  c(register_readonly_fields(), "approved_seal")
 }
 
 
 #' The fields a row carries because somebody asked for them
 #'
-#' Derived and not listed: everything in the dictionary that the round does not
-#' write itself. A field added to the dictionary joins this set on its own,
-#' which is the property that keeps the seal honest — a hand-picked list would
-#' silently stop covering the column somebody added last week.
+#' Derived and not listed: everything in the dictionary the seal has to cover.
+#' A field added to the dictionary joins this set on its own, which is the
+#' property that keeps the seal honest — a hand-picked list would silently
+#' stop covering the column somebody added last week.
 #'
 #' @return A character vector of field names, in dictionary order.
 #'
@@ -107,7 +132,7 @@ register_readonly_fields <- function() {
 register_intent_fields <- function() {
   setdiff(
     register_dictionary()[["Variable / Field Name"]],
-    register_readonly_fields()
+    register_unsealed_fields()
   )
 }
 

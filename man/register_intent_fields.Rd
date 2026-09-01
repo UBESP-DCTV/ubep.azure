@@ -10,9 +10,9 @@ register_intent_fields()
 A character vector of field names, in dictionary order.
 }
 \description{
-Derived and not listed: everything in the dictionary that the round does not
-write itself. A field added to the dictionary joins this set on its own,
-which is the property that keeps the seal honest — a hand-picked list would
-silently stop covering the column somebody added last week.
+Derived and not listed: everything in the dictionary the seal has to cover.
+A field added to the dictionary joins this set on its own, which is the
+property that keeps the seal honest — a hand-picked list would silently
+stop covering the column somebody added last week.
 }
 \keyword{internal}

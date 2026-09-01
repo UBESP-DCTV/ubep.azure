@@ -425,6 +425,22 @@ test_that("il sigillo ignora i campi che scrive il giro", {
 })
 
 
+test_that("il sigillo non si muove quando qualcuno approva la modifica", {
+  # eval
+  prima <- request_seal(register_row())
+  dopo <- request_seal(register_row(approved_seal = "9f3c1a7b04de"))
+
+  # test
+  # The approval carries the seal it approves, so if writing it moved the seal
+  # the value would never match the row it was written for: the comparison
+  # would chase itself and no change could ever be approved. The field is
+  # therefore outside the seal -- and it is the first one that has to be,
+  # while still being writable by a person, which is why "written by the
+  # channel" and "outside the seal" stopped being the same list.
+  expect_equal(prima, dopo)
+})
+
+
 test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
   # eval
   base <- register_row()
