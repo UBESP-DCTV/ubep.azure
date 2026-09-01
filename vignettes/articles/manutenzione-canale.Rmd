@@ -352,11 +352,19 @@ la lavorazione continua a scriverli mentre chi compila non può. Senza quella
 marca un referente potrebbe digitare «applicata» nel campo d'esito, e il
 registro porterebbe un successo che nessuno ha prodotto.
 
-### Il giro scrive da due porte, e restano separate
+### Il giro scrive da tre porte, e restano separate
 
 La prima porta deposita **identità e username** appena la risoluzione è fatta,
 e non prende altro. La seconda deposita **l'esito**, e avviene dopo l'invio
-della notifica. In mezzo c'è la posta.
+della notifica. In mezzo c'è la posta. La terza deposita **il sigillo**, per
+ultima.
+
+Il sigillo ha una porta sua e non è una colonna dell'esito, e la ragione è
+che il corpo dell'esito si scrive a ogni esito: una colonna del sigillo lì
+dentro porterebbe un valore ogni volta, e il valore onesto quando non si è
+applicato niente è vuoto. Un `data_error` su una riga già applicata
+azzererebbe allora il sigillo, togliendo la protezione proprio alle righe che
+sono le sole ad averla.
 
 La conseguenza da conoscere quando si tocca il testo dei messaggi: il frame da
 cui il giro compone la notifica è il registro **come è stato letto**, e resta
@@ -370,6 +378,51 @@ Una richiesta è **una persona su un progetto**. Una coppia che compare due
 volte è un errore su **entrambe** le righe, non su una: una delle due è
 l'errore e non c'è modo di sapere quale. Indovinare quale vince è ciò che fa un
 libro mastro; un registro si rifiuta.
+
+### Una riga cambiata dopo essere stata applicata
+
+REDCap non ha una proprietà per riga: i diritti sono per strumento, e la sola
+cosa che partiziona le righe sono i gruppi di accesso, che qui non ci sono per
+scelta — nasconderebbero le righe altrui e renderebbero i doppioni
+incomprensibili. Chiunque abbia il registro può quindi modificare la riga di
+un altro.
+
+Il giro scrive accanto a ogni riga applicata il **sigillo** di ciò che ha
+applicato: dodici caratteri sui campi di intento, e su nessun altro. Un
+sigillo che al giro dopo non corrisponde significa «modificata dopo
+l'applicazione»: la riga prende l'esito `held`, si ferma dove si ferma una
+revocata — prima che il piano si formi, quindi **nessuna istanza viene
+interrogata** — e la notizia va a `requested_by`.
+
+Tre cose da sapere quando si tocca questo meccanismo:
+
+- **il sigillo copre ciò che è stato chiesto, non ciò che è successo.** Se si
+  muovesse quando il giro scrive l'esito, ogni riga applicata sembrerebbe
+  modificata un giro dopo: il meccanismo accuserebbe se stesso, su ogni riga,
+  per sempre;
+- **il sigillo si calcola sulla riga che il giro sta per lasciare**, non su
+  quella che ha letto. Il giro risolve `username` e lo riscrive nella stessa
+  passata, e `username` sta dentro al sigillo perché cambiarlo cambia a chi si
+  dà l'accesso. Sigillare la riga come letta sarebbe lo stesso difetto di
+  sopra, per mano del giro invece che dell'esito;
+- **il campo di approvazione sta fuori dal sigillo pur non essendo
+  `@READONLY`.** Porta il sigillo che approva, quindi scriverlo non può
+  spostare ciò che confronta. È il primo campo per cui «scritto dal canale» e
+  «fuori dal sigillo» smettono di essere lo stesso insieme, ed è per questo
+  che sono due liste.
+
+L'approvazione vale a due condizioni: porta il sigillo di **quella** versione
+della riga, e viene da **qualcun altro**. La seconda si verifica leggendo il
+registro degli eventi di REDCap, che dice chi era **autenticato** e non che
+cosa qualcuno ha scritto in un campo — la stessa ragione per cui
+`requested_by` non basta da solo il giorno in cui si concede il Data Import
+Tool. Un registro degli eventi illeggibile lascia la riga ferma: «non ho
+potuto chiedere chi è stato» non è «l'ha approvata un altro».
+
+La finestra del log si chiede **nell'ora dell'istanza**, non in UTC: REDCap
+timbra col proprio orologio, e il giro delle 21:03 UTC compare alle 23:03. Lo
+scarto non è una costante, perché cambia con l'ora legale — per questo la
+finestra è larga un giorno e la conversione è una comodità, non un cardine.
 
 ### Verificare che il progetto sia ancora quello che il canale si aspetta
 
@@ -489,6 +542,30 @@ Quindi l'ordine è: **prima la regola di raccolta, poi il pacchetto, poi gli
 allarmi nuovi**. E una regola d'allarme che verifica quali colonne il record
 porta va aggiornata nella **stessa finestra** del rilascio, o scatterebbe su un
 record perfettamente sano.
+
+Lo stesso vincolo d'ordine vale per il **dizionario del progetto**, e nello
+stesso verso, ma per una ragione opposta e più mite: un campo che il pacchetto
+si aspetta e il progetto non ha **ferma** il giro
+(`DIZIONARIO_CAMPO_ASSENTE`), mentre un campo che il progetto ha e il
+pacchetto non conosce è **tollerato** (`DIZIONARIO_CAMPO_IN_PIU`). Importare
+il dizionario prima e installare dopo lascia quindi il canale vecchio che gira
+senza accorgersene; l'ordine inverso lo pianta su `DIZIONARIO_DERIVATO`.
+
+### Due domande diverse decidono la forma di un rilascio
+
+Vanno fatte separatamente, perché fino al 2026-09-01 avevano sempre risposto
+insieme:
+
+- **tocca lo schema?** Allora serve l'atto unico: import del dizionario e
+  installazione nella stessa finestra, con il giro fermo in mezzo.
+- **cambia la firma di ciò che la lavorazione chiama?** Allora i gesti sono
+  **due**, e la lavorazione in `/opt` va ricopiata insieme al pacchetto.
+
+La 0.13.0 ha risposto **no** alla prima e **sì** alla seconda: nessun
+dizionario da importare, ma `round_record()` aveva preso un terzo argomento
+obbligatorio, e un pacchetto nuovo con la lavorazione vecchia muore su
+`argument "posta" is missing` — cioè il giro non ritorna, non lascia record, e
+l'allarme sull'assenza suona a gravità 1.
 
 ### La regola ritirata è disattivata, non cancellata
 
