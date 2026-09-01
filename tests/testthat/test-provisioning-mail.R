@@ -400,6 +400,35 @@ test_that("il messaggio porta l'esito di questo giro, non quello vecchio", {
 })
 
 
+test_that("il messaggio nomina l'identita' che il giro ha stabilito", {
+  # eval
+  # A row as a referent files it: the UPN is not typed, the round resolves it.
+  registro <- registro_di_prova(username = "", identity = "")
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE,
+    identified = data.frame(
+      record_id = "16",
+      username = "sara.collaudozeta@ubep.unipd.it",
+      identity = "existing",
+      stringsAsFactors = FALSE
+    )
+  )
+
+  # test
+  # The resolution happens before the mail and is already in the register by
+  # the time it leaves, so the message that says it is not established yet is
+  # contradicting a value this same round wrote.
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, "sara.collaudozeta@ubep.unipd.it", fixed = TRUE)
+  expect_false(grepl("non ancora stabilito", corpo, fixed = TRUE))
+})
+
+
 test_that("una nascita produce due messaggi, a due destinatari diversi", {
   # eval
   registro <- registro_di_prova()

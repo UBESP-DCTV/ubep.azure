@@ -12,7 +12,8 @@ mail_round(
   dry_run,
   redirect_to = NULL,
   copy_to = NULL,
-  reply_to = NULL
+  reply_to = NULL,
+  identified = NULL
 )
 }
 \arguments{
@@ -35,6 +36,11 @@ writable -- the round behaves as it did before this file existed.}
 
 \item{reply_to}{Kept for the caller's symmetry with \code{mail_send()}; the
 mailer closure is what carries it to the transport.}
+
+\item{identified}{The identity this round settled, as a frame with
+\code{record_id} and the fields it settled. \code{register} is the register as
+read, on purpose; this is how the message names what the round has just
+established rather than what the referent typed.}
 }
 \value{
 A list with \code{recapitate}, \code{errori} and \code{contatori}.

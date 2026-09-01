@@ -1381,3 +1381,27 @@ test_that("una mail partita apre la strada alla scrittura della sua riga", {
   expect_length(importazioni(campi_esito), 1L)
   expect_equal(esito[["posta"]][["posta_partite"]], 1L)
 })
+
+
+test_that("il messaggio nomina l'identita' che questo giro ha stabilito", {
+  # eval
+  corpo <- NULL
+  giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      corpo <<- body # nolint: assignment_linter.
+      list(ok = TRUE, errors = character())
+    }
+  )
+
+  # test
+  # The fixture files the row the way a referent does, with `username` blank.
+  # The round resolves it and writes it through the identity door *before* the
+  # mail leaves, so by the time the referent reads the message the register
+  # already carries the UPN. A message that says it is not established yet is
+  # contradicting a value this same round produced.
+  expect_match(corpo, "mario.rossi@ubep.unipd.it", fixed = TRUE)
+  expect_false(grepl("non ancora stabilito", corpo, fixed = TRUE))
+})

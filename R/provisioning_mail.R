@@ -497,6 +497,10 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param copy_to Address in copy, on the outcome message only.
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
+#' @param identified The identity this round settled, as a frame with
+#'   `record_id` and the fields it settled. `register` is the register as
+#'   read, on purpose; this is how the message names what the round has just
+#'   established rather than what the referent typed.
 #'
 #' @return A list with `recapitate`, `errori` and `contatori`.
 #'
@@ -508,7 +512,8 @@ mail_round <- function(changed,
                        dry_run,
                        redirect_to = NULL,
                        copy_to = NULL,
-                       reply_to = NULL) {
+                       reply_to = NULL,
+                       identified = NULL) {
   stopifnot(
     is.data.frame(changed), is.data.frame(register), is.list(born),
     is.function(mailer),
@@ -525,9 +530,34 @@ mail_round <- function(changed,
     return(list(recapitate = changed, errori = character(), contatori = conto))
   }
 
+  # `register` is the register as read, and it stays that way: it is the metro
+  # the change was measured against. But the round settles `username` and
+  # `identity` earlier and writes them through their own door, before the mail
+  # leaves -- so a message composed from `register` alone would tell the
+  # referent the UPN is not established yet, about a value this same round has
+  # already put in the register. This is the only place that difference is
+  # visible, so it is repaired here rather than by widening what `changed`
+  # carries: that frame is also what gets imported, and the two doors stay
+  # separate.
   riga_di <- function(record_id) {
     at <- match(as.character(record_id), as.character(register[["record_id"]]))
-    if (is.na(at)) NULL else as.list(register[at, , drop = FALSE])
+    if (is.na(at)) {
+      return(NULL)
+    }
+    riga <- as.list(register[at, , drop = FALSE])
+    if (is.null(identified)) {
+      return(riga)
+    }
+    found <- match(
+      as.character(record_id), as.character(identified[["record_id"]])
+    )
+    if (is.na(found)) {
+      return(riga)
+    }
+    for (campo in setdiff(names(identified), "record_id")) {
+      riga[[campo]] <- identified[[campo]][[found]]
+    }
+    riga
   }
 
   consegna <- function(to, cc, message) {

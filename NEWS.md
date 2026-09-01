@@ -1,3 +1,17 @@
+# ubep.azure 0.12.1
+
+* **The outcome message names the identity the round settled**, instead of
+  saying it is not established yet. A referent files a row with the UPN blank,
+  as the work instruction asks; the round resolves it and writes it through the
+  identity door *before* the message leaves. The message, though, was composed
+  from the register as read — which is deliberately frozen, since it is what
+  the round measures change against — so the first notice about any new request
+  told the referent less than the register beside it already carried.
+
+  Repaired by telling `mail_round()` what the round settled, rather than by
+  widening the frame that gets imported: that frame is the other write door,
+  and the two stay separate.
+
 # ubep.azure 0.12.0
 
 * **The round sends the post itself, in Italian and in English.** Three

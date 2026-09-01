@@ -127,7 +127,10 @@ provisioning_reconcile <- function(register_url,
   # register in two places -- here and on a failed sweep -- and a notification
   # that skipped one of them would be a `transport_error` nobody was told
   # about.
-  posted <- function(changed, born = list()) {
+  # `identified` is empty by default because the branch above calls this before
+  # the sweep has resolved anybody: a round that could not ask the tenant has
+  # no identity to tell, and saying so is the honest message.
+  posted <- function(changed, born = list(), identified = NULL) {
     if (is.null(mailer)) {
       return(list(
         recapitate = changed, errori = character(),
@@ -140,7 +143,8 @@ provisioning_reconcile <- function(register_url,
     }
     mail_round(
       changed, register, born, mailer, dry_run,
-      redirect_to = redirect_to, copy_to = copy_to, reply_to = reply_to
+      redirect_to = redirect_to, copy_to = copy_to, reply_to = reply_to,
+      identified = identified
     )
   }
 
@@ -721,7 +725,17 @@ provisioning_reconcile <- function(register_url,
   # 11. only what changed, against the register as it was read and not as this
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
-  posta <- posted(changed, born)
+  # The same minutes the identity door wrote, so the message names what the
+  # round settled instead of what the referent left blank.
+  posta <- posted(
+    changed, born,
+    identified = data.frame(
+      record_id = as.character(record_ids),
+      username = resolved_names,
+      identity = verdicts,
+      stringsAsFactors = FALSE
+    )
+  )
   import <- register_import(
     register_url, register_token, posta[["recapitate"]]
   )
