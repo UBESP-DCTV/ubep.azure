@@ -317,6 +317,18 @@ test_that("outcome_payload carries the outcome and nothing else", {
 })
 
 
+test_that("the vocabulary has a word for a row that is held back", {
+  # test
+  # A row modified after it was applied is neither an error nor still to do.
+  # `pending` would say nobody has looked at it, and the two `_error` words
+  # would attribute a fault to somebody: the referent who filed it, or us.
+  # Nothing went wrong -- the round looked, found the row changed, and stopped
+  # on purpose. Only a word of its own can say that to the counter the round's
+  # record carries, and to the person reading the outcome in the form.
+  expect_true("held" %in% outcome_vocabulary())
+})
+
+
 test_that("outcome_payload refuses an outcome outside the vocabulary", {
   # test
   expect_error(outcome_payload(record_id = "1", outcome = "ok"))

@@ -1,9 +1,10 @@
 #' Say an outcome in both languages
 #'
-#' The vocabulary of outcomes is closed and counts five words. This function
-#' names all five, and a test walks `outcome_vocabulary()` to say so: adding a
-#' sixth outcome without a translation stops the suite instead of shipping a
-#' message with an English gap in the middle of an Italian sentence.
+#' The vocabulary of outcomes is closed and counts six words. This function
+#' names all six, and a test walks `outcome_vocabulary()` to say so: adding a
+#' seventh outcome without a translation stops the suite instead of shipping a
+#' message with an English gap in the middle of an Italian sentence. That gate
+#' fired when `held` was added, which is what it is for.
 #'
 #' @param outcome One word of `outcome_vocabulary()`.
 #'
@@ -18,7 +19,12 @@ mail_outcome_words <- function(outcome) {
     applied         = c(it = "eseguita",            en = "applied"),
     simulated       = c(it = "simulata",            en = "simulated"),
     data_error      = c(it = "errore di dato",      en = "data error"),
-    transport_error = c(it = "errore di trasporto", en = "transport error")
+    transport_error = c(it = "errore di trasporto", en = "transport error"),
+    # Not "sospesa" and not "bloccata": the first says the round is still
+    # deciding and the second says something broke. The row is intact, the
+    # round read it, and it is waiting for a person -- which is what a referent
+    # has to understand from one word before reading the rest.
+    held            = c(it = "trattenuta",           en = "held")
   )
 
   if (!outcome %in% names(said)) {

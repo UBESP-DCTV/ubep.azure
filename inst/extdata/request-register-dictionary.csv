@@ -12,7 +12,7 @@ dag_name,request_register,,text,"Data access group",,"Optional. Must already exi
 expiration,request_register,,text,"Last day of access",,"The last day the person may still get in. Leave blank for no end date.",date_ymd,,,,,,,,,,
 requested_by,request_register,"Provenance",text,"Requested by",,,,,,,,,,,,,"@USERNAME @READONLY"
 request_status,request_register,,radio,"Requested state","active, active | revoked, revoked","Set to revoked to have the access removed. Deleting the record does nothing: absence is not a request.",,,,,,y,,,,,
-outcome,request_register,"Outcome",radio,"Outcome","pending, pending | applied, applied | data_error, data_error | transport_error, transport_error | simulated, simulated",,,,,,,,,,,,@READONLY
+outcome,request_register,"Outcome",radio,"Outcome","pending, pending | applied, applied | data_error, data_error | transport_error, transport_error | simulated, simulated | held, held",,,,,,,,,,,,@READONLY
 outcome_detail,request_register,,notes,"Outcome detail",,,,,,,,,,,,,@READONLY
 outcome_at,request_register,,text,"Outcome recorded at",,,datetime_ymd,,,,,,,,,,@READONLY
 applied_as,request_register,,notes,"Read back as",,,,,,,,,,,,,@READONLY
