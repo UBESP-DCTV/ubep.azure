@@ -795,6 +795,19 @@ provisioning_reconcile <- function(register_url,
   # apply anything. Rewriting it would adopt the very edit the round declined,
   # and the next pass would find the row conforming -- the protection would
   # erase its own evidence one round after firing.
+  # The register as this round will have left it, and not as it read it. The
+  # round resolves `username` and writes it back in this same pass, so sealing
+  # the row as read would seal a version the register is about to stop
+  # holding: `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- and the next round would find every applied
+  # row modified, by the round's own hand. The mechanism would accuse itself
+  # on the ordinary path, on every row, one pass after each apply.
+  #
+  # `resolved_names` is what the register ends up with either way: written when
+  # it differs, already there when it does not.
+  register_after <- register
+  register_after[["username"]] <- resolved_names
+
   sealing <- do.call(rbind, c(
     list(seal_payload("", "", "intact")[0, , drop = FALSE]),
     lapply(
@@ -804,7 +817,9 @@ provisioning_reconcile <- function(register_url,
       function(id) {
         seal_payload(
           id,
-          request_seal(register[match(id, record_ids), , drop = FALSE]),
+          request_seal(
+            register_after[match(id, record_ids), , drop = FALSE]
+          ),
           "intact"
         )
       }

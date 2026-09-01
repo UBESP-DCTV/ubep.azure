@@ -219,9 +219,9 @@ registro_doppio <- function(records, eventi = "[]") {
 }
 
 
-record_json <- function(...) {
-  rows <- list(...)
-  as.character(jsonlite::toJSON(lapply(rows, function(row) {
+# The defaults of an exported row, reachable on their own so a test can build
+# the frame the register will hold and not only the JSON it answers with.
+record_default <- function(row) {
     # `username` and `identity` are blank, which is the ordinary state of a
     # freshly filed row and what the work instruction asks for: the round fills
     # them in from the tenant. A fixture that carried the UPN would be a row
@@ -238,9 +238,22 @@ record_json <- function(...) {
       outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
       applied_seal = "", seal_state = "", approved_seal = ""
     )
-    defaults[names(row)] <- row
-    defaults
-  }), auto_unbox = TRUE))
+  defaults[names(row)] <- row
+  defaults
+}
+
+
+record_json <- function(...) {
+  as.character(jsonlite::toJSON(
+    lapply(list(...), record_default), auto_unbox = TRUE
+  ))
+}
+
+
+# The row as the register will hold it once this round has written back what
+# it resolved -- which is what the seal has to be computed from.
+riga_come_registro <- function(...) {
+  as.data.frame(record_default(list(...)), stringsAsFactors = FALSE)
 }
 
 
@@ -1480,4 +1493,114 @@ test_that("il giro sigilla la riga che ha appena applicato", {
   expect_equal(as.character(scritto[["record_id"]]), "1")
   expect_true(nzchar(as.character(scritto[["applied_seal"]])))
   expect_equal(as.character(scritto[["seal_state"]]), "intact")
+})
+
+
+test_that("lo username che il giro risolve non fa sembrare modificata la riga", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(record_id = "1"))),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The round resolves `username` and writes it back in the same pass, so the
+  # register holds a different value after the round than the one the round
+  # read. `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- so a seal computed from the row as read
+  # would stop matching the moment the round's own write landed, and every
+  # applied row would come back `held` one round later. The mechanism would
+  # accuse itself, systematically, on the ordinary path.
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]),
+    request_seal(riga_come_registro(
+      record_id = "1", username = "mario.rossi@ubep.unipd.it"
+    ))
+  )
+})
+
+
+# The event log as REDCap answers it, newest first.
+eventi_json <- function(...) {
+  as.character(jsonlite::toJSON(lapply(list(...), function(e) {
+    utils::modifyList(
+      list(
+        timestamp = "2026-09-01 02:45", username = "", action = "Update record",
+        details = "", record = "1"
+      ),
+      e
+    )
+  }), auto_unbox = TRUE))
+}
+
+
+test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
+  # eval
+  # Two seals, and the test is worth writing because they differ. What the
+  # approval has to carry is the seal of the row **as the register holds it**,
+  # username still blank; what the round writes back afterwards is the seal of
+  # the row once this same pass has resolved the username into it.
+  approvato <- request_seal(riga_come_registro(record_id = "1"))
+  risigillato <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  esito <- giro(
+    registro_doppio(
+      record_json(list(
+        record_id = "1",
+        applied_seal = "000000000000", approved_seal = approvato
+      )),
+      eventi = eventi_json(
+        list(
+          username = "cinzia.rossi@ubep.unipd.it",
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        list(
+          username = "bruno.verdi@ubep.unipd.it",
+          details = "role_name = 'data entry'"
+        )
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The other half of the protection, and the half that has to work or the
+  # register fills up with rows nobody can ever clear. The approval carries
+  # this row's seal and comes from somebody who did not make the change, so
+  # the round applies it -- and seals the row again, at its new value, so the
+  # approval covers this change and stops there.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), risigillato
+  )
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "intact")
+})
+
+
+test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
+  # eval
+  approvato <- request_seal(riga_come_registro(record_id = "1"))
+  esito <- giro(
+    registro_doppio(
+      record_json(list(
+        record_id = "1",
+        applied_seal = "000000000000", approved_seal = approvato
+      )),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The approval is there and it is the right one, and it still does not
+  # count: without the log the round cannot tell whether it came from somebody
+  # other than whoever made the change, and that is the whole condition. "I
+  # could not ask who did this" is not "somebody else approved it" -- between
+  # the two ways of being wrong, this is the one that does not grant.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
 })
