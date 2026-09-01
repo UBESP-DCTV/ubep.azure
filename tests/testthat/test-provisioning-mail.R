@@ -497,3 +497,66 @@ test_that("il dirottamento sostituisce i destinatari e lo dichiara nel corpo", {
   expect_match(mandata[["body"]], "cinzia@ubep.unipd.it", fixed = TRUE)
   expect_true(detto[["contatori"]][["posta_dirottata"]])
 })
+
+
+test_that("una riga trattenuta dice quale sigillo incollare, e dove", {
+  # eval
+  messaggio <- mail_outcome_message(list(
+    record_id = "42", outcome = "held", outcome_detail = "SIGILLO_DIVERSO",
+    outcome_at = "2026-09-02 04:02", request_status = "active",
+    first_name = "Mario", last_name = "Rossi",
+    contact_email = "mario.rossi@example.org",
+    server = "edc10", project_id = "9003", role_name = "data entry",
+    username = "mario.rossi@ubep.unipd.it", applied_as = "",
+    seal_now = "9f3c1a7b04de"
+  ))
+
+  # test
+  # The approval is a value to paste, not a box to tick, and the only place
+  # that value exists is this message: the current seal is computed, not
+  # stored, so a referent who is not told it cannot approve anything. A
+  # protection nobody can clear is an outage with a nicer name.
+  expect_true(grepl("9f3c1a7b04de", messaggio[["body"]], fixed = TRUE))
+  expect_true(grepl("approved_seal", messaggio[["body"]], fixed = TRUE))
+})
+
+
+test_that("gli altri esiti non parlano di sigilli", {
+  # eval
+  messaggio <- mail_outcome_message(list(
+    record_id = "42", outcome = "applied", outcome_detail = "",
+    outcome_at = "2026-09-02 04:02", request_status = "active",
+    first_name = "Mario", last_name = "Rossi",
+    contact_email = "mario.rossi@example.org",
+    server = "edc10", project_id = "9003", role_name = "data entry",
+    username = "mario.rossi@ubep.unipd.it", applied_as = "role_name=data entry",
+    seal_now = "9f3c1a7b04de"
+  ))
+
+  # test
+  # Instructions for a situation the reader is not in are the fastest way to
+  # make the rest of the message unread.
+  expect_false(grepl("approved_seal", messaggio[["body"]], fixed = TRUE))
+})
+
+
+test_that("il giro mette nel messaggio il sigillo che la riga vale adesso", {
+  # eval
+  registro <- registro_di_prova(outcome = "held")
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+
+  # test
+  # The current seal is computed from the row and stored nowhere, so it exists
+  # only here. `register` is the register as read, which is exactly the frame
+  # the seal has to be computed from: computing it from what the round has
+  # been rewriting would hand the referent a value for a row that no longer
+  # matches what they are looking at.
+  expect_true(grepl(request_seal(registro), corpo, fixed = TRUE))
+})

@@ -309,11 +309,55 @@ provisioning_reconcile <- function(register_url,
     trimws(as.character(register[["request_status"]])) == "revoked"
 
   awaiting <- absent & !withdrawn
-  standing <- admitted | awaiting
+
+  # A row somebody edited after the round applied it. REDCap has no per-row
+  # ownership -- rights are per instrument, and the only thing that partitions
+  # rows are data access groups, which this project does not have on purpose --
+  # so any referent can edit any row, in good faith or by mistake. The seal is
+  # what notices: it covers what was asked and not what happened, so it moves
+  # only when somebody changed the request itself.
+  #
+  # Applying again would grant whatever the edit says on the authority of a
+  # round that ran before the edit existed. So the row stops here, exactly
+  # where a withdrawn one stops, and waits for a person.
+  sealed <- trimws(as.character(register[["applied_seal"]] %||% ""))
+  sealed[is.na(sealed)] <- ""
+  tampered <- nzchar(sealed) & sealed != request_seal(register)
+
+  # The log is read only when a row needs it, and it is one call for the whole
+  # round rather than one per row. On the ordinary night nothing is tampered
+  # with and the register is never asked for it at all.
+  events <- log_frame(list())
+  if (any(tampered)) {
+    reading_log <- register_log(
+      register_url, register_token, log_since(at)
+    )
+    # A log that could not be read leaves every changed row held. "I could not
+    # ask who did this" is not "somebody else approved it", and between the two
+    # ways of being wrong this is the one that does not grant.
+    if (isTRUE(reading_log[["ok"]])) {
+      events <- reading_log[["log"]]
+    }
+  }
+
+  held <- tampered & !seal_approved(register, events)
+  standing <- (admitted | awaiting) & !held
 
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(which(!standing), function(i) {
+      # Before the identity verdict, and not after it. A row can be both held
+      # and unservable -- change the username on an applied row and it is
+      # `ambiguous` as well as edited -- and of the two, "somebody changed this
+      # after it was applied" is the one that names what happened and who can
+      # undo it. `ambiguous` would send the referent to fix a name nobody
+      # complained about until the edit.
+      if (held[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]], "held", detail = "SIGILLO_DIVERSO", at = at
+        ))
+      }
+
       # Nothing to take away and nobody to make: the state this row asks for is
       # the one the tenant is already in. Settled the way `already_gone` settles
       # a revocation of a right that is not there -- the same word and the same
@@ -740,6 +784,57 @@ provisioning_reconcile <- function(register_url,
     register_url, register_token, posta[["recapitate"]]
   )
 
+  # The seals, written last and through a door that takes nothing else.
+  #
+  # Only a row whose outcome is `applied` gets a fresh seal. A simulated round
+  # applied nothing, so sealing it would state that a change had been carried
+  # out and would leave the next real round believing it had already happened.
+  #
+  # A held row keeps the seal it already carries and only its state moves: the
+  # seal is the record of what was applied, and the round has just refused to
+  # apply anything. Rewriting it would adopt the very edit the round declined,
+  # and the next pass would find the row conforming -- the protection would
+  # erase its own evidence one round after firing.
+  # The register as this round will have left it, and not as it read it. The
+  # round resolves `username` and writes it back in this same pass, so sealing
+  # the row as read would seal a version the register is about to stop
+  # holding: `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- and the next round would find every applied
+  # row modified, by the round's own hand. The mechanism would accuse itself
+  # on the ordinary path, on every row, one pass after each apply.
+  #
+  # `resolved_names` is what the register ends up with either way: written when
+  # it differs, already there when it does not.
+  register_after <- register
+  register_after[["username"]] <- resolved_names
+
+  sealing <- do.call(rbind, c(
+    list(seal_payload("", "", "intact")[0, , drop = FALSE]),
+    lapply(
+      as.character(outcomes[["record_id"]])[
+        as.character(outcomes[["outcome"]]) == "applied"
+      ],
+      function(id) {
+        seal_payload(
+          id,
+          request_seal(
+            register_after[match(id, record_ids), , drop = FALSE]
+          ),
+          "intact"
+        )
+      }
+    ),
+    lapply(which(held), function(i) {
+      seal_payload(record_ids[[i]], sealed[[i]], "modified")
+    })
+  ))
+  seal_written <- register_seal_import(
+    register_url, register_token,
+    round_changed(
+      register, sealing, fields = c("applied_seal", "seal_state")
+    )
+  )
+
   list(
     at = at,
     fermato = FALSE,
@@ -772,7 +867,8 @@ provisioning_reconcile <- function(register_url,
     # verdicts while every row still reported its own fate correctly. A message
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
-      identity_written[["errors"]], import[["errors"]], posta[["errori"]]
+      identity_written[["errors"]], import[["errors"]], posta[["errori"]],
+      seal_written[["errors"]]
     )
   )
 }

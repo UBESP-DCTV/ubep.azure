@@ -89,17 +89,42 @@ dictionary_choices <- function(text) {
 register_readonly_fields <- function() {
   c(
     "identity", "requested_by", "outcome", "outcome_detail",
-    "outcome_at", "applied_as"
+    "outcome_at", "applied_as", "applied_seal", "seal_state"
   )
+}
+
+
+#' The fields the seal does not cover
+#'
+#' Every read-only field, plus the one a person writes that must still stay out
+#' of the seal.
+#'
+#' The two lists were the same until row protection needed them apart, and the
+#' reason they were the same is worth keeping: a field the channel writes is a
+#' field a requester must not, and a field the channel writes must not move the
+#' seal, or the round would accuse itself one pass after every write.
+#'
+#' `approved_seal` breaks that coincidence. It carries the seal it approves, so
+#' if writing it moved the seal it would never match the row it was written
+#' for — the comparison would chase itself and no change could ever be
+#' approved. But a person writes it, so it cannot be `@READONLY`, and
+#' `register_readonly_fields()` is also what the dictionary test checks the
+#' tags against. Two questions, two lists.
+#'
+#' @return A character vector of field names.
+#'
+#' @keywords internal
+register_unsealed_fields <- function() {
+  c(register_readonly_fields(), "approved_seal")
 }
 
 
 #' The fields a row carries because somebody asked for them
 #'
-#' Derived and not listed: everything in the dictionary that the round does not
-#' write itself. A field added to the dictionary joins this set on its own,
-#' which is the property that keeps the seal honest — a hand-picked list would
-#' silently stop covering the column somebody added last week.
+#' Derived and not listed: everything in the dictionary the seal has to cover.
+#' A field added to the dictionary joins this set on its own, which is the
+#' property that keeps the seal honest — a hand-picked list would silently
+#' stop covering the column somebody added last week.
 #'
 #' @return A character vector of field names, in dictionary order.
 #'
@@ -107,7 +132,7 @@ register_readonly_fields <- function() {
 register_intent_fields <- function() {
   setdiff(
     register_dictionary()[["Variable / Field Name"]],
-    register_readonly_fields()
+    register_unsealed_fields()
   )
 }
 
@@ -156,6 +181,148 @@ request_seal <- function(register) {
   joined <- do.call(paste, c(values, list(sep = "\r")))
 
   substr(as.character(openssl::sha256(joined)), 1L, 12L)
+}
+
+
+#' The closed vocabulary of what the round thinks of a row
+#'
+#' Named here for the reason `outcome_vocabulary()` is: the CSV holds a copy,
+#' and a word added to one and not the other is a value the live project
+#' refuses to store or one the package never emits. The dictionary test walks
+#' both.
+#'
+#' @return A character vector of the three states.
+#'
+#' @keywords internal
+seal_state_vocabulary <- function() {
+  c("intact", "modified", "approved")
+}
+
+
+#' Build the body that writes a seal back into the register
+#'
+#' A third door beside the outcome and the identity, and it exists for the
+#' reason those two are separate rather than for a new one: the columns are
+#' fixed here so a bug cannot rewrite anything else.
+#'
+#' It could not be a column of `outcome_payload()`, and the reason is worth
+#' keeping. That body is written on every outcome, so a seal column would carry
+#' a value on every outcome too — and the honest default is empty. A
+#' `data_error` on an already applied row would then blank the seal, quietly
+#' taking the protection off the one kind of row that has any.
+#'
+#' @param record_id The register record to write to.
+#' @param seal The seal of what was applied, `""` when nothing was.
+#' @param state One of `seal_state_vocabulary()`.
+#'
+#' @return A one-row data frame with exactly the seal columns.
+#'
+#' @keywords internal
+seal_payload <- function(record_id, seal, state) {
+  stopifnot(
+    is.character(record_id), length(record_id) == 1L,
+    is.character(seal), length(seal) == 1L,
+    is.character(state), length(state) == 1L,
+    state %in% seal_state_vocabulary()
+  )
+
+  data.frame(
+    record_id = record_id,
+    applied_seal = seal,
+    seal_state = state,
+    stringsAsFactors = FALSE
+  )
+}
+
+
+#' Who last wrote one of these fields on this row
+#'
+#' Reads `details`, which REDCap fills with the fields an edit touched and the
+#' values it gave them — `role_name = 'read only'` — so the question "who
+#' changed what was asked" is answerable without holding a copy of the row.
+#'
+#' The most recent matching event wins, and which one that is comes from the
+#' **order of the answer** rather than from the timestamp: REDCap stamps the
+#' log to the minute, and an edit and the approval that follows it can easily
+#' share one. The order is REDCap's own, newest first.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param fields Field names to look for in `details`.
+#'
+#' @return The username, or `""` when no event touched any of those fields.
+#'
+#' @keywords internal
+log_last_author <- function(events, record, fields) {
+  stopifnot(is.data.frame(events), is.character(fields))
+
+  mine <- events[
+    trimws(as.character(events[["record"]])) == as.character(record), ,
+    drop = FALSE
+  ]
+  if (nrow(mine) == 0L || length(fields) == 0L) {
+    return("")
+  }
+
+  # `\b` and `=` together: without the word boundary `seal_state` would match
+  # inside nothing, but `name` would match inside `role_name`, and the answer
+  # would be an author who touched a different field.
+  pattern <- paste0(
+    "\\b(", paste(fields, collapse = "|"), ")\\s*="
+  )
+  hit <- grepl(pattern, as.character(mine[["details"]]))
+  if (!any(hit)) {
+    return("")
+  }
+
+  trimws(as.character(mine[["username"]][which(hit)[[1L]]]))
+}
+
+
+#' Whether a change to an applied row has been approved
+#'
+#' Two conditions, and neither is enough on its own.
+#'
+#' The approval has to carry **this** row's seal. A value that is some other
+#' seal approves some other version of the row, and accepting it would make one
+#' approval stand for every change that came after it.
+#'
+#' And it has to come from **somebody else**. Otherwise the protection is a
+#' formality: whoever edits another referent's row would paste the seal on the
+#' way out, and the round would apply a change nobody but its author ever saw.
+#' The seal detects that the row moved; only the log can say who moved it,
+#' because it names whoever was authenticated rather than a value somebody
+#' typed — which is the same reason `requested_by` cannot be trusted alone.
+#'
+#' An unreadable log is not this function's to decide. It answers about the
+#' events it was handed, and a caller holding no events gets `FALSE` on every
+#' changed row: the row waits, which is the direction that does not grant.
+#'
+#' @param register The register as read, one row per request.
+#' @param events The event log, as `register_log()` returns it.
+#'
+#' @return A logical vector, one answer per row.
+#'
+#' @keywords internal
+seal_approved <- function(register, events) {
+  stopifnot(is.data.frame(register), is.data.frame(events))
+
+  current <- request_seal(register)
+  approved <- trimws(as.character(register[["approved_seal"]] %||% ""))
+  approved[is.na(approved)] <- ""
+  ids <- as.character(register[["record_id"]])
+  intent <- register_intent_fields()
+
+  vapply(seq_len(nrow(register)), function(i) {
+    if (!nzchar(approved[[i]]) || !identical(approved[[i]], current[[i]])) {
+      return(FALSE)
+    }
+
+    approver <- log_last_author(events, ids[[i]], "approved_seal")
+    editor <- log_last_author(events, ids[[i]], intent)
+
+    nzchar(approver) && !identical(approver, editor)
+  }, logical(1))
 }
 
 
@@ -612,17 +779,29 @@ identity_payload <- function(record_id, username, identity) {
 
 #' The closed vocabulary of outcomes
 #'
-#' Five words, and the register's `outcome` field offers exactly these. Kept in
+#' Six words, and the register's `outcome` field offers exactly these. Kept in
 #' one place because two readers already need it — the payload builder, which
 #' refuses anything else, and the run record, which carries one counter per
 #' word. A second copy would let the two drift, and the drift would show as a
 #' counter that silently stops counting a word somebody added.
 #'
-#' @return A character vector of the five outcomes.
+#' `held` is the one that is neither a state nor a fault. The other five split
+#' in two: three say where the row is (`pending`, `applied`, `simulated`) and
+#' two say what went wrong and therefore who hears about it — `data_error` to
+#' whoever filed the row, `transport_error` to us. A row modified after it was
+#' applied is a third thing: nothing went wrong, and the round stopped on
+#' purpose until somebody approves the change. Filing it under either `_error`
+#' would send an alarm to a person with nothing to fix, and `pending` would say
+#' nobody has looked at it yet.
+#'
+#' @return A character vector of the six outcomes.
 #'
 #' @keywords internal
 outcome_vocabulary <- function() {
-  c("pending", "applied", "data_error", "transport_error", "simulated")
+  c(
+    "pending", "applied", "data_error", "transport_error", "simulated",
+    "held"
+  )
 }
 
 

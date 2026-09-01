@@ -383,3 +383,84 @@ test_that("an empty identity body calls nobody", {
   expect_true(result[["ok"]])
   expect_equal(result[["scritte"]], 0L)
 })
+
+
+test_that("the event log is asked for as a log and comes back as a frame", {
+  # eval
+  captured <- NULL
+  body <- paste0(
+    '[{"timestamp":"2026-09-01 02:45",',
+    '"username":"anna.bianchi@ubep.unipd.it",',
+    '"action":"Update record (API) 42",',
+    '"details":"role_name = data entry","record":"42"}]'
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    register_log("registro.example.org", "t0ken", since = "2026-09-01 00:00")
+  )
+
+  # test
+  # The log is the only source that says who touched a row, and it says it
+  # about whoever was authenticated rather than about a field somebody typed
+  # -- which is the whole reason row protection can trust it and cannot trust
+  # `requested_by` alone.
+  expect_true(result[["ok"]])
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["content"]]), "log"
+  )
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["beginTime"]]),
+    "2026-09-01 00:00"
+  )
+  expect_equal(result[["log"]][["record"]], "42")
+  expect_equal(
+    result[["log"]][["username"]], "anna.bianchi@ubep.unipd.it"
+  )
+})
+
+
+test_that("an empty event log is a frame with no rows, not an absence", {
+  # eval
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      httr2::response(status_code = 200L, body = charToRaw("[]"))
+    },
+    register_log("registro.example.org", "t0ken", since = "2026-09-01 00:00")
+  )
+
+  # test
+  # "Nobody touched anything in the window" and "the log could not be read"
+  # decide opposite things: the first lets a row through unapproved, the
+  # second must not. They have to be two shapes, not one empty one.
+  expect_true(result[["ok"]])
+  expect_equal(nrow(result[["log"]]), 0L)
+})
+
+
+test_that("the log window is asked for in the instance's clock, not in UTC", {
+  # eval
+  detto <- log_since("2026-09-01 21:03", hours = 0L)
+
+  # test
+  # Measured on 2026-09-01: a round that ran at 21:03 UTC appears in the log
+  # at 23:03. Handing the round's own stamp straight through would ask for a
+  # window shifted by two hours in summer and one in winter -- a discrepancy
+  # that is not a constant, so it cannot be corrected by a constant either.
+  expect_equal(detto, "2026-09-01 23:03")
+})
+
+
+test_that("the log window reaches back far enough to be wrong about the hour", {
+  # eval
+  detto <- log_since("2026-09-01 21:03", hours = 24L)
+
+  # test
+  # The margin is what makes the conversion above a convenience rather than a
+  # load-bearing assumption: an hour out in either direction still leaves the
+  # window covering every round since yesterday. A log window is cheap to
+  # widen, and the filtering that decides anything is done on the rows.
+  expect_equal(detto, "2026-08-31 23:03")
+})

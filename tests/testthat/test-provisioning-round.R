@@ -541,14 +541,17 @@ test_that("the record's fields are exactly the rule's columns", {
   # turns that silence into a red, and its message says which one moves first.
   #
   # It also pins the arithmetic that ties the record to the closed vocabulary:
-  # adding a sixth outcome gives `round_record()` a sixth counter for free, and
-  # that free counter is exactly the one the rule would drop.
+  # adding an outcome gives `round_record()` one more counter for free, and
+  # that free counter is exactly the one the rule would drop. It fired when
+  # `held` was added, which is the whole reason it is written out by hand: the
+  # rule learned `esiti_held` before the package could emit it.
   colonne <- c(
     "at", "registro_letto", "fermato", "scrittura", "posta", "schema_ferma",
     "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
     "errori", "posta_partite", "posta_fallite", "credenziali_recapitate",
     "credenziali_perse", "posta_dirottata", "esiti_pending", "esiti_applied",
-    "esiti_data_error", "esiti_transport_error", "esiti_simulated"
+    "esiti_data_error", "esiti_transport_error", "esiti_simulated",
+    "esiti_held"
   )
 
   record <- round_record(esito_finto(), TRUE, FALSE)

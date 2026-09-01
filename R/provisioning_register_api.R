@@ -203,6 +203,146 @@ register_records <- function(url, token) {
 }
 
 
+#' The five columns REDCap's event log answers with
+#'
+#' Fixed here rather than derived from the answer, unlike `records_frame()`,
+#' and the difference is what the two are for: a register record set is
+#' whatever the project's dictionary holds today, while the log's shape belongs
+#' to REDCap and does not move with the project. Deriving it would make an
+#' empty window — the common case on a quiet night — come back with no
+#' columns at all, and every reader would then have to guard against a frame
+#' that has no `username`.
+#'
+#' @return A character vector of column names.
+#'
+#' @keywords internal
+log_fields <- function() {
+  c("timestamp", "username", "action", "details", "record")
+}
+
+
+#' Turn REDCap's event log export into a frame of character columns
+#'
+#' @param entries The parsed export, a list of one list per event.
+#'
+#' @return A data frame with one row per event and always `log_fields()` as
+#'   columns, empty of rows when nothing happened in the window.
+#'
+#' @keywords internal
+log_frame <- function(entries) {
+  columns <- lapply(log_fields(), function(field) {
+    if (length(entries) == 0L) {
+      return(character())
+    }
+    vapply(
+      entries, function(entry) scalar_as_character(entry[[field]]),
+      character(1)
+    )
+  })
+  names(columns) <- log_fields()
+
+  columns_frame(columns)
+}
+
+
+#' Where a log window starts, in the clock the instance stamps with
+#'
+#' Two jobs in one small function, and the second is what makes the first safe.
+#'
+#' It converts, because REDCap stamps the log with the server clock while the
+#' channel keeps UTC: measured on 2026-09-01, a round that ran at 21:03 UTC
+#' appears in the log at 23:03. And it reaches back, because that conversion
+#' assumes the instance sits in Italian civil time — true of the three served
+#' today, and not a property this package can check. With a day of margin an
+#' hour out in either direction still leaves every round since yesterday
+#' inside the window.
+#'
+#' The margin costs a longer answer and nothing else. What decides anything is
+#' the filtering done on the rows, never the boundary.
+#'
+#' @param at When the round ran, `"%Y-%m-%d %H:%M"` in UTC.
+#' @param hours How far back to reach.
+#'
+#' @return The start of the window as REDCap writes it, or `NA_character_` if
+#'   `at` does not parse — a window starting at a wrong hour is worse than a
+#'   caller that has to say it could not build one.
+#'
+#' @keywords internal
+log_since <- function(at, hours = 24L) {
+  stopifnot(
+    is.character(at), length(at) == 1L,
+    is.numeric(hours), length(hours) == 1L, !is.na(hours)
+  )
+
+  moment <- as.POSIXct(at, tz = "UTC", format = "%Y-%m-%d %H:%M")
+  if (is.na(moment)) {
+    return(NA_character_)
+  }
+
+  format(
+    moment - hours * 3600, "%Y-%m-%d %H:%M", tz = "Europe/Rome"
+  )
+}
+
+
+#' Read who touched the register, and when
+#'
+#' The one question the register's own fields cannot answer. `requested_by`
+#' says who filed a row only because `@USERNAME` filled it in on the form, and
+#' an action tag governs the form and not the API: measured on 2026-09-01, an
+#' import writes into that field whatever it is handed. The log says who was
+#' **authenticated**, which is not a value anybody can type.
+#'
+#' `since` is in the **instance's** civil time and not in UTC, which is the
+#' one thing about this call that is easy to get wrong. REDCap stamps its log
+#' with the server clock: measured on 2026-09-01, a round that ran at 21:03
+#' UTC appears in the log at 23:03. The channel keeps UTC everywhere else, so
+#' a caller that handed its own stamp straight through would ask for a window
+#' shifted by two hours in summer and **one in winter** — a discrepancy that
+#' is not a constant and that would come and go with the change of hour.
+#'
+#' Callers therefore convert, and they are expected to convert generously: the
+#' window is cheap to widen and the filtering that matters is done on the rows,
+#' not on the boundary.
+#'
+#' @inheritParams register_call
+#' @param since Beginning of the window, `"%Y-%m-%d %H:%M"`, in the
+#'   instance's civil time.
+#'
+#' @return The `register_call()` list plus `log`, a data frame.
+#'
+#' @keywords internal
+register_log <- function(url, token, since) {
+  stopifnot(
+    is.character(since), length(since) == 1L, !is.na(since), nzchar(since)
+  )
+
+  answer <- register_call(url, token, list(
+    content = "log", beginTime = since
+  ))
+
+  if (!isTRUE(answer[["ok"]])) {
+    return(c(answer, list(log = NULL)))
+  }
+
+  # Same guard as the record export, and needed for the same reason: an array
+  # parses to an unnamed list, an object arrives named and is a message rather
+  # than a log. Read as a log it would become one event nobody produced -- and
+  # here that matters more than in the export, because an invented event is an
+  # invented author, and the author is what decides whether a change applies.
+  if (!is.null(names(answer[["payload"]]))) {
+    return(list(
+      ok = FALSE,
+      errors = "TRASPORTO_REGISTRO_LOG_INATTESO",
+      payload = NULL,
+      log = NULL
+    ))
+  }
+
+  c(answer, list(log = log_frame(answer[["payload"]])))
+}
+
+
 #' The four dictionary columns the comparison reads, in the API's vocabulary
 #'
 #' REDCap holds one schema under two sets of names: the CSV a project imports
@@ -340,6 +480,28 @@ register_identity_import <- function(url, token, payload) {
     reason = paste(
       "What the register was asked and what the round resolved about who it",
       "means must not travel together, and neither may ride with an outcome."
+    )
+  )
+}
+
+
+#' Write the seals back, and nothing else
+#'
+#' @inheritParams register_call
+#' @param payload A frame of exactly `record_id`, `applied_seal`, `seal_state`.
+#'
+#' @return The `register_call()` list plus `scritte`.
+#'
+#' @keywords internal
+register_seal_import <- function(url, token, payload) {
+  register_field_import(
+    url, token, payload,
+    expected = c("record_id", "applied_seal", "seal_state"),
+    caller = "register_seal_import",
+    reason = paste(
+      "What the round applied and what happened to the row are two",
+      "statements, and the seal must not ride with an outcome: an outcome",
+      "body carrying a seal column would rewrite the seal on every outcome."
     )
   )
 }

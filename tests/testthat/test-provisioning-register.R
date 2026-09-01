@@ -317,6 +317,18 @@ test_that("outcome_payload carries the outcome and nothing else", {
 })
 
 
+test_that("the vocabulary has a word for a row that is held back", {
+  # test
+  # A row modified after it was applied is neither an error nor still to do.
+  # `pending` would say nobody has looked at it, and the two `_error` words
+  # would attribute a fault to somebody: the referent who filed it, or us.
+  # Nothing went wrong -- the round looked, found the row changed, and stopped
+  # on purpose. Only a word of its own can say that to the counter the round's
+  # record carries, and to the person reading the outcome in the form.
+  expect_true("held" %in% outcome_vocabulary())
+})
+
+
 test_that("outcome_payload refuses an outcome outside the vocabulary", {
   # test
   expect_error(outcome_payload(record_id = "1", outcome = "ok"))
@@ -413,6 +425,22 @@ test_that("il sigillo ignora i campi che scrive il giro", {
 })
 
 
+test_that("il sigillo non si muove quando qualcuno approva la modifica", {
+  # eval
+  prima <- request_seal(register_row())
+  dopo <- request_seal(register_row(approved_seal = "9f3c1a7b04de"))
+
+  # test
+  # The approval carries the seal it approves, so if writing it moved the seal
+  # the value would never match the row it was written for: the comparison
+  # would chase itself and no change could ever be approved. The field is
+  # therefore outside the seal -- and it is the first one that has to be,
+  # while still being writable by a person, which is why "written by the
+  # channel" and "outside the seal" stopped being the same list.
+  expect_equal(prima, dopo)
+})
+
+
 test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
   # eval
   base <- register_row()
@@ -427,4 +455,86 @@ test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
   expect_false(identical(request_seal(base), ruolo))
   expect_false(identical(request_seal(base), revoca))
   expect_false(identical(request_seal(base), gruppo))
+})
+
+
+eventi_finti <- function(...) {
+  righe <- list(...)
+  if (length(righe) == 0L) {
+    return(log_frame(list()))
+  }
+  log_frame(lapply(righe, function(r) {
+    utils::modifyList(
+      list(
+        timestamp = "2026-09-01 02:45", username = "", action = "Update record",
+        details = "", record = "1"
+      ),
+      r
+    )
+  }))
+}
+
+
+test_that("an approval that does not carry the current seal does not count", {
+  # eval
+  detto <- seal_approved(
+    register_row(approved_seal = "000000000000"), eventi_finti()
+  )
+
+  # test
+  # The approval names the version of the row it approves. A value that is not
+  # this row's seal approves some other version -- an earlier change, or a
+  # string somebody typed -- and letting it through would make one approval
+  # stand for every change that came after it.
+  expect_false(detto)
+})
+
+
+test_that("chi ha modificato la riga non puo' approvare la propria modifica", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  # Most recent first, which is the order REDCap answers in.
+  detto <- seal_approved(riga, eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "approved_seal = 'abc'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    )
+  ))
+
+  # test
+  # Otherwise the protection is a formality: whoever edits another referent's
+  # row would tick the box on the way out, and the round would apply a change
+  # nobody but its author ever saw. The seal detects the change; only the log
+  # can say the approval came from somebody else, because it names whoever was
+  # authenticated rather than a value somebody typed.
+  expect_false(detto)
+})
+
+
+test_that("un terzo che approva col sigillo giusto sblocca la riga", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  detto <- seal_approved(riga, eventi_finti(
+    list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "approved_seal = 'abc'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    )
+  ))
+
+  # test
+  # The other side of the two tests above, and it has to be here or an
+  # implementation that answered FALSE to everything would pass them both. A
+  # protection that never lets anything through is not a protection, it is an
+  # outage.
+  expect_true(detto)
 })
