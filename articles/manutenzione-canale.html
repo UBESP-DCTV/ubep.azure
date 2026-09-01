@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,80 +80,136 @@ credenziale.</p>
 <div class="section level2">
 <h2 id="che-cosè-il-canale">1. Che cos’è il canale<a class="anchor" aria-label="anchor" href="#che-cos%C3%A8-il-canale"></a>
 </h2>
-<p>Cinque pezzi, ciascuno con un mestiere.</p>
-<p><strong>Il modulo REDCap.</strong> Codice PHP installato sulle
-istanze osservate. Espone tre operazioni — leggere lo stato di una
-coppia, asserire dei diritti, revocarli — dietro un segreto condiviso e
-una lista di indirizzi ammessi. È l’unico pezzo che tocca
-<code>\UserRights</code>, e l’unico che calcola le due impronte: quella
-della superficie di REDCap e quella della propria lista di
-indirizzi.</p>
-<p><strong>Il client R.</strong> Questo pacchetto. Parla al modulo,
-valida le richieste, calcola il confronto fra desiderato e reale, e
-decide che cosa dichiarare al modulo quando chiede di scrivere.</p>
+<p><strong>Sette pezzi, ciascuno con un mestiere.</strong> Nessuno dei
+sette sta per «il canale» da solo, e buona parte dei guasti che si
+vedono in esercizio sono guasti di <em>giunzione</em> fra due di
+essi.</p>
 <p><strong>Il registro delle richieste.</strong> Un progetto REDCap su
 un’istanza dedicata, dove i referenti scrivono chi deve avere che cosa.
 Il registro <em>dichiara delle richieste</em>; non descrive la realtà.
 Una coppia che esiste su un’istanza e non compare nel registro non
-significa niente — in particolare non significa «da revocare».</p>
+significa niente — in particolare non significa «da revocare». È anche
+la coda di lavoro: non ce n’è una seconda, e il §4 dice perché.</p>
+<p><strong>Il modulo REDCap.</strong> Codice PHP installato sulle
+istanze servite. Espone tre operazioni — leggere lo stato di una coppia,
+asserire dei diritti, revocarli — dietro un segreto condiviso e una
+lista di indirizzi ammessi. È l’unico pezzo che tocca
+<code>\UserRights</code>, e l’unico che calcola le due impronte: quella
+della superficie di REDCap e quella della propria lista di indirizzi.
+Vive in <code>inst/redcap-module/</code> <strong>dentro questo
+repository</strong>, e <code><a href="../reference/build_redcap_module.html">build_redcap_module()</a></code> ne costruisce
+l’archivio prendendo il numero di versione da <code>DESCRIPTION</code>:
+le cartelle numerate sulle istanze sono deployment, non sorgenti.</p>
+<p><strong>Il client R.</strong> Questo pacchetto. Parla al modulo,
+risolve le identità, valida le richieste, calcola il confronto fra
+desiderato e reale, decide che cosa dichiarare al modulo quando chiede
+di scrivere, compone le notifiche e scrive gli esiti.</p>
 <p><strong>Il perimetro.</strong> Una macchina virtuale dedicata in
 Azure, con identità gestita, da cui partono due lavorazioni separate —
-l’osservatore e il giro del canale, dettagliati sotto il diagramma. Sul
-disco della macchina non c’è nessun segreto: il token si chiede al
-servizio di metadati dell’istanza, che risponde solo a chi gira su
-quella macchina, e con quel token si legge il Key Vault. L’indirizzo
-pubblico della macchina è statico per necessità e non per comodità — è
-l’unica voce ammessa nelle liste di indirizzi delle istanze, e cambiarlo
-le chiude tutte insieme.</p>
-<p><strong>La telemetria e gli allarmi.</strong> Ogni esecuzione
-dell’osservatore lascia un record in un workspace di Log Analytics,
-attraverso un punto di raccolta e una regola di raccolta. Sei regole
-d’allarme leggono quel record e scrivono a un gruppo di azione. Il giro
-del canale non emette ancora telemetria: emetterla è del sotto-progetto
-4.</p>
-<pre><code>     referenti                        chi mantiene
-         │                                  │
-         ▼                                  ▼
-  ┌──────────────┐                 ┌──────────────────┐
-  │ registro     │                 │ giro del canale  │
-  │ richieste    │◄- - - - - - - - │ (client R,       │
-  │ (REDCap)     │  legge, scrive  │  a chiamata)     │
-  └──────────────┘  il solo esito  └────────┬─────────┘
-                                            │
-                               stato / asserisci / revoca
-                                            │
-                                            ▼
-  ┌─────────────────────────┐      ┌──────────────────┐
-  │ perimetro               │      │ modulo REDCap    │
-  │ - identità gestita      │─────►│ sulle istanze    │
-  │ - segreti in Key Vault  │      │ osservate        │
-  │ - due lavorazioni:      │      └─────────┬────────┘
-  │   osservatore (giorno)  │                │
-  │   giro (a chiamata)     │                │
-  └───────────┬─────────────┘                │
-              │                              │ due impronte:
-              │ un record, dall'osservatore  │ superficie, indirizzi
-              ▼                              │
-  ┌─────────────────────────┐                │
-  │ telemetria              │◄───────────────┘
-  │ + sei regole d'allarme  │
-  │ solo dall'osservatore   │
-  └─────────────────────────┘</code></pre>
+l’osservatore e il giro del canale. Sul disco della macchina non c’è
+nessun segreto: il token si chiede al servizio di metadati dell’istanza,
+che risponde solo a chi gira su quella macchina, e con quel token si
+legge il Key Vault. L’indirizzo pubblico della macchina è statico per
+necessità e non per comodità — è l’unica voce ammessa nelle liste di
+indirizzi delle istanze, e cambiarlo le chiude tutte insieme.</p>
+<p><strong>L’anagrafica.</strong> Microsoft Entra, letta via Graph con
+l’identità gestita. Serve a due cose: stabilire <strong>chi sia</strong>
+la persona nominata in una richiesta, e crearle un’utenza quando non ne
+ha. I permessi applicativi sono <strong>due e nessun altro</strong> —
+leggere gli utenti e crearne — e la scelta è deliberata: nessuno dei due
+consente di modificare, disabilitare o cancellare un’utenza che esiste,
+né di toccarne le credenziali. Chi un giorno aggiungesse un terzo
+permesso sta allargando quel confine, e questa frase è ciò che glielo
+dice.</p>
+<p><strong>Il servizio di posta.</strong> Un servizio esterno a cui il
+giro consegna i messaggi. Il pacchetto non sa da dove esce la posta:
+riceve una <em>chiusura</em> a cui chiedere di mandare, e chi la
+costruisce è la lavorazione, che legge la chiave dal Key Vault e non la
+lascia uscire dalla funzione che la usa. Il servizio risponde «presa in
+carico», non «consegnata»: un rimbalzo avviene dopo, in modo asincrono,
+e non torna dentro il giro.</p>
+<p><strong>La telemetria e gli allarmi.</strong> Ogni esecuzione di
+<strong>entrambe</strong> le lavorazioni lascia un record in un
+workspace di Log Analytics, attraverso un punto di raccolta e una regola
+di raccolta. Le due lavorazioni <strong>non condividono la
+tabella</strong>, quindi non condividono nessuna regola: una regola del
+canale non può leggere un record dell’osservatore, e viceversa. Le
+regole attive sono <strong>undici</strong> — sei dell’osservatore,
+cinque del canale.</p>
+<pre><code>     referenti                              chi mantiene
+         |                                        |
+         v                                        v
+  +--------------+                      +----------------------+
+  | registro     |  legge le richieste  | giro del canale      |
+  | richieste    |&lt;---------------------| (client R,           |
+  | (REDCap)     |  scrive identita'    |  ogni quattro ore)   |
+  +--------------+  e i soli esiti      +---+--------------+---+
+                                            |              |
+                       stato / asserisci /  |              | manda PRIMA
+                              revoca        |              | di scrivere
+                                            v              v
+  +-------------------------+      +--------------+  +--------------+
+  | perimetro               |      | modulo       |  | servizio     |
+  | - identita' gestita     |-----&gt;| REDCap sulle |  | di posta     |
+  | - segreti in Key Vault  |      | istanze      |  +--------------+
+  | - due lavorazioni:      |      | servite      |
+  |   osservatore (giorno)  |      +------+-------+
+  |   canale (4 ore)        |             |
+  +----+---------------+----+             | due impronte:
+       |               |                  | superficie, indirizzi
+       |               | chi e' la        |
+       |               | persona, e       |
+       |               | creala se manca  |
+       |               v                  |
+       |        +--------------+          |
+       |        | anagrafica   |          |
+       |        | (Entra/Graph)|          |
+       |        +--------------+          |
+       | un record per lavorazione        |
+       v                                  |
+  +-----------------------------+         |
+  | telemetria: due tabelle     |&lt;--------+
+  | + undici regole d'allarme   |
+  +-----------------------------+</code></pre>
 <p><strong>La macchina del perimetro ospita due lavorazioni, non
-una</strong>, e questo è il punto che il diagramma dice per primo:
-nessuna delle due sta per «il canale» da sola.
+una</strong>, ed è il punto che il diagramma dice per primo.
 <strong>L’osservatore</strong> gira ogni giorno, legge lo stato di ogni
 istanza che ha il modulo e non confronta niente — non legge il registro
 e non chiama <code><a href="../reference/provisioning_diff.html">provisioning_diff()</a></code>, e una guardia in
 <code>tests/testthat/test-runner-guardie.R</code> lo sorveglia.
 <strong>Il giro del canale</strong> è un job separato, apposta:
 osservare e agire hanno cadenze diverse e conseguenze diverse, e un
-guasto nell’uno non deve fermare l’altro. Legge il registro con l’API a
-token, chiede il cancello sull’ambito a ogni istanza che ha risposto,
-confronta il desiderato con il reale per le sole coppie di cui qualcuno
-ha chiesto, e scrive solo quando la scrittura è richiesta esplicitamente
-— di default simula. Le ragioni di questa divisione, e perché solo
-l’osservatore doveva restare senza confronto, stanno in §2.</p>
+guasto nell’uno non deve fermare l’altro. Le ragioni della divisione, e
+perché solo l’osservatore doveva restare senza confronto, stanno nel
+§2.</p>
+<p><strong>La cadenza di quattro ore è una decisione, non un
+caso.</strong> Dice: chi compila una richiesta sa entro quattro ore se è
+formalmente corretta e, quando la scrittura è accesa, se è stata evasa.
+Non sono due tempi — il giro valida e applica nella stessa passata.</p>
+<p><strong>L’ordine dentro un giro, che è la parte da avere in
+testa.</strong> Il giro (1) legge il dizionario del registro e si ferma
+se è derivato da quello impacchettato; (2) legge le richieste; (3)
+risolve l’identità di ogni riga contro l’anagrafica, e
+<strong>crea</strong> l’utenza dove manca; (4) scrive identità e
+username nel registro, per una porta che non prende altro; (5) chiede a
+ogni istanza il cancello sull’ambito e confronta desiderato e reale per
+le sole coppie di cui qualcuno ha chiesto; (6) applica; (7) rilegge; (8)
+<strong>manda la posta</strong>; (9) scrive gli esiti. Le due scritture
+nel registro sono due porte distinte e restano tali: la prima porta i
+verbali del verdetto, la seconda l’esito.</p>
+<p><strong>«Manda prima, scrivi dopo» è un contratto, non un ordine di
+comodo.</strong> Una riga entra nel registro <strong>solo se la sua
+notizia è partita</strong>: se l’invio fallisce la riga resta come il
+registro la porta, e il giro seguente la ritrova cambiata e riprova. La
+coda è il registro stesso — nessun secondo stato, niente da tenere
+allineato. Il costo accettato in cambio è che una notifica possa
+arrivare <strong>due volte</strong>, mai che si perda.</p>
+<p><strong>La posta è spenta di default</strong>, e la ragione non è
+intuitiva: con «manda prima, scrivi dopo» una posta semplicemente spenta
+bloccherebbe <em>ogni</em> scrittura nel registro. Quindi senza la
+variabile che la accende il giro fa esattamente quello che faceva prima
+che la posta esistesse — calcola, scrive, non manda — così installare il
+pacchetto non fa partire nessun messaggio al timer successivo.</p>
 <p><strong>Che cosa garantisce una simulazione, e che cosa no.</strong>
 Un giro simulato non scrive né sulle istanze né in ambito, ma
 <strong>riporta l’esito nel registro</strong>: è <code>simulated</code>,
@@ -165,20 +221,12 @@ richiesta che nominava un ruolo inesistente usciva <code>creato</code>
 in simulazione e sarebbe stata rifiutata da una scrittura vera. Dalla
 versione successiva le due risoluzioni girano su ogni giro — sono
 letture — e una simulazione rifiuta ciò che rifiuterebbe una scrittura.
-<strong>Resta fuori dalla garanzia l’esistenza dell’utente</strong>:
-nessun punto del modulo verifica che uno username esista, né in
-simulazione né in scrittura, e REDCap accetta diritti per un login che
-non c’è (è così che nascono le righe orfane). Su un’istanza che non
-abbia ancora la versione nuova, un <code>simulated</code> va letto come
-«nessun ostacolo di forma», non come «funzionerà».</p>
-<p><strong>Il giro non ha ancora un’unità di sistema o un
-timer</strong>: gira quando qualcuno lo lancia, da riga di comando sulla
-macchina del perimetro (<code>dev/runner-canale.R</code>, installato
-come per l’osservatore). Programmarlo è un lavoro del sotto-progetto 4,
-non ancora fatto: questa guida non descrive un orario che non esiste.
-Per lo stesso motivo la telemetria oggi riceve un record solo
-dall’osservatore — il giro non emette ancora nulla lì, e il diagramma lo
-dice piuttosto che lasciarlo intuire.</p>
+<strong>Resta fuori dalla garanzia l’esistenza dell’utente
+sull’istanza</strong>: nessun punto del modulo verifica che uno username
+esista lì, e REDCap accetta diritti per un login che non c’è, ed è così
+che nascono le righe orfane. Su un’istanza che non abbia ancora la
+versione nuova, un <code>simulated</code> va letto come «nessun ostacolo
+di forma», non come «funzionerà».</p>
 </div>
 <div class="section level2">
 <h2 id="i-due-cancelli-e-che-cosa-fa-scattare-ciascuno">2. I due cancelli, e che cosa fa scattare ciascuno<a class="anchor" aria-label="anchor" href="#i-due-cancelli-e-che-cosa-fa-scattare-ciascuno"></a>
@@ -421,6 +469,23 @@ il <strong>form</strong>, non l’API, quindi la lavorazione continua a
 scriverli mentre chi compila non può. Senza quella marca un referente
 potrebbe digitare «applicata» nel campo d’esito, e il registro
 porterebbe un successo che nessuno ha prodotto.</p>
+</div>
+<div class="section level3">
+<h3 id="il-giro-scrive-da-due-porte-e-restano-separate">Il giro scrive da due porte, e restano separate<a class="anchor" aria-label="anchor" href="#il-giro-scrive-da-due-porte-e-restano-separate"></a>
+</h3>
+<p>La prima porta deposita <strong>identità e username</strong> appena
+la risoluzione è fatta, e non prende altro. La seconda deposita
+<strong>l’esito</strong>, e avviene dopo l’invio della notifica. In
+mezzo c’è la posta.</p>
+<p>La conseguenza da conoscere quando si tocca il testo dei messaggi: il
+frame da cui il giro compone la notifica è il registro <strong>come è
+stato letto</strong>, e resta volutamente immobile — è il metro contro
+cui si misura che cosa è cambiato. Quindi ciò che il messaggio deve dire
+e che quel frame ancora non porta va passato
+<strong>esplicitamente</strong> a chi compone. Allargare il frame
+dell’esito sarebbe la scorciatoia sbagliata: quel frame è anche il corpo
+dell’import, e allargarlo farebbe passare l’identità per la porta
+dell’esito.</p>
 <p>Una richiesta è <strong>una persona su un progetto</strong>. Una
 coppia che compare due volte è un errore su <strong>entrambe</strong> le
 righe, non su una: una delle due è l’errore e non c’è modo di sapere
@@ -517,21 +582,58 @@ importarlo per sbaglio al posto del dizionario vero.</p>
 <div class="section level2">
 <h2 id="gli-allarmi">5. Gli allarmi<a class="anchor" aria-label="anchor" href="#gli-allarmi"></a>
 </h2>
-<p>Sei regole attive, tutte con risoluzione automatica e finestra di due
-giorni. Si dividono in due famiglie, e la <strong>gravità dice
-quale</strong>:</p>
+<p><strong>Undici regole attive, tutte con risoluzione
+automatica</strong>, divise in due famiglie che non si parlano:
+<strong>sei dell’osservatore</strong> e <strong>cinque del
+canale</strong>. La divisione non è organizzativa ma tecnica — le due
+lavorazioni scrivono in <strong>due tabelle diverse</strong>, e una
+regola non può leggere la tabella dell’altra. Chi cerca il perché di una
+regola mancante deve guardare prima di tutto quale tabella potrebbe
+leggerla.</p>
+<p>La <strong>gravità</strong> dice la famiglia del problema, non chi lo
+ha trovato:</p>
 <ul>
 <li>
-<strong>gravità 1 — «non possiamo più vedere»</strong>: la
-lavorazione non ha lasciato nessun record; oppure il record c’è ma non
-porta le colonne che deve;</li>
+<strong>gravità 1 — «non possiamo più vedere» o «non sta
+lavorando»</strong>: la lavorazione non ha lasciato nessun record; il
+record c’è ma non porta le colonne che deve; l’ultimo giro si è fermato
+prima di agire; un’utenza è nata e la sua credenziale non è arrivata a
+nessuno;</li>
 <li>
 <strong>gravità 2 — «abbiamo trovato un problema»</strong>: una o
 più istanze non si sono lasciate leggere; un’istanza non è in stato
 collaudato; la superficie di un’istanza è cambiata; le liste di
-indirizzi sono cambiate o divergono fra istanze.</li>
+indirizzi sono cambiate o divergono; gli esiti sono stati calcolati e
+non scritti; una notifica non è stata recapitata.</li>
 </ul>
-<p>I nomi esatti delle sei regole stanno nel foglio dei parametri.</p>
+<p>I nomi esatti, le gravità e le finestre stanno nel foglio dei
+parametri.</p>
+<div class="section level3">
+<h3 id="le-finestre-sono-diverse-e-devono-esserlo">Le finestre sono diverse, e devono esserlo<a class="anchor" aria-label="anchor" href="#le-finestre-sono-diverse-e-devono-esserlo"></a>
+</h3>
+<p>L’osservatore gira una volta al giorno e le sue regole guardano
+indietro <strong>due giorni</strong>. Il canale gira ogni quattro ore, e
+le sue guardano indietro <strong>cinque</strong>, dentro una finestra di
+sei: la finestra deve contenere il periodo che la query interroga, o la
+regola scatta sempre.</p>
+</div>
+<div class="section level3">
+<h3 id="una-regola-vede-solo-ciò-che-la-sua-lavorazione-interroga">Una regola vede solo ciò che la sua lavorazione interroga<a class="anchor" aria-label="anchor" href="#una-regola-vede-solo-ci%C3%B2-che-la-sua-lavorazione-interroga"></a>
+</h3>
+<p>Il canale interroga <strong>solo le istanze che hanno righe nel
+registro</strong>, quindi il suo contatore delle istanze irraggiungibili
+conta quelle, non la flotta servita. Con un registro che nomina una sola
+istanza, la regola tace sulle altre anche se sono spente — ed è corretto
+così: un’istanza che nessuno ha chiesto non è un guasto. Chi vuole
+sapere se la flotta è viva guarda l’osservatore, che le legge tutte.</p>
+<p>Questa asimmetria è costata un guasto vero, ed è la ragione per cui
+la quinta regola del canale esiste: cinque giri di fila hanno perso
+l’unica istanza con righe nel registro senza che nessuna delle quattro
+regole di allora si accorgesse di niente. Non ne avevano motivo — «non
+ho raggiunto l’istanza» non è un errore del giro, è il suo
+<strong>esito</strong>, e finiva in un campo che nessuna regola
+guardava.</p>
+</div>
 <div class="section level3">
 <h3 id="la-forma-della-query-e-perché-è-quella">La forma della query, e perché è quella<a class="anchor" aria-label="anchor" href="#la-forma-della-query-e-perch%C3%A9-%C3%A8-quella"></a>
 </h3>
@@ -542,12 +644,29 @@ dei filtri, non un filtro su una finestra temporale.</p>
 qualcosa di brutto nelle ultime ventiquattr’ore?» resta vera per
 ventiquattr’ore, perché i record sono immutabili: un guasto riparato in
 cinque minuti tiene la regola rossa per un giorno intero. La forma
-giusta per un osservatore giornaliero è «l’ultima osservazione com’è
-andata?», che torna verde appena atterra una run buona.</p>
+giusta è «l’ultima osservazione com’è andata?», che torna verde appena
+atterra una run buona.</p>
 <p>Questa è anche la ragione per cui una regola sola con quattro rami in
 <code>or</code> è stata ritirata: spezzarla in quattro senza rimediare
 prima la finestra avrebbe fatto ereditare a tutte e quattro il rosso
 appiccicoso, moltiplicando le notifiche invece di dividerle.</p>
+</div>
+<div class="section level3">
+<h3 id="la-regola-di-raccolta-impara-le-colonne-prima-che-il-pacchetto-le-emetta">La regola di raccolta impara le colonne prima che il pacchetto le
+emetta<a class="anchor" aria-label="anchor" href="#la-regola-di-raccolta-impara-le-colonne-prima-che-il-pacchetto-le-emetta"></a>
+</h3>
+<p>Vale ogni volta che il record del giro guadagna un campo, e non dà
+errore se lo si sbaglia — dà silenzio. L’API d’ingestione <strong>scarta
+senza dirlo</strong> ogni colonna che la regola di raccolta non conosce.
+Rilasciare il pacchetto prima e aggiornare la regola dopo non produce un
+errore: produce colonne vuote, e quindi allarmi che sorvegliano un campo
+mai scritto — regole che non possono scattare, installate nella
+convinzione che stiano guardando qualcosa.</p>
+<p>Quindi l’ordine è: <strong>prima la regola di raccolta, poi il
+pacchetto, poi gli allarmi nuovi</strong>. E una regola d’allarme che
+verifica quali colonne il record porta va aggiornata nella
+<strong>stessa finestra</strong> del rilascio, o scatterebbe su un
+record perfettamente sano.</p>
 </div>
 <div class="section level3">
 <h3 id="la-regola-ritirata-è-disattivata-non-cancellata">La regola ritirata è disattivata, non cancellata<a class="anchor" aria-label="anchor" href="#la-regola-ritirata-%C3%A8-disattivata-non-cancellata"></a>
@@ -556,43 +675,6 @@ appiccicoso, moltiplicando le notifiche invece di dividerle.</p>
 disattivata, con la descrizione che spiega perché è stata sostituita. Va
 lasciata dov’è: cancellarla toglierebbe quella spiegazione. Il ritorno
 indietro è una modifica che la riabilita.</p>
-</div>
-<div class="section level3">
-<h3 id="la-deduplica-misurata">La deduplica, misurata<a class="anchor" aria-label="anchor" href="#la-deduplica-misurata"></a>
-</h3>
-<p>Con la risoluzione automatica <strong>spenta</strong>, ogni
-valutazione che trova la condizione vera crea un allarme
-<strong>nuovo</strong> — il precedente non si risolve mai, quindi non
-c’è niente su cui deduplicare. Misurato: tre valutazioni, tre allarmi.
-Con la risoluzione automatica accesa, l’allarme aperto resta e non se ne
-crea un altro: cinque valutazioni, un allarme.</p>
-<p>Il difetto della configurazione vecchia non era il silenzio, era la
-ripetizione. È lo stesso modo di rendere inutile un monitor, preso dal
-lato opposto.</p>
-</div>
-<div class="section level3">
-<h3 id="il-punto-cieco-che-ha-richiesto-una-settima-regola">Il punto cieco che ha richiesto una settima regola<a class="anchor" aria-label="anchor" href="#il-punto-cieco-che-ha-richiesto-una-settima-regola"></a>
-</h3>
-<p>Una condizione del tipo «l’array ha più di un elemento» vale
-<strong>falso</strong> su una colonna assente. Quindi, se il modulo
-smettesse di riportare un’impronta, la regola corrispondente tacerebbe
-invece di allarmare — e la regola sull’assenza di record non lo
-coprirebbe, perché guarda un’altra colonna. Il canale perderebbe la
-sorveglianza su quell’asse <strong>in silenzio</strong>, e ogni segnale
-disponibile direbbe che la sorveglianza funziona.</p>
-<p>La regola sul record incompleto chiude quel buco, ed <strong>elenca
-esplicitamente</strong> le colonne che pretende invece di dire «tutte».
-Non è stile. Scritta come «tutte le colonne», dipenderebbe da ciò che la
-lavorazione capita di emettere, e diventerebbe rossa ogni volta che
-estendiamo il record — cioè insegnerebbe il riflesso «ignorala», che è
-il difetto che la regola esiste per togliere. Con la lista esplicita la
-dipendenza si rovescia: è l’allarme a dichiarare il proprio contratto, e
-una colonna nuova non è pretesa finché non la aggiungiamo, cosa che
-facciamo dopo averla vista arrivare.</p>
-<p><strong>Un array vuoto invece è corretto che sia verde.</strong>
-Durante un’interruzione le impronte sono vuote e le regole di omogeneità
-tacciono, delegando a quelle sulla raggiungibilità e sull’assenza. La
-delega è verificata in entrambe le direzioni.</p>
 </div>
 </div>
 <div class="section level2">
@@ -726,7 +808,7 @@ inquinare ogni lettura futura.</p>
 cartella condivisa. Il rimando è sempre <strong>per nome del
 parametro</strong>, mai per posizione nel foglio, così che riordinare il
 foglio non invalidi questa guida.</p>
-<p>Il foglio raccoglie sei famiglie:</p>
+<p>Il foglio raccoglie otto famiglie:</p>
 <ul>
 <li>il registro delle richieste: URL, istanza, identificativo del
 progetto, nome del modulo e numero dei campi;</li>
@@ -738,6 +820,11 @@ registro, il segreto del modulo per ciascuna istanza;</li>
 alias di connessione, unità di sistema e orario;</li>
 <li>la telemetria: workspace, tabella, punto di raccolta, regola di
 raccolta, gruppo di azione;</li>
+<li>le variabili dell’unità di sistema, che è dove entrambe le
+lavorazioni prendono i nomi delle risorse e gli interruttori — la
+scrittura, la posta, il dirottamento delle notifiche;</li>
+<li>gli allarmi: le regole attive per ciascuna delle due lavorazioni, la
+loro gravità, la finestra e lo stato di collaudo;</li>
 <li>la flotta osservata: quali istanze hanno il modulo, le due impronte
 correnti, il numero di coppie e quante hanno una scadenza.</li>
 </ul>

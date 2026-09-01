@@ -11,7 +11,7 @@ about the round itself. This record is that."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@ about the round itself. This record is that.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">round_record</span><span class="op">(</span><span class="va">esito</span>, <span class="va">scrittura</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">round_record</span><span class="op">(</span><span class="va">esito</span>, <span class="va">scrittura</span>, <span class="va">posta</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,6 +62,13 @@ about the round itself. This record is that.</p>
 <dt id="arg-scrittura">scrittura<a class="anchor" aria-label="anchor" href="#arg-scrittura"></a></dt>
 <dd><p>Whether the round was allowed to write, so a reader of the
 telemetry can tell the same counts apart simulated and real.</p></dd>
+
+
+<dt id="arg-posta">posta<a class="anchor" aria-label="anchor" href="#arg-posta"></a></dt>
+<dd><p>Whether the round was allowed to send. Neither this nor
+<code>scrittura</code> has a fallback, and for the same reason: a caller that forgets
+one would report the switch as off, which is the single reading the field
+exists to make impossible.</p></dd>
 
 </dl></div>
     <div class="section level2">

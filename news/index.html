@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,20 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.0" id="ubepazure-0130">ubep.azure 0.13.0<a class="anchor" aria-label="anchor" href="#ubepazure-0130"></a></h2>
+<ul><li>
+<p><strong>The round’s record says whether the post was switched on.</strong> Every mail counter is zero both when there was nothing to send and when sending was off, and <code>posta_dirottata</code> is false in both cases too — so the two rounds produced the same record and the telemetry could not tell a quiet night from a mute channel. The new <code>posta</code> field is the twin of <code>scrittura</code>, and it matters more than that one: under “send first, write after” the switch it reports gates every write into the register.</p>
+<p>Neither field has a fallback, and for the same reason: a caller that forgot to pass one would report the switch as off, which is the single reading the field exists to make impossible.</p>
+</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.12.1" id="ubepazure-0121">ubep.azure 0.12.1<a class="anchor" aria-label="anchor" href="#ubepazure-0121"></a></h2>
+<ul><li>
+<p><strong>The outcome message names the identity the round settled</strong>, instead of saying it is not established yet. A referent files a row with the UPN blank, as the work instruction asks; the round resolves it and writes it through the identity door <em>before</em> the message leaves. The message, though, was composed from the register as read — which is deliberately frozen, since it is what the round measures change against — so the first notice about any new request told the referent less than the register beside it already carried.</p>
+<p>Repaired by telling <code><a href="../reference/mail_round.html">mail_round()</a></code> what the round settled, rather than by widening the frame that gets imported: that frame is the other write door, and the two stay separate.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.12.0" id="ubepazure-0120">ubep.azure 0.12.0<a class="anchor" aria-label="anchor" href="#ubepazure-0120"></a></h2>
 <ul><li><p><strong>The round sends the post itself, in Italian and in English.</strong> Three messages: the outcome of a request to whoever filed it, first-access instructions to the person the request is about, and the way into a newly created account to the referent who asked for it. It replaces the REDCap alerts, which deliver once per record and cannot be made to do otherwise — the trigger that sees writes arriving through the API is the one that has no “every time” to offer. A row whose outcome changed twice therefore warned once, and the last word a referent was left with could be the wrong one.</p></li>

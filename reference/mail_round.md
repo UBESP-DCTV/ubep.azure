@@ -17,7 +17,8 @@ mail_round(
   dry_run,
   redirect_to = NULL,
   copy_to = NULL,
-  reply_to = NULL
+  reply_to = NULL,
+  identified = NULL
 )
 ```
 
@@ -59,6 +60,13 @@ mail_round(
   Kept for the caller's symmetry with
   [`mail_send()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_send.md);
   the mailer closure is what carries it to the transport.
+
+- identified:
+
+  The identity this round settled, as a frame with `record_id` and the
+  fields it settled. `register` is the register as read, on purpose;
+  this is how the message names what the round has just established
+  rather than what the referent typed.
 
 ## Value
 

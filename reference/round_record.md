@@ -7,7 +7,7 @@ say nothing about the round itself. This record is that.
 ## Usage
 
 ``` r
-round_record(esito, scrittura)
+round_record(esito, scrittura, posta)
 ```
 
 ## Arguments
@@ -22,6 +22,13 @@ round_record(esito, scrittura)
 
   Whether the round was allowed to write, so a reader of the telemetry
   can tell the same counts apart simulated and real.
+
+- posta:
+
+  Whether the round was allowed to send. Neither this nor `scrittura`
+  has a fallback, and for the same reason: a caller that forgets one
+  would report the switch as off, which is the single reading the field
+  exists to make impossible.
 
 ## Value
 

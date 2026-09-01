@@ -73,12 +73,14 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_field_import.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_identity_import.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_import.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_intent_fields.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_metadata.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_readonly_fields.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_records.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/request_for.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/request_from_row.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/request_seal.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/resolve_against_directory.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/resolve_identity.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_actual.html</loc></url>
