@@ -543,13 +543,36 @@ allarmi nuovi**. E una regola d'allarme che verifica quali colonne il record
 porta va aggiornata nella **stessa finestra** del rilascio, o scatterebbe su un
 record perfettamente sano.
 
-Lo stesso vincolo d'ordine vale per il **dizionario del progetto**, e nello
-stesso verso, ma per una ragione opposta e più mite: un campo che il pacchetto
-si aspetta e il progetto non ha **ferma** il giro
-(`DIZIONARIO_CAMPO_ASSENTE`), mentre un campo che il progetto ha e il
-pacchetto non conosce è **tollerato** (`DIZIONARIO_CAMPO_IN_PIU`). Importare
-il dizionario prima e installare dopo lascia quindi il canale vecchio che gira
-senza accorgersene; l'ordine inverso lo pianta su `DIZIONARIO_DERIVATO`.
+Per il **dizionario del progetto** il vincolo d'ordine è lo stesso, ma
+guardare i soli campi non basta a decidere se serva l'atto unico, e la
+distinzione è costata una finestra di canale fermo il 2026-09-01.
+
+Sui **campi** l'asimmetria è reale e mite: un campo che il pacchetto si aspetta
+e il progetto non ha **ferma** il giro (`DIZIONARIO_CAMPO_ASSENTE`), mentre uno
+che il progetto ha e il pacchetto non conosce è **tollerato**
+(`DIZIONARIO_CAMPO_IN_PIU`). Da soli, quei due direbbero che basta importare
+prima e installare dopo.
+
+Sulle **scelte di un campo codificato** non c'è nessuna asimmetria:
+`DIZIONARIO_SCELTE_DIVERSE` **ferma il giro in tutti e due i versi**, perché
+una scelta in più da un lato e una in meno dall'altro sono la stessa
+differenza vista da due parti. Quindi:
+
+- una modifica che aggiunge **solo campi** si può fare in due tempi;
+- una che tocca **una parola di un vocabolario** — cioè le scelte di `outcome`,
+  `identity`, `request_status`, `seal_state` — vuole l'**atto unico**: import e
+  installazione nella stessa finestra, con il giro fermo in mezzo.
+
+La 0.14.0 sembrava del primo tipo perché aggiunge tre campi, ed era del
+secondo: aggiungeva anche `held` alle scelte di `outcome`. Il giro si è fermato
+su `DIZIONARIO_DERIVATO` fra i due gesti, come doveva.
+
+**E `server` non è un vocabolario del pacchetto, è la flotta.** Le sue scelte
+si generano da `instances`, e la lavorazione passa lì **l'intera flotta**
+dell'inventario, non le sole istanze col modulo. Un dizionario generato con le
+tre servite supera il controllo dei campi e ferma il giro su
+`DIZIONARIO_SCELTE_DIVERSE:server` — misurato lo stesso giorno, generandolo
+sbagliato.
 
 ### Due domande diverse decidono la forma di un rilascio
 

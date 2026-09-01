@@ -29,8 +29,11 @@
   request has nothing to protect.
 
   **The collection rule has to learn `esiti_held` before this release lands**,
-  and the project's dictionary has to be imported before the package is
-  installed — a missing field stops the round, an unknown one is tolerated.
+  and the dictionary import and the package installation are **a single act**:
+  this version also adds `held` to the choices of `outcome`, and
+  `DIZIONARIO_SCELTE_DIVERSE` stops the round in **both** directions — unlike
+  a field, which stops it only when missing. The round is meant to sit on
+  `DIZIONARIO_DERIVATO` between the two gestures.
 
 # ubep.azure 0.13.0
 
