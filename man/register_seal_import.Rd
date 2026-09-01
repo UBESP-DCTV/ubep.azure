@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_register_api.R
 \name{register_seal_import}
 \alias{register_seal_import}
-\title{Send a body REDCap will overwrite, and check it took all of it}
+\title{Write the seals back, and nothing else}
 \usage{
 register_seal_import(url, token, payload)
 }
@@ -15,31 +15,11 @@ silently downgrading the channel.}
 \item{token}{The API token of the service account, sent in the body.}
 
 \item{payload}{A frame of exactly \code{record_id}, \code{applied_seal}, \code{seal_state}.}
-
-\item{expected}{The exact column names this writer accepts, in order.}
-
-\item{caller}{The writer's name, so a refusal names the door that refused.}
-
-\item{reason}{The sentence that says why this body may carry nothing else.}
 }
 \value{
 The \code{register_call()} list plus \code{scritte}.
-
-The \code{register_call()} list plus \code{scritte}.
 }
 \description{
-The transport both writers share, and one copy of it rather than two. What
-keeps the field families apart is the door each writer fixes — its own
-column list, refused at the threshold — and not the mechanics of the call,
-which are the same question asked of the same API. Two copies of the
-partial-write check would be a place to fix a defect once and leave it
-standing in the other.
+Write the seals back, and nothing else
 }
-\keyword{Write}
-\keyword{and}
-\keyword{back,}
-\keyword{else}
 \keyword{internal}
-\keyword{nothing}
-\keyword{seals}
-\keyword{the}
