@@ -184,6 +184,97 @@ request_seal <- function(register) {
 }
 
 
+#' Who last wrote one of these fields on this row
+#'
+#' Reads `details`, which REDCap fills with the fields an edit touched and the
+#' values it gave them — `role_name = 'read only'` — so the question "who
+#' changed what was asked" is answerable without holding a copy of the row.
+#'
+#' The most recent matching event wins, and recency is the **order of the
+#' answer** rather than the timestamp: REDCap stamps the log to the minute, and
+#' an edit and the approval that follows it can easily share one. The order is
+#' REDCap's own, newest first.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param fields Field names to look for in `details`.
+#'
+#' @return The username, or `""` when no event touched any of those fields.
+#'
+#' @keywords internal
+log_last_author <- function(events, record, fields) {
+  stopifnot(is.data.frame(events), is.character(fields))
+
+  mine <- events[
+    trimws(as.character(events[["record"]])) == as.character(record), ,
+    drop = FALSE
+  ]
+  if (nrow(mine) == 0L || length(fields) == 0L) {
+    return("")
+  }
+
+  # `\b` and `=` together: without the word boundary `seal_state` would match
+  # inside nothing, but `name` would match inside `role_name`, and the answer
+  # would be an author who touched a different field.
+  pattern <- paste0(
+    "\\b(", paste(fields, collapse = "|"), ")\\s*="
+  )
+  hit <- grepl(pattern, as.character(mine[["details"]]))
+  if (!any(hit)) {
+    return("")
+  }
+
+  trimws(as.character(mine[["username"]][which(hit)[[1L]]]))
+}
+
+
+#' Whether a change to an applied row has been approved
+#'
+#' Two conditions, and neither is enough on its own.
+#'
+#' The approval has to carry **this** row's seal. A value that is some other
+#' seal approves some other version of the row, and accepting it would make one
+#' approval stand for every change that came after it.
+#'
+#' And it has to come from **somebody else**. Otherwise the protection is a
+#' formality: whoever edits another referent's row would paste the seal on the
+#' way out, and the round would apply a change nobody but its author ever saw.
+#' The seal detects that the row moved; only the log can say who moved it,
+#' because it names whoever was authenticated rather than a value somebody
+#' typed — which is the same reason `requested_by` cannot be trusted alone.
+#'
+#' An unreadable log is not this function's to decide. It answers about the
+#' events it was handed, and a caller holding no events gets `FALSE` on every
+#' changed row: the row waits, which is the direction that does not grant.
+#'
+#' @param register The register as read, one row per request.
+#' @param events The event log, as `register_log()` returns it.
+#'
+#' @return A logical vector, one answer per row.
+#'
+#' @keywords internal
+seal_approved <- function(register, events) {
+  stopifnot(is.data.frame(register), is.data.frame(events))
+
+  current <- request_seal(register)
+  approved <- trimws(as.character(register[["approved_seal"]] %||% ""))
+  approved[is.na(approved)] <- ""
+  ids <- as.character(register[["record_id"]])
+  intent <- register_intent_fields()
+
+  vapply(seq_len(nrow(register)), function(i) {
+    if (!nzchar(approved[[i]]) || !identical(approved[[i]], current[[i]])) {
+      return(FALSE)
+    }
+
+    approver <- log_last_author(events, ids[[i]], "approved_seal")
+    editor <- log_last_author(events, ids[[i]], intent)
+
+    nzchar(approver) && !identical(approver, editor)
+  }, logical(1))
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two

@@ -383,3 +383,58 @@ test_that("an empty identity body calls nobody", {
   expect_true(result[["ok"]])
   expect_equal(result[["scritte"]], 0L)
 })
+
+
+test_that("the event log is asked for as a log and comes back as a frame", {
+  # eval
+  captured <- NULL
+  body <- paste0(
+    '[{"timestamp":"2026-09-01 02:45",',
+    '"username":"anna.bianchi@ubep.unipd.it",',
+    '"action":"Update record (API) 42",',
+    '"details":"role_name = data entry","record":"42"}]'
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    register_log("registro.example.org", "t0ken", since = "2026-09-01 00:00")
+  )
+
+  # test
+  # The log is the only source that says who touched a row, and it says it
+  # about whoever was authenticated rather than about a field somebody typed
+  # -- which is the whole reason row protection can trust it and cannot trust
+  # `requested_by` alone.
+  expect_true(result[["ok"]])
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["content"]]), "log"
+  )
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["beginTime"]]),
+    "2026-09-01 00:00"
+  )
+  expect_equal(result[["log"]][["record"]], "42")
+  expect_equal(
+    result[["log"]][["username"]], "anna.bianchi@ubep.unipd.it"
+  )
+})
+
+
+test_that("an empty event log is a frame with no rows, not an absence", {
+  # eval
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      httr2::response(status_code = 200L, body = charToRaw("[]"))
+    },
+    register_log("registro.example.org", "t0ken", since = "2026-09-01 00:00")
+  )
+
+  # test
+  # "Nobody touched anything in the window" and "the log could not be read"
+  # decide opposite things: the first lets a row through unapproved, the
+  # second must not. They have to be two shapes, not one empty one.
+  expect_true(result[["ok"]])
+  expect_equal(nrow(result[["log"]]), 0L)
+})

@@ -203,6 +203,106 @@ register_records <- function(url, token) {
 }
 
 
+#' The five columns REDCap's event log answers with
+#'
+#' Fixed here rather than derived from the answer, unlike `records_frame()`,
+#' and the difference is what the two are for: a register record set is
+#' whatever the project's dictionary holds today, while the log's shape belongs
+#' to REDCap and does not move with the project. Deriving it would make an
+#' empty window — the common case on a quiet night — come back with no
+#' columns at all, and every reader would then have to guard against a frame
+#' that has no `username`.
+#'
+#' @return A character vector of column names.
+#'
+#' @keywords internal
+log_fields <- function() {
+  c("timestamp", "username", "action", "details", "record")
+}
+
+
+#' Turn REDCap's event log export into a frame of character columns
+#'
+#' @param entries The parsed export, a list of one list per event.
+#'
+#' @return A data frame with one row per event and always `log_fields()` as
+#'   columns, empty of rows when nothing happened in the window.
+#'
+#' @keywords internal
+log_frame <- function(entries) {
+  columns <- lapply(log_fields(), function(field) {
+    if (length(entries) == 0L) {
+      return(character())
+    }
+    vapply(
+      entries, function(entry) scalar_as_character(entry[[field]]),
+      character(1)
+    )
+  })
+  names(columns) <- log_fields()
+
+  columns_frame(columns)
+}
+
+
+#' Read who touched the register, and when
+#'
+#' The one question the register's own fields cannot answer. `requested_by`
+#' says who filed a row only because `@USERNAME` filled it in on the form, and
+#' an action tag governs the form and not the API: measured on 2026-09-01, an
+#' import writes into that field whatever it is handed. The log says who was
+#' **authenticated**, which is not a value anybody can type.
+#'
+#' `since` is in the **instance's** civil time and not in UTC, which is the
+#' one thing about this call that is easy to get wrong. REDCap stamps its log
+#' with the server clock: measured on 2026-09-01, a round that ran at 21:03
+#' UTC appears in the log at 23:03. The channel keeps UTC everywhere else, so
+#' a caller that handed its own stamp straight through would ask for a window
+#' shifted by two hours in summer and **one in winter** — a discrepancy that
+#' is not a constant and that would come and go with the change of hour.
+#'
+#' Callers therefore convert, and they are expected to convert generously: the
+#' window is cheap to widen and the filtering that matters is done on the rows,
+#' not on the boundary.
+#'
+#' @inheritParams register_call
+#' @param since Beginning of the window, `"%Y-%m-%d %H:%M"`, in the
+#'   instance's civil time.
+#'
+#' @return The `register_call()` list plus `log`, a data frame.
+#'
+#' @keywords internal
+register_log <- function(url, token, since) {
+  stopifnot(
+    is.character(since), length(since) == 1L, !is.na(since), nzchar(since)
+  )
+
+  answer <- register_call(url, token, list(
+    content = "log", beginTime = since
+  ))
+
+  if (!isTRUE(answer[["ok"]])) {
+    return(c(answer, list(log = NULL)))
+  }
+
+  # Same guard as the record export, and needed for the same reason: an array
+  # parses to an unnamed list, an object arrives named and is a message rather
+  # than a log. Read as a log it would become one event nobody produced -- and
+  # here that matters more than in the export, because an invented event is an
+  # invented author, and the author is what decides whether a change applies.
+  if (!is.null(names(answer[["payload"]]))) {
+    return(list(
+      ok = FALSE,
+      errors = "TRASPORTO_REGISTRO_LOG_INATTESO",
+      payload = NULL,
+      log = NULL
+    ))
+  }
+
+  c(answer, list(log = log_frame(answer[["payload"]])))
+}
+
+
 #' The four dictionary columns the comparison reads, in the API's vocabulary
 #'
 #' REDCap holds one schema under two sets of names: the CSV a project imports
