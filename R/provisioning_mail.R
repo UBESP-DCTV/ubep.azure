@@ -140,6 +140,54 @@ mail_outcome_message <- function(row) {
     list(it = NULL, en = NULL)
   }
 
+  # A held row is the only outcome that asks the reader to do something whose
+  # instructions are not in the work instruction, and the value it asks them to
+  # paste exists nowhere else: the current seal is computed from the row, not
+  # stored beside it. A referent who is not told it cannot approve anything,
+  # and a protection nobody can clear is an outage with a nicer name.
+  trattenuta <- if (identical(as.character(row[["outcome"]]), "held")) {
+    sigillo <- mail_said_or(row[["seal_now"]], "non disponibile, chiedi a IT")
+    list(
+      it = c(
+        "",
+        paste0(
+          "Questa riga e' stata modificata dopo essere stata eseguita, e il ",
+          "canale non ha riapplicato la modifica. Se la modifica e' giusta, ",
+          "falla approvare da un altro referente: deve incollare questo ",
+          "sigillo nel campo approved_seal della riga."
+        ),
+        "",
+        paste0("    ", sigillo),
+        "",
+        paste0(
+          "Vale per questa modifica e non per quelle dopo, e chi ha fatto la ",
+          "modifica non puo' approvarla da se': il registro degli eventi di ",
+          "REDCap dice chi ha scritto che cosa. Approvata, la modifica ",
+          "diventa effettiva al giro successivo."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "This row was edited after it had been applied, and the channel did ",
+          "not apply the edit. If the edit is right, have another referent ",
+          "approve it: they paste this seal into the row's approved_seal ",
+          "field."
+        ),
+        "",
+        paste0("    ", sigillo),
+        "",
+        paste0(
+          "It approves this edit and no later one, and whoever made the edit ",
+          "cannot approve it themselves: REDCap's event log says who wrote ",
+          "what. Once approved, the edit takes effect on the next round."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
   it <- c(
     paste0("La richiesta ", id, " del registro di provisioning ha un esito."),
     "",
@@ -163,6 +211,7 @@ mail_outcome_message <- function(row) {
     paste0("Letto sull'istanza: ", mail_said_or(
       row[["applied_as"]], "l'istanza non ha risposto"
     )),
+    trattenuta[["it"]],
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
@@ -195,6 +244,7 @@ mail_outcome_message <- function(row) {
     paste0("Read back on the instance: ", mail_said_or(
       row[["applied_as"]], "the instance did not answer"
     )),
+    trattenuta[["en"]],
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
@@ -551,6 +601,12 @@ mail_round <- function(changed,
       return(NULL)
     }
     riga <- as.list(register[at, , drop = FALSE])
+    # What the row is worth now, which a held message has to carry: it is
+    # computed from the row and stored nowhere, so this is the only place it
+    # exists. Taken from `register` -- the register as read -- for the reason
+    # the whole frame is: a seal computed from what the round has been
+    # rewriting would name a version of the row the referent is not looking at.
+    riga[["seal_now"]] <- request_seal(register[at, , drop = FALSE])
     if (is.null(identified)) {
       return(riga)
     }
