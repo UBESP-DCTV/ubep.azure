@@ -94,6 +94,71 @@ register_readonly_fields <- function() {
 }
 
 
+#' The fields a row carries because somebody asked for them
+#'
+#' Derived and not listed: everything in the dictionary that the round does not
+#' write itself. A field added to the dictionary joins this set on its own,
+#' which is the property that keeps the seal honest — a hand-picked list would
+#' silently stop covering the column somebody added last week.
+#'
+#' @return A character vector of field names, in dictionary order.
+#'
+#' @keywords internal
+register_intent_fields <- function() {
+  setdiff(
+    register_dictionary()[["Variable / Field Name"]],
+    register_readonly_fields()
+  )
+}
+
+
+#' What the round applied, in twelve characters
+#'
+#' The seal the round writes beside a row once it has acted on it, and what the
+#' next round compares the row against: a different seal means the row was
+#' modified after it was applied.
+#'
+#' It covers the intent fields and nothing else, and that is the whole point.
+#' A seal that moved when the round wrote the outcome would make every applied
+#' row look modified one round later — the mechanism would accuse itself, on
+#' every row, for ever.
+#'
+#' A field the register does not carry is sealed as empty rather than skipped,
+#' so a row exported with a column missing and the same row with that column
+#' blank seal alike. The absence itself is not lost: `compare_dictionary()`
+#' reports it as `DIZIONARIO_CAMPO_ASSENTE`, which is where it belongs.
+#'
+#' Twelve hex characters, like the surface fingerprint, and for the same
+#' reason: it goes in a text field a person may read aloud.
+#'
+#' @param register The register as read, one row per request.
+#'
+#' @return A character vector, one seal per row.
+#'
+#' @keywords internal
+request_seal <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  fields <- register_intent_fields()
+  values <- lapply(fields, function(field) {
+    if (is.null(register[[field]])) {
+      rep("", nrow(register))
+    } else {
+      value <- trimws(as.character(register[[field]]))
+      value[is.na(value)] <- ""
+      value
+    }
+  })
+
+  # `\r` and not a comma: the separator has to be a character no register value
+  # can contain, or two different rows could join into the same string --
+  # role_name "a" with dag "b,c" against role_name "a,b" with dag "c".
+  joined <- do.call(paste, c(values, list(sep = "\r")))
+
+  substr(as.character(openssl::sha256(joined)), 1L, 12L)
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two

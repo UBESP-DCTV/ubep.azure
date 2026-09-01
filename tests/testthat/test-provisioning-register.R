@@ -391,3 +391,40 @@ test_that("a collision carries its proposal rather than an empty username", {
   expect_equal(body[["username"]], "mario.rossi.2@ubep.unipd.it")
   expect_equal(body[["identity"]], "collision")
 })
+
+
+test_that("il sigillo ignora i campi che scrive il giro", {
+  # eval
+  prima <- request_seal(register_row())
+  dopo <- request_seal(register_row(
+    identity = "existing",
+    outcome = "applied",
+    outcome_detail = "",
+    outcome_at = "2026-09-01 12:04",
+    applied_as = "role_name=data entry; dag_name=; expiration="
+  ))
+
+  # test
+  # The seal is what the round writes beside a row once it has applied it, and
+  # what the next round compares the row against. If it moved when the round
+  # wrote the outcome, every applied row would look modified one round later:
+  # the mechanism would accuse itself, on every row, for ever.
+  expect_equal(prima, dopo)
+})
+
+
+test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
+  # eval
+  base <- register_row()
+  ruolo <- request_seal(register_row(role_name = "read only"))
+  revoca <- request_seal(register_row(request_status = "revoked"))
+  gruppo <- request_seal(register_row(dag_name = ""))
+
+  # test
+  # One assertion per field would be a test per column and would still miss the
+  # next one added. These three are the ones that change what is granted, to
+  # whom, and whether it is granted at all.
+  expect_false(identical(request_seal(base), ruolo))
+  expect_false(identical(request_seal(base), revoca))
+  expect_false(identical(request_seal(base), gruppo))
+})
