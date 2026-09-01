@@ -222,22 +222,22 @@ registro_doppio <- function(records, eventi = "[]") {
 # The defaults of an exported row, reachable on their own so a test can build
 # the frame the register will hold and not only the JSON it answers with.
 record_default <- function(row) {
-    # `username` and `identity` are blank, which is the ordinary state of a
-    # freshly filed row and what the work instruction asks for: the round fills
-    # them in from the tenant. A fixture that carried the UPN would be a row
-    # that had already been resolved, and would test the round against its own
-    # output instead of against what a referent writes.
-    defaults <- list(
-      record_id = "1", server = "edc10", project_id = "9003",
-      username = "", identity = "",
-      first_name = "Mario", last_name = "Rossi",
-      contact_email = "mario.rossi@example.org",
-      role_name = "data entry", dag_name = "", expiration = "",
-      requested_by = "anna.bianchi@ubep.unipd.it",
-      request_status = "active",
-      outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
-      applied_seal = "", seal_state = "", approved_seal = ""
-    )
+  # `username` and `identity` are blank, which is the ordinary state of a
+  # freshly filed row and what the work instruction asks for: the round fills
+  # them in from the tenant. A fixture that carried the UPN would be a row
+  # that had already been resolved, and would test the round against its own
+  # output instead of against what a referent writes.
+  defaults <- list(
+    record_id = "1", server = "edc10", project_id = "9003",
+    username = "", identity = "",
+    first_name = "Mario", last_name = "Rossi",
+    contact_email = "mario.rossi@example.org",
+    role_name = "data entry", dag_name = "", expiration = "",
+    requested_by = "anna.bianchi@ubep.unipd.it",
+    request_status = "active",
+    outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
+    applied_seal = "", seal_state = "", approved_seal = ""
+  )
   defaults[names(row)] <- row
   defaults
 }
@@ -1496,7 +1496,7 @@ test_that("il giro sigilla la riga che ha appena applicato", {
 })
 
 
-test_that("lo username che il giro risolve non fa sembrare modificata la riga", {
+test_that("lo username che il giro risolve non fa sembrare cambiata la riga", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list(record_id = "1"))),

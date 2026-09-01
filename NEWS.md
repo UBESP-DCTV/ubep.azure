@@ -1,3 +1,37 @@
+# ubep.azure 0.14.0
+
+* **A row edited after it was applied is no longer applied again.** REDCap has
+  no per-row ownership — rights are per instrument, and the only thing that
+  partitions rows are data access groups, which this register does not have on
+  purpose — so any referent can edit any other referent's row. Until now the
+  round would carry that edit out, on the authority of a pass that ran before
+  the edit existed.
+
+  The round now seals what it applied, compares the seal on the next pass, and
+  stops the row where a withdrawn one stops: before the desired state is built,
+  so no instance is ever asked about it. The outcome vocabulary grows a sixth
+  word, `held`, which is neither a state nor a fault — nothing went wrong, and
+  the row is waiting for a person.
+
+* **A change is cleared by somebody other than whoever made it.** The approval
+  carries the seal it approves, so it covers that change and no later one, and
+  the round reads REDCap's event log to check the two are different people. The
+  log names whoever was *authenticated*, which is not a value anybody can type
+  — the same reason `requested_by` cannot be trusted on its own once the Data
+  Import Tool is granted.
+
+  A log that cannot be read leaves the row held. "I could not ask who did this"
+  is not "somebody else approved it", and of the two ways to be wrong that is
+  the one that does not grant.
+
+* Three fields join the register's dictionary: `applied_seal`, `seal_state`,
+  `approved_seal`. They stay hidden until a row has been applied, since a fresh
+  request has nothing to protect.
+
+  **The collection rule has to learn `esiti_held` before this release lands**,
+  and the project's dictionary has to be imported before the package is
+  installed — a missing field stops the round, an unknown one is tolerated.
+
 # ubep.azure 0.13.0
 
 * **The round's record says whether the post was switched on.** Every mail
