@@ -424,7 +424,9 @@ test_that("the record counts each outcome under its own name", {
     outcome_payload("5", "simulated", at = "2026-08-14 20:40")
   ))
 
-  record <- round_record(esito_finto(esiti = esiti, scritte = 5L), TRUE)
+  record <- round_record(
+    esito_finto(esiti = esiti, scritte = 5L), TRUE, FALSE
+  )
 
   # test
   # One counter per word of the closed vocabulary, named after the word. A
@@ -442,7 +444,8 @@ test_that("the record counts each outcome under its own name", {
 test_that("a halted round does not claim to have read the register", {
   # eval
   record <- round_record(
-    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"), TRUE
+    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"),
+    TRUE, FALSE
   )
 
   # test
@@ -456,7 +459,7 @@ test_that("a halted round does not claim to have read the register", {
 
 test_that("an empty register is still a register that was read", {
   # eval
-  record <- round_record(esito_finto(), TRUE)
+  record <- round_record(esito_finto(), TRUE, FALSE)
 
   # test
   # `righe = 0` with `registro_letto = TRUE` is a quiet night; `righe = 0`
@@ -476,7 +479,7 @@ test_that("the record counts the instances that did not answer", {
     stringsAsFactors = FALSE
   )
 
-  record <- round_record(esito_finto(istanze = istanze), TRUE)
+  record <- round_record(esito_finto(istanze = istanze), TRUE, FALSE)
 
   # test
   expect_equal(record[["istanze"]], 2L)
@@ -486,8 +489,8 @@ test_that("the record counts the instances that did not answer", {
 
 test_that("the record says whether the round was allowed to write", {
   # eval
-  simulato <- round_record(esito_finto(), FALSE)
-  scritto <- round_record(esito_finto(), TRUE)
+  simulato <- round_record(esito_finto(), FALSE, FALSE)
+  scritto <- round_record(esito_finto(), TRUE, FALSE)
 
   # test
   # Not cosmetic: the same counts mean different things simulated and real,
@@ -500,7 +503,8 @@ test_that("the record says whether the round was allowed to write", {
 test_that("the record's list fields stay arrays when they hold one item", {
   # eval
   record <- round_record(
-    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"), TRUE
+    esito_finto(fermato = TRUE, errori = "DIZIONARIO_DERIVATO"),
+    TRUE, FALSE
   )
   record[["schema_differenze"]] <- "server"
 
@@ -540,14 +544,14 @@ test_that("the record's fields are exactly the rule's columns", {
   # adding a sixth outcome gives `round_record()` a sixth counter for free, and
   # that free counter is exactly the one the rule would drop.
   colonne <- c(
-    "at", "registro_letto", "fermato", "scrittura", "schema_ferma",
+    "at", "registro_letto", "fermato", "scrittura", "posta", "schema_ferma",
     "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
     "errori", "posta_partite", "posta_fallite", "credenziali_recapitate",
     "credenziali_perse", "posta_dirottata", "esiti_pending", "esiti_applied",
     "esiti_data_error", "esiti_transport_error", "esiti_simulated"
   )
 
-  record <- round_record(esito_finto(), TRUE)
+  record <- round_record(esito_finto(), TRUE, FALSE)
 
   # test
   expect_setequal(names(record), colonne)
@@ -562,7 +566,7 @@ test_that("the record's fields are exactly the rule's columns", {
 test_that("il record del giro porta i contatori della posta", {
   # eval
   record <- round_record(
-    esito_finto(posta = posta_finta(posta_fallite = 2L)), TRUE
+    esito_finto(posta = posta_finta(posta_fallite = 2L)), TRUE, TRUE
   )
 
   # test
@@ -579,7 +583,7 @@ test_that("il record del giro porta i contatori della posta", {
 
 test_that("un giro senza posta porta i contatori a zero, non li omette", {
   # eval
-  record <- round_record(esito_finto(), TRUE)
+  record <- round_record(esito_finto(), TRUE, FALSE)
 
   # test
   # The alarm on the record's shape counts columns, so a round that sent
@@ -594,11 +598,27 @@ test_that("un giro senza posta porta i contatori a zero, non li omette", {
 test_that("un dirottamento dimenticato si vede nella telemetria", {
   # eval
   record <- round_record(
-    esito_finto(posta = posta_finta(posta_dirottata = TRUE)), TRUE
+    esito_finto(posta = posta_finta(posta_dirottata = TRUE)), TRUE, TRUE
   )
 
   # test
   expect_true(record[["posta_dirottata"]])
+})
+
+
+test_that("il record del giro dice se la posta era accesa", {
+  # eval
+  accesa <- round_record(esito_finto(), TRUE, TRUE)
+  spenta <- round_record(esito_finto(), TRUE, FALSE)
+
+  # test
+  # Without this field a round that had nothing to send and a round with the
+  # post switched off are the same record: every counter zero and
+  # `posta_dirottata` false. It is the twin of `scrittura`, and it exists for
+  # the reason `posta_dirottata` exists -- a switch nobody can see is a switch
+  # that stays wrong, and this one gates every write into the register.
+  expect_true(accesa[["posta"]])
+  expect_false(spenta[["posta"]])
 })
 
 
@@ -612,7 +632,7 @@ test_that("la chiave d'ingresso non entra mai nel record del giro", {
         credential = finti[["parola"]], stringsAsFactors = FALSE
       )
     ),
-    TRUE
+    TRUE, TRUE
   )
 
   # test

@@ -4,13 +4,18 @@
 \alias{round_record}
 \title{Build the record the channel's round leaves behind}
 \usage{
-round_record(esito, scrittura)
+round_record(esito, scrittura, posta)
 }
 \arguments{
 \item{esito}{What \code{provisioning_reconcile()} returned.}
 
 \item{scrittura}{Whether the round was allowed to write, so a reader of the
 telemetry can tell the same counts apart simulated and real.}
+
+\item{posta}{Whether the round was allowed to send. Neither this nor
+\code{scrittura} has a fallback, and for the same reason: a caller that forgets
+one would report the switch as off, which is the single reading the field
+exists to make impossible.}
 }
 \value{
 A named list, ready to be serialized as one JSON object.

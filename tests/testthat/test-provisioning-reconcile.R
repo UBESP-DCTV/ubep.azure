@@ -1292,7 +1292,7 @@ test_that("the credential leaves by one road and is on none of the others", {
     dry_run = FALSE
   )
   credenziale <- esito[["credenziali"]][["credential"]][[1]]
-  record <- round_record(esito, scrittura = TRUE)
+  record <- round_record(esito, scrittura = TRUE, posta = TRUE)
   altrove <- c(
     unlist(esito[["esiti"]]),
     unlist(lapply(importazioni(), function(req) {

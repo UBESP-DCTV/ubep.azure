@@ -459,20 +459,28 @@ round_changed <- function(register,
 #' @param esito What `provisioning_reconcile()` returned.
 #' @param scrittura Whether the round was allowed to write, so a reader of the
 #'   telemetry can tell the same counts apart simulated and real.
+#' @param posta Whether the round was allowed to send. Neither this nor
+#'   `scrittura` has a fallback, and for the same reason: a caller that forgets
+#'   one would report the switch as off, which is the single reading the field
+#'   exists to make impossible.
 #'
 #' @return A named list, ready to be serialized as one JSON object.
 #'
 #' @keywords internal
-round_record <- function(esito, scrittura) {
+round_record <- function(esito, scrittura, posta) {
   stopifnot(
     is.list(esito),
-    is.logical(scrittura), length(scrittura) == 1L, !is.na(scrittura)
+    is.logical(scrittura), length(scrittura) == 1L, !is.na(scrittura),
+    is.logical(posta), length(posta) == 1L, !is.na(posta)
   )
 
   esiti <- esito[["esiti"]]
   istanze <- esito[["istanze"]]
   schema <- esito[["schema"]]
-  posta <- esito[["posta"]] %||% list()
+  # `contatori` and not `posta`: the argument owns that name now, and the two
+  # are different things -- one is the switch, the other is what the switch
+  # produced.
+  contatori <- esito[["posta"]] %||% list()
 
   counted <- as.list(vapply(
     outcome_vocabulary(),
@@ -487,6 +495,12 @@ round_record <- function(esito, scrittura) {
       registro_letto = !isTRUE(esito[["fermato"]]),
       fermato = isTRUE(esito[["fermato"]]),
       scrittura = isTRUE(scrittura),
+      # The twin of `scrittura`, and the counters below are the reason it is
+      # needed: they are all zero both when there was nothing to send and when
+      # sending was off, so without this field the two rounds are the same
+      # record. And this switch is the stricter of the two -- under "send
+      # first, write after" it gates every write into the register.
+      posta = isTRUE(posta),
       schema_ferma = isTRUE(schema[["blocks"]]),
       schema_differenze = c(
         schema[["blocking"]] %||% character(),
@@ -506,14 +520,14 @@ round_record <- function(esito, scrittura) {
       # on the record's shape counts columns, so a quiet night has to look like
       # a quiet night and not like a record from a version that predates the
       # post.
-      posta_partite = as.integer(posta[["posta_partite"]] %||% 0L),
-      posta_fallite = as.integer(posta[["posta_fallite"]] %||% 0L),
+      posta_partite = as.integer(contatori[["posta_partite"]] %||% 0L),
+      posta_fallite = as.integer(contatori[["posta_fallite"]] %||% 0L),
       credenziali_recapitate =
-        as.integer(posta[["credenziali_recapitate"]] %||% 0L),
-      credenziali_perse = as.integer(posta[["credenziali_perse"]] %||% 0L),
+        as.integer(contatori[["credenziali_recapitate"]] %||% 0L),
+      credenziali_perse = as.integer(contatori[["credenziali_perse"]] %||% 0L),
       # A redirect left on by mistake would otherwise be silent: every referent
       # would stop hearing from the channel and nothing would say so.
-      posta_dirottata = isTRUE(posta[["posta_dirottata"]])
+      posta_dirottata = isTRUE(contatori[["posta_dirottata"]])
     ),
     counted
   )

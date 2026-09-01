@@ -1,3 +1,17 @@
+# ubep.azure 0.13.0
+
+* **The round's record says whether the post was switched on.** Every mail
+  counter is zero both when there was nothing to send and when sending was
+  off, and `posta_dirottata` is false in both cases too — so the two rounds
+  produced the same record and the telemetry could not tell a quiet night from
+  a mute channel. The new `posta` field is the twin of `scrittura`, and it
+  matters more than that one: under "send first, write after" the switch it
+  reports gates every write into the register.
+
+  Neither field has a fallback, and for the same reason: a caller that forgot
+  to pass one would report the switch as off, which is the single reading the
+  field exists to make impossible.
+
 # ubep.azure 0.12.1
 
 * **The outcome message names the identity the round settled**, instead of

@@ -222,7 +222,7 @@ esito <- ubep.azure:::provisioning_reconcile(
 #
 # Che cosa entri nel record lo decide il pacchetto, non questo file: qui c'e'
 # solo il momento in cui si costruisce e la via per cui esce.
-record <- ubep.azure:::round_record(esito, SCRITTURA)
+record <- ubep.azure:::round_record(esito, SCRITTURA, POSTA)
 
 # Log Analytics vuole `TimeGenerated`: entra nel record prima della
 # serializzazione invece di essere incollato nel JSON dopo, perche' incollare
