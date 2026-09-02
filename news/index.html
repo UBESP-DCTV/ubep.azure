@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.14.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,21 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.14.0" id="ubepazure-0140">ubep.azure 0.14.0<a class="anchor" aria-label="anchor" href="#ubepazure-0140"></a></h2>
+<ul><li>
+<p><strong>A row edited after it was applied is no longer applied again.</strong> REDCap has no per-row ownership — rights are per instrument, and the only thing that partitions rows are data access groups, which this register does not have on purpose — so any referent can edit any other referent’s row. Until now the round would carry that edit out, on the authority of a pass that ran before the edit existed.</p>
+<p>The round now seals what it applied, compares the seal on the next pass, and stops the row where a withdrawn one stops: before the desired state is built, so no instance is ever asked about it. The outcome vocabulary grows a sixth word, <code>held</code>, which is neither a state nor a fault — nothing went wrong, and the row is waiting for a person.</p>
+</li>
+<li>
+<p><strong>A change is cleared by somebody other than whoever made it.</strong> The approval carries the seal it approves, so it covers that change and no later one, and the round reads REDCap’s event log to check the two are different people. The log names whoever was <em>authenticated</em>, which is not a value anybody can type — the same reason <code>requested_by</code> cannot be trusted on its own once the Data Import Tool is granted.</p>
+<p>A log that cannot be read leaves the row held. “I could not ask who did this” is not “somebody else approved it”, and of the two ways to be wrong that is the one that does not grant.</p>
+</li>
+<li>
+<p>Three fields join the register’s dictionary: <code>applied_seal</code>, <code>seal_state</code>, <code>approved_seal</code>. They stay hidden until a row has been applied, since a fresh request has nothing to protect.</p>
+<p><strong>The collection rule has to learn <code>esiti_held</code> before this release lands</strong>, and the dictionary import and the package installation are <strong>a single act</strong>: this version also adds <code>held</code> to the choices of <code>outcome</code>, and <code>DIZIONARIO_SCELTE_DIVERSE</code> stops the round in <strong>both</strong> directions — unlike a field, which stops it only when missing. The round is meant to sit on <code>DIZIONARIO_DERIVATO</code> between the two gestures.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.13.0" id="ubepazure-0130">ubep.azure 0.13.0<a class="anchor" aria-label="anchor" href="#ubepazure-0130"></a></h2>
 <ul><li>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.14.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -471,12 +471,20 @@ potrebbe digitare «applicata» nel campo d’esito, e il registro
 porterebbe un successo che nessuno ha prodotto.</p>
 </div>
 <div class="section level3">
-<h3 id="il-giro-scrive-da-due-porte-e-restano-separate">Il giro scrive da due porte, e restano separate<a class="anchor" aria-label="anchor" href="#il-giro-scrive-da-due-porte-e-restano-separate"></a>
+<h3 id="il-giro-scrive-da-tre-porte-e-restano-separate">Il giro scrive da tre porte, e restano separate<a class="anchor" aria-label="anchor" href="#il-giro-scrive-da-tre-porte-e-restano-separate"></a>
 </h3>
 <p>La prima porta deposita <strong>identità e username</strong> appena
 la risoluzione è fatta, e non prende altro. La seconda deposita
 <strong>l’esito</strong>, e avviene dopo l’invio della notifica. In
-mezzo c’è la posta.</p>
+mezzo c’è la posta. La terza deposita <strong>il sigillo</strong>, per
+ultima.</p>
+<p>Il sigillo ha una porta sua e non è una colonna dell’esito, e la
+ragione è che il corpo dell’esito si scrive a ogni esito: una colonna
+del sigillo lì dentro porterebbe un valore ogni volta, e il valore
+onesto quando non si è applicato niente è vuoto. Un
+<code>data_error</code> su una riga già applicata azzererebbe allora il
+sigillo, togliendo la protezione proprio alle righe che sono le sole ad
+averla.</p>
 <p>La conseguenza da conoscere quando si tocca il testo dei messaggi: il
 frame da cui il giro compone la notifica è il registro <strong>come è
 stato letto</strong>, e resta volutamente immobile — è il metro contro
@@ -491,6 +499,57 @@ coppia che compare due volte è un errore su <strong>entrambe</strong> le
 righe, non su una: una delle due è l’errore e non c’è modo di sapere
 quale. Indovinare quale vince è ciò che fa un libro mastro; un registro
 si rifiuta.</p>
+</div>
+<div class="section level3">
+<h3 id="una-riga-cambiata-dopo-essere-stata-applicata">Una riga cambiata dopo essere stata applicata<a class="anchor" aria-label="anchor" href="#una-riga-cambiata-dopo-essere-stata-applicata"></a>
+</h3>
+<p>REDCap non ha una proprietà per riga: i diritti sono per strumento, e
+la sola cosa che partiziona le righe sono i gruppi di accesso, che qui
+non ci sono per scelta — nasconderebbero le righe altrui e renderebbero
+i doppioni incomprensibili. Chiunque abbia il registro può quindi
+modificare la riga di un altro.</p>
+<p>Il giro scrive accanto a ogni riga applicata il
+<strong>sigillo</strong> di ciò che ha applicato: dodici caratteri sui
+campi di intento, e su nessun altro. Un sigillo che al giro dopo non
+corrisponde significa «modificata dopo l’applicazione»: la riga prende
+l’esito <code>held</code>, si ferma dove si ferma una revocata — prima
+che il piano si formi, quindi <strong>nessuna istanza viene
+interrogata</strong> — e la notizia va a <code>requested_by</code>.</p>
+<p>Tre cose da sapere quando si tocca questo meccanismo:</p>
+<ul>
+<li>
+<strong>il sigillo copre ciò che è stato chiesto, non ciò che è
+successo.</strong> Se si muovesse quando il giro scrive l’esito, ogni
+riga applicata sembrerebbe modificata un giro dopo: il meccanismo
+accuserebbe se stesso, su ogni riga, per sempre;</li>
+<li>
+<strong>il sigillo si calcola sulla riga che il giro sta per
+lasciare</strong>, non su quella che ha letto. Il giro risolve
+<code>username</code> e lo riscrive nella stessa passata, e
+<code>username</code> sta dentro al sigillo perché cambiarlo cambia a
+chi si dà l’accesso. Sigillare la riga come letta sarebbe lo stesso
+difetto di sopra, per mano del giro invece che dell’esito;</li>
+<li>
+<strong>il campo di approvazione sta fuori dal sigillo pur non
+essendo <code>@READONLY</code>.</strong> Porta il sigillo che approva,
+quindi scriverlo non può spostare ciò che confronta. È il primo campo
+per cui «scritto dal canale» e «fuori dal sigillo» smettono di essere lo
+stesso insieme, ed è per questo che sono due liste.</li>
+</ul>
+<p>L’approvazione vale a due condizioni: porta il sigillo di
+<strong>quella</strong> versione della riga, e viene da <strong>qualcun
+altro</strong>. La seconda si verifica leggendo il registro degli eventi
+di REDCap, che dice chi era <strong>autenticato</strong> e non che cosa
+qualcuno ha scritto in un campo — la stessa ragione per cui
+<code>requested_by</code> non basta da solo il giorno in cui si concede
+il Data Import Tool. Un registro degli eventi illeggibile lascia la riga
+ferma: «non ho potuto chiedere chi è stato» non è «l’ha approvata un
+altro».</p>
+<p>La finestra del log si chiede <strong>nell’ora dell’istanza</strong>,
+non in UTC: REDCap timbra col proprio orologio, e il giro delle 21:03
+UTC compare alle 23:03. Lo scarto non è una costante, perché cambia con
+l’ora legale — per questo la finestra è larga un giorno e la conversione
+è una comodità, non un cardine.</p>
 </div>
 <div class="section level3">
 <h3 id="verificare-che-il-progetto-sia-ancora-quello-che-il-canale-si-aspetta">Verificare che il progetto sia ancora quello che il canale si
@@ -667,6 +726,63 @@ pacchetto, poi gli allarmi nuovi</strong>. E una regola d’allarme che
 verifica quali colonne il record porta va aggiornata nella
 <strong>stessa finestra</strong> del rilascio, o scatterebbe su un
 record perfettamente sano.</p>
+<p>Per il <strong>dizionario del progetto</strong> il vincolo d’ordine è
+lo stesso, ma guardare i soli campi non basta a decidere se serva l’atto
+unico, e la distinzione è costata una finestra di canale fermo il
+2026-09-01.</p>
+<p>Sui <strong>campi</strong> l’asimmetria è reale e mite: un campo che
+il pacchetto si aspetta e il progetto non ha <strong>ferma</strong> il
+giro (<code>DIZIONARIO_CAMPO_ASSENTE</code>), mentre uno che il progetto
+ha e il pacchetto non conosce è <strong>tollerato</strong>
+(<code>DIZIONARIO_CAMPO_IN_PIU</code>). Da soli, quei due direbbero che
+basta importare prima e installare dopo.</p>
+<p>Sulle <strong>scelte di un campo codificato</strong> non c’è nessuna
+asimmetria: <code>DIZIONARIO_SCELTE_DIVERSE</code> <strong>ferma il giro
+in tutti e due i versi</strong>, perché una scelta in più da un lato e
+una in meno dall’altro sono la stessa differenza vista da due parti.
+Quindi:</p>
+<ul>
+<li>una modifica che aggiunge <strong>solo campi</strong> si può fare in
+due tempi;</li>
+<li>una che tocca <strong>una parola di un vocabolario</strong> — cioè
+le scelte di <code>outcome</code>, <code>identity</code>,
+<code>request_status</code>, <code>seal_state</code> — vuole
+l’<strong>atto unico</strong>: import e installazione nella stessa
+finestra, con il giro fermo in mezzo.</li>
+</ul>
+<p>La 0.14.0 sembrava del primo tipo perché aggiunge tre campi, ed era
+del secondo: aggiungeva anche <code>held</code> alle scelte di
+<code>outcome</code>. Il giro si è fermato su
+<code>DIZIONARIO_DERIVATO</code> fra i due gesti, come doveva.</p>
+<p><strong>E <code>server</code> non è un vocabolario del pacchetto, è
+la flotta.</strong> Le sue scelte si generano da <code>instances</code>,
+e la lavorazione passa lì <strong>l’intera flotta</strong>
+dell’inventario, non le sole istanze col modulo. Un dizionario generato
+con le tre servite supera il controllo dei campi e ferma il giro su
+<code>DIZIONARIO_SCELTE_DIVERSE:server</code> — misurato lo stesso
+giorno, generandolo sbagliato.</p>
+</div>
+<div class="section level3">
+<h3 id="due-domande-diverse-decidono-la-forma-di-un-rilascio">Due domande diverse decidono la forma di un rilascio<a class="anchor" aria-label="anchor" href="#due-domande-diverse-decidono-la-forma-di-un-rilascio"></a>
+</h3>
+<p>Vanno fatte separatamente, perché fino al 2026-09-01 avevano sempre
+risposto insieme:</p>
+<ul>
+<li>
+<strong>tocca lo schema?</strong> Allora serve l’atto unico: import
+del dizionario e installazione nella stessa finestra, con il giro fermo
+in mezzo.</li>
+<li>
+<strong>cambia la firma di ciò che la lavorazione chiama?</strong>
+Allora i gesti sono <strong>due</strong>, e la lavorazione in
+<code>/opt</code> va ricopiata insieme al pacchetto.</li>
+</ul>
+<p>La 0.13.0 ha risposto <strong>no</strong> alla prima e
+<strong>sì</strong> alla seconda: nessun dizionario da importare, ma
+<code><a href="../reference/round_record.html">round_record()</a></code> aveva preso un terzo argomento obbligatorio,
+e un pacchetto nuovo con la lavorazione vecchia muore su
+<code>argument "posta" is missing</code> — cioè il giro non ritorna, non
+lascia record, e l’allarme sull’assenza suona a gravità 1.</p>
 </div>
 <div class="section level3">
 <h3 id="la-regola-ritirata-è-disattivata-non-cancellata">La regola ritirata è disattivata, non cancellata<a class="anchor" aria-label="anchor" href="#la-regola-ritirata-%C3%A8-disattivata-non-cancellata"></a>
