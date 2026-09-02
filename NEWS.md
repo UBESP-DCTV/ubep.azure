@@ -12,8 +12,10 @@
   The round now asks REDCap's event log who was **authenticated** when each
   row was created, and the gate judges that name. It is a fact REDCap
   establishes rather than a value anybody types, so no import can move it.
-  The same substitution reaches the mail, which had been addressing the
-  credential to the same field an import can write.
+  The notifications still address the register's own `requested_by`: the two
+  agree on every row filed from the form, and the import right that would
+  make them disagree is not granted to anybody.
+
 
   One call for the whole round, `logtype = "record_add"` and no time window:
   a record is created once, so the answer holds one row per record that ever
