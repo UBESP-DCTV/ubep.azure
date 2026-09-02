@@ -538,3 +538,66 @@ test_that("un terzo che approva col sigillo giusto sblocca la riga", {
   # outage.
   expect_true(detto)
 })
+
+
+test_that("the creator is who REDCap authenticated, not who the row names", {
+  # eval
+  # The forgery, written out: an import that hands `requested_by` a name that
+  # is not the importer's. Measured on 2026-09-02 on edc10, this is exactly
+  # what the Data Import Tool writes -- `@USERNAME` is an action tag, it
+  # governs the form REDCap draws and an import draws none.
+  detto <- log_creators(
+    eventi_finti(list(
+      username = "anna.bianchi@ubep.unipd.it",
+      action = "Create record (import) 7",
+      details = paste0(
+        "record_id = '7', requested_by = 'mario.rossi@ubep.unipd.it', ",
+        "server = 'edc05'"
+      ),
+      record = "7"
+    )),
+    "7"
+  )
+
+  # test
+  # The two names are both in the event and only one of them is a fact. The
+  # `username` column is who REDCap had authenticated when the row appeared,
+  # and no value in the payload can move it; `requested_by` inside `details`
+  # is the string the importer chose. A reader that took the second would
+  # authorize Mario for what Anna did.
+  expect_equal(detto, "anna.bianchi@ubep.unipd.it")
+})
+
+
+test_that("a row the log does not name is attributed to nobody", {
+  # eval
+  detto <- log_creators(eventi_finti(), "7")
+
+  # test
+  # REDCap purges its log on a schedule an instance sets, so a row filed long
+  # enough ago can outlive the event that made it. That is not "nobody filed
+  # it" and must not read as a name either: the empty string is the third
+  # answer, and the caller is the one that decides a row it cannot attribute
+  # waits rather than being refused against whoever filed it.
+  expect_equal(detto, "")
+})
+
+
+test_that("an id used twice is answered for by the creation that stands", {
+  # eval
+  # Newest first, which is the order REDCap answers in.
+  detto <- log_creators(
+    eventi_finti(
+      list(username = "bruno.verdi@ubep.unipd.it", record = "7"),
+      list(username = "anna.bianchi@ubep.unipd.it", record = "7")
+    ),
+    "7"
+  )
+
+  # test
+  # An id carries two creations when a record was deleted and made again, and
+  # the row standing now is the one made last. Answering with the older event
+  # would gate today's request on the rights of whoever filed a row that no
+  # longer exists.
+  expect_equal(detto, "bruno.verdi@ubep.unipd.it")
+})
