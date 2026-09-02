@@ -28,13 +28,21 @@ name only inside \code{details}, where it is a string somebody chose rather than
 a fact REDCap established.
 }
 \details{
-It reads \code{record} and \code{username} and nothing else, which is what keeps it
-apart from \code{log_last_author()}. That one searches \code{details} for a field
-pattern because it asks "who wrote this field"; this one asks "who made
-this row", and the caller has already had REDCap answer only with
-creations. Matching the prose of \code{action} would be the third way and the
-wrong one: the same act reads \verb{Create record 7} from the form and
-\verb{Create record (import) 20} from an import.
+It answers from \code{record} and \code{username}, which is what keeps it apart from
+\code{log_last_author()}. That one searches \code{details} for a field pattern
+because it asks "who wrote this field"; this one asks "who made this row",
+and the caller has already had REDCap answer only with creations.
+
+\code{action} is then read as a \strong{guard and not as the mechanism}, and the
+distinction is the whole of it. REDCap ignores a parameter it does not
+know rather than refusing it, so a \code{logtype} it silently dropped would
+come back as a complete log that looks exactly like a valid answer -- and
+the newest event for a row would be whoever last edited it, not whoever
+opened it. Reading the prose is a bad primary mechanism, because the same
+act reads \verb{Create record 7} from the form and \verb{Create record (import) 20}
+from an import. It is a sound guard because it fails \strong{closed}: reword the
+string and nothing matches, the answer is empty, and the caller holds the
+row instead of judging it against the wrong person.
 
 The most recent event wins, and which one that is comes from the order of
 the answer rather than from the timestamp -- REDCap's own, newest first,
