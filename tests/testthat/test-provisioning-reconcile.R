@@ -1576,7 +1576,48 @@ test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
   expect_equal(
     as.character(sigilli_scritti()[["applied_seal"]]), risigillato
   )
-  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "intact")
+  # `approved` and not `intact`: the two say different things about the same
+  # row, and only one of them is true here. `intact` is what a row carries
+  # when nobody has ever contested it, and this row was contested and cleared
+  # -- writing `intact` would leave the register unable to tell the two apart
+  # one round after the protection fired, which is the state the log would
+  # then be the only witness of.
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("il giro dopo non retrocede una riga approvata a intatta", {
+  # eval
+  # The row as it stands once the approval has already been applied: seal in
+  # force, `approved` beside it, username resolved so this round has nothing
+  # to rewrite. Nobody has touched it since.
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  esito <- giro(
+    registro_doppio(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", outcome = "applied",
+        applied_seal = fermo, seal_state = "approved"
+      ))
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row really is applied on this pass, and the assertion below is worth
+  # nothing without it: a fixture the round stops earlier -- on the identity,
+  # as the first draft of this test did -- writes no seal either, and would
+  # pass while proving nothing.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+
+  # Nothing goes through the seal door at all. The seal has not moved and the
+  # state must not either: a state recomputed as `intact` on every ordinary
+  # round would erase the approval one pass after it was granted, and the
+  # third value would name a state that lasts four hours.
+  expect_null(sigilli_scritti())
 })
 
 
