@@ -1,5 +1,23 @@
 # Changelog
 
+## ubep.azure 0.15.0
+
+- **An approved row now says so, and keeps saying so.** `seal_state` had
+  three values in its vocabulary and the round wrote two: a row cleared
+  by an approval was applied and sealed `intact`, indistinguishable from
+  one nobody had ever contested. The register forgot, one round after
+  the protection fired, and REDCap’s event log was left as the only
+  witness.
+
+  The round now writes `approved` on the row it applies because an
+  approval cleared it, and carries that value forward while the seal
+  holds. It gives way to `modified` if somebody edits the row again, and
+  to `approved` again once that edit is cleared in its turn. `intact`
+  therefore keeps its own meaning: nobody has ever contested this row.
+
+  No dictionary change — `approved` was already among the field’s
+  choices — so this release is an install and not an import.
+
 ## ubep.azure 0.14.0
 
 - **A row edited after it was applied is no longer applied again.**

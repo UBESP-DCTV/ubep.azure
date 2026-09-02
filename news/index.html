@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.14.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.15.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,14 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.15.0" id="ubepazure-0150">ubep.azure 0.15.0<a class="anchor" aria-label="anchor" href="#ubepazure-0150"></a></h2>
+<ul><li>
+<p><strong>An approved row now says so, and keeps saying so.</strong> <code>seal_state</code> had three values in its vocabulary and the round wrote two: a row cleared by an approval was applied and sealed <code>intact</code>, indistinguishable from one nobody had ever contested. The register forgot, one round after the protection fired, and REDCap’s event log was left as the only witness.</p>
+<p>The round now writes <code>approved</code> on the row it applies because an approval cleared it, and carries that value forward while the seal holds. It gives way to <code>modified</code> if somebody edits the row again, and to <code>approved</code> again once that edit is cleared in its turn. <code>intact</code> therefore keeps its own meaning: nobody has ever contested this row.</p>
+<p>No dictionary change — <code>approved</code> was already among the field’s choices — so this release is an install and not an import.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.14.0" id="ubepazure-0140">ubep.azure 0.14.0<a class="anchor" aria-label="anchor" href="#ubepazure-0140"></a></h2>
 <ul><li>
