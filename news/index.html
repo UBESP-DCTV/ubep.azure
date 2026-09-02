@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.15.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,16 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.16.0" id="ubepazure-0160">ubep.azure 0.16.0<a class="anchor" aria-label="anchor" href="#ubepazure-0160"></a></h2>
+<ul><li>
+<p><strong>The scope gate no longer takes the requester’s name from the row.</strong> The gate decides whether whoever filed a request may manage the project they filed it for, and it built that question out of <code>requested_by</code> — a field filled in by the <code>@USERNAME</code> action tag. An action tag governs the form REDCap draws, and an import draws no form: measured on 2026-09-02 on a live instance, the Data Import Tool writes that field verbatim. Anyone holding the import right could therefore name a colleague who manages the project and have the gate check that colleague’s rights.</p>
+<p>The round now asks REDCap’s event log who was <strong>authenticated</strong> when each row was created, and the gate judges that name. It is a fact REDCap establishes rather than a value anybody types, so no import can move it. The same substitution reaches the mail, which had been addressing the credential to the same field an import can write.</p>
+<p>One call for the whole round, <code>logtype = "record_add"</code> and no time window: a record is created once, so the answer holds one row per record that ever existed rather than one per event, and it is asked only when a row is still standing to be judged.</p>
+<p>A row whose author the log cannot name is <strong>held, not refused</strong>, under the new <code>TRASPORTO_AUTORE_NON_LEGGIBILE</code>. Telling the referent they are not authorized would send the one person who cannot fix it to go and argue — the same reason <code>TRASPORTO_PERMESSO_NON_LEGGIBILE</code> exists.</p>
+<p>No dictionary change: this release is an install and not an import. It does require the register’s service account to hold REDCap’s <strong>Logging</strong> privilege, which the row-protection release already needed.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.15.0" id="ubepazure-0150">ubep.azure 0.15.0<a class="anchor" aria-label="anchor" href="#ubepazure-0150"></a></h2>
 <ul><li>

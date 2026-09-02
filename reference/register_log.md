@@ -10,7 +10,7 @@ type.
 ## Usage
 
 ``` r
-register_log(url, token, since)
+register_log(url, token, since = NULL, logtype = NULL)
 ```
 
 ## Arguments
@@ -29,7 +29,18 @@ register_log(url, token, since)
 - since:
 
   Beginning of the window, `"%Y-%m-%d %H:%M"`, in the instance's civil
-  time.
+  time. `NULL` asks without one, which REDCap reads as "no begin time"
+  and answers with the whole log.
+
+- logtype:
+
+  REDCap's own classification of the event, or `NULL` for every kind.
+  `"record_add"` is the creations and nothing else. It is asked of
+  REDCap rather than filtered here because the alternative is reading
+  the prose of `action`, which is not stable: measured on 2026-09-02,
+  one act reads `Create record 7` from the form and
+  `Create record (import) 20` from an import, and a reader matching that
+  string would have to keep up with REDCap's wording for ever.
 
 ## Value
 

@@ -106,6 +106,26 @@ round were born with, and it is the only road those take.
 
 11. write back the outcome, and only what changed.
 
+**The gate's subject is read from the log, not from the row.**
+`requested_by` says who filed a request only because `@USERNAME` filled
+it in, and an action tag governs the form REDCap draws rather than the
+layer that writes: measured on 2026-09-02, an import writes that field
+verbatim, so anyone holding the Data Import Tool could name a colleague
+who manages the project and have the gate check that colleague's rights.
+So between step 3 and step 4 the round asks REDCap who was authenticated
+when each row was created and puts that name in the column the gate
+reads. One call, `logtype = "record_add"` and no window: a record is
+created once, so the answer holds one row per record that ever existed
+rather than one per event, and it is asked only when a row is still
+standing to be judged.
+
+A row the log cannot name is **held and not refused**, which is the same
+distinction step 6 already makes between a permission that does not
+grant and one that could not be read. "I could not establish who filed
+this" is our failure and not the referent's, and the code that carries
+it is a `TRASPORTO_` one so the row comes back next round and the mail
+comes to us.
+
 **Step 3 is a step of this round and not a job of its own** — decision 2
 of the design — and the reason is latency: resolving and acting have the
 same cadence and the second consumes the first, so a resolver on a timer

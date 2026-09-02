@@ -15,7 +15,7 @@ authenticated, which is not a value anybody can type."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.15.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@ import writes into that field whatever it is handed. The log says who was
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_log</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, <span class="va">since</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_log</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, since <span class="op">=</span> <span class="cn">NULL</span>, logtype <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -74,7 +74,18 @@ silently downgrading the channel.</p></dd>
 
 <dt id="arg-since">since<a class="anchor" aria-label="anchor" href="#arg-since"></a></dt>
 <dd><p>Beginning of the window, <code>"%Y-%m-%d %H:%M"</code>, in the
-instance's civil time.</p></dd>
+instance's civil time. <code>NULL</code> asks without one, which REDCap reads as
+"no begin time" and answers with the whole log.</p></dd>
+
+
+<dt id="arg-logtype">logtype<a class="anchor" aria-label="anchor" href="#arg-logtype"></a></dt>
+<dd><p>REDCap's own classification of the event, or <code>NULL</code> for every
+kind. <code>"record_add"</code> is the creations and nothing else. It is asked of
+REDCap rather than filtered here because the alternative is reading the
+prose of <code>action</code>, which is not stable: measured on 2026-09-02, one act
+reads <code>Create record 7</code> from the form and <code>Create record (import) 20</code>
+from an import, and a reader matching that string would have to keep up
+with REDCap's wording for ever.</p></dd>
 
 </dl></div>
     <div class="section level2">
