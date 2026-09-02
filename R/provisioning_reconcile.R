@@ -808,6 +808,15 @@ provisioning_reconcile <- function(register_url,
   register_after <- register
   register_after[["username"]] <- resolved_names
 
+  # `approved` is sticky, and it has to be to mean anything. Recomputed as
+  # `intact` on every ordinary round it would name a state that lasts one
+  # pass: four hours after an approval the register would again be unable to
+  # say whether a row had ever been contested, and the event log would be the
+  # only witness left. Carried forward, the value answers the question the
+  # register is asked -- how did the version now in force get here.
+  state_before <- trimws(as.character(register[["seal_state"]] %||% ""))
+  state_before[is.na(state_before)] <- ""
+
   sealing <- do.call(rbind, c(
     list(seal_payload("", "", "intact")[0, , drop = FALSE]),
     lapply(
@@ -815,12 +824,19 @@ provisioning_reconcile <- function(register_url,
         as.character(outcomes[["outcome"]]) == "applied"
       ],
       function(id) {
+        i <- match(id, record_ids)
         seal_payload(
           id,
-          request_seal(
-            register_after[match(id, record_ids), , drop = FALSE]
-          ),
-          "intact"
+          request_seal(register_after[i, , drop = FALSE]),
+          # Applied while tampered is the one way past `held`, so it says an
+          # approval carried this row here. Otherwise the row keeps what it
+          # had: a change approved once stays approved until somebody edits
+          # the row again, which is when `modified` takes over below.
+          if (tampered[[i]] || identical(state_before[[i]], "approved")) {
+            "approved"
+          } else {
+            "intact"
+          }
         )
       }
     ),
