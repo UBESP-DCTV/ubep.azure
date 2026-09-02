@@ -588,8 +588,10 @@ test_that("an id used twice is answered for by the creation that stands", {
   # Newest first, which is the order REDCap answers in.
   detto <- log_creators(
     eventi_finti(
-      list(username = "bruno.verdi@ubep.unipd.it", record = "7"),
-      list(username = "anna.bianchi@ubep.unipd.it", record = "7")
+      list(username = "bruno.verdi@ubep.unipd.it",
+           action = "Create record 7", record = "7"),
+      list(username = "anna.bianchi@ubep.unipd.it",
+           action = "Create record 7", record = "7")
     ),
     "7"
   )
@@ -600,4 +602,33 @@ test_that("an id used twice is answered for by the creation that stands", {
   # would gate today's request on the rights of whoever filed a row that no
   # longer exists.
   expect_equal(detto, "bruno.verdi@ubep.unipd.it")
+})
+
+
+test_that("an edit does not pass for a creation if REDCap ignored the filter", {
+  # eval
+  # The order is REDCap's, newest first: the edit is more recent than the
+  # creation. This is the log a caller would get if `logtype` had not been
+  # honoured -- an unknown parameter is ignored rather than refused, so the
+  # answer would come back complete and look exactly like a valid one.
+  detto <- log_creators(
+    eventi_finti(
+      list(username = "bruno.verdi@ubep.unipd.it", action = "Update record 7",
+           record = "7"),
+      list(username = "anna.bianchi@ubep.unipd.it", action = "Create record 7",
+           record = "7")
+    ),
+    "7"
+  )
+
+  # test
+  # The filter is asked of REDCap and must not be trusted blind: a parameter
+  # that is silently ignored is the family of failure this project keeps
+  # meeting, and here it would hand the gate the name of whoever last touched
+  # the row instead of whoever opened it. The guard reads the prose of
+  # `action`, which is exactly what the primary mechanism refuses to do -- and
+  # that is sound only because it fails CLOSED: if REDCap ever rewords the
+  # string, no creation matches, the answer is empty, and the row is held
+  # rather than judged on the wrong person.
+  expect_equal(detto, "anna.bianchi@ubep.unipd.it")
 })
