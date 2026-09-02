@@ -200,12 +200,42 @@ dizionario_json <- function() {
 # that could not read the log and a round that read an empty one decide
 # opposite things, and every test written before row protection existed means
 # the second.
-registro_doppio <- function(records, eventi = "[]") {
+# `creazioni` defaults to "every row was created by whoever it names as its
+# requester", which is what a row filed from the form actually looks like:
+# `@USERNAME` fills that field in with the account REDCap authenticated, so
+# the two agree. A test about the forgery is a test where they disagree, and
+# it says so by passing `creazioni` itself.
+registro_doppio <- function(records, eventi = "[]", creazioni = NULL) {
+  if (is.null(creazioni)) {
+    righe <- tryCatch(
+      jsonlite::fromJSON(records, simplifyVector = FALSE),
+      error = function(e) list()
+    )
+    creazioni <- as.character(jsonlite::toJSON(
+      lapply(righe, function(riga) {
+        list(
+          timestamp = "2026-08-14 01:00",
+          username = riga[["requested_by"]] %||% "",
+          action = paste0("Create record ", riga[["record_id"]] %||% ""),
+          details = "",
+          record = riga[["record_id"]] %||% ""
+        )
+      }),
+      auto_unbox = TRUE
+    ))
+  }
   function(data) {
     if (identical(form_field_value(data[["content"]]), "metadata")) {
       return(dizionario_json())
     }
     if (identical(form_field_value(data[["content"]]), "log")) {
+      # The two log questions are not the same question, and a double that
+      # answered both from one fixture would let a test about edits quietly
+      # stand in for a test about creations. `logtype` is what tells them
+      # apart on the wire, so it is what tells them apart here.
+      if (!is.null(data[["logtype"]])) {
+        return(creazioni)
+      }
       return(eventi)
     }
     if (identical(form_field_value(data[["action"]]), "import")) {
@@ -1644,4 +1674,118 @@ test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # the two ways of being wrong, this is the one that does not grant.
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
   expect_length(scritture(), 0L)
+})
+
+
+# Creation events in the shape REDCap answers a `logtype = "record_add"` with.
+# `details` carries the forged name on purpose: it is where an importer's
+# chosen `requested_by` actually lands, and a reader that took it from there
+# would be reading the payload instead of the authentication.
+creazioni_finte <- function(...) {
+  as.character(jsonlite::toJSON(
+    lapply(list(...), function(evento) {
+      utils::modifyList(
+        list(
+          timestamp = "2026-08-14 01:00",
+          username = "anna.bianchi@ubep.unipd.it",
+          action = "Create record (import) 1",
+          details = "record_id = '1'",
+          record = "1"
+        ),
+        evento
+      )
+    }),
+    auto_unbox = TRUE
+  ))
+}
+
+
+test_that("the gate judges whoever filed the row, not whoever the row says filed it", { # nolint: line_length_linter.
+  # eval
+  # `requested_by` names Anna, who manages this project and whose request
+  # would be served. The log says Carla made the row, and Carla manages
+  # nothing here. Measured on 2026-09-02: an import writes that field
+  # verbatim, so the register alone cannot tell these two situations apart.
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = creazioni_finte(
+        list(username = "carla.neri@ubep.unipd.it")
+      )
+    ),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The assertion is on the gate's own code and not merely on "nothing was
+  # written", and that is deliberate. A row can fail to be written for a dozen
+  # reasons that have nothing to do with the gate, and a test satisfied by
+  # absence would pass just as well if the row had died before ever reaching
+  # it -- which is how yesterday's blind test passed. `DATO_AMBITO_NON_
+  # AUTORIZZATO` can only have been produced by the gate, so it proves the row
+  # got there.
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("a creation log that could not be read holds the row, it does not refuse it", { # nolint: line_length_linter.
+  # eval
+  # The register answers the creation question with a refusal -- the service
+  # account lost its Logging right, say, which is a thing that happens to a
+  # right somebody granted by hand.
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row must not be written, and that much a `DATO_` code would also
+  # achieve. What it must not do is tell the referent they are not authorized:
+  # they filed a correct request, they may well hold the permission, and what
+  # is broken is inside REDCap where only we can reach it. `DATO_` closes the
+  # row against them and mails them; `TRASPORTO_` keeps it queued and mails
+  # us. It is the same distinction `scope_errors()` already makes for a
+  # permission it could not read, and for the same reason.
+  expect_length(scritture(), 0L)
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+})
+
+
+test_that("a row held for an unreadable log makes nobody exist either", {
+  # eval
+  # The tenant holds nobody, so the row resolves `absent` and it is the
+  # creation branch that would act on it -- the branch that runs last, after
+  # the gate, and that no earlier assertion in this cycle covers.
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Making the person is the one act of the round that cannot be undone by
+  # running it again: an account exists afterwards. The rule the design states
+  # for it is that whoever could not have granted the project by hand must not
+  # be able to make the person to grant it to either -- and a round that
+  # cannot say who filed the row cannot say that person could.
+  expect_length(creazioni(), 0L)
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
 })

@@ -464,3 +464,43 @@ test_that("the log window reaches back far enough to be wrong about the hour", {
   # widen, and the filtering that decides anything is done on the rows.
   expect_equal(detto, "2026-08-31 23:03")
 })
+
+
+test_that("the creation log is asked for as creations only, without a window", {
+  # eval
+  captured <- NULL
+  body <- paste0(
+    '[{"timestamp":"2026-03-26 23:21",',
+    '"username":"anna.bianchi@ubep.unipd.it",',
+    '"action":"Create record (import) 20",',
+    '"details":"record_id = \'20\', server = \'edc05\'","record":"20"}]'
+  )
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw(body))
+    },
+    register_log("registro.example.org", "t0ken", logtype = "record_add")
+  )
+
+  # test
+  # Two properties, and the round needs both. `logtype` makes REDCap classify
+  # the event instead of this package reading the prose of `action`: measured
+  # on 2026-09-02, a creation reads `Create record 7` from the form and
+  # `Create record (import) 20` from an import, and a reader that matched the
+  # string would have to keep up with REDCap's wording for ever.
+  #
+  # And no window at all, which is what makes one call per round enough. A
+  # record is created once, so the answer holds one row per record that ever
+  # existed -- it grows with the register and not with the traffic, while a
+  # window would lose the creation of every row filed before yesterday.
+  expect_true(result[["ok"]])
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["content"]]), "log"
+  )
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["logtype"]]), "record_add"
+  )
+  expect_null(captured[["body"]][["data"]][["beginTime"]])
+  expect_equal(result[["log"]][["record"]], "20")
+})

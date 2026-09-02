@@ -4,7 +4,7 @@
 \alias{register_log}
 \title{Read who touched the register, and when}
 \usage{
-register_log(url, token, since)
+register_log(url, token, since = NULL, logtype = NULL)
 }
 \arguments{
 \item{url}{Hostname of the instance hosting the register, optionally
@@ -15,7 +15,16 @@ silently downgrading the channel.}
 \item{token}{The API token of the service account, sent in the body.}
 
 \item{since}{Beginning of the window, \code{"\%Y-\%m-\%d \%H:\%M"}, in the
-instance's civil time.}
+instance's civil time. \code{NULL} asks without one, which REDCap reads as
+"no begin time" and answers with the whole log.}
+
+\item{logtype}{REDCap's own classification of the event, or \code{NULL} for every
+kind. \code{"record_add"} is the creations and nothing else. It is asked of
+REDCap rather than filtered here because the alternative is reading the
+prose of \code{action}, which is not stable: measured on 2026-09-02, one act
+reads \verb{Create record 7} from the form and \verb{Create record (import) 20}
+from an import, and a reader matching that string would have to keep up
+with REDCap's wording for ever.}
 }
 \value{
 The \code{register_call()} list plus \code{log}, a data frame.

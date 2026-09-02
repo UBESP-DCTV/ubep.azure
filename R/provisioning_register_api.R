@@ -307,19 +307,41 @@ log_since <- function(at, hours = 24L) {
 #'
 #' @inheritParams register_call
 #' @param since Beginning of the window, `"%Y-%m-%d %H:%M"`, in the
-#'   instance's civil time.
+#'   instance's civil time. `NULL` asks without one, which REDCap reads as
+#'   "no begin time" and answers with the whole log.
+#' @param logtype REDCap's own classification of the event, or `NULL` for every
+#'   kind. `"record_add"` is the creations and nothing else. It is asked of
+#'   REDCap rather than filtered here because the alternative is reading the
+#'   prose of `action`, which is not stable: measured on 2026-09-02, one act
+#'   reads `Create record 7` from the form and `Create record (import) 20`
+#'   from an import, and a reader matching that string would have to keep up
+#'   with REDCap's wording for ever.
 #'
 #' @return The `register_call()` list plus `log`, a data frame.
 #'
 #' @keywords internal
-register_log <- function(url, token, since) {
+register_log <- function(url, token, since = NULL, logtype = NULL) {
+  scalar <- function(value) {
+    is.character(value) && length(value) == 1L &&
+      !is.na(value) && nzchar(value)
+  }
   stopifnot(
-    is.character(since), length(since) == 1L, !is.na(since), nzchar(since)
+    is.null(since) || scalar(since),
+    is.null(logtype) || scalar(logtype)
   )
 
-  answer <- register_call(url, token, list(
-    content = "log", beginTime = since
-  ))
+  # Accrued rather than declared whole, because a parameter sent empty is not
+  # the same request as one not sent: REDCap reads an absent `beginTime` as
+  # "no begin time" and an empty one as a timestamp it cannot parse.
+  params <- list(content = "log")
+  if (!is.null(since)) {
+    params[["beginTime"]] <- since
+  }
+  if (!is.null(logtype)) {
+    params[["logtype"]] <- logtype
+  }
+
+  answer <- register_call(url, token, params)
 
   if (!isTRUE(answer[["ok"]])) {
     return(c(answer, list(log = NULL)))
