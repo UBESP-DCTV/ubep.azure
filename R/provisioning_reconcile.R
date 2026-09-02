@@ -21,6 +21,24 @@
 #' 10. **create the accounts the gate allowed and the tenant does not hold**;
 #' 11. write back the outcome, and only what changed.
 #'
+#' **The gate's subject is read from the log, not from the row.** `requested_by`
+#' says who filed a request only because `@USERNAME` filled it in, and an
+#' action tag governs the form REDCap draws rather than the layer that writes:
+#' measured on 2026-09-02, an import writes that field verbatim, so anyone
+#' holding the Data Import Tool could name a colleague who manages the project
+#' and have the gate check that colleague's rights. So between step 3 and step
+#' 4 the round asks REDCap who was authenticated when each row was created and
+#' puts that name in the column the gate reads. One call, `logtype =
+#' "record_add"` and no window: a record is created once, so the answer holds
+#' one row per record that ever existed rather than one per event, and it is
+#' asked only when a row is still standing to be judged.
+#'
+#' A row the log cannot name is **held and not refused**, which is the same
+#' distinction step 6 already makes between a permission that does not grant
+#' and one that could not be read. "I could not establish who filed this" is
+#' our failure and not the referent's, and the code that carries it is a
+#' `TRASPORTO_` one so the row comes back next round and the mail comes to us.
+#'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
 #' cadence and the second consumes the first, so a resolver on a timer of its
@@ -390,9 +408,36 @@ provisioning_reconcile <- function(register_url,
   # `register_to_desired()` builds a pair out of `username`, and the value it
   # must build it out of is the resolved one. An `absent` row travels with an
   # empty one, so it reaches the scope question without ever becoming a pair.
+  # Who was authenticated when each row was made, which is the name the gate
+  # has to judge. `requested_by` cannot be it: `@USERNAME` is an action tag,
+  # it governs the form REDCap draws, and an import draws none -- measured on
+  # 2026-09-02, an import writes that field verbatim, so anyone with the
+  # Data Import Tool could declare themselves somebody who manages the project
+  # and have the gate check that somebody's rights.
+  #
+  # Asked with `logtype = "record_add"` and no window at all, and both halves
+  # matter. The classification is REDCap's, so this package never reads the
+  # prose of `action` -- one act reads `Create record 7` from the form and
+  # `Create record (import) 20` from an import. And a record is created once,
+  # so the answer holds one row per record that ever existed: it grows with
+  # the register rather than with the traffic, where a window would lose the
+  # creation of every row filed before yesterday.
+  #
+  # Still one call for the whole round, and still only when a row needs it.
+  creators <- rep("", nrow(register))
+  if (any(standing)) {
+    reading_creations <- register_log(
+      register_url, register_token, logtype = "record_add"
+    )
+    if (isTRUE(reading_creations[["ok"]])) {
+      creators <- log_creators(reading_creations[["log"]], record_ids)
+    }
+  }
+
   resolved <- register
   resolved[["username"]] <- resolved_names
   resolved[["identity"]] <- verdicts
+  resolved[["requested_by"]] <- creators
   resolved <- resolved[standing, , drop = FALSE]
 
   # 4. the pure layer
@@ -421,13 +466,30 @@ provisioning_reconcile <- function(register_url,
     }
   }
 
+  # A row the log could not name is not a row nobody filed, and the difference
+  # decides who gets told. Left to the gate it would come back as "you are not
+  # authorized to ask for that project" -- a verdict about the referent, sent
+  # to the one person who cannot act on it, when what actually failed is our
+  # own reading of the register's log. So it takes a `TRASPORTO_` code: the
+  # row stays queued and comes back next round, and the mail comes to us.
+  # Same shape and same reason as `TRASPORTO_PERMESSO_NON_LEGGIBILE`.
+  unnamed <- !scope_filled(resolved[["requested_by"]])
+  for (id in as.character(resolved[["record_id"]])[unnamed]) {
+    if (is.null(row_errors[[id]])) {
+      row_errors[[id]] <- "TRASPORTO_AUTORE_NON_LEGGIBILE"
+    }
+  }
+
   form_errors <- outcome_rows(character(), "pending")
   if (length(row_errors) > 0L) {
     form_errors <- do.call(rbind, lapply(
       names(row_errors),
       function(id) {
+        # The kind is read off the codes rather than fixed, because this list
+        # is no longer all `DATO_`: a row held for a log nobody could read has
+        # to come back next round, and only `transport_error` does that.
         outcome_payload(
-          id, "data_error",
+          id, round_outcome_kind(row_errors[[id]], dry_run),
           detail = paste(row_errors[[id]], collapse = ","), at = at
         )
       }
@@ -457,6 +519,18 @@ provisioning_reconcile <- function(register_url,
     }
     wanted <- mine(plan[["desired"]])
     revoked <- mine(plan[["revoked"]])
+
+    # A row already carrying an error must not travel into the plan. Until now
+    # this held without being written: every such row had failed validation,
+    # and a row that fails validation never becomes a desired entry. A row
+    # held because the log could not name who filed it is well formed in every
+    # other way, so it does enter -- and the exclusion that was a consequence
+    # has to become a statement.
+    served <- function(e) {
+      !as.character(e[["record_id"]]) %in% names(row_errors)
+    }
+    wanted <- Filter(served, wanted)
+    revoked <- Filter(served, revoked)
 
     # The record ids of a row the round could actually have acted on. Not every
     # register row for this server: a row the identity gate stopped never

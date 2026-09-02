@@ -1,3 +1,34 @@
+# ubep.azure 0.16.0
+
+* **The scope gate no longer takes the requester's name from the row.** The
+  gate decides whether whoever filed a request may manage the project they
+  filed it for, and it built that question out of `requested_by` — a field
+  filled in by the `@USERNAME` action tag. An action tag governs the form
+  REDCap draws, and an import draws no form: measured on 2026-09-02 on a live
+  instance, the Data Import Tool writes that field verbatim. Anyone holding
+  the import right could therefore name a colleague who manages the project
+  and have the gate check that colleague's rights.
+
+  The round now asks REDCap's event log who was **authenticated** when each
+  row was created, and the gate judges that name. It is a fact REDCap
+  establishes rather than a value anybody types, so no import can move it.
+  The same substitution reaches the mail, which had been addressing the
+  credential to the same field an import can write.
+
+  One call for the whole round, `logtype = "record_add"` and no time window:
+  a record is created once, so the answer holds one row per record that ever
+  existed rather than one per event, and it is asked only when a row is still
+  standing to be judged.
+
+  A row whose author the log cannot name is **held, not refused**, under the
+  new `TRASPORTO_AUTORE_NON_LEGGIBILE`. Telling the referent they are not
+  authorized would send the one person who cannot fix it to go and argue —
+  the same reason `TRASPORTO_PERMESSO_NON_LEGGIBILE` exists.
+
+  No dictionary change: this release is an install and not an import. It does
+  require the register's service account to hold REDCap's **Logging**
+  privilege, which the row-protection release already needed.
+
 # ubep.azure 0.15.0
 
 * **An approved row now says so, and keeps saying so.** `seal_state` had three
