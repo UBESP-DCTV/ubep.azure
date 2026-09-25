@@ -85,13 +85,20 @@ it": it is "the log did not say", and the caller decides what that means.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>It reads <code>record</code> and <code>username</code> and nothing else, which is what keeps it
-apart from <code><a href="log_last_author.html">log_last_author()</a></code>. That one searches <code>details</code> for a field
-pattern because it asks "who wrote this field"; this one asks "who made
-this row", and the caller has already had REDCap answer only with
-creations. Matching the prose of <code>action</code> would be the third way and the
-wrong one: the same act reads <code>Create record 7</code> from the form and
-<code>Create record (import) 20</code> from an import.</p>
+    <p>It answers from <code>record</code> and <code>username</code>, which is what keeps it apart from
+<code><a href="log_last_author.html">log_last_author()</a></code>. That one searches <code>details</code> for a field pattern
+because it asks "who wrote this field"; this one asks "who made this row",
+and the caller has already had REDCap answer only with creations.</p>
+<p><code>action</code> is then read as a <strong>guard and not as the mechanism</strong>, and the
+distinction is the whole of it. REDCap ignores a parameter it does not
+know rather than refusing it, so a <code>logtype</code> it silently dropped would
+come back as a complete log that looks exactly like a valid answer – and
+the newest event for a row would be whoever last edited it, not whoever
+opened it. Reading the prose is a bad primary mechanism, because the same
+act reads <code>Create record 7</code> from the form and <code>Create record (import) 20</code>
+from an import. It is a sound guard because it fails <strong>closed</strong>: reword the
+string and nothing matches, the answer is empty, and the caller holds the
+row instead of judging it against the wrong person.</p>
 <p>The most recent event wins, and which one that is comes from the order of
 the answer rather than from the timestamp – REDCap's own, newest first,
 the same rule <code><a href="log_last_author.html">log_last_author()</a></code> follows. A record id normally carries one

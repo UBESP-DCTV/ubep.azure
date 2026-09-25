@@ -36,15 +36,24 @@ is "the log did not say", and the caller decides what that means.
 
 ## Details
 
-It reads `record` and `username` and nothing else, which is what keeps
-it apart from
+It answers from `record` and `username`, which is what keeps it apart
+from
 [`log_last_author()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_last_author.md).
 That one searches `details` for a field pattern because it asks "who
 wrote this field"; this one asks "who made this row", and the caller has
-already had REDCap answer only with creations. Matching the prose of
-`action` would be the third way and the wrong one: the same act reads
-`Create record 7` from the form and `Create record (import) 20` from an
-import.
+already had REDCap answer only with creations.
+
+`action` is then read as a **guard and not as the mechanism**, and the
+distinction is the whole of it. REDCap ignores a parameter it does not
+know rather than refusing it, so a `logtype` it silently dropped would
+come back as a complete log that looks exactly like a valid answer – and
+the newest event for a row would be whoever last edited it, not whoever
+opened it. Reading the prose is a bad primary mechanism, because the
+same act reads `Create record 7` from the form and
+`Create record (import) 20` from an import. It is a sound guard because
+it fails **closed**: reword the string and nothing matches, the answer
+is empty, and the caller holds the row instead of judging it against the
+wrong person.
 
 The most recent event wins, and which one that is comes from the order
 of the answer rather than from the timestamp – REDCap's own, newest

@@ -15,8 +15,17 @@
   The round now asks REDCap’s event log who was **authenticated** when
   each row was created, and the gate judges that name. It is a fact
   REDCap establishes rather than a value anybody types, so no import can
-  move it. The same substitution reaches the mail, which had been
-  addressing the credential to the same field an import can write.
+  move it. The notifications still address the register’s own
+  `requested_by`: the two agree on every row filed from the form, and
+  the import right that would make them disagree is not granted to
+  anybody. The creation events are asked for with `logtype`, which is
+  REDCap’s own classification of the event, and the prose of `action` is
+  read only as a guard on top of it. REDCap ignores a parameter it does
+  not know rather than refusing it, so a filter REDCap silently dropped
+  would answer with a complete log that looks valid — and the newest
+  event for a row is whoever last edited it, not whoever opened it. The
+  guard fails closed: no match, no creator, and the row is held rather
+  than judged against the wrong person.
 
   One call for the whole round, `logtype = "record_add"` and no time
   window: a record is created once, so the answer holds one row per
