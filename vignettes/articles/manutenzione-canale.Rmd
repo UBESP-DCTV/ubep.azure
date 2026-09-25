@@ -512,6 +512,33 @@ accorgesse di niente. Non ne avevano motivo — «non ho raggiunto l'istanza» n
 è un errore del giro, è il suo **esito**, e finiva in un campo che nessuna
 regola guardava.
 
+### I banchi spenti non fanno suonare l'osservatore
+
+I **banchi** sono istanze di prova, spente di norma e accese al bisogno. Stanno
+fra le istanze col modulo dell'inventario, perché quando sono accese vanno
+lette, ma la loro voce porta `"banco": true`. Contati con le altre,
+terrebbero rossa ogni giorno la regola dell'osservatore sulle istanze
+irraggiungibili, e una regola sempre rossa non la guarda più nessuno.
+
+Per questo il record dell'osservatore porta due campi accanto a
+`irraggiungibili`, che resta com'era: `irraggiungibili_produzione`, che non
+conta i banchi, e `irraggiungibili_nomi`, che elenca tutte le irraggiungibili,
+banchi compresi. **La regola guarda `irraggiungibili_produzione`**, quindi un
+banco marcato non la fa scattare. Un campo `banco` assente, o con un valore
+che non sia esattamente `true`, vale produzione: un'istanza esce dall'allarme
+solo se qualcuno l'ha marcata. Un banco spento resta invece un buco di
+copertura, e `flotta_a_una_major` resta falso: potrebbe stare su un'altra
+major.
+
+Il rilascio segue l'ordine della sezione sulla regola di raccolta, più sotto:
+**prima** le due colonne nella tabella dell'osservatore e nella sua regola di
+raccolta, perché le colonne che la regola non conosce vengono scartate in
+silenzio; **poi** il pacchetto e la copia della lavorazione in `/opt`, in
+quest'ordine, perché la lavorazione nuova passa un argomento che il pacchetto
+vecchio non conosce; **per ultima** la regola d'allarme. Aggiornata prima, la
+regola leggerebbe una colonna vuota, e in KQL un confronto su un valore nullo
+è falso e non un errore: tacerebbe anche con una produzione spenta.
+
 ### La forma della query, e perché è quella
 
 Ogni regola prende **l'ultima osservazione** e la giudica: `top 1 by

@@ -1,3 +1,26 @@
+# ubep.azure 0.17.0
+
+* **A bench that is switched off no longer keeps the observer's alarm red.**
+  Benches are instances kept for trials, off by default and switched on when
+  needed. Listed among the instances with the module, they are unreachable on
+  most runs, and the alarm on unreachable instances fires on
+  `irraggiungibili > 0`: it would stay red for good, and an alarm that is
+  always red is an alarm nobody reads.
+
+  An entry of the inventory's `con_modulo` may now carry `"banco": true`, and
+  the observer's run record gains two fields. `irraggiungibili_produzione`
+  counts the unreachable instances not marked as benches, and is the field the
+  alarm reads; `irraggiungibili_nomi` names every unreachable instance, benches
+  included, as an array even when it holds one. `irraggiungibili` is
+  unchanged. A missing flag, or any value other than `true`, means production:
+  an instance leaves the alarm only when somebody marked it.
+
+  The order of the release is the one every new column asks for, because the
+  ingestion API drops in silence a column the collection rule does not know:
+  the two columns go into the observer's table and its collection rule first,
+  then the package and the runner copy under `/opt`, then the alarm rule. No
+  dictionary change and no module change.
+
 # ubep.azure 0.16.0
 
 * **The scope gate no longer takes the requester's name from the row.** The
