@@ -671,10 +671,14 @@ conosce ancora una colonna che la lavorazione ha cominciato a emettere. La
 seconda si riconosce dal fatto che la colonna è **nuova**, e si ripara
 aggiornando la regola di raccolta.
 
-**Istanze irraggiungibili (gravità 2).** Una o più istanze non hanno risposto.
-Guardare quante, e quali: se sono tutte, il sospetto è sul perimetro — tipico
-l'indirizzo della macchina cambiato, che chiude tutte le liste insieme. Se è
-una sola, il sospetto è su quell'istanza.
+**Istanze irraggiungibili (gravità 2).** Una o più istanze di produzione non
+hanno risposto: nell'osservatore la regola conta `irraggiungibili_produzione`,
+che lascia fuori i banchi (§5), e non il campo storico `irraggiungibili`. Quali
+siano lo dice `irraggiungibili_nomi`, che elenca anche i banchi spenti; quali
+di quei nomi siano banchi lo dice l'inventario. Tolti i banchi, guardare
+quante: se sono tutte le istanze di produzione, il sospetto è sul perimetro,
+tipico l'indirizzo della macchina cambiato, che chiude tutte le liste insieme.
+Se è una sola, il sospetto è su quell'istanza.
 
 **Cancello non collaudato (gravità 2).** Un'istanza non è in stato collaudato.
 Leggere quale dei due cancelli l'ha declassata: se è il soffitto di major,
