@@ -1,11 +1,11 @@
 # ubep.azure 0.17.0
 
-* **A bench that is switched off no longer keeps the observer's alarm red.**
-  Benches are instances kept for trials, off by default and switched on when
-  needed. Listed among the instances with the module, they are unreachable on
-  most runs, and the alarm on unreachable instances fires on
-  `irraggiungibili > 0`: it would stay red for good, and an alarm that is
-  always red is an alarm nobody reads.
+* **A bench that is switched off no longer keeps the observer's alarm on
+  unreachable instances red.** Benches are instances kept for trials, off by
+  default and switched on when needed. Listed among the instances with the
+  module, they are unreachable on most runs, and the alarm on unreachable
+  instances fires on `irraggiungibili > 0`: it would stay red for good, and an
+  alarm that is always red is an alarm nobody reads.
 
   An entry of the inventory's `con_modulo` may now carry `"banco": true`, and
   the observer's run record gains two fields. `irraggiungibili_produzione`
@@ -14,6 +14,13 @@
   included, as an array even when it holds one. `irraggiungibili` is
   unchanged. A missing flag, or any value other than `true`, means production:
   an instance leaves the alarm only when somebody marked it.
+
+  The mark takes a bench out of that alarm and out of nothing else. When every
+  instance with the module is a bench and all are off, the run reads nothing:
+  `letture_riuscite` is zero and `tutti_collaudati` is false, so the alarms on
+  absence and on the gate fire and stay red, as measured on 2026-08-20. That
+  is the observer reporting that it sees no instance, and the steady red goes
+  only when a production instance with the module is listed and answers.
 
   The order of the release is the one every new column asks for, because the
   ingestion API drops in silence a column the collection rule does not know:

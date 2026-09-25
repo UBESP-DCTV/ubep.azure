@@ -512,7 +512,7 @@ accorgesse di niente. Non ne avevano motivo — «non ho raggiunto l'istanza» n
 è un errore del giro, è il suo **esito**, e finiva in un campo che nessuna
 regola guardava.
 
-### I banchi spenti non fanno suonare l'osservatore
+### I banchi spenti non fanno scattare la regola sulle irraggiungibili
 
 I **banchi** sono istanze di prova, spente di norma e accese al bisogno. Stanno
 fra le istanze col modulo dell'inventario, perché quando sono accese vanno
@@ -529,6 +529,19 @@ che non sia esattamente `true`, vale produzione: un'istanza esce dall'allarme
 solo se qualcuno l'ha marcata. Un banco spento resta invece un buco di
 copertura, e `flotta_a_una_major` resta falso: potrebbe stare su un'altra
 major.
+
+**La garanzia vale per quella regola sola, e solo finché almeno un'istanza col
+modulo risponde.** Se le istanze col modulo sono tutte banchi e sono tutte
+spente, l'osservatore non legge niente: `letture_riuscite` è zero e
+`tutti_collaudati` è falso, perché un giro che non ha visto nessun cancello non
+ne ha visto uno buono. Suonano allora la regola sull'assenza, a gravità 1, e
+quella sul cancello, a gravità 2, e restano rosse finché i banchi restano
+spenti. Marcare i banchi non le spegne, e non deve: in quel caso l'osservatore
+non vede nessuna istanza, che è ciò che la gravità 1 dice. Misurato il
+2026-08-20, con i soli banchi agganciati e tutti spenti: il cancello è
+scattato mezz'ora dopo il giro, l'assenza due ore dopo. Il rosso fisso sparisce
+quando fra le istanze col modulo c'è almeno un'istanza di produzione, e
+risponde.
 
 Il rilascio segue l'ordine della sezione sulla regola di raccolta, più sotto:
 **prima** le due colonne nella tabella dell'osservatore e nella sua regola di
@@ -632,7 +645,11 @@ contenuto; i nomi stanno nel foglio dei parametri.
 **Nessun record (gravità 1).** La lavorazione non è partita, o è morta prima di
 emettere. Guardare lo stato dell'unità di sistema e i suoi log sulla macchina
 del perimetro. Se l'unità è partita e ha fallito, l'errore è quasi sempre nel
-recupero del token o del segreto.
+recupero del token o del segreto. La regola dell'osservatore però non chiede
+un record qualsiasi, ne chiede uno con almeno una lettura riuscita: se l'unità
+è sana e il record c'è con `letture_riuscite` a zero, nessuna istanza col
+modulo ha risposto, e quando sono tutte banchi spenti è il caso descritto nel
+§5.
 
 **Record incompleto (gravità 1).** Il record c'è ma manca una colonna pretesa.
 Due cause, e vanno distinte prima di toccare qualcosa: o il modulo ha smesso di
@@ -651,7 +668,8 @@ Leggere quale dei due cancelli l'ha declassata: se è il soffitto di major,
 l'istanza è stata aggiornata oltre la finestra del modulo; se è l'impronta, la
 superficie è cambiata dentro lo stesso major. Nel primo caso si alza il
 soffitto prima di ricollaudare, nel secondo si va direttamente al protocollo di
-§3.
+§3. Con `cancelli` vuoto non c'è nessun declassamento da leggere: il giro non
+ha letto nessuna istanza, e suona anche la regola sull'assenza.
 
 **Superficie disomogenea (gravità 2).** Le istanze osservate non espongono la
 stessa impronta di superficie. Normale durante un'ondata di aggiornamenti, in

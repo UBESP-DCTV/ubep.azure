@@ -331,6 +331,24 @@ test_that("a production instance switched off still counts", {
 })
 
 
+test_that("benches alone and all off still leave a run that read nothing", {
+  # Marking a bench takes it out of the alarm on unreachable instances and out
+  # of nothing else. When every instance with the module is a bench and all are
+  # off, the run read nothing: the alarm on absence and the one on the gate
+  # must still fire, because the observer cannot see any instance.
+  observations <- rbind(spento("banco-a"), spento("banco-b"))
+
+  record <- run_record(
+    observations,
+    at = "2026-08-07 03:00", banchi = c("banco-a", "banco-b")
+  )
+
+  expect_equal(record[["irraggiungibili_produzione"]], 0L)
+  expect_equal(record[["letture_riuscite"]], 0L)
+  expect_false(record[["tutti_collaudati"]])
+})
+
+
 test_that("a bench named but not observed changes nothing", {
   # The inventory and the observations can disagree for a run: a name that
   # marks nothing must neither fail nor be counted.
