@@ -548,9 +548,22 @@ Il rilascio segue l'ordine della sezione sulla regola di raccolta, più sotto:
 raccolta, perché le colonne che la regola non conosce vengono scartate in
 silenzio; **poi** il pacchetto e la copia della lavorazione in `/opt`, in
 quest'ordine, perché la lavorazione nuova passa un argomento che il pacchetto
-vecchio non conosce; **per ultima** la regola d'allarme. Aggiornata prima, la
-regola leggerebbe una colonna vuota, e in KQL un confronto su un valore nullo
-è falso e non un errore: tacerebbe anche con una produzione spenta.
+vecchio non conosce; **per ultime**, nella stessa finestra e dopo aver visto
+arrivare un record che porta `irraggiungibili_produzione` con un valore, la
+regola d'allarme e quella sul record incompleto. Aggiornata prima, la regola
+d'allarme leggerebbe una colonna vuota, e in KQL un confronto su un valore
+nullo è falso e non un errore: tacerebbe anche con una produzione spenta.
+
+La regola sul record incompleto elenca per nome le colonne che pretende, e
+`irraggiungibili_produzione` va aggiunta all'elenco. Finché la regola d'allarme
+guardava `irraggiungibili`, un campo che la lavorazione scrive da sempre, non
+serviva; spostata sulla colonna nuova, guarda un campo che nessuna regola
+sorveglia. Se la colonna tornasse vuota, per un ritorno indietro di pacchetto e
+lavorazione o per una regola di raccolta riapplicata dalla definizione di
+prima, il record resterebbe accettato, `irraggiungibili` continuerebbe a essere
+scritto, e un'istanza di produzione spenta non farebbe scattare niente. È il
+passo che la regola sul record incompleto del canale ha fatto con le colonne
+della posta, col rilascio della 0.12.0.
 
 ### La forma della query, e perché è quella
 

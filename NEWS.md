@@ -25,8 +25,14 @@
   The order of the release is the one every new column asks for, because the
   ingestion API drops in silence a column the collection rule does not know:
   the two columns go into the observer's table and its collection rule first,
-  then the package and the runner copy under `/opt`, then the alarm rule. No
-  dictionary change and no module change.
+  then the package and the runner copy under `/opt`, and last, in the same
+  window and once a record has brought `irraggiungibili_produzione` with a
+  value, the alarm rule and the rule on incomplete records. The latter names
+  the columns it requires, and must gain this one: moved onto it, the alarm
+  reads a field no other rule guards, and should it arrive empty after a
+  rollback or a collection rule restored from its earlier definition, a
+  production instance switched off would fire nothing. No dictionary change and
+  no module change.
 
 # ubep.azure 0.16.0
 
