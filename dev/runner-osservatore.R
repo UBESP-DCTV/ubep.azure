@@ -93,6 +93,20 @@ if (length(con_modulo) == 0L) {
   stop("l'inventario non elenca nessuna istanza con il modulo", call. = FALSE)
 }
 
+# I banchi sono istanze di prova, spente di norma e accese al bisogno. Stanno
+# in `con_modulo` come le altre, perche' quando sono accese vanno lette, ma la
+# loro voce porta `"banco": true`: senza quel segno un banco spento conterebbe
+# come un'istanza di produzione irraggiungibile, e l'allarme resterebbe rosso
+# ogni giorno. Un allarme sempre rosso non lo guarda piu' nessuno. Il campo
+# assente, o con un valore che non sia esattamente `true`, vale produzione:
+# nel dubbio un'istanza resta sorvegliata, invece di uscire dall'allarme senza
+# che nessuno lo abbia deciso.
+banchi <- vapply(
+  Filter(function(x) isTRUE(x[["banco"]]), con_modulo),
+  function(x) as.character(x[["nome"]]),
+  character(1)
+)
+
 # --- la passata larga -------------------------------------------------------
 
 token <- token_imds("https://vault.azure.net")
@@ -131,7 +145,8 @@ record <- ubep.azure:::run_record(
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"),
   non_osservate = vapply(
     senza_modulo, function(x) as.character(x[["nome"]]), character(1)
-  )
+  ),
+  banchi = banchi
 )
 
 # Log Analytics vuole `TimeGenerated`: entra nel record prima della
