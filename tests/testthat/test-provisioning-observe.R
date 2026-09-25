@@ -257,3 +257,133 @@ test_that("all gates collaudata is only true when every read said so", {
   ))
   expect_false(run_record(niente, at = "x")[["tutti_collaudati"]])
 })
+
+
+# Two fixtures for the tests on benches below: what matters there is only
+# whether an instance answered and what it is called, so the payload is written
+# once rather than restated in every test.
+acceso <- function(nome) {
+  observe_instance(nome, list(
+    ok = TRUE, gate = "collaudata",
+    payload = list(
+      redcap_major = 17L, redcap_version = "17.3.3",
+      surface_fingerprint = "16faf46d5ab1", results = list()
+    )
+  ))
+}
+
+spento <- function(nome) {
+  observe_instance(nome, list(
+    ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE", payload = NULL
+  ))
+}
+
+
+test_that("without benches, every unreachable instance is a production one", {
+  observations <- rbind(acceso("prod-a"), spento("prod-b"), spento("prod-c"))
+
+  record <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(record[["irraggiungibili"]], 2L)
+  expect_equal(
+    record[["irraggiungibili_produzione"]], record[["irraggiungibili"]]
+  )
+  expect_equal(record[["irraggiungibili_nomi"]], c("prod-b", "prod-c"))
+})
+
+
+test_that("a bench switched off does not count against production", {
+  # Benches are off by default and switched on when needed. Counted with the
+  # rest, they would keep the alarm on unreachable instances red for good, and
+  # an alarm that is always red is an alarm nobody reads.
+  observations <- rbind(acceso("prod-a"), spento("banco-a"))
+
+  record <- run_record(
+    observations,
+    at = "2026-08-07 03:00", banchi = "banco-a"
+  )
+
+  expect_equal(record[["irraggiungibili_produzione"]], 0L)
+  expect_equal(record[["irraggiungibili_nomi"]], "banco-a")
+  # The old counter is untouched: the table and whoever reads it keep the
+  # meaning they had.
+  expect_equal(record[["irraggiungibili"]], 1L)
+  # And a bench that was not read is still a gap in coverage: it may sit on
+  # another major, so the fleet claim cannot be made over it.
+  expect_false(record[["copertura_completa"]])
+  expect_false(record[["flotta_a_una_major"]])
+})
+
+
+test_that("a production instance switched off still counts", {
+  observations <- rbind(
+    spento("prod-a"), spento("banco-a"), acceso("banco-b")
+  )
+
+  record <- run_record(
+    observations,
+    at = "2026-08-07 03:00", banchi = c("banco-a", "banco-b")
+  )
+
+  expect_equal(record[["irraggiungibili"]], 2L)
+  expect_equal(record[["irraggiungibili_produzione"]], 1L)
+  expect_equal(record[["irraggiungibili_nomi"]], c("prod-a", "banco-a"))
+})
+
+
+test_that("a bench named but not observed changes nothing", {
+  # The inventory and the observations can disagree for a run: a name that
+  # marks nothing must neither fail nor be counted.
+  observations <- rbind(acceso("prod-a"), spento("prod-b"))
+
+  con <- run_record(
+    observations,
+    at = "2026-08-07 03:00", banchi = "banco-assente"
+  )
+  senza <- run_record(observations, at = "2026-08-07 03:00")
+
+  expect_equal(con[["irraggiungibili_produzione"]], 1L)
+  expect_identical(con, senza)
+})
+
+
+test_that("the unreachable names stay an array, with one item or none", {
+  # The same length-one trap as the other list fields: one bench off would
+  # emit a bare string where the column is `dynamic`, and a query reading it as
+  # an array would fail on that run only.
+  uno <- run_record_json(run_record(
+    rbind(acceso("prod-a"), spento("banco-a")),
+    at = "2026-08-07 03:00", banchi = "banco-a"
+  ))
+  expect_match(uno, '"irraggiungibili_nomi":["banco-a"]', fixed = TRUE)
+  # a counter stays a counter
+  expect_match(uno, '"irraggiungibili_produzione":0', fixed = TRUE)
+
+  nessuno <- run_record_json(
+    run_record(acceso("prod-a"), at = "2026-08-07 03:00")
+  )
+  expect_match(nessuno, '"irraggiungibili_nomi":[]', fixed = TRUE)
+})
+
+
+test_that("the record's fields are exactly the collection rule's columns", {
+  # The columns of the observer's table, minus `TimeGenerated`, which the
+  # runner adds at emission time.
+  #
+  # Written out by hand, like its twin for the channel's record, because the
+  # ingestion API drops in silence every column the collection rule does not
+  # know: a field added here before the rule has learned it does not fail, it
+  # arrives empty. This test is what turns that silence into a red, and the
+  # order it asks for is the rule first, the package after.
+  colonne <- c(
+    "at", "istanze", "letture_riuscite", "irraggiungibili",
+    "irraggiungibili_produzione", "irraggiungibili_nomi", "non_osservate",
+    "copertura_completa", "major_fra_lette", "flotta_a_una_major", "cancelli",
+    "tutti_collaudati", "impronte_superficie", "impronte_allowlist",
+    "coppie_scadute", "coppie_totali"
+  )
+
+  record <- run_record(acceso("prod-a"), at = "2026-08-07 03:00")
+
+  expect_setequal(names(record), colonne)
+})

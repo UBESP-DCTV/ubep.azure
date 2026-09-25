@@ -4,7 +4,7 @@
 \alias{run_record}
 \title{Build the record a run leaves behind}
 \usage{
-run_record(observations, at, non_osservate = character())
+run_record(observations, at, non_osservate = character(), banchi = character())
 }
 \arguments{
 \item{observations}{Rows from \code{observe_instance()}, bound together.}
@@ -15,6 +15,9 @@ than read here so the record stays a pure function of what was observed.}
 \item{non_osservate}{Names of instances the run did not even attempt —
 those without the module. Passed in so the record can state its own scope
 instead of leaving the reader to assume it covered everything.}
+
+\item{banchi}{Names of the instances the inventory marks as benches. A name
+that matches no observation marks nothing and counts nothing.}
 }
 \value{
 A named list, ready to be serialized as one JSON object.
@@ -42,5 +45,17 @@ authorizes a destructive decision must be false when it cannot know.
 Found by running rather than by reading: with the module on three instances
 of fourteen, a field named for the fleet reported the fleet was a singleton
 while two instances on major 11 were never contacted.
+
+Benches are instances kept for trials, off by default and switched on when
+needed. Counted with production, they would keep \code{irraggiungibili} above
+zero by construction, and an alarm that is always red is an alarm nobody
+reads any more. So the record carries \code{irraggiungibili_produzione}, which
+leaves them out, and \code{irraggiungibili_nomi}, which names every unreachable
+instance so a reader can tell which is which. \code{irraggiungibili} keeps
+counting all of them, as it always did.
+
+A bench that did not answer still leaves the coverage incomplete, and
+deliberately: it may sit on another major, and \code{flotta_a_una_major} must be
+false when it cannot know.
 }
 \keyword{internal}
