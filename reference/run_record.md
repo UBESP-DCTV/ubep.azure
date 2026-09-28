@@ -9,7 +9,7 @@ none.
 ## Usage
 
 ``` r
-run_record(observations, at, non_osservate = character())
+run_record(observations, at, non_osservate = character(), banchi = character())
 ```
 
 ## Arguments
@@ -30,6 +30,11 @@ run_record(observations, at, non_osservate = character())
   Names of instances the run did not even attempt — those without the
   module. Passed in so the record can state its own scope instead of
   leaving the reader to assume it covered everything.
+
+- banchi:
+
+  Names of the instances the inventory marks as benches. A name that
+  matches no observation marks nothing and counts nothing.
 
 ## Value
 
@@ -54,3 +59,16 @@ it cannot know.
 Found by running rather than by reading: with the module on three
 instances of fourteen, a field named for the fleet reported the fleet
 was a singleton while two instances on major 11 were never contacted.
+
+Benches are instances kept for trials, off by default and switched on
+when needed. Counted with production, they would keep `irraggiungibili`
+above zero by construction, and an alarm that is always red is an alarm
+nobody reads any more. So the record carries
+`irraggiungibili_produzione`, which leaves them out, and
+`irraggiungibili_nomi`, which names every unreachable instance so a
+reader can tell which is which. `irraggiungibili` keeps counting all of
+them, as it always did.
+
+A bench that did not answer still leaves the coverage incomplete, and
+deliberately: it may sit on another major, and `flotta_a_una_major` must
+be false when it cannot know.

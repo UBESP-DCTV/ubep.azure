@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,15 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.17.0" id="ubepazure-0170">ubep.azure 0.17.0<a class="anchor" aria-label="anchor" href="#ubepazure-0170"></a></h2>
+<ul><li>
+<p><strong>A bench that is switched off no longer keeps the observer’s alarm on unreachable instances red.</strong> Benches are instances kept for trials, off by default and switched on when needed. Listed among the instances with the module, they are unreachable on most runs, and the alarm on unreachable instances fires on <code>irraggiungibili &gt; 0</code>: it would stay red for good, and an alarm that is always red is an alarm nobody reads.</p>
+<p>An entry of the inventory’s <code>con_modulo</code> may now carry <code>"banco": true</code>, and the observer’s run record gains two fields. <code>irraggiungibili_produzione</code> counts the unreachable instances not marked as benches, and is the field the alarm reads; <code>irraggiungibili_nomi</code> names every unreachable instance, benches included, as an array even when it holds one. <code>irraggiungibili</code> is unchanged. A missing flag, or any value other than <code>true</code>, means production: an instance leaves the alarm only when somebody marked it.</p>
+<p>The mark takes a bench out of that alarm and out of nothing else. When every instance with the module is a bench and all are off, the run reads nothing: <code>letture_riuscite</code> is zero and <code>tutti_collaudati</code> is false, so the alarms on absence and on the gate fire and stay red, as measured on 2026-08-20. That is the observer reporting that it sees no instance, and the steady red goes only when a production instance with the module is listed and answers.</p>
+<p>The order of the release is the one every new column asks for, because the ingestion API drops in silence a column the collection rule does not know: the two columns go into the observer’s table and its collection rule first, then the package and the runner copy under <code>/opt</code>, and last, in the same window and once a record has brought <code>irraggiungibili_produzione</code> with a value, the alarm rule and the rule on incomplete records. The latter names the columns it requires, and must gain this one: moved onto it, the alarm reads a field no other rule guards, and should it arrive empty after a rollback or a collection rule restored from its earlier definition, a production instance switched off would fire nothing. No dictionary change and no module change.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.16.0" id="ubepazure-0160">ubep.azure 0.16.0<a class="anchor" aria-label="anchor" href="#ubepazure-0160"></a></h2>
 <ul><li>

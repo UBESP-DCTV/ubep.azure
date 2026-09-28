@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -694,6 +694,67 @@ ho raggiunto l’istanza» non è un errore del giro, è il suo
 guardava.</p>
 </div>
 <div class="section level3">
+<h3 id="i-banchi-spenti-non-fanno-scattare-la-regola-sulle-irraggiungibili">I banchi spenti non fanno scattare la regola sulle
+irraggiungibili<a class="anchor" aria-label="anchor" href="#i-banchi-spenti-non-fanno-scattare-la-regola-sulle-irraggiungibili"></a>
+</h3>
+<p>I <strong>banchi</strong> sono istanze di prova, spente di norma e
+accese al bisogno. Stanno fra le istanze col modulo dell’inventario,
+perché quando sono accese vanno lette, ma la loro voce porta
+<code>"banco": true</code>. Contati con le altre, terrebbero rossa ogni
+giorno la regola dell’osservatore sulle istanze irraggiungibili, e una
+regola sempre rossa non la guarda più nessuno.</p>
+<p>Per questo il record dell’osservatore porta due campi accanto a
+<code>irraggiungibili</code>, che resta com’era:
+<code>irraggiungibili_produzione</code>, che non conta i banchi, e
+<code>irraggiungibili_nomi</code>, che elenca tutte le irraggiungibili,
+banchi compresi. <strong>La regola guarda
+<code>irraggiungibili_produzione</code></strong>, quindi un banco
+marcato non la fa scattare. Un campo <code>banco</code> assente, o con
+un valore che non sia esattamente <code>true</code>, vale produzione:
+un’istanza esce dall’allarme solo se qualcuno l’ha marcata. Un banco
+spento resta invece un buco di copertura, e
+<code>flotta_a_una_major</code> resta falso: potrebbe stare su un’altra
+major.</p>
+<p><strong>La garanzia vale per quella regola sola, e solo finché almeno
+un’istanza col modulo risponde.</strong> Se le istanze col modulo sono
+tutte banchi e sono tutte spente, l’osservatore non legge niente:
+<code>letture_riuscite</code> è zero e <code>tutti_collaudati</code> è
+falso, perché un giro che non ha visto nessun cancello non ne ha visto
+uno buono. Suonano allora la regola sull’assenza, a gravità 1, e quella
+sul cancello, a gravità 2, e restano rosse finché i banchi restano
+spenti. Marcare i banchi non le spegne, e non deve: in quel caso
+l’osservatore non vede nessuna istanza, che è ciò che la gravità 1 dice.
+Misurato il 2026-08-20, con i soli banchi agganciati e tutti spenti: il
+cancello è scattato mezz’ora dopo il giro, l’assenza due ore dopo. Il
+rosso fisso sparisce quando fra le istanze col modulo c’è almeno
+un’istanza di produzione, e risponde.</p>
+<p>Il rilascio segue l’ordine della sezione sulla regola di raccolta,
+più sotto: <strong>prima</strong> le due colonne nella tabella
+dell’osservatore e nella sua regola di raccolta, perché le colonne che
+la regola non conosce vengono scartate in silenzio; <strong>poi</strong>
+il pacchetto e la copia della lavorazione in <code>/opt</code>, in
+quest’ordine, perché la lavorazione nuova passa un argomento che il
+pacchetto vecchio non conosce; <strong>per ultime</strong>, nella stessa
+finestra e dopo aver visto arrivare un record che porta
+<code>irraggiungibili_produzione</code> con un valore, la regola
+d’allarme e quella sul record incompleto. Aggiornata prima, la regola
+d’allarme leggerebbe una colonna vuota, e in KQL un confronto su un
+valore nullo è falso e non un errore: tacerebbe anche con una produzione
+spenta.</p>
+<p>La regola sul record incompleto elenca per nome le colonne che
+pretende, e <code>irraggiungibili_produzione</code> va aggiunta
+all’elenco. Finché la regola d’allarme guardava
+<code>irraggiungibili</code>, un campo che la lavorazione scrive da
+sempre, non serviva; spostata sulla colonna nuova, guarda un campo che
+nessuna regola sorveglia. Se la colonna tornasse vuota, per un ritorno
+indietro di pacchetto e lavorazione o per una regola di raccolta
+riapplicata dalla definizione di prima, il record resterebbe accettato,
+<code>irraggiungibili</code> continuerebbe a essere scritto, e
+un’istanza di produzione spenta non farebbe scattare niente. È il passo
+che la regola sul record incompleto del canale ha fatto con le colonne
+della posta, col rilascio della 0.12.0.</p>
+</div>
+<div class="section level3">
 <h3 id="la-forma-della-query-e-perché-è-quella">La forma della query, e perché è quella<a class="anchor" aria-label="anchor" href="#la-forma-della-query-e-perch%C3%A9-%C3%A8-quella"></a>
 </h3>
 <p>Ogni regola prende <strong>l’ultima osservazione</strong> e la
@@ -802,7 +863,11 @@ nominate per contenuto; i nomi stanno nel foglio dei parametri.</p>
 partita, o è morta prima di emettere. Guardare lo stato dell’unità di
 sistema e i suoi log sulla macchina del perimetro. Se l’unità è partita
 e ha fallito, l’errore è quasi sempre nel recupero del token o del
-segreto.</p>
+segreto. La regola dell’osservatore però non chiede un record qualsiasi,
+ne chiede uno con almeno una lettura riuscita: se l’unità è sana e il
+record c’è con <code>letture_riuscite</code> a zero, nessuna istanza col
+modulo ha risposto, e quando sono tutte banchi spenti è il caso
+descritto nel §5.</p>
 <p><strong>Record incompleto (gravità 1).</strong> Il record c’è ma
 manca una colonna pretesa. Due cause, e vanno distinte prima di toccare
 qualcosa: o il modulo ha smesso di riportare quel campo su qualche
@@ -811,8 +876,13 @@ la lavorazione ha cominciato a emettere. La seconda si riconosce dal
 fatto che la colonna è <strong>nuova</strong>, e si ripara aggiornando
 la regola di raccolta.</p>
 <p><strong>Istanze irraggiungibili (gravità 2).</strong> Una o più
-istanze non hanno risposto. Guardare quante, e quali: se sono tutte, il
-sospetto è sul perimetro — tipico l’indirizzo della macchina cambiato,
+istanze di produzione non hanno risposto: nell’osservatore la regola
+conta <code>irraggiungibili_produzione</code>, che lascia fuori i banchi
+(§5), e non il campo storico <code>irraggiungibili</code>. Quali siano
+lo dice <code>irraggiungibili_nomi</code>, che elenca anche i banchi
+spenti; quali di quei nomi siano banchi lo dice l’inventario. Tolti i
+banchi, guardare quante: se sono tutte le istanze di produzione, il
+sospetto è sul perimetro, tipico l’indirizzo della macchina cambiato,
 che chiude tutte le liste insieme. Se è una sola, il sospetto è su
 quell’istanza.</p>
 <p><strong>Cancello non collaudato (gravità 2).</strong> Un’istanza non
@@ -820,7 +890,10 @@ quell’istanza.</p>
 se è il soffitto di major, l’istanza è stata aggiornata oltre la
 finestra del modulo; se è l’impronta, la superficie è cambiata dentro lo
 stesso major. Nel primo caso si alza il soffitto prima di ricollaudare,
-nel secondo si va direttamente al protocollo di §3.</p>
+nel secondo si va direttamente al protocollo di §3. Con
+<code>cancelli</code> vuoto non c’è nessun declassamento da leggere: il
+giro non ha letto nessuna istanza, e suona anche la regola
+sull’assenza.</p>
 <p><strong>Superficie disomogenea (gravità 2).</strong> Le istanze
 osservate non espongono la stessa impronta di superficie. Normale
 durante un’ondata di aggiornamenti, in cui le istanze passano alla

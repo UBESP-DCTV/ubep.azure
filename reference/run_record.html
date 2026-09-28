@@ -13,7 +13,7 @@ run log is the only evidence of an event that leaves none.'></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,7 @@ run log is the only evidence of an event that leaves none.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_record</span><span class="op">(</span><span class="va">observations</span>, <span class="va">at</span>, non_osservate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_record</span><span class="op">(</span><span class="va">observations</span>, <span class="va">at</span>, non_osservate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>, banchi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,6 +71,11 @@ than read here so the record stays a pure function of what was observed.</p></dd
 <dd><p>Names of instances the run did not even attempt —
 those without the module. Passed in so the record can state its own scope
 instead of leaving the reader to assume it covered everything.</p></dd>
+
+
+<dt id="arg-banchi">banchi<a class="anchor" aria-label="anchor" href="#arg-banchi"></a></dt>
+<dd><p>Names of the instances the inventory marks as benches. A name
+that matches no observation marks nothing and counts nothing.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -93,6 +98,16 @@ authorizes a destructive decision must be false when it cannot know.</p>
 <p>Found by running rather than by reading: with the module on three instances
 of fourteen, a field named for the fleet reported the fleet was a singleton
 while two instances on major 11 were never contacted.</p>
+<p>Benches are instances kept for trials, off by default and switched on when
+needed. Counted with production, they would keep <code>irraggiungibili</code> above
+zero by construction, and an alarm that is always red is an alarm nobody
+reads any more. So the record carries <code>irraggiungibili_produzione</code>, which
+leaves them out, and <code>irraggiungibili_nomi</code>, which names every unreachable
+instance so a reader can tell which is which. <code>irraggiungibili</code> keeps
+counting all of them, as it always did.</p>
+<p>A bench that did not answer still leaves the coverage incomplete, and
+deliberately: it may sit on another major, and <code>flotta_a_una_major</code> must be
+false when it cannot know.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

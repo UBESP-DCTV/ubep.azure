@@ -546,6 +546,64 @@ allora si accorgesse di niente. Non ne avevano motivo — «non ho
 raggiunto l’istanza» non è un errore del giro, è il suo **esito**, e
 finiva in un campo che nessuna regola guardava.
 
+### I banchi spenti non fanno scattare la regola sulle irraggiungibili
+
+I **banchi** sono istanze di prova, spente di norma e accese al bisogno.
+Stanno fra le istanze col modulo dell’inventario, perché quando sono
+accese vanno lette, ma la loro voce porta `"banco": true`. Contati con
+le altre, terrebbero rossa ogni giorno la regola dell’osservatore sulle
+istanze irraggiungibili, e una regola sempre rossa non la guarda più
+nessuno.
+
+Per questo il record dell’osservatore porta due campi accanto a
+`irraggiungibili`, che resta com’era: `irraggiungibili_produzione`, che
+non conta i banchi, e `irraggiungibili_nomi`, che elenca tutte le
+irraggiungibili, banchi compresi. **La regola guarda
+`irraggiungibili_produzione`**, quindi un banco marcato non la fa
+scattare. Un campo `banco` assente, o con un valore che non sia
+esattamente `true`, vale produzione: un’istanza esce dall’allarme solo
+se qualcuno l’ha marcata. Un banco spento resta invece un buco di
+copertura, e `flotta_a_una_major` resta falso: potrebbe stare su
+un’altra major.
+
+**La garanzia vale per quella regola sola, e solo finché almeno
+un’istanza col modulo risponde.** Se le istanze col modulo sono tutte
+banchi e sono tutte spente, l’osservatore non legge niente:
+`letture_riuscite` è zero e `tutti_collaudati` è falso, perché un giro
+che non ha visto nessun cancello non ne ha visto uno buono. Suonano
+allora la regola sull’assenza, a gravità 1, e quella sul cancello, a
+gravità 2, e restano rosse finché i banchi restano spenti. Marcare i
+banchi non le spegne, e non deve: in quel caso l’osservatore non vede
+nessuna istanza, che è ciò che la gravità 1 dice. Misurato il
+2026-08-20, con i soli banchi agganciati e tutti spenti: il cancello è
+scattato mezz’ora dopo il giro, l’assenza due ore dopo. Il rosso fisso
+sparisce quando fra le istanze col modulo c’è almeno un’istanza di
+produzione, e risponde.
+
+Il rilascio segue l’ordine della sezione sulla regola di raccolta, più
+sotto: **prima** le due colonne nella tabella dell’osservatore e nella
+sua regola di raccolta, perché le colonne che la regola non conosce
+vengono scartate in silenzio; **poi** il pacchetto e la copia della
+lavorazione in `/opt`, in quest’ordine, perché la lavorazione nuova
+passa un argomento che il pacchetto vecchio non conosce; **per ultime**,
+nella stessa finestra e dopo aver visto arrivare un record che porta
+`irraggiungibili_produzione` con un valore, la regola d’allarme e quella
+sul record incompleto. Aggiornata prima, la regola d’allarme leggerebbe
+una colonna vuota, e in KQL un confronto su un valore nullo è falso e
+non un errore: tacerebbe anche con una produzione spenta.
+
+La regola sul record incompleto elenca per nome le colonne che pretende,
+e `irraggiungibili_produzione` va aggiunta all’elenco. Finché la regola
+d’allarme guardava `irraggiungibili`, un campo che la lavorazione scrive
+da sempre, non serviva; spostata sulla colonna nuova, guarda un campo
+che nessuna regola sorveglia. Se la colonna tornasse vuota, per un
+ritorno indietro di pacchetto e lavorazione o per una regola di raccolta
+riapplicata dalla definizione di prima, il record resterebbe accettato,
+`irraggiungibili` continuerebbe a essere scritto, e un’istanza di
+produzione spenta non farebbe scattare niente. È il passo che la regola
+sul record incompleto del canale ha fatto con le colonne della posta,
+col rilascio della 0.12.0.
+
 ### La forma della query, e perché è quella
 
 Ogni regola prende **l’ultima osservazione** e la giudica:
@@ -645,7 +703,11 @@ nominate per contenuto; i nomi stanno nel foglio dei parametri.
 **Nessun record (gravità 1).** La lavorazione non è partita, o è morta
 prima di emettere. Guardare lo stato dell’unità di sistema e i suoi log
 sulla macchina del perimetro. Se l’unità è partita e ha fallito,
-l’errore è quasi sempre nel recupero del token o del segreto.
+l’errore è quasi sempre nel recupero del token o del segreto. La regola
+dell’osservatore però non chiede un record qualsiasi, ne chiede uno con
+almeno una lettura riuscita: se l’unità è sana e il record c’è con
+`letture_riuscite` a zero, nessuna istanza col modulo ha risposto, e
+quando sono tutte banchi spenti è il caso descritto nel §5.
 
 **Record incompleto (gravità 1).** Il record c’è ma manca una colonna
 pretesa. Due cause, e vanno distinte prima di toccare qualcosa: o il
@@ -654,17 +716,24 @@ regola di raccolta non conosce ancora una colonna che la lavorazione ha
 cominciato a emettere. La seconda si riconosce dal fatto che la colonna
 è **nuova**, e si ripara aggiornando la regola di raccolta.
 
-**Istanze irraggiungibili (gravità 2).** Una o più istanze non hanno
-risposto. Guardare quante, e quali: se sono tutte, il sospetto è sul
-perimetro — tipico l’indirizzo della macchina cambiato, che chiude tutte
-le liste insieme. Se è una sola, il sospetto è su quell’istanza.
+**Istanze irraggiungibili (gravità 2).** Una o più istanze di produzione
+non hanno risposto: nell’osservatore la regola conta
+`irraggiungibili_produzione`, che lascia fuori i banchi (§5), e non il
+campo storico `irraggiungibili`. Quali siano lo dice
+`irraggiungibili_nomi`, che elenca anche i banchi spenti; quali di quei
+nomi siano banchi lo dice l’inventario. Tolti i banchi, guardare quante:
+se sono tutte le istanze di produzione, il sospetto è sul perimetro,
+tipico l’indirizzo della macchina cambiato, che chiude tutte le liste
+insieme. Se è una sola, il sospetto è su quell’istanza.
 
 **Cancello non collaudato (gravità 2).** Un’istanza non è in stato
 collaudato. Leggere quale dei due cancelli l’ha declassata: se è il
 soffitto di major, l’istanza è stata aggiornata oltre la finestra del
 modulo; se è l’impronta, la superficie è cambiata dentro lo stesso
 major. Nel primo caso si alza il soffitto prima di ricollaudare, nel
-secondo si va direttamente al protocollo di §3.
+secondo si va direttamente al protocollo di §3. Con `cancelli` vuoto non
+c’è nessun declassamento da leggere: il giro non ha letto nessuna
+istanza, e suona anche la regola sull’assenza.
 
 **Superficie disomogenea (gravità 2).** Le istanze osservate non
 espongono la stessa impronta di superficie. Normale durante un’ondata di
