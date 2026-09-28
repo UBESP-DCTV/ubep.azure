@@ -105,21 +105,39 @@ observe_instance <- function(server, state, today = Sys.Date()) {
 #' of fourteen, a field named for the fleet reported the fleet was a singleton
 #' while two instances on major 11 were never contacted.
 #'
+#' Benches are instances kept for trials, off by default and switched on when
+#' needed. Counted with production, they would keep `irraggiungibili` above
+#' zero by construction, and an alarm that is always red is an alarm nobody
+#' reads any more. So the record carries `irraggiungibili_produzione`, which
+#' leaves them out, and `irraggiungibili_nomi`, which names every unreachable
+#' instance so a reader can tell which is which. `irraggiungibili` keeps
+#' counting all of them, as it always did.
+#'
+#' A bench that did not answer still leaves the coverage incomplete, and
+#' deliberately: it may sit on another major, and `flotta_a_una_major` must be
+#' false when it cannot know.
+#'
 #' @param observations Rows from `observe_instance()`, bound together.
 #' @param at When the run finished, as `YYYY-MM-DD HH:MM`. Passed in rather
 #'   than read here so the record stays a pure function of what was observed.
 #' @param non_osservate Names of instances the run did not even attempt —
 #'   those without the module. Passed in so the record can state its own scope
 #'   instead of leaving the reader to assume it covered everything.
+#' @param banchi Names of the instances the inventory marks as benches. A name
+#'   that matches no observation marks nothing and counts nothing.
 #'
 #' @return A named list, ready to be serialized as one JSON object.
 #'
 #' @keywords internal
-run_record <- function(observations, at, non_osservate = character()) {
+run_record <- function(observations,
+                       at,
+                       non_osservate = character(),
+                       banchi = character()) {
   stopifnot(
     is.data.frame(observations),
     is.character(at), length(at) == 1L,
-    is.character(non_osservate)
+    is.character(non_osservate),
+    is.character(banchi)
   )
 
   # `unique(sort(x))` drops NA on its own; naming the intent here rather than
@@ -130,6 +148,7 @@ run_record <- function(observations, at, non_osservate = character()) {
   }
 
   reached <- observations[["raggiungibile"]]
+  unreachable <- observations[["server"]][!reached]
   majors <- distinct(observations[["redcap_major"]][reached])
   gates <- distinct(observations[["version_gate"]][reached])
 
@@ -142,6 +161,8 @@ run_record <- function(observations, at, non_osservate = character()) {
     istanze = nrow(observations),
     letture_riuscite = sum(reached),
     irraggiungibili = sum(!reached),
+    irraggiungibili_produzione = sum(!(unreachable %in% banchi)),
+    irraggiungibili_nomi = unreachable,
     non_osservate = non_osservate,
     copertura_completa = complete,
     major_fra_lette = as.integer(majors),
@@ -190,6 +211,7 @@ run_record_json <- function(record) {
     "impronte_allowlist",
     "cancelli",
     "non_osservate",
+    "irraggiungibili_nomi",
     "schema_differenze",
     "errori"
   )
