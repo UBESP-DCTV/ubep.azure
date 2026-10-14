@@ -405,6 +405,22 @@ creata, e la regola, decisa il 2026-10-14, segue da lì:
   modifica successiva del creatore non sblocca la riga: non dice che ha visto
   quella dell'altro, e l'approvazione è l'atto che lo dice.
 
+**Anche prima dell'esecuzione.** Una riga che il giro non ha ancora applicato,
+appena depositata o rimasta in coda per un errore di trasporto o un dato da
+correggere, non ha un sigillo da confrontare, ma è del suo creatore lo stesso:
+cambiata da un altro, il giro la eseguirebbe con i diritti del creatore, che
+sono quelli che il cancello giudica, senza chiedergli niente. Per questo il
+giro legge il log anche di ogni riga non ancora applicata su cui potrebbe
+agire (il cancello dell'identità l'ha lasciata passare, o aspetta di essere
+creata, e il creatore è noto), e la regola è la stessa. Cambia una cosa sola:
+su una riga sigillata è il sigillo a dire che la riga è cambiata, quindi un
+log che non nomina nessuno la ferma; su una riga mai applicata un log che non
+nomina nessuno dice che nessuno l'ha cambiata. Il costo è una chiamata per
+ogni riga in coda, a ogni giro in cui resta in coda. Riportare i campi ai
+valori di prima non sblocca una riga mai applicata, perché la modifica
+dell'altro resta nel log: arriva il sigillo della versione ripristinata, e il
+creatore lo incolla.
+
 Il creatore è quello del registro delle creazioni (`log_creators()`, con
 `logtype = "record_add"`), non `requested_by`: è la stessa utenza che il
 cancello dell'ambito giudica a ogni giro. Per questo chi approva non ha
@@ -419,11 +435,23 @@ funzione serviranno i campi cambiati e i diritti di chi ha cambiato, che oggi
 non riceve.
 
 **Chi ha cambiato la riga.** Il giro legge il registro degli eventi della sola
-riga, tutta la sua storia, con una chiamata per riga cambiata: nessuna nella
-notte ordinaria. Contano gli autori dei campi di intento dopo l'ultima
-scrittura di `applied_seal`, che è il segno dell'ultima esecuzione; ciò che
-viene prima era già stato eseguito. Se quella scrittura non è più nel log
-conta tutta la storia, che può solo far chiedere un'approvazione più spesso.
+riga, tutta la sua storia, con una chiamata per riga cambiata o non ancora
+applicata: nessuna nella notte ordinaria. Contano gli autori dei campi di
+intento dopo l'ultima scrittura di `applied_seal`, che è il segno dell'ultima
+esecuzione; ciò che viene prima era già stato eseguito. Se quella scrittura
+non è più nel log conta tutta la storia, che può solo far chiedere
+un'approvazione più spesso.
+
+«Già eseguito» vale per ciò che il giro ha letto, e il giro scrive il sigillo
+per ultimo: una modifica fatta mentre il giro interroga il tenant e le istanze
+finisce sotto il sigillo senza essere stata eseguita, e passerebbe per del
+creatore alla sua prossima modifica. Per questo il giro rilegge anche il
+tratto fra l'ultima esecuzione e quella prima (`log_uncovered_authors()`): una
+modifica di un altro che sta lì conta, a meno che sopra di lei, nello stesso
+tratto, ci sia l'approvazione del creatore con il sigillo che quell'esecuzione
+ha scritto. Basta un tratto: una modifica scoperta ferma la riga, una riga
+ferma non scrive sigilli, e il confine non si sposta finché il creatore non
+approva.
 
 Le scritture del canale non contano. Il giro riscrive lo `username` che
 risolve prima di leggere il log, e `username` è un campo di intento: contata,
@@ -475,11 +503,17 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   esecuzione, e tutte aspettano il proprio creatore, con una chiamata al log
   per ciascuna a ogni giro.
 
-L'approvazione vale a due condizioni: porta il sigillo di **quella** versione
-della riga, e viene da **chi l'ha creata**. Entrambe si verificano sul
-registro degli eventi di REDCap, che dice chi era **autenticato** e non che
-cosa qualcuno ha scritto in un campo: la stessa ragione per cui `requested_by`
-non basta da solo il giorno in cui si concede il Data Import Tool.
+L'approvazione vale a tre condizioni: porta il sigillo di **quella** versione
+della riga, viene da **chi l'ha creata**, ed è **più recente di ciò che
+approva**, cioè sta sopra l'ultima esecuzione e sopra ogni modifica di altri
+(`log_approval_stands()`). La terza serve perché `approved_seal` non si azzera
+mai: senza, un'approvazione già eseguita tornerebbe a valere ogni volta che la
+riga riprende quel contenuto, e varrebbe un sigillo incollato prima della
+modifica, che si può calcolare in anticipo perché è un hash pubblico dei campi
+di intento. Le ultime due si verificano sul registro degli eventi di REDCap,
+che dice chi era **autenticato** e non che cosa qualcuno ha scritto in un
+campo: la stessa ragione per cui `requested_by` non basta da solo il giorno in
+cui si concede il Data Import Tool.
 
 Il log della riga si chiede **senza finestra di tempo**. Fino alla 0.18.0 si
 chiedevano le ultime 24 ore di tutto il registro: una modifica più vecchia
