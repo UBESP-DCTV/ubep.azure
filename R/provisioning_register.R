@@ -550,13 +550,13 @@ seal_needs_approval <- function(register, events, creators) {
 
 #' Whether a change to an applied row has been approved
 #'
-#' Two conditions, and neither is enough on its own.
+#' Three conditions, and none is enough on its own.
 #'
 #' The approval has to carry **this** row's seal. A value that is some other
 #' seal approves some other version of the row, and accepting it would make one
 #' approval stand for every change that came after it.
 #'
-#' And it has to come from **whoever created the row**. Not merely from
+#' It has to come from **whoever created the row**. Not merely from
 #' somebody other than the author of the change: the request is the creator's,
 #' the scope gate checks the creator's rights on the project every round and
 #' nobody else's, so an approval from a third referent would grant on the word
@@ -565,6 +565,14 @@ seal_needs_approval <- function(register, events, creators) {
 #' created the row, because it names whoever was authenticated rather than a
 #' value somebody typed -- which is the same reason `requested_by` cannot be
 #' trusted alone.
+#'
+#' And it has to be **newer than what it approves**: above the round's last
+#' execution and above every change somebody other than the creator made, as
+#' `log_approval_stands()` reads the log. The value alone cannot say so.
+#' `approved_seal` is never blanked, so an approval the round has already
+#' carried out would approve again any later change that brings the row back
+#' to it; and the seal is a public hash of the intent fields, so it can be
+#' pasted before the change it names exists.
 #'
 #' An unreadable log is not this function's to decide. It answers about the
 #' events and the creators it was handed, and a caller holding neither gets
@@ -590,6 +598,7 @@ seal_approved <- function(register, events, creators) {
   approved[is.na(approved)] <- ""
   ids <- as.character(register[["record_id"]])
   creators <- trimws(creators)
+  intent <- register_intent_fields()
 
   vapply(seq_len(nrow(register)), function(i) {
     if (!nzchar(approved[[i]]) || !identical(approved[[i]], current[[i]])) {
@@ -599,10 +608,65 @@ seal_approved <- function(register, events, creators) {
       return(FALSE)
     }
 
-    identical(
-      log_last_author(events, ids[[i]], "approved_seal"), creators[[i]]
-    )
+    log_approval_stands(events, ids[[i]], creators[[i]], intent)
   }, logical(1))
+}
+
+
+#' Whether the newest approval in a row's log still stands
+#'
+#' The log half of `seal_approved()`: the newest write of `approved_seal` is
+#' the creator's, and nothing it could not have seen stands above it.
+#'
+#' - **No execution above it.** The newest write of `applied_seal` is the
+#'   round's last execution, and an approval below it was the one that
+#'   execution carried out, or one older still. Either way it is spent.
+#' - **No change by anybody else above it.** An intent field written by an
+#'   account that is neither the creator nor the channel, or by a blank
+#'   account, after the approval, is a change the approval cannot have seen:
+#'   written before the change, the approval is a seal computed in advance.
+#'
+#' The creator's own edits above it do not withdraw it here. They move the
+#' seal, and the value check in `seal_approved()` is what refuses an approval
+#' of a version the creator changed afterwards.
+#'
+#' The order is REDCap's, newest first, as everywhere else in the log.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#'
+#' @return `TRUE` when the approval stands.
+#'
+#' @keywords internal
+log_approval_stands <- function(events, record, creator,
+                                fields = register_intent_fields()) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.character(fields)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record)
+  if (length(channel) > 1L) {
+    return(FALSE)
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  approvals <- which(log_wrote(mine, "approved_seal"))
+  if (length(approvals) == 0L ||
+        !identical(authors[[approvals[[1L]]]], trimws(creator))) {
+    return(FALSE)
+  }
+  newest <- approvals[[1L]]
+
+  executed <- which(log_wrote(mine, "applied_seal"))
+  foreign <- which(
+    log_wrote(mine, fields) & !authors %in% channel &
+      authors != trimws(creator)
+  )
+  !any(executed <= newest) && !any(foreign < newest)
 }
 
 

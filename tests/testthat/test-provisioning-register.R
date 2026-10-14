@@ -628,6 +628,61 @@ applicata <- list(
 )
 
 
+test_that("un'approvazione piu' vecchia dell'ultima esecuzione non vale", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  # Newest first: the creator's approval was carried out by the round, and
+  # Bruno changed the row afterwards.
+  detto <- seal_approved(
+    riga,
+    eventi_finti(
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      ),
+      applicata,
+      list(username = creatrice, details = "approved_seal = 'abc'")
+    ),
+    creatrice
+  )
+
+  # test
+  # An approval is spent by the execution it allowed. `approved_seal` is
+  # never blanked, so the value alone would approve again any later change
+  # that brings the row back to it.
+  expect_false(detto)
+})
+
+
+test_that("un'approvazione piu' vecchia della modifica di un altro non vale", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  sotto <- function(chi) {
+    seal_approved(
+      riga,
+      eventi_finti(
+        list(username = chi, details = "role_name = 'read only'"),
+        list(username = creatrice, details = "approved_seal = 'abc'"),
+        applicata
+      ),
+      creatrice
+    )
+  }
+
+  # test
+  # Written before the change, the approval cannot say the creator saw it:
+  # it is a seal computed in advance. A change nobody signed is not the
+  # creator's either.
+  expect_false(sotto("bruno.verdi@ubep.unipd.it"))
+  expect_false(sotto(""))
+  # The creator's own later edit is no reason to refuse it: the value check
+  # is what stops an approval of a version the creator then changed.
+  expect_true(sotto(creatrice))
+})
+
+
 test_that("conta chi ha cambiato la riga dopo l'ultima esecuzione, e nessun altro", { # nolint: line_length_linter.
   # eval
   # Newest first. Bruno changed the row before the round applied it, and that

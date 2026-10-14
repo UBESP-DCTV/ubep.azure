@@ -18,14 +18,14 @@ order of \code{register}. \code{""} approves nothing.}
 A logical vector, one answer per row.
 }
 \description{
-Two conditions, and neither is enough on its own.
+Three conditions, and none is enough on its own.
 }
 \details{
 The approval has to carry \strong{this} row's seal. A value that is some other
 seal approves some other version of the row, and accepting it would make one
 approval stand for every change that came after it.
 
-And it has to come from \strong{whoever created the row}. Not merely from
+It has to come from \strong{whoever created the row}. Not merely from
 somebody other than the author of the change: the request is the creator's,
 the scope gate checks the creator's rights on the project every round and
 nobody else's, so an approval from a third referent would grant on the word
@@ -34,6 +34,14 @@ detects that the row moved; only the log can say who approved it and who
 created the row, because it names whoever was authenticated rather than a
 value somebody typed -- which is the same reason \code{requested_by} cannot be
 trusted alone.
+
+And it has to be \strong{newer than what it approves}: above the round's last
+execution and above every change somebody other than the creator made, as
+\code{log_approval_stands()} reads the log. The value alone cannot say so.
+\code{approved_seal} is never blanked, so an approval the round has already
+carried out would approve again any later change that brings the row back
+to it; and the seal is a public hash of the intent fields, so it can be
+pasted before the change it names exists.
 
 An unreadable log is not this function's to decide. It answers about the
 events and the creators it was handed, and a caller holding neither gets

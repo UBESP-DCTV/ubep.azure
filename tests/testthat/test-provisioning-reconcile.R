@@ -2218,6 +2218,71 @@ test_that("una modifica che il log non attribuisce aspetta chi ha creato la riga
 })
 
 
+test_that("un'approvazione gia' eseguita non vale per la modifica dopo", {
+  # eval
+  # Newest first. Bruno set the role, Anna approved it and the round applied
+  # it; Anna set it back to data entry herself and the round applied that;
+  # now Bruno sets it again. `approved_seal` still holds Anna's old approval,
+  # and the row is back to the version it approves.
+  in_uso <- sigillo_cambiata(role_name = "data entry")
+  esito <- giro_cambiata(
+    list(
+      cambio(bruno), esecuzione(in_uso),
+      cambio(anna, "role_name = 'data entry'"),
+      esecuzione(sigillo_cambiata()), approvazione(anna), cambio(bruno)
+    ),
+    approvato = sigillo_cambiata(),
+    riga = riga_cambiata(applied_seal = in_uso)
+  )
+
+  # test
+  # That approval was spent when the round carried it out. Taken again, one
+  # value would approve every later change that brings the row back to it,
+  # and the creator would never be asked nor told.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un'approvazione gia' eseguita non riattiva una richiesta revocata", {
+  # eval
+  revocata <- sigillo_cambiata(request_status = "revoked")
+  esito <- giro_cambiata(
+    list(
+      cambio(bruno, "request_status = 'active'"), esecuzione(revocata),
+      cambio(anna, "request_status = 'revoked'"),
+      esecuzione(sigillo_cambiata()), approvazione(anna), cambio(bruno)
+    ),
+    approvato = sigillo_cambiata(),
+    riga = riga_cambiata(applied_seal = revocata)
+  )
+
+  # test
+  # Anna withdrew the access; Bruno turning it back on is a change to her
+  # request like any other, whatever she approved before she withdrew it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un'approvazione scritta prima della modifica non la approva", {
+  # eval
+  # The seal is a public sha256 of the intent fields, so it can be computed
+  # for a version that does not exist yet: Anna pastes it, Bruno then makes
+  # the row match it.
+  esito <- giro_cambiata(
+    list(cambio(bruno), approvazione(anna)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # An approval says the creator saw the change, and nobody sees a change
+  # before it is made.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # eval
   approvato <- request_seal(riga_come_registro(record_id = "1"))
