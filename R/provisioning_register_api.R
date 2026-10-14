@@ -316,18 +316,24 @@ log_since <- function(at, hours = 24L) {
 #'   reads `Create record 7` from the form and `Create record (import) 20`
 #'   from an import, and a reader matching that string would have to keep up
 #'   with REDCap's wording for ever.
+#' @param record One record id, or `NULL` for every record. With it REDCap
+#'   answers with that row's events alone, its whole history unless `since`
+#'   narrows it: the answer then grows with what happened to one row and not
+#'   with the traffic of the whole register.
 #'
 #' @return The `register_call()` list plus `log`, a data frame.
 #'
 #' @keywords internal
-register_log <- function(url, token, since = NULL, logtype = NULL) {
+register_log <- function(url, token, since = NULL, logtype = NULL,
+                         record = NULL) {
   scalar <- function(value) {
     is.character(value) && length(value) == 1L &&
       !is.na(value) && nzchar(value)
   }
   stopifnot(
     is.null(since) || scalar(since),
-    is.null(logtype) || scalar(logtype)
+    is.null(logtype) || scalar(logtype),
+    is.null(record) || scalar(record)
   )
 
   # Accrued rather than declared whole, because a parameter sent empty is not
@@ -339,6 +345,9 @@ register_log <- function(url, token, since = NULL, logtype = NULL) {
   }
   if (!is.null(logtype)) {
     params[["logtype"]] <- logtype
+  }
+  if (!is.null(record)) {
+    params[["record"]] <- record
   }
 
   answer <- register_call(url, token, params)

@@ -466,6 +466,31 @@ test_that("the log window reaches back far enough to be wrong about the hour", {
 })
 
 
+test_that("the log of one row is asked for by record, without a window", {
+  # eval
+  captured <- NULL
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(status_code = 200L, body = charToRaw("[]"))
+    },
+    register_log("registro.example.org", "t0ken", record = "42")
+  )
+
+  # test
+  # The question row protection asks is about one row, and about all of it:
+  # who changed it since the round last applied it, however long ago that
+  # was. `record` narrows the answer to that row, and the absence of
+  # `beginTime` is what keeps an edit made the day before yesterday inside it.
+  expect_true(result[["ok"]])
+  expect_equal(
+    form_field_value(captured[["body"]][["data"]][["record"]]), "42"
+  )
+  expect_null(captured[["body"]][["data"]][["beginTime"]])
+  expect_null(captured[["body"]][["data"]][["logtype"]])
+})
+
+
 test_that("the creation log is asked for as creations only, without a window", {
   # eval
   captured <- NULL
