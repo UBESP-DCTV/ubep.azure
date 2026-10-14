@@ -1481,6 +1481,87 @@ test_that("il messaggio nomina l'identita' che questo giro ha stabilito", {
 })
 
 
+test_that("il giro passa al benvenuto l'host dell'istanza della riga", {
+  # eval
+  mandate <- list()
+  giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject, body = body
+      )
+      list(ok = TRUE, errors = character())
+    }
+  )
+  a <- function(chi, oggetto) {
+    Filter(function(m) {
+      identical(m[["to"]], chi) && grepl(oggetto, m[["subject"]], fixed = TRUE)
+    }, mandate)
+  }
+
+  # test
+  # The address is not composed from `server` and not written anywhere in the
+  # package: the round already holds the inventory's map, and this is the test
+  # that it hands it on. Forgetting to would cost nothing visible -- the
+  # welcome leaves without the two lines -- which is why it is pinned here.
+  benvenuto <- a("mario.rossi@example.org", "Il tuo account UBEP")
+  chiave <- a("anna.bianchi@ubep.unipd.it", "Accesso al nuovo account")
+  expect_length(benvenuto, 1L)
+  expect_length(chiave, 1L)
+  expect_match(
+    benvenuto[[1L]][["body"]], "REDCap si apre da: https://edc10.example.org/",
+    fixed = TRUE
+  )
+  expect_false(grepl("example.org", chiave[[1L]][["body"]], fixed = TRUE))
+})
+
+
+test_that("un benvenuto perso arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      if (identical(to, "mario.rossi@example.org")) {
+        return(list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA"))
+      }
+      list(ok = TRUE, errors = character())
+    }
+  )
+  record <- round_record(esito, scrittura = TRUE, posta = TRUE)
+
+  # test
+  # Counted where the key is counted, and carried by the same road: the
+  # round's `posta`, then the record the alarm reads.
+  expect_true("POSTA_BENVENUTO_PERSO" %in% esito[["errori"]])
+  expect_identical(record[["benvenuti_persi"]], 1L)
+  expect_identical(record[["benvenuti_recapitati"]], 0L)
+  expect_identical(record[["credenziali_recapitate"]], 1L)
+  expect_identical(record[["posta_fallite"]], 0L)
+  # The outcome of the row that made the account still goes in.
+  expect_length(importazioni(campi_esito), 1L)
+})
+
+
+test_that("senza mailer il giro porta anche i benvenuti a zero", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_identical(esito[["posta"]][["benvenuti_recapitati"]], 0L)
+  expect_identical(esito[["posta"]][["benvenuti_persi"]], 0L)
+})
+
+
 test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
   # eval
   esito <- giro(

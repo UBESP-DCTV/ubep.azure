@@ -264,6 +264,33 @@ mail_outcome_message <- function(row) {
 }
 
 
+#' Say where an instance opens, from the host the inventory names
+#'
+#' The host is the one `provisioning_reconcile()` already holds, read from the
+#' inventory on the machine: the address is not composed from `server` and is
+#' not written anywhere in this repository. The scheme and the trailing slashes
+#' are dropped first, as `module_call()` drops them, so a host the instances
+#' answer on cannot turn into an address nobody can open.
+#'
+#' @param host The instance's host, optionally followed by the path REDCap is
+#'   mounted under.
+#'
+#' @return The address as a person opens it, or `NULL` when there is no host.
+#'
+#' @keywords internal
+mail_instance_url <- function(host) {
+  if (is.null(host) || length(host) != 1L || is.na(host) || !nzchar(host)) {
+    return(NULL)
+  }
+  base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", as.character(host))
+  base <- sub("/+$", "", base)
+  if (!nzchar(base)) {
+    return(NULL)
+  }
+  paste0("https://", base, "/")
+}
+
+
 #' Tell a person an account now exists for them, and what stands in the way
 #'
 #' It carries no way in, and that is the decision rather than an omission:
@@ -273,18 +300,58 @@ mail_outcome_message <- function(row) {
 #' choosing. The referent who asked for the account hands it over instead; this
 #' message says so, and names them.
 #'
+#' It does name the instance, as the address REDCap opens at, and that is the
+#' same decision read from the other side. A message without a secret can carry
+#' the context, and of the two messages a creation sends this is the one that
+#' can: the message with the key carries none of it, because context is what
+#' makes a key spendable. It also says that access to the project normally
+#' follows within four hours, which is the cadence of the round. Without an
+#' address the message still leaves, without those two lines: a missing address
+#' is no reason to lose it.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name, as created.
+#' @param url The address the row's instance opens at, from
+#'   `mail_instance_url()`; `NULL`, `NA` or empty leaves it out.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_welcome_message <- function(row, upn) {
-  stopifnot(is.list(row), is.character(upn), length(upn) == 1L, nzchar(upn))
+mail_welcome_message <- function(row, upn, url = NULL) {
+  stopifnot(
+    is.list(row), is.character(upn), length(upn) == 1L, nzchar(upn),
+    is.null(url) || length(url) == 1L
+  )
 
   referente <- mail_said_or(
     row[["requested_by"]], "chi ha compilato la richiesta"
   )
+
+  # Both lines or neither: the four hours are about the instance the address
+  # names, and without the address they would be a promise about a place the
+  # message does not say.
+  istanza <- if (is.null(url) || is.na(url) || !nzchar(url)) {
+    list(it = NULL, en = NULL)
+  } else {
+    list(
+      it = c(
+        "",
+        paste0("REDCap si apre da: ", url),
+        paste0(
+          "L'accesso al progetto per cui e' stato chiesto l'account arriva di ",
+          "norma entro quattro ore da questo messaggio."
+        )
+      ),
+      en = c(
+        "",
+        paste0("REDCap opens at: ", url),
+        paste0(
+          "Access to the project the account was requested for normally ",
+          "arrives within four hours of this message."
+        )
+      )
+    )
+  }
 
   it <- c(
     paste0("Ciao ", row[["first_name"]], ","),
@@ -293,6 +360,7 @@ mail_welcome_message <- function(row, upn) {
       "e' stato creato per te un account UBEP. Il nome con cui ti autentichi ",
       "e': ", upn
     ),
+    istanza[["it"]],
     "",
     paste0(
       "La chiave d'ingresso non e' in questo messaggio: te la consegna ",
@@ -316,6 +384,7 @@ mail_welcome_message <- function(row, upn) {
       "a UBEP account has been created for you. The name you sign in with ",
       "is: ", upn
     ),
+    istanza[["en"]],
     "",
     paste0(
       "The way in is not in this message: ", referente,
@@ -344,6 +413,16 @@ mail_welcome_message <- function(row, upn) {
 #' It carries the UPN, the key, and nothing else. No project, no role, no
 #' instance, nobody in copy: a message with a way in must not also carry the
 #' context that makes it spendable.
+#'
+#' What it asks of the referent is the rule decided for handing the key over:
+#' another channel if there is one, otherwise a new message with the key
+#' alone, never a forward of this one, and to the address the referent knows
+#' from their own correspondence rather than the one copied from the request.
+#' The welcome went to the address in the request, so a referent who finds the
+#' two different is asked to stop and reply instead of sending. The same
+#' sentence asks them to leave the key out of the reply: a mail client quotes
+#' this body by default, and the reply goes to the round's reply address,
+#' where a key not yet used would stay readable.
 #'
 #' This message has no second chance, and that is what separates it from every
 #' other one the round sends. The account is already born and the round does
@@ -374,10 +453,17 @@ mail_credential_message <- function(row, upn, credential) {
     paste0("Chiave d'ingresso: ", credential),
     "",
     paste0(
-      "Consegnala alla persona per una via sicura, e non inoltrare questo ",
-      "messaggio. Va cambiata al primo accesso, e chi la usa per prima si ",
-      "prende l'account."
-    )
+      "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
+      "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
+      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
+      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
+      "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
+      "(togli il testo citato): quel messaggio a parte e' andato ",
+      "all'indirizzo della richiesta."
+    ),
+    "",
+    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
   )
 
   en <- c(
@@ -387,8 +473,19 @@ mail_credential_message <- function(row, upn, credential) {
     paste0("Way in: ", credential),
     "",
     paste0(
-      "Hand it over securely, and do not forward this message. It must be ",
-      "changed at first sign-in, and whoever uses it first takes the account."
+      "Hand the key to the person, and do not forward this message. If you ",
+      "have a channel other than e-mail, use it; otherwise write them a new ",
+      "e-mail with the key alone: the user name has already reached them in a ",
+      "separate message. Use the address you know from your own ",
+      "correspondence with them, not the one copied from the request. If the ",
+      "two differ, stop and reply to this message without the key (delete ",
+      "the quoted text): that separate message went to the address in the ",
+      "request."
+    ),
+    "",
+    paste0(
+      "It must be changed at first sign-in, and whoever uses it first takes ",
+      "the account."
     )
   )
 
@@ -536,10 +633,15 @@ mail_redirect_note <- function(body, to, cc) {
 #' again and retries -- the queue is the register, and no second state exists
 #' to keep aligned. The cost accepted in exchange is a duplicate, never a loss.
 #'
-#' The credential message is the asymmetry. The account is already born, the
-#' round does not create it twice, and the managed identity cannot repair it.
-#' So its failure is not a retry: it is a person's job, and it goes out under
-#' its own code so an alarm can tell the two apart.
+#' The two messages a creation sends are the asymmetry. The account is already
+#' born, the round does not create it twice, and the managed identity cannot
+#' repair it, so neither the welcome nor the key has a next round. Their
+#' failure is not a retry: it is a person's job, and each goes out under its
+#' own code, `POSTA_BENVENUTO_PERSO` and `POSTA_CREDENZIALE_PERSA`, so an alarm
+#' can tell them apart from a message that will simply be retried. They are
+#' counted apart from the outcome messages for the same reason, and a welcome
+#' that did not leave holds no row back: holding it would not send the welcome
+#' again, it would only keep the outcome out of the register.
 #'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
@@ -557,6 +659,10 @@ mail_redirect_note <- function(body, to, cc) {
 #'   `record_id` and the fields it settled. `register` is the register as
 #'   read, on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
+#' @param hosts Named character vector, instance name to host, as
+#'   `provisioning_reconcile()` receives it from the inventory. Only the
+#'   welcome message reads it, to say where the row's instance opens; a row
+#'   whose instance it does not name gets a welcome without that address.
 #'
 #' @return A list with `recapitate`, `errori` and `contatori`.
 #'
@@ -569,16 +675,31 @@ mail_round <- function(changed,
                        redirect_to = NULL,
                        copy_to = NULL,
                        reply_to = NULL,
-                       identified = NULL) {
+                       identified = NULL,
+                       hosts = NULL) {
   stopifnot(
     is.data.frame(changed), is.data.frame(register), is.list(born),
     is.function(mailer),
-    is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run)
+    is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
+    is.null(hosts) || is.character(hosts)
   )
+
+  # The address the welcome names, looked up by the row's instance. A server
+  # the map does not hold is not an error here: the welcome leaves anyway,
+  # without the address, because the account is born either way.
+  indirizzo_di <- function(server) {
+    server <- as.character(server %||% "")
+    known <- length(server) == 1L && !is.na(server) && server %in% names(hosts)
+    if (!known) {
+      return(NULL)
+    }
+    mail_instance_url(hosts[[server]])
+  }
 
   conto <- list(
     posta_partite = 0L, posta_fallite = 0L,
     credenziali_recapitate = 0L, credenziali_perse = 0L,
+    benvenuti_recapitati = 0L, benvenuti_persi = 0L,
     posta_dirottata = !is.null(redirect_to)
   )
 
@@ -660,14 +781,29 @@ mail_round <- function(changed,
   for (nato in born) {
     riga <- riga_di(nato[["record_id"]])
     if (is.null(riga)) {
-      errori <- c(errori, "POSTA_CREDENZIALE_PERSA")
+      # Neither message has a row to be composed from, so both are lost, and
+      # they are counted the way each is counted when its own send fails.
+      errori <- c(errori, "POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+      conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
       conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
       next
     }
-    consegna(
+    # The welcome is not retried either, for the reason the key is not: the
+    # account is born and nothing in the next round sends it again. A row
+    # held back for it would not bring it back, so its failure is counted and
+    # coded instead, like the key's, and the outcome goes in all the same.
+    benvenuto <- consegna(
       riga[["contact_email"]], NULL,
-      mail_welcome_message(riga, upn = nato[["upn"]])
+      mail_welcome_message(
+        riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]])
+      )
     )
+    if (isTRUE(benvenuto[["ok"]])) {
+      conto[["benvenuti_recapitati"]] <- conto[["benvenuti_recapitati"]] + 1L
+    } else {
+      conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
+      errori <- c(errori, "POSTA_BENVENUTO_PERSO")
+    }
     segreto <- consegna(
       riga[["requested_by"]], NULL,
       mail_credential_message(

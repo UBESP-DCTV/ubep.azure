@@ -103,6 +103,87 @@ test_that("le istruzioni di primo accesso non portano nessun segreto", {
 })
 
 
+test_that("il benvenuto dice da dove si apre REDCap, nelle due lingue", {
+  # eval
+  detto <- mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    url = "https://edc10.example.org/redcap/"
+  )[["body"]]
+
+  # test
+  expect_match(
+    detto, "REDCap si apre da: https://edc10.example.org/redcap/",
+    fixed = TRUE
+  )
+  expect_match(
+    detto, "REDCap opens at: https://edc10.example.org/redcap/", fixed = TRUE
+  )
+  expect_match(detto, "entro quattro ore da questo messaggio", fixed = TRUE)
+  expect_match(detto, "within four hours of this message", fixed = TRUE)
+})
+
+
+test_that("l'indirizzo dell'istanza segue il nome utente, non la chiave", {
+  # eval
+  righe <- strsplit(mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    url = "https://edc10.example.org/"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)
+
+  # test
+  # In each language: the user name, then the address and the four hours, then
+  # who hands over the key. The rest of the message is where it was.
+  expect_true(dove("ti autentichi")[[1]] < dove("REDCap si apre da")[[1]])
+  expect_true(dove("REDCap si apre da")[[1]] < dove("quattro ore")[[1]])
+  expect_true(dove("quattro ore")[[1]] < dove("non e' in questo")[[1]])
+  expect_true(dove("sign in with")[[1]] < dove("REDCap opens at")[[1]])
+  expect_true(dove("REDCap opens at")[[1]] < dove("four hours")[[1]])
+  expect_true(dove("four hours")[[1]] < dove("The way in is not")[[1]])
+})
+
+
+test_that("senza indirizzo dell'istanza il benvenuto parte com'era", {
+  # eval
+  riga <- riga_di_prova()
+  upn <- "sara.collaudozeta@ubep.unipd.it"
+  com_era <- mail_welcome_message(riga, upn = upn)
+
+  # test
+  # A missing address is not a reason to lose the message: it leaves without
+  # the two lines, and otherwise exactly as it did before they existed.
+  for (url in list(NULL, NA_character_, "")) {
+    detto <- mail_welcome_message(riga, upn = upn, url = url)
+    expect_identical(detto, com_era)
+    expect_false(grepl("REDCap si apre da", detto[["body"]], fixed = TRUE))
+    expect_false(grepl("quattro ore", detto[["body"]], fixed = TRUE))
+    expect_false(grepl("REDCap opens at", detto[["body"]], fixed = TRUE))
+    expect_match(detto[["body"]], upn, fixed = TRUE)
+  }
+})
+
+
+test_that("l'indirizzo dell'istanza si compone dall'host dell'inventario", {
+  # test
+  expect_equal(
+    mail_instance_url("edc03.example.org"), "https://edc03.example.org/"
+  )
+  expect_equal(
+    mail_instance_url("edc01.example.org/redcap"),
+    "https://edc01.example.org/redcap/"
+  )
+  # The same normalization `module_call()` makes, so a host the instances
+  # answer on cannot turn into an address nobody can open.
+  expect_equal(
+    mail_instance_url("https://edc01.example.org/redcap/"),
+    "https://edc01.example.org/redcap/"
+  )
+  expect_null(mail_instance_url(NULL))
+  expect_null(mail_instance_url(NA_character_))
+  expect_null(mail_instance_url(""))
+})
+
+
 test_that("il messaggio d'ingresso non nomina istanza, progetto, ruolo", {
   # eval
   detto <- mail_credential_message(
@@ -118,12 +199,98 @@ test_that("il messaggio d'ingresso non nomina istanza, progetto, ruolo", {
 })
 
 
+test_that("il messaggio con la chiave dice come consegnarla", {
+  # eval
+  detto <- mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # The rule the referent follows, decided on 2026-10-14: a new message with
+  # the key alone, to the address they know, never a forward of this one.
+  it <- c(
+    paste0(
+      "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
+      "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
+      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
+      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
+      "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
+      "(togli il testo citato): quel messaggio a parte e' andato ",
+      "all'indirizzo della richiesta."
+    ),
+    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
+  )
+  en <- c(
+    paste0(
+      "Hand the key to the person, and do not forward this message. If you ",
+      "have a channel other than e-mail, use it; otherwise write them a new ",
+      "e-mail with the key alone: the user name has already reached them in a ",
+      "separate message. Use the address you know from your own ",
+      "correspondence with them, not the one copied from the request. If the ",
+      "two differ, stop and reply to this message without the key (delete ",
+      "the quoted text): that separate message went to the address in the ",
+      "request."
+    ),
+    paste0(
+      "It must be changed at first sign-in, and whoever uses it first takes ",
+      "the account."
+    )
+  )
+  righe <- strsplit(detto, "\n", fixed = TRUE)[[1]]
+  for (frase in c(it, en)) {
+    expect_true(frase %in% righe, info = frase)
+  }
+  expect_false(grepl("per una via sicura", detto, fixed = TRUE))
+  expect_false(grepl("Hand it over securely", detto, fixed = TRUE))
+})
+
+
+test_that("la risposta chiesta dal messaggio con la chiave la lascia fuori", {
+  # eval
+  detto <- mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # A reply goes to reply_to, the shared mailbox of IT, and a mail client
+  # quotes the body by default: the key, still unused, would land there. So
+  # the very sentence that asks for a reply says to leave the key out of it.
+  expect_match(
+    detto, "rispondi a questo messaggio senza la chiave", fixed = TRUE
+  )
+  expect_match(detto, "reply to this message without the key", fixed = TRUE)
+})
+
+
+test_that("il messaggio con la chiave non porta il contesto della persona", {
+  # eval
+  riga <- riga_di_prova()
+  detto <- mail_credential_message(
+    riga, upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # It tells the referent to use the address they know, and does not name the
+  # one in the request: copying it from here is what the rule forbids.
+  expect_false(grepl(riga[["contact_email"]], detto, fixed = TRUE))
+  expect_false(grepl(riga[["last_name"]], detto, fixed = TRUE))
+  expect_false(grepl("https://", detto, fixed = TRUE))
+})
+
+
 test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
   # eval
   riga <- riga_di_prova()
   altri <- list(
     mail_outcome_message(riga)[["body"]],
-    mail_welcome_message(riga, upn = "sara@ubep.unipd.it")[["body"]]
+    mail_welcome_message(riga, upn = "sara@ubep.unipd.it")[["body"]],
+    mail_welcome_message(
+      riga, upn = "sara@ubep.unipd.it", url = "https://edc10.example.org/"
+    )[["body"]]
   )
 
   # test
@@ -456,6 +623,74 @@ test_that("una nascita produce due messaggi, a due destinatari diversi", {
 })
 
 
+test_that("il benvenuto porta l'indirizzo dell'istanza della sua riga", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]]
+  ))
+
+  # eval
+  mail_round(
+    changed, registro, born = nati, mailer = posta[["mailer"]],
+    dry_run = FALSE,
+    hosts = c(edc10 = "edc10.example.org/redcap", edc12 = "edc12.example.org")
+  )
+
+  # test
+  mandate <- posta[["mandate"]]()
+  a <- function(chi) {
+    Filter(function(m) identical(m[["to"]], chi), mandate)[[1L]][["body"]]
+  }
+  benvenuto <- a("sara.esterna@example.org")
+  chiave <- a("cinzia@ubep.unipd.it")
+  expect_match(
+    benvenuto, "REDCap si apre da: https://edc10.example.org/redcap/",
+    fixed = TRUE
+  )
+  expect_false(grepl("edc12", benvenuto, fixed = TRUE))
+  # The message with the key carries no context, and an address is context:
+  # with it, a key that leaked would come with the door it opens.
+  expect_false(grepl("example.org", chiave, fixed = TRUE))
+  expect_false(grepl("https://", chiave, fixed = TRUE))
+  expect_false(grepl("edc10", chiave, fixed = TRUE))
+})
+
+
+test_that("un'istanza che l'inventario non conosce non ferma il benvenuto", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]]
+  ))
+
+  for (hosts in list(NULL, c(edc12 = "edc12.example.org"))) {
+    posta <- raccoglitore()
+
+    # eval
+    mail_round(
+      changed, registro, born = nati, mailer = posta[["mailer"]],
+      dry_run = FALSE, hosts = hosts
+    )
+
+    # test
+    benvenuto <- Filter(
+      function(m) identical(m[["to"]], "sara.esterna@example.org"),
+      posta[["mandate"]]()
+    )
+    expect_length(benvenuto, 1L)
+    expect_false(
+      grepl("REDCap si apre da", benvenuto[[1L]][["body"]], fixed = TRUE)
+    )
+  }
+})
+
+
 test_that("una chiave d'ingresso non recapitata ha un codice suo", {
   # eval
   registro <- registro_di_prova()
@@ -474,6 +709,191 @@ test_that("una chiave d'ingresso non recapitata ha un codice suo", {
   # test
   expect_true("POSTA_CREDENZIALE_PERSA" %in% detto[["errori"]])
   expect_equal(detto[["contatori"]][["credenziali_perse"]], 1L)
+})
+
+
+# A mailer that fails for one recipient only, so a test can lose the welcome
+# and keep the key, or the other way round.
+rifiuta_a <- function(chi) {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list(to = to, subject = subject)
+      if (identical(to, chi)) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    },
+    mandate = function() mandate
+  )
+}
+
+
+nascita_di_prova <- function(credential, record_id = "16") {
+  list(list(
+    record_id = record_id, upn = "sara@ubep.unipd.it", credential = credential
+  ))
+}
+
+
+test_that("un benvenuto recapitato si conta, accanto alla chiave", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore()[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  conto <- detto[["contatori"]]
+  expect_equal(conto[["benvenuti_recapitati"]], 1L)
+  expect_equal(conto[["benvenuti_persi"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 0L)
+  # Not added to the outcome messages: those have a next round, and these two
+  # do not.
+  expect_equal(conto[["posta_partite"]], 0L)
+  expect_equal(conto[["posta_fallite"]], 0L)
+  expect_equal(detto[["errori"]], character())
+})
+
+
+test_that("un benvenuto non recapitato ha un codice suo", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = rifiuta_a("sara.esterna@example.org")[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  # The code alone, as for the key: the transport's word is in the journal,
+  # and this string reaches the telemetry record.
+  conto <- detto[["contatori"]]
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(conto[["benvenuti_persi"]], 1L)
+  expect_equal(conto[["benvenuti_recapitati"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 0L)
+  expect_equal(conto[["posta_fallite"]], 0L)
+})
+
+
+test_that("un benvenuto senza destinatario e' un benvenuto perso", {
+  # eval
+  registro <- registro_di_prova(contact_email = "")
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = posta[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 1L)
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(detto[["contatori"]][["benvenuti_persi"]], 1L)
+  expect_equal(detto[["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("benvenuto e chiave persi insieme si contano tutti e due", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore(riesce = FALSE)[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  conto <- detto[["contatori"]]
+  expect_equal(
+    detto[["errori"]], c("POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+  )
+  expect_equal(conto[["benvenuti_persi"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 1L)
+  expect_equal(conto[["benvenuti_recapitati"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 0L)
+})
+
+
+test_that("una nascita senza riga nel registro perde benvenuto e chiave", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro,
+    born = nascita_di_prova(finti[["parola"]], record_id = "99"),
+    mailer = posta[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  # Neither message has anybody to go to, and both are lost the same way.
+  expect_length(posta[["mandate"]](), 0L)
+  expect_equal(
+    detto[["errori"]], c("POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+  )
+  expect_equal(detto[["contatori"]][["benvenuti_persi"]], 1L)
+  expect_equal(detto[["contatori"]][["credenziali_perse"]], 1L)
+})
+
+
+test_that("un benvenuto perso non si ritenta, e non trattiene nessuna riga", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = rifiuta_a("sara.esterna@example.org")[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  # The account is already born and the round does not create it twice, so
+  # the next round has no occasion to send the welcome again. Holding the row
+  # back would not bring it back: it would only stop the outcome being written.
+  expect_equal(nrow(detto[["recapitate"]]), 1L)
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(detto[["contatori"]][["posta_partite"]], 1L)
+})
+
+
+test_that("un giro che simula o non manda porta i quattro contatori a zero", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore()[["mailer"]], dry_run = TRUE
+  )
+
+  # test
+  for (campo in c(
+    "benvenuti_recapitati", "benvenuti_persi",
+    "credenziali_recapitate", "credenziali_perse"
+  )) {
+    expect_identical(detto[["contatori"]][[campo]], 0L)
+  }
 })
 
 

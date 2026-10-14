@@ -25,7 +25,8 @@ provisioning_reconcile(
 
 \item{hosts}{Named character vector, instance name to hostname, optionally
 carrying the path REDCap is mounted under. The register names instances
-(\code{edc10}); only this map knows where they are.}
+(\code{edc10}); only this map knows where they are, and it is also where the
+welcome message takes the address it gives a new account.}
 
 \item{secrets}{Named character vector, instance name to shared secret. An
 instance whose secret could not be read is named here with \code{NA} rather

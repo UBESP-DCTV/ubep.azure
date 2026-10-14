@@ -82,7 +82,8 @@
 #' @param register_url,register_token The register's host and API token.
 #' @param hosts Named character vector, instance name to hostname, optionally
 #'   carrying the path REDCap is mounted under. The register names instances
-#'   (`edc10`); only this map knows where they are.
+#'   (`edc10`); only this map knows where they are, and it is also where the
+#'   welcome message takes the address it gives a new account.
 #' @param secrets Named character vector, instance name to shared secret. An
 #'   instance whose secret could not be read is named here with `NA` rather
 #'   than left out, so the two failures stay distinguishable.
@@ -155,6 +156,7 @@ provisioning_reconcile <- function(register_url,
         contatori = list(
           posta_partite = 0L, posta_fallite = 0L,
           credenziali_recapitate = 0L, credenziali_perse = 0L,
+          benvenuti_recapitati = 0L, benvenuti_persi = 0L,
           posta_dirottata = FALSE
         )
       ))
@@ -162,7 +164,7 @@ provisioning_reconcile <- function(register_url,
     mail_round(
       changed, register, born, mailer, dry_run,
       redirect_to = redirect_to, copy_to = copy_to, reply_to = reply_to,
-      identified = identified
+      identified = identified, hosts = hosts
     )
   }
 

@@ -13,7 +13,8 @@ mail_round(
   redirect_to = NULL,
   copy_to = NULL,
   reply_to = NULL,
-  identified = NULL
+  identified = NULL,
+  hosts = NULL
 )
 }
 \arguments{
@@ -41,6 +42,11 @@ mailer closure is what carries it to the transport.}
 \code{record_id} and the fields it settled. \code{register} is the register as
 read, on purpose; this is how the message names what the round has just
 established rather than what the referent typed.}
+
+\item{hosts}{Named character vector, instance name to host, as
+\code{provisioning_reconcile()} receives it from the inventory. Only the
+welcome message reads it, to say where the row's instance opens; a row
+whose instance it does not name gets a welcome without that address.}
 }
 \value{
 A list with \code{recapitate}, \code{errori} and \code{contatori}.
@@ -52,9 +58,14 @@ again and retries -- the queue is the register, and no second state exists
 to keep aligned. The cost accepted in exchange is a duplicate, never a loss.
 }
 \details{
-The credential message is the asymmetry. The account is already born, the
-round does not create it twice, and the managed identity cannot repair it.
-So its failure is not a retry: it is a person's job, and it goes out under
-its own code so an alarm can tell the two apart.
+The two messages a creation sends are the asymmetry. The account is already
+born, the round does not create it twice, and the managed identity cannot
+repair it, so neither the welcome nor the key has a next round. Their
+failure is not a retry: it is a person's job, and each goes out under its
+own code, \code{POSTA_BENVENUTO_PERSO} and \code{POSTA_CREDENZIALE_PERSA}, so an alarm
+can tell them apart from a message that will simply be retried. They are
+counted apart from the outcome messages for the same reason, and a welcome
+that did not leave holds no row back: holding it would not send the welcome
+again, it would only keep the outcome out of the register.
 }
 \keyword{internal}
