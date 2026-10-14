@@ -485,7 +485,8 @@ La **gravità** dice la famiglia del problema, non chi lo ha trovato:
 - **gravità 2 — «abbiamo trovato un problema»**: una o più istanze non si sono
   lasciate leggere; un'istanza non è in stato collaudato; la superficie di
   un'istanza è cambiata; le liste di indirizzi sono cambiate o divergono; gli
-  esiti sono stati calcolati e non scritti; una notifica non è stata recapitata.
+  esiti sono stati calcolati e non scritti; una notifica non è stata recapitata;
+  un'utenza è nata e il benvenuto non è arrivato alla persona.
 
 I nomi esatti, le gravità e le finestre stanno nel foglio dei parametri.
 
@@ -643,6 +644,17 @@ obbligatorio, e un pacchetto nuovo con la lavorazione vecchia muore su
 `argument "posta" is missing` — cioè il giro non ritorna, non lascia record, e
 l'allarme sull'assenza suona a gravità 1.
 
+La 0.18.0 risponde **no** a tutte e due: nessun dizionario da importare, e la
+lavorazione chiama il pacchetto come prima, perché passa già al giro la mappa
+delle istanze da cui il benvenuto prende l'indirizzo. La copia in `/opt` resta
+com'è. Ma il record del giro guadagna due colonne, `benvenuti_recapitati` e
+`benvenuti_persi`, quindi l'ordine è quello della sezione sopra: **prima** le
+due colonne nella tabella del canale e nella sua regola di raccolta, **poi** il
+pacchetto, **per ultime**, dopo aver visto arrivare un record che le porta con
+un valore, la regola d'allarme nuova sul benvenuto perso e quella sul record
+incompleto, che elenca le colonne per nome e deve guadagnare anche queste due.
+Aggiornata prima del pacchetto, la seconda scatterebbe su ogni record sano.
+
 ### La regola ritirata è disattivata, non cancellata
 
 La vecchia regola a quattro rami è ancora nella sottoscrizione, disattivata,
@@ -700,6 +712,17 @@ diversi, e la differenza va spiegata prima di essere accettata. L'impronta è un
 digest di una manciata di indirizzi: lo spazio dei candidati è minuscolo, e
 ricostruire il contenuto per enumerazione costa meno che andare a leggere la
 configurazione. È un rilevatore di cambiamento, non un segreto.
+
+**Benvenuto perso (gravità 2).** Un'utenza è nata e il messaggio che la
+annuncia alla persona non è partito: `benvenuti_persi` è maggiore di zero, e
+fra gli errori del giro c'è `POSTA_BENVENUTO_PERSO`. Non si ripara da sé: il
+giro non crea due volte la stessa utenza, quindi non ha un'altra occasione di
+mandarlo. E il messaggio con la chiave dice al referente che il nome utente è
+già arrivato in un messaggio a parte, quindi la persona riceverebbe la sola
+chiave: il nome utente, l'indirizzo dell'istanza e i passi del primo accesso
+glieli manda IT, a mano. Per sapere perché non è partito, guardare la riga nel
+registro: un `contact_email` vuoto spiega il caso da solo; altrimenti il journal
+della lavorazione riporta la risposta del servizio di posta.
 
 **Prima di inseguire un allarme isolato.** L'ingestione ha consistenza
 eventuale: per qualche decina di secondi due query identiche possono vedere
