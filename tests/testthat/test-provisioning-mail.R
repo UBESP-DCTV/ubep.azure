@@ -941,6 +941,55 @@ test_that("una riga trattenuta dice quale sigillo incollare, e dove", {
 })
 
 
+riga_trattenuta <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "42", outcome = "held",
+      outcome_detail = "SIGILLO_DIVERSO:9f3c1a7b04de",
+      outcome_at = "2026-09-02 04:02", request_status = "active",
+      first_name = "Mario", last_name = "Rossi",
+      contact_email = "mario.rossi@example.org",
+      server = "edc10", project_id = "9003", role_name = "data entry",
+      username = "mario.rossi@ubep.unipd.it", applied_as = "",
+      seal_now = "9f3c1a7b04de"
+    ),
+    list(...)
+  )
+}
+
+
+test_that("la riga trattenuta dice che approva solo chi l'ha creata", {
+  # eval
+  corpo <- mail_outcome_message(
+    riga_trattenuta(edited_by = "bruno.verdi@ubep.unipd.it")
+  )[["body"]]
+
+  # test
+  # The message goes to the creator and has to say why: the approval of
+  # anybody else, the author of the change included, does not count. Sending
+  # the reader to "another referent" would ask for an act the round ignores.
+  expect_match(corpo, "solo chi l'ha creata", fixed = TRUE)
+  expect_match(corpo, "Only whoever created the request", fixed = TRUE)
+  expect_false(grepl("un altro referente", corpo, fixed = TRUE))
+  expect_false(grepl("another referent", corpo, fixed = TRUE))
+  # Who changed the row is what the creator needs to judge the change.
+  expect_match(
+    corpo, "Modificata da: bruno.verdi@ubep.unipd.it", fixed = TRUE
+  )
+  expect_match(corpo, "Edited by: bruno.verdi@ubep.unipd.it", fixed = TRUE)
+})
+
+
+test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", {
+  # eval
+  corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
+
+  # test
+  expect_match(corpo, "Modificata da: non stabilito", fixed = TRUE)
+  expect_match(corpo, "Edited by: not established", fixed = TRUE)
+})
+
+
 test_that("solo la riga trattenuta va al creatore, le altre a requested_by", {
   # eval
   riga <- list(

@@ -903,7 +903,15 @@ provisioning_reconcile <- function(register_url,
   # The same minutes the identity door wrote, so the message names what the
   # round settled instead of what the referent left blank. And the creator the
   # log named, which is where a held row's message goes: it asks its reader
-  # to approve, and the creator is the only one whose approval counts.
+  # to approve, and the creator is the only one whose approval counts. With
+  # it, who changed the row, which is what the creator has to judge.
+  edited_by <- vapply(seq_along(record_ids), function(i) {
+    if (!tampered[[i]]) {
+      return("")
+    }
+    authors <- log_change_authors(events, record_ids[[i]])
+    if (anyNA(authors)) "" else paste(authors, collapse = ", ")
+  }, character(1))
   posta <- posted(
     changed, born,
     identified = data.frame(
@@ -911,6 +919,7 @@ provisioning_reconcile <- function(register_url,
       username = resolved_names,
       identity = verdicts,
       creator = creators,
+      edited_by = edited_by,
       stringsAsFactors = FALSE
     )
   )

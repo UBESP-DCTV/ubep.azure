@@ -142,45 +142,72 @@ mail_outcome_message <- function(row) {
 
   # A held row is the only outcome that asks the reader to do something whose
   # instructions are not in the work instruction, and the value it asks them to
-  # paste exists nowhere else: the current seal is computed from the row, not
-  # stored beside it. A referent who is not told it cannot approve anything,
-  # and a protection nobody can clear is an outage with a nicer name.
+  # paste is computed from the row: a referent who is not told it cannot
+  # approve anything, and a protection nobody can clear is an outage with a
+  # nicer name. The message goes to whoever created the row, the only person
+  # whose approval counts, so it says that, and names who changed the row:
+  # the creator is the one who has to judge the change.
   trattenuta <- if (identical(as.character(row[["outcome"]]), "held")) {
     sigillo <- mail_said_or(row[["seal_now"]], "non disponibile, chiedi a IT")
     list(
       it = c(
         "",
         paste0(
-          "Questa riga e' stata modificata dopo essere stata eseguita, e il ",
-          "canale non ha riapplicato la modifica. Se la modifica e' giusta, ",
-          "falla approvare da un altro referente: deve incollare questo ",
-          "sigillo nel campo approved_seal della riga."
+          "Questa richiesta e' stata modificata dopo essere stata eseguita, e ",
+          "il canale non ha applicato la modifica perche' non risulta fatta ",
+          "solo da chi l'ha creata. La puo' approvare solo chi l'ha creata: ",
+          "questo messaggio va a chi risulta averla creata."
+        ),
+        paste0("Modificata da: ", mail_said_or(
+          row[["edited_by"]], "non stabilito dal registro degli eventi"
+        )),
+        "",
+        paste0(
+          "Se la modifica e' giusta, incolla questo sigillo nel campo ",
+          "approved_seal della riga:"
         ),
         "",
         paste0("    ", sigillo),
         "",
         paste0(
-          "Vale per questa modifica e non per quelle dopo, e chi ha fatto la ",
-          "modifica non puo' approvarla da se': il registro degli eventi di ",
-          "REDCap dice chi ha scritto che cosa. Approvata, la modifica ",
-          "diventa effettiva al giro successivo."
+          "Vale per questa versione della riga e non per quelle dopo: se la ",
+          "riga cambia ancora, arriva un sigillo nuovo. L'approvazione di ",
+          "chiunque altro, compreso chi ha fatto la modifica, non vale: il ",
+          "registro degli eventi di REDCap dice chi ha creato la riga e chi ",
+          "ha scritto che cosa. Approvata, la modifica diventa effettiva al ",
+          "giro successivo. Se la modifica non e' giusta, riporta i campi ai ",
+          "valori di prima: la riga torna a quella eseguita e non c'e' niente ",
+          "da approvare."
         )
       ),
       en = c(
         "",
         paste0(
-          "This row was edited after it had been applied, and the channel did ",
-          "not apply the edit. If the edit is right, have another referent ",
-          "approve it: they paste this seal into the row's approved_seal ",
-          "field."
+          "This request was edited after it had been applied, and the channel ",
+          "did not apply the edit because it is not on record as made by the ",
+          "request's creator alone. Only whoever created the request can ",
+          "approve it: this message goes to whoever is on record as its ",
+          "creator."
+        ),
+        paste0("Edited by: ", mail_said_or(
+          row[["edited_by"]], "not established from the event log"
+        )),
+        "",
+        paste0(
+          "If the edit is right, paste this seal into the row's approved_seal ",
+          "field:"
         ),
         "",
         paste0("    ", sigillo),
         "",
         paste0(
-          "It approves this edit and no later one, and whoever made the edit ",
-          "cannot approve it themselves: REDCap's event log says who wrote ",
-          "what. Once approved, the edit takes effect on the next round."
+          "It approves this version of the row and no later one: if the row ",
+          "changes again, a new seal follows. An approval by anybody else, ",
+          "including whoever made the edit, does not count: REDCap's event ",
+          "log says who created the row and who wrote what. Once approved, ",
+          "the edit takes effect on the next round. If the edit is wrong, set ",
+          "the fields back to what they were: the row returns to the version ",
+          "that was applied, with nothing to approve."
         )
       )
     )
@@ -683,8 +710,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
 #' @param identified What this round settled about each row, as a frame with
-#'   `record_id` and the fields it settled: the identity, and `creator`, who
-#'   the creation log says made the row. `register` is the register as read,
+#'   `record_id` and the fields it settled: the identity; `creator`, who the
+#'   creation log says made the row; `edited_by`, who changed a held row since
+#'   it was applied, as the row's log says. `register` is the register as read,
 #'   on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
 #' @param hosts Named character vector, instance name to host, as

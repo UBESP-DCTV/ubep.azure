@@ -2273,6 +2273,11 @@ test_that("la riga trattenuta si annuncia a chi l'ha creata, non a chi la riga n
   # anybody else it asks for an act that will not count.
   destinatari <- vapply(posta[["mandate"]](), `[[`, "", "to")
   expect_equal(destinatari, anna)
+  # And it names who changed the row, read from the row's log.
+  expect_match(
+    posta[["mandate"]]()[[1L]][["body"]], paste("Modificata da:", bruno),
+    fixed = TRUE
+  )
 })
 
 
