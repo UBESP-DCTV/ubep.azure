@@ -438,14 +438,17 @@ log_creators <- function(events, records) {
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
+#' @param fields The intent fields. Passed in by a caller that asks about
+#'   many rows, since deriving them reads the packaged dictionary.
 #'
 #' @return A character vector of usernames, newest first and each once;
 #'   `character()` when nobody changed an intent field; `NA_character_` when
 #'   the log cannot say who did.
 #'
 #' @keywords internal
-log_change_authors <- function(events, record) {
-  stopifnot(is.data.frame(events))
+log_change_authors <- function(events, record,
+                               fields = register_intent_fields()) {
+  stopifnot(is.data.frame(events), is.character(fields))
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record)
@@ -461,7 +464,7 @@ log_change_authors <- function(events, record) {
   }
 
   authors <- trimws(as.character(mine[["username"]]))
-  edits <- log_wrote(mine, register_intent_fields()) & !authors %in% channel
+  edits <- log_wrote(mine, fields) & !authors %in% channel
   if (any(edits & !nzchar(authors))) {
     return(NA_character_)
   }
@@ -536,8 +539,11 @@ seal_needs_approval <- function(register, events, creators) {
   )
 
   ids <- as.character(register[["record_id"]])
+  intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
-    change_needs_approval(log_change_authors(events, ids[[i]]), creators[[i]])
+    change_needs_approval(
+      log_change_authors(events, ids[[i]], intent), creators[[i]]
+    )
   }, logical(1))
 }
 

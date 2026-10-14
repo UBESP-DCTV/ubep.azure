@@ -410,7 +410,10 @@ provisioning_reconcile <- function(register_url,
   # whatever the edit says on the authority of a round that ran before the
   # edit existed, and of a request somebody else filed. The rule is in
   # `change_needs_approval()` and nowhere else.
-  awaits <- tampered & seal_needs_approval(register, events, creators)
+  awaits <- tampered
+  awaits[tampered] <- seal_needs_approval(
+    register[tampered, , drop = FALSE], events, creators[tampered]
+  )
   cleared <- awaits & seal_approved(register, events, creators)
   held <- awaits & !cleared
   standing <- (admitted | awaiting) & !held
@@ -431,6 +434,7 @@ provisioning_reconcile <- function(register_url,
   # it differs, already there when it does not.
   register_after <- register
   register_after[["username"]] <- resolved_names
+  seal_after <- request_seal(register_after)
 
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
@@ -451,9 +455,7 @@ provisioning_reconcile <- function(register_url,
       if (held[[i]]) {
         return(outcome_payload(
           record_ids[[i]], "held",
-          detail = paste0(
-            "SIGILLO_DIVERSO:", request_seal(register_after[i, , drop = FALSE])
-          ),
+          detail = paste0("SIGILLO_DIVERSO:", seal_after[[i]]),
           at = at
         ))
       }
@@ -905,11 +907,12 @@ provisioning_reconcile <- function(register_url,
   # log named, which is where a held row's message goes: it asks its reader
   # to approve, and the creator is the only one whose approval counts. With
   # it, who changed the row, which is what the creator has to judge.
+  intent <- register_intent_fields()
   edited_by <- vapply(seq_along(record_ids), function(i) {
     if (!tampered[[i]]) {
       return("")
     }
-    authors <- log_change_authors(events, record_ids[[i]])
+    authors <- log_change_authors(events, record_ids[[i]], intent)
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
   posta <- posted(
@@ -961,7 +964,7 @@ provisioning_reconcile <- function(register_url,
         i <- match(id, record_ids)
         seal_payload(
           id,
-          request_seal(register_after[i, , drop = FALSE]),
+          seal_after[[i]],
           # Applied while waiting for an approval says an approval carried
           # this row here. A change the creator made alone was nobody's to
           # contest, and leaves the row as it was. Otherwise the row keeps

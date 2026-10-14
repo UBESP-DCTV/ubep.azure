@@ -4,12 +4,15 @@
 \alias{log_change_authors}
 \title{Who changed a row since the round last applied it}
 \usage{
-log_change_authors(events, record)
+log_change_authors(events, record, fields = register_intent_fields())
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
 
 \item{record}{The record id to look at.}
+
+\item{fields}{The intent fields. Passed in by a caller that asks about
+many rows, since deriving them reads the packaged dictionary.}
 }
 \value{
 A character vector of usernames, newest first and each once;
