@@ -2308,6 +2308,105 @@ test_that("una modifica fatta mentre il giro girava non diventa di chi ha creato
 })
 
 
+test_that("chi cambia una richiesta di un altro non ancora eseguita la ferma", { # nolint: line_length_linter.
+  # eval
+  # Anna filed the row; before any round applied it, Bruno, who manages
+  # nothing on 9003, set the role to admin. The row carries no seal, whether
+  # no round has reached it yet or the last one left it in the queue.
+  esiti <- vapply(c("", "pending", "transport_error"), function(prima) {
+    esito <- giro(
+      registro_doppio(
+        record_json(list(record_id = "1", role_name = "admin", outcome = prima)),
+        eventi = eventi_json(
+          list(username = bruno, details = "role_name = 'admin'")
+        )
+      ),
+      istanza_che_scrive(),
+      dry_run = FALSE
+    )
+    paste(as.character(esito[["esiti"]][["outcome"]]), length(scritture()))
+  }, character(1))
+
+  # test
+  # Carried out, the change would run on Anna's authority -- hers are the
+  # rights the gate checks -- and nobody asked her. A request is its
+  # creator's before the round applies it as much as after.
+  expect_equal(unname(esiti), rep("held 0", 3L))
+})
+
+
+test_that("chi ha creato una richiesta non ancora eseguita la cambia, e il giro la esegue", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1")),
+      eventi = eventi_json(
+        list(username = anna, details = "role_name = 'data entry'"),
+        list(
+          username = anna, action = "Create record 1",
+          details = "record_id = '1', role_name = 'read only'"
+        )
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("l'approvazione di chi l'ha creata sblocca una richiesta non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  riga <- list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", role_name = "read only"
+  )
+  approvato <- request_seal(do.call(riga_come_registro, riga))
+  esito <- giro(
+    registro_doppio(
+      record_json(c(riga, list(approved_seal = approvato))),
+      eventi = eventi_json(
+        list(
+          username = anna,
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        list(username = bruno, details = "role_name = 'read only'")
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("un log illeggibile tiene anche una richiesta non ancora eseguita", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Whether somebody else changed the request is the log's to say, and the
+  # log did not answer: the row waits, and the reason reaches the round's
+  # record, where IT reads it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})
+
+
 test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # eval
   approvato <- request_seal(riga_come_registro(record_id = "1"))

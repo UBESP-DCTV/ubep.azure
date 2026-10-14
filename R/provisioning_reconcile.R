@@ -34,12 +34,15 @@
 #' asked only when a row is still standing to be judged or has changed since
 #' it was applied.
 #'
-#' **A row changed after it was applied waits for its creator**, unless the
-#' creator made the change alone. The same creator the gate judges is the one
-#' person who can approve somebody else's change, so whoever approves has
-#' already had their rights on the project checked, and will again on every
-#' round. Who made the change is read from that row's own log, whole, and
-#' without the round's own writes; the rule is `change_needs_approval()`.
+#' **A row somebody other than its creator changed waits for its creator**,
+#' whether the round has applied it already or not yet. The same creator the
+#' gate judges is the one person who can approve somebody else's change, so
+#' whoever approves has already had their rights on the project checked, and
+#' will again on every round. Who made the change is read from that row's own
+#' log, whole, and without the round's own writes; the rule is
+#' `change_needs_approval()`. The log is asked once per row that needs it: a
+#' row whose seal moved, and a row not applied yet that the round could act
+#' on.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
@@ -385,21 +388,39 @@ provisioning_reconcile <- function(register_url,
     }
   }
 
-  # The log is read only for a row that needs it, one call per changed row and
-  # with no window: the question is who touched this row since the round last
-  # applied it, and that can be longer ago than any window. A window of a day
-  # lost the edit and kept the approval that came after it, so the change had
-  # no author and the approval passed for somebody else's. On the ordinary
-  # night nothing is tampered with and the register is never asked at all.
+  # A row the round has never applied carries no seal to compare, and is the
+  # creator's all the same: changed by somebody else while it waits in the
+  # queue, it would be carried out on the creator's authority -- the gate
+  # checks the creator's rights -- with nobody asking the creator. So its log
+  # is read too, whenever the round could act on it: the gate let it through
+  # or it waits to be created, and its creator is known. A row whose creator
+  # could not be read stops at the gate anyway, on a `TRASPORTO_` code.
+  fresh <- !nzchar(sealed) & (admitted | awaiting) & nzchar(creators)
+  checked <- tampered | fresh
+
+  # The log is read only for a row that needs it, one call per row and with no
+  # window: the question is who touched this row since the round last applied
+  # it, or since it was filed, and that can be longer ago than any window. A
+  # window of a day lost the edit and kept the approval that came after it, so
+  # the change had no author and the approval passed for somebody else's. On
+  # the ordinary night nothing is tampered with, every row has been applied,
+  # and the register is never asked at all; a row waiting to be applied costs
+  # one call for each round it waits.
   events <- log_frame(list())
-  for (id in record_ids[tampered]) {
-    reading_log <- register_log(register_url, register_token, record = id)
+  unread <- logical(length(record_ids))
+  for (i in which(checked)) {
+    reading_log <- register_log(
+      register_url, register_token, record = record_ids[[i]]
+    )
     # A log that could not be read leaves the row held. "I could not ask who
     # did this" is not "the creator did it", and between the two ways of being
-    # wrong this is the one that does not grant.
+    # wrong this is the one that does not grant. It has to be said, not left
+    # to the empty log: on a row never applied an empty log reads as nobody
+    # having changed it.
     if (isTRUE(reading_log[["ok"]])) {
       events <- rbind(events, reading_log[["log"]])
     } else {
+      unread[[i]] <- TRUE
       log_errors <- c(log_errors, reading_log[["errors"]])
     }
   }
@@ -412,10 +433,11 @@ provisioning_reconcile <- function(register_url,
   # `change_needs_approval()` and nowhere else. An edit made while an earlier
   # round ran counts as well: it sits below that round's seal, which covers
   # only what the round had read, and `log_pending_authors()` finds it there.
-  awaits <- tampered
-  awaits[tampered] <- seal_needs_approval(
-    register[tampered, , drop = FALSE], events, creators[tampered]
+  awaits <- checked
+  awaits[checked] <- seal_needs_approval(
+    register[checked, , drop = FALSE], events, creators[checked]
   )
+  awaits <- awaits | unread
   cleared <- awaits & seal_approved(register, events, creators)
   held <- awaits & !cleared
   standing <- (admitted | awaiting) & !held
@@ -911,7 +933,7 @@ provisioning_reconcile <- function(register_url,
   # it, who changed the row, which is what the creator has to judge.
   intent <- register_intent_fields()
   edited_by <- vapply(seq_along(record_ids), function(i) {
-    if (!tampered[[i]]) {
+    if (!checked[[i]]) {
       return("")
     }
     authors <- log_pending_authors(

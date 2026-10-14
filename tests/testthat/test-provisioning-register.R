@@ -865,6 +865,21 @@ test_that("solo una modifica tutta del creatore non chiede approvazione", {
 })
 
 
+test_that("una richiesta mai eseguita aspetta solo se qualcun altro l'ha cambiata", { # nolint: line_length_linter.
+  # eval, test
+  # With no seal there is no evidence that the row moved, so a log that
+  # names nobody says nobody changed it. What it does name is judged as on
+  # an applied row.
+  expect_false(change_needs_approval(character(), creatrice, sealed = FALSE))
+  expect_false(change_needs_approval(creatrice, creatrice, sealed = FALSE))
+  expect_true(change_needs_approval(
+    c(creatrice, "bruno.verdi@ubep.unipd.it"), creatrice, sealed = FALSE
+  ))
+  expect_true(change_needs_approval(NA_character_, creatrice, sealed = FALSE))
+  expect_true(change_needs_approval(character(), "", sealed = FALSE))
+})
+
+
 test_that("il canale e' chi ha scritto i campi che scrive solo lui", {
   # eval
   # Newest first. The channel's username rewrite carries `username` alone,

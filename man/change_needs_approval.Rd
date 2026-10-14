@@ -2,15 +2,18 @@
 % Please edit documentation in R/provisioning_register.R
 \name{change_needs_approval}
 \alias{change_needs_approval}
-\title{Whether a change to an applied row waits for an approval}
+\title{Whether a change to a request waits for an approval}
 \usage{
-change_needs_approval(authors, creator)
+change_needs_approval(authors, creator, sealed = TRUE)
 }
 \arguments{
 \item{authors}{Who has a hand in the version the round would carry out,
 as \code{log_pending_authors()} answers.}
 
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
+
+\item{sealed}{Whether the row carries the seal of an execution, whose
+mismatch is what says it changed.}
 }
 \value{
 \code{TRUE} when the change has to wait for the creator's approval.
@@ -31,6 +34,12 @@ creator saw the other one, and an approval is the act that does;
 \item a change whose authors or whose creator the log cannot establish waits
 too. "I could not establish who did this" is not "the creator did it".
 }
+
+It holds whether or not the round has applied the row yet. The one
+difference is what a log naming nobody means. On a row that carries a seal
+the seal has already moved, so the row did change and nobody is on record
+for it: it waits. On a row never applied there is no such evidence, and a
+log that names nobody says nobody changed it.
 
 A revocation, \code{request_status} moving to \code{revoked}, follows the same rule
 for now. Whether a referent who manages the project may withdraw somebody

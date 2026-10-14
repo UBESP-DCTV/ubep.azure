@@ -617,7 +617,7 @@ log_pending_authors <- function(events, record, creator,
 }
 
 
-#' Whether a change to an applied row waits for an approval
+#' Whether a change to a request waits for an approval
 #'
 #' **The one place the rule lives**, decided on 2026-10-14. A request belongs
 #' to whoever created it, and the creator answers for it: the scope gate asks
@@ -632,6 +632,12 @@ log_pending_authors <- function(events, record, creator,
 #' - a change whose authors or whose creator the log cannot establish waits
 #'   too. "I could not establish who did this" is not "the creator did it".
 #'
+#' It holds whether or not the round has applied the row yet. The one
+#' difference is what a log naming nobody means. On a row that carries a seal
+#' the seal has already moved, so the row did change and nobody is on record
+#' for it: it waits. On a row never applied there is no such evidence, and a
+#' log that names nobody says nobody changed it.
+#'
 #' A revocation, `request_status` moving to `revoked`, follows the same rule
 #' for now. Whether a referent who manages the project may withdraw somebody
 #' else's request without its creator is still open; if it is allowed, this
@@ -641,21 +647,27 @@ log_pending_authors <- function(events, record, creator,
 #' @param authors Who has a hand in the version the round would carry out,
 #'   as `log_pending_authors()` answers.
 #' @param creator Who created the row, as `log_creators()` answers.
+#' @param sealed Whether the row carries the seal of an execution, whose
+#'   mismatch is what says it changed.
 #'
 #' @return `TRUE` when the change has to wait for the creator's approval.
 #'
 #' @keywords internal
-change_needs_approval <- function(authors, creator) {
+change_needs_approval <- function(authors, creator, sealed = TRUE) {
   stopifnot(
-    is.character(authors), is.character(creator), length(creator) == 1L
+    is.character(authors), is.character(creator), length(creator) == 1L,
+    is.logical(sealed), length(sealed) == 1L, !is.na(sealed)
   )
 
   creator <- trimws(creator)
   if (is.na(creator) || !nzchar(creator)) {
     return(TRUE)
   }
-  if (length(authors) == 0L || anyNA(authors)) {
+  if (anyNA(authors)) {
     return(TRUE)
+  }
+  if (length(authors) == 0L) {
+    return(sealed)
   }
   any(authors != creator)
 }
@@ -665,6 +677,7 @@ change_needs_approval <- function(authors, creator) {
 #'
 #' `change_needs_approval()` asked once per row, of the authors the row's log
 #' names, `log_pending_authors()`, and of the creator the creation log names.
+#' Whether the row carries a seal is read from its `applied_seal`.
 #'
 #' @param register The register as read, one row per request.
 #' @param events The event log of the rows that changed, as `register_log()`
@@ -683,11 +696,14 @@ seal_needs_approval <- function(register, events, creators) {
   )
 
   ids <- as.character(register[["record_id"]])
+  sealed <- trimws(as.character(register[["applied_seal"]] %||% ""))
+  sealed[is.na(sealed)] <- ""
   intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
     change_needs_approval(
       log_pending_authors(events, ids[[i]], creators[[i]], intent),
-      creators[[i]]
+      creators[[i]],
+      sealed = nzchar(sealed[[i]])
     )
   }, logical(1))
 }

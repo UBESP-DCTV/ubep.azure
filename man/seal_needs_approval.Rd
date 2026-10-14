@@ -22,5 +22,6 @@ it is handed, so the caller restricts it to the rows that changed.
 \description{
 \code{change_needs_approval()} asked once per row, of the authors the row's log
 names, \code{log_pending_authors()}, and of the creator the creation log names.
+Whether the row carries a seal is read from its \code{applied_seal}.
 }
 \keyword{internal}
