@@ -2276,6 +2276,90 @@ test_that("la riga trattenuta si annuncia a chi l'ha creata, non a chi la riga n
 })
 
 
+test_that("una seconda modifica a una riga trattenuta porta al creatore il sigillo nuovo", { # nolint: line_length_linter.
+  # eval
+  # The first round holds Bruno's change and tells Anna its seal.
+  prima <- posta_raccolta()
+  esito_prima <- giro_cambiata(list(cambio(bruno)), mailer = prima[["mailer"]])
+  # Then Bruno changes the role again, before Anna has approved anything. The
+  # register carries what the first round wrote.
+  dopo <- posta_raccolta()
+  esito_dopo <- giro_cambiata(
+    list(cambio(bruno, "role_name = 'data manager'"), cambio(bruno)),
+    riga = riga_cambiata(
+      role_name = "data manager", outcome = "held",
+      outcome_detail = as.character(esito_prima[["esiti"]][["outcome_detail"]]),
+      seal_state = "modified"
+    ),
+    mailer = dopo[["mailer"]]
+  )
+
+  # test
+  # The seal Anna holds approves a version of the row that no longer exists.
+  # Without a message carrying the new one she cannot approve the row at all:
+  # it would stay held with nobody told why.
+  expect_equal(as.character(esito_dopo[["esiti"]][["outcome"]]), "held")
+  mandate <- dopo[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_match(
+    mandate[[1L]][["body"]], sigillo_cambiata(role_name = "data manager"),
+    fixed = TRUE
+  )
+  # The seal is in the outcome detail too, which is what makes the row count
+  # as changed, and what a referent who lost the message finds on the row.
+  expect_equal(
+    as.character(esito_dopo[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", sigillo_cambiata(role_name = "data manager"))
+  )
+})
+
+
+test_that("una riga trattenuta che non cambia non riscrive al creatore", {
+  # eval
+  prima <- posta_raccolta()
+  esito_prima <- giro_cambiata(list(cambio(bruno)), mailer = prima[["mailer"]])
+  dopo <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(bruno)),
+    riga = riga_cambiata(
+      outcome = "held",
+      outcome_detail = as.character(esito_prima[["esiti"]][["outcome_detail"]]),
+      seal_state = "modified"
+    ),
+    mailer = dopo[["mailer"]]
+  )
+
+  # test
+  # One message per version of the row, not one per round.
+  expect_length(prima[["mandate"]](), 1L)
+  expect_length(dopo[["mandate"]](), 0L)
+})
+
+
+test_that("il sigillo della riga trattenuta e' quello che la riga avra' dopo il giro", { # nolint: line_length_linter.
+  # eval
+  # Bruno blanks the username and changes the role; the round writes the
+  # username back in this same pass, before the message leaves.
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    list(cambio(bruno, "role_name = 'read only', username = ''")),
+    riga = riga_cambiata(username = ""),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Anna reads the message after the round, on a row that carries the
+  # resolved username: a seal of the row as read would never match it.
+  atteso <- sigillo_cambiata()
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", atteso)
+  )
+  expect_match(posta[["mandate"]]()[[1L]][["body"]], atteso, fixed = TRUE)
+})
+
+
 test_that("senza il creatore la riga trattenuta si annuncia a requested_by", {
   # eval
   posta <- posta_raccolta()

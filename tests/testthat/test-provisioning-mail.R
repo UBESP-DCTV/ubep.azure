@@ -1009,3 +1009,32 @@ test_that("il giro mette nel messaggio il sigillo che la riga vale adesso", {
   # matches what they are looking at.
   expect_true(grepl(request_seal(registro), corpo, fixed = TRUE))
 })
+
+
+test_that("il sigillo del messaggio porta lo username che il giro ha appena scritto", { # nolint: line_length_linter.
+  # eval
+  registro <- registro_di_prova(outcome = "held", username = "")
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  risolto <- registro
+  risolto[["username"]] <- "mario.rossi@ubep.unipd.it"
+
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE,
+    identified = data.frame(
+      record_id = registro[["record_id"]],
+      username = "mario.rossi@ubep.unipd.it", identity = "existing",
+      stringsAsFactors = FALSE
+    )
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+
+  # test
+  # The round writes the username it resolved through its own door before the
+  # message leaves, and `username` is inside the seal. By the time the
+  # referent pastes the value the row holds the resolved name, so the seal
+  # computed from the row as read would never match it.
+  expect_true(grepl(request_seal(risolto), corpo, fixed = TRUE))
+  expect_false(grepl(request_seal(registro), corpo, fixed = TRUE))
+})

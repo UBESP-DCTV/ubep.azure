@@ -415,6 +415,23 @@ provisioning_reconcile <- function(register_url,
   held <- awaits & !cleared
   standing <- (admitted | awaiting) & !held
 
+  # The register as this round will have left it, and not as it read it. The
+  # round resolves `username` and writes it back in this same pass, so sealing
+  # the row as read would seal a version the register is about to stop
+  # holding: `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- and the next round would find every applied
+  # row modified, by the round's own hand. The mechanism would accuse itself
+  # on the ordinary path, on every row, one pass after each apply.
+  #
+  # The seal a held row asks its creator to paste is computed on it for the
+  # same reason: the creator reads the row after this round has written the
+  # username, and a seal of the row as read would never match it.
+  #
+  # `resolved_names` is what the register ends up with either way: written when
+  # it differs, already there when it does not.
+  register_after <- register
+  register_after[["username"]] <- resolved_names
+
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(which(!standing), function(i) {
@@ -424,9 +441,20 @@ provisioning_reconcile <- function(register_url,
       # after it was applied" is the one that names what happened and who can
       # undo it. `ambiguous` would send the referent to fix a name nobody
       # complained about until the edit.
+      #
+      # The detail carries the seal the creator has to paste, and that is what
+      # tells the creator about a second change: the seal moves with it, so
+      # the outcome reads as changed and the message leaves again with the
+      # new value, while the one the creator holds approves nothing any more.
+      # It is also where a referent who lost the message finds it, on the row
+      # itself.
       if (held[[i]]) {
         return(outcome_payload(
-          record_ids[[i]], "held", detail = "SIGILLO_DIVERSO", at = at
+          record_ids[[i]], "held",
+          detail = paste0(
+            "SIGILLO_DIVERSO:", request_seal(register_after[i, , drop = FALSE])
+          ),
+          at = at
         ))
       }
 
@@ -901,18 +929,9 @@ provisioning_reconcile <- function(register_url,
   # apply anything. Rewriting it would adopt the very edit the round declined,
   # and the next pass would find the row conforming -- the protection would
   # erase its own evidence one round after firing.
-  # The register as this round will have left it, and not as it read it. The
-  # round resolves `username` and writes it back in this same pass, so sealing
-  # the row as read would seal a version the register is about to stop
-  # holding: `username` is inside the seal -- it has to be, since changing it
-  # changes who gets the access -- and the next round would find every applied
-  # row modified, by the round's own hand. The mechanism would accuse itself
-  # on the ordinary path, on every row, one pass after each apply.
   #
-  # `resolved_names` is what the register ends up with either way: written when
-  # it differs, already there when it does not.
-  register_after <- register
-  register_after[["username"]] <- resolved_names
+  # The seal of an applied row is computed on `register_after`, the register
+  # as this round will have left it, for the reason given where it is built.
 
   # `approved` is sticky, and it has to be to mean anything. Recomputed as
   # `intact` on every ordinary round it would name a state that lasts one

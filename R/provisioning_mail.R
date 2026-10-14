@@ -750,24 +750,25 @@ mail_round <- function(changed,
       return(NULL)
     }
     riga <- as.list(register[at, , drop = FALSE])
+    found <- if (is.null(identified)) {
+      NA_integer_
+    } else {
+      match(as.character(record_id), as.character(identified[["record_id"]]))
+    }
+    if (!is.na(found)) {
+      for (campo in setdiff(names(identified), "record_id")) {
+        riga[[campo]] <- identified[[campo]][[found]]
+      }
+    }
     # What the row is worth now, which a held message has to carry: it is
-    # computed from the row and stored nowhere, so this is the only place it
-    # exists. Taken from `register` -- the register as read -- for the reason
-    # the whole frame is: a seal computed from what the round has been
-    # rewriting would name a version of the row the referent is not looking at.
-    riga[["seal_now"]] <- request_seal(register[at, , drop = FALSE])
-    if (is.null(identified)) {
-      return(riga)
-    }
-    found <- match(
-      as.character(record_id), as.character(identified[["record_id"]])
+    # computed from the row, and the round writes it into the outcome detail
+    # too. Computed after what the round settled, and not on the register as
+    # read: the round has already written the resolved username when this
+    # message leaves, `username` is inside the seal, and the referent pastes
+    # the value into a row that carries the resolved name.
+    riga[["seal_now"]] <- request_seal(
+      as.data.frame(riga, stringsAsFactors = FALSE, check.names = FALSE)
     )
-    if (is.na(found)) {
-      return(riga)
-    }
-    for (campo in setdiff(names(identified), "record_id")) {
-      riga[[campo]] <- identified[[campo]][[found]]
-    }
     riga
   }
 
