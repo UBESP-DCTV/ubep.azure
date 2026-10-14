@@ -25,12 +25,45 @@
   somebody other than the creator stops counting, and the row stays held
   until the creator approves.
 
+* **An approval counts once, and only after what it approves.**
+  `approved_seal` is never blanked, so an approval the round had already
+  carried out approved again any later change that brought the row back to
+  the same content: a role set to admin by somebody else and approved, set
+  back by the creator, set to admin again, was granted with nobody asked; a
+  request the creator revoked came back the same way. And a seal pasted
+  before the change it names, which can be computed in advance since it is a
+  public hash of the intent fields, approved that change as soon as it was
+  made. An approval now counts only when it stands above the round's last
+  execution and above every change by somebody other than the creator, in
+  the row's log (`log_approval_stands()`).
+
+* **A change made while the round runs is not the creator's.** The round
+  seals the row it read at the start and writes the seal last, so an edit
+  made while it swept the tenant and talked to the instances landed below the
+  seal, dropped out of the authors, and was carried out with the creator's
+  next edit. The round now also reads the stretch between the last execution
+  and the one before it: a change by anybody else there counts, unless the
+  creator's approval of the seal that execution wrote stands above it
+  (`log_uncovered_authors()`; `log_pending_authors()` is what the rule now
+  judges).
+
+* **A request not applied yet is protected too.** A row with no seal, just
+  filed or left in the queue by a transport or data error, could be changed
+  by anybody and the round carried it out on its creator's authority, without
+  reading its log. The round now reads the log of every row not applied yet
+  that it could act on and whose creator it knows, and applies the same rule;
+  a log that names nobody says nobody changed it, since there is no seal that
+  moved, and a log that cannot be read holds the row. It costs one call per
+  waiting row for each round it waits. Setting the fields back does not
+  release such a row, since the other change stays in its log: the message
+  carries the seal of the restored version for the creator to paste.
+
 * **Who made a change is read from the row's whole log.** The round asked for
   the last 24 hours of the whole register: an edit older than that fell out
   while the approval that followed it stayed in, the change had no author,
   and its author's own approval passed for somebody else's. It now asks for
-  the changed row alone, all of its history, one call per changed row and
-  none on the ordinary night. If an instance ignored the `record` parameter
+  the changed row alone, all of its history, one call per changed row (or
+  row not applied yet) and none on the ordinary night. If an instance ignored the `record` parameter
   the answer would be the whole log, and the round would still read only that
   row's events from it. `log_since()` is gone.
 
@@ -77,6 +110,13 @@
   change to what the runner calls, so the runner copy under `/opt` stays as
   it is. The register's service account still needs REDCap's **Logging**
   privilege, as it has since row protection.
+
+  On the first round after the install every request still waiting to be
+  applied costs one log call, and one changed by somebody other than its
+  creator is held. A row applied before the release whose last execution
+  carried a change by somebody else that its creator never approved, for
+  instance one another referent approved under the old rule, is held at its
+  next change, until its creator approves.
 
 # ubep.azure 0.18.0
 
