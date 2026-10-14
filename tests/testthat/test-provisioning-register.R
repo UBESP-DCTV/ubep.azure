@@ -788,6 +788,34 @@ test_that("una modifica di un altro approvata e poi eseguita non conta piu'", {
 })
 
 
+test_that("con due esecuzioni il confine e' la piu' recente", {
+  # eval
+  # Newest first. Bruno changed the row, Anna approved it, the round applied
+  # it; then Anna changed the expiration.
+  eventi <- eventi_finti(
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    applicata,
+    list(username = creatrice, details = "approved_seal = '000000000000'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "dag_name = 'centro-02'"
+    ),
+    applicata
+  )
+
+  # test
+  # Every other log in these tests holds one execution, so none of them
+  # tells the newest from the oldest. Counted from the oldest, Bruno's change
+  # -- approved and carried out -- would come back as an author, and the
+  # creator's own edit would wait for an approval.
+  expect_equal(log_change_authors(eventi, "1"), creatrice)
+  expect_equal(log_pending_authors(eventi, "1", creatrice), creatrice)
+  expect_false(
+    change_needs_approval(log_pending_authors(eventi, "1", creatrice), creatrice)
+  )
+})
+
+
 test_that("senza la scrittura del sigillo conta tutta la storia della riga", {
   # eval
   detto <- log_change_authors(

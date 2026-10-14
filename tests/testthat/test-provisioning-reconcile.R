@@ -2079,6 +2079,30 @@ test_that("l'approvazione di chi ha creato la riga vale", {
 })
 
 
+test_that("chi ha creato la riga la cambia dopo una modifica approvata ed eseguita, e il giro la esegue", { # nolint: line_length_linter.
+  # eval
+  # Newest first. Bruno changed the row, Anna approved it, a round applied it
+  # and sealed 111111111111; then Anna changed the expiration.
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"),
+      esecuzione("111111111111"),
+      approvazione(anna, "111111111111"),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    )
+  )
+
+  # test
+  # Bruno's change is behind the newest execution and was carried out with
+  # Anna's leave. What is left is Anna's own edit, carried out at once.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
 test_that("chi ha creato la riga e la cambia dopo un altro non fa sua la modifica dell'altro", { # nolint: line_length_linter.
   # eval
   # Bruno changes the role, Anna then changes the expiration. The version the
