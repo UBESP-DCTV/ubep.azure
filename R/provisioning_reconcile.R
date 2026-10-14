@@ -873,13 +873,16 @@ provisioning_reconcile <- function(register_url,
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
   # The same minutes the identity door wrote, so the message names what the
-  # round settled instead of what the referent left blank.
+  # round settled instead of what the referent left blank. And the creator the
+  # log named, which is where a held row's message goes: it asks its reader
+  # to approve, and the creator is the only one whose approval counts.
   posta <- posted(
     changed, born,
     identified = data.frame(
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
+      creator = creators,
       stringsAsFactors = FALSE
     )
   )

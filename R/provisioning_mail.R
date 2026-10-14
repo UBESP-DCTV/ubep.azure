@@ -264,6 +264,33 @@ mail_outcome_message <- function(row) {
 }
 
 
+#' Who the message about a row's outcome goes to
+#'
+#' `requested_by`, except on a held row, whose message asks its reader to
+#' approve a change. Only whoever created the row can, and that is the
+#' account REDCap authenticated when the row was made, which the round reads
+#' from the creation log and passes on as `creator`. The two agree on every
+#' row filed from the form; an import is what makes them disagree, and then
+#' the message goes where the approval can come from. With no creator read
+#' this round it goes to `requested_by`: nobody can approve until the
+#' creation log answers again, and the row is still held.
+#'
+#' @param row One register row as a list, with this round's outcome.
+#'
+#' @return One address, possibly empty.
+#'
+#' @keywords internal
+mail_outcome_recipient <- function(row) {
+  stopifnot(is.list(row))
+
+  creator <- mail_said_or(row[["creator"]], "")
+  if (identical(as.character(row[["outcome"]]), "held") && nzchar(creator)) {
+    return(creator)
+  }
+  row[["requested_by"]]
+}
+
+
 #' Say where an instance opens, from the host the inventory names
 #'
 #' The host is the one `provisioning_reconcile()` already holds, read from the
@@ -655,9 +682,10 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param copy_to Address in copy, on the outcome message only.
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
-#' @param identified The identity this round settled, as a frame with
-#'   `record_id` and the fields it settled. `register` is the register as
-#'   read, on purpose; this is how the message names what the round has just
+#' @param identified What this round settled about each row, as a frame with
+#'   `record_id` and the fields it settled: the identity, and `creator`, who
+#'   the creation log says made the row. `register` is the register as read,
+#'   on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
 #' @param hosts Named character vector, instance name to host, as
 #'   `provisioning_reconcile()` receives it from the inventory. Only the
@@ -772,7 +800,7 @@ mail_round <- function(changed,
       riga[[campo]] <- changed[[campo]][[i]]
     }
     esito <- consegna(
-      riga[["requested_by"]], copy_to, mail_outcome_message(riga)
+      mail_outcome_recipient(riga), copy_to, mail_outcome_message(riga)
     )
     partite[[i]] <- isTRUE(esito[["ok"]])
     if (!partite[[i]]) errori <- c(errori, esito[["errors"]])

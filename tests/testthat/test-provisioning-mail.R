@@ -941,6 +941,35 @@ test_that("una riga trattenuta dice quale sigillo incollare, e dove", {
 })
 
 
+test_that("solo la riga trattenuta va al creatore, le altre a requested_by", {
+  # eval
+  riga <- list(
+    record_id = "42", requested_by = "carla.neri@ubep.unipd.it",
+    creator = "anna.bianchi@ubep.unipd.it"
+  )
+
+  # test
+  # The held message asks for an approval, which only the creator can give.
+  # Every other outcome tells whoever the row names, as it always has: moving
+  # them would change where a credential's notice goes on a question nobody
+  # asked here.
+  expect_equal(
+    mail_outcome_recipient(c(riga, outcome = "held")),
+    "anna.bianchi@ubep.unipd.it"
+  )
+  expect_equal(
+    mail_outcome_recipient(c(riga, outcome = "applied")),
+    "carla.neri@ubep.unipd.it"
+  )
+  expect_equal(
+    mail_outcome_recipient(
+      list(record_id = "42", outcome = "held", requested_by = "x@y.it")
+    ),
+    "x@y.it"
+  )
+})
+
+
 test_that("gli altri esiti non parlano di sigilli", {
   # eval
   messaggio <- mail_outcome_message(list(

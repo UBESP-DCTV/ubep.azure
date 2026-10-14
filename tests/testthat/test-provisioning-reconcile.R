@@ -1732,6 +1732,29 @@ test_that("il giro dopo non retrocede una riga approvata a intatta", {
 })
 
 
+# Creation events in the shape REDCap answers a `logtype = "record_add"` with.
+# `details` carries the forged name on purpose: it is where an importer's
+# chosen `requested_by` actually lands, and a reader that took it from there
+# would be reading the payload instead of the authentication.
+creazioni_finte <- function(...) {
+  as.character(jsonlite::toJSON(
+    lapply(list(...), function(evento) {
+      utils::modifyList(
+        list(
+          timestamp = "2026-08-14 01:00",
+          username = "anna.bianchi@ubep.unipd.it",
+          action = "Create record (import) 1",
+          details = "record_id = '1'",
+          record = "1"
+        ),
+        evento
+      )
+    }),
+    auto_unbox = TRUE
+  ))
+}
+
+
 # The register as REDCap answers its event log, which the double above does
 # not: `beginTime` keeps only the events from that hour on, in the instance's
 # clock, and `record` only that row's. And every import the round makes
@@ -1952,11 +1975,13 @@ giro_cambiata <- function(storia,
                           approvato = "",
                           istanza = istanza_che_scrive(),
                           riga = riga_cambiata(),
+                          creazioni = NULL,
                           ...) {
   giro(
     registro_con_log(
       record_json(utils::modifyList(riga, list(approved_seal = approvato))),
-      storia = c(storia, list(esecuzione()))
+      storia = c(storia, list(esecuzione())),
+      creazioni = creazioni
     ),
     istanza,
     dry_run = FALSE,
@@ -2215,6 +2240,64 @@ test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
 })
 
 
+# Every message the round sends, as the mailer received it.
+posta_raccolta <- function() {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject, body = body
+      )
+      list(ok = TRUE, errors = character())
+    },
+    mandate = function() mandate
+  )
+}
+
+
+test_that("la riga trattenuta si annuncia a chi l'ha creata, non a chi la riga nomina", { # nolint: line_length_linter.
+  # eval
+  # `requested_by` names Carla; the creation log says Anna made the row. The
+  # two agree on every row filed from the form, and an import is what makes
+  # them disagree.
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(bruno)),
+    riga = riga_cambiata(requested_by = "carla.neri@ubep.unipd.it"),
+    creazioni = creazioni_finte(list(username = anna)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The message asks its reader to approve, and only the creator can: sent to
+  # anybody else it asks for an act that will not count.
+  destinatari <- vapply(posta[["mandate"]](), `[[`, "", "to")
+  expect_equal(destinatari, anna)
+})
+
+
+test_that("senza il creatore la riga trattenuta si annuncia a requested_by", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The creator could not be read this round, and nobody can approve until it
+  # is; the referent the row names still hears that the row is held.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  destinatari <- vapply(posta[["mandate"]](), `[[`, "", "to")
+  expect_equal(destinatari, anna)
+})
+
+
 test_that("un log illeggibile arriva fino al record del giro", {
   # eval
   esito <- giro(
@@ -2257,29 +2340,6 @@ test_that("un log delle creazioni illeggibile arriva fino al record del giro", {
   # record can carry it.
   expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
 })
-
-
-# Creation events in the shape REDCap answers a `logtype = "record_add"` with.
-# `details` carries the forged name on purpose: it is where an importer's
-# chosen `requested_by` actually lands, and a reader that took it from there
-# would be reading the payload instead of the authentication.
-creazioni_finte <- function(...) {
-  as.character(jsonlite::toJSON(
-    lapply(list(...), function(evento) {
-      utils::modifyList(
-        list(
-          timestamp = "2026-08-14 01:00",
-          username = "anna.bianchi@ubep.unipd.it",
-          action = "Create record (import) 1",
-          details = "record_id = '1'",
-          record = "1"
-        ),
-        evento
-      )
-    }),
-    auto_unbox = TRUE
-  ))
-}
 
 
 test_that("the gate judges whoever filed the row, not whoever the row says filed it", { # nolint: line_length_linter.

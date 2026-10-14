@@ -38,9 +38,10 @@ writable -- the round behaves as it did before this file existed.}
 \item{reply_to}{Kept for the caller's symmetry with \code{mail_send()}; the
 mailer closure is what carries it to the transport.}
 
-\item{identified}{The identity this round settled, as a frame with
-\code{record_id} and the fields it settled. \code{register} is the register as
-read, on purpose; this is how the message names what the round has just
+\item{identified}{What this round settled about each row, as a frame with
+\code{record_id} and the fields it settled: the identity, and \code{creator}, who
+the creation log says made the row. \code{register} is the register as read,
+on purpose; this is how the message names what the round has just
 established rather than what the referent typed.}
 
 \item{hosts}{Named character vector, instance name to host, as
