@@ -2215,6 +2215,50 @@ test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
 })
 
 
+test_that("un log illeggibile arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row is held, and a held row says nothing about why: to the referent
+  # it is the same row as one nobody has approved yet. What failed is ours --
+  # the round could not read the log -- and it has to reach whoever reads the
+  # round's record, under a `TRASPORTO_` code, or the row waits in silence.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+  expect_true(
+    "TRASPORTO_REGISTRO_RIFIUTATO" %in%
+      round_record(esito, scrittura = TRUE, posta = FALSE)[["errori"]]
+  )
+})
+
+
+test_that("un log delle creazioni illeggibile arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row carries its own code, `TRASPORTO_AUTORE_NON_LEGGIBILE`. The reason
+  # the log could not be read is the register's answer, and only the round's
+  # record can carry it.
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})
+
+
 # Creation events in the shape REDCap answers a `logtype = "record_add"` with.
 # `details` carries the forged name on purpose: it is where an importer's
 # chosen `requested_by` actually lands, and a reader that took it from there

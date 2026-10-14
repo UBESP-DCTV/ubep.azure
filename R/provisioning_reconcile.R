@@ -366,6 +366,13 @@ provisioning_reconcile <- function(register_url,
   # creation of every row filed before yesterday.
   #
   # Still one call for the whole round, and still only when a row needs it.
+  #
+  # A log that could not be read holds the rows that needed it, and the rows
+  # do not say why: a held row reads the same whether nobody approved it or
+  # nobody could ask. So the register's answer goes into the round's own
+  # errors, where it reaches whoever reads the record -- us, under the
+  # `TRASPORTO_` code the register gave -- instead of being dropped here.
+  log_errors <- character()
   creators <- rep("", nrow(register))
   if (any(admitted | awaiting | tampered)) {
     reading_creations <- register_log(
@@ -373,6 +380,8 @@ provisioning_reconcile <- function(register_url,
     )
     if (isTRUE(reading_creations[["ok"]])) {
       creators <- log_creators(reading_creations[["log"]], record_ids)
+    } else {
+      log_errors <- c(log_errors, reading_creations[["errors"]])
     }
   }
 
@@ -390,6 +399,8 @@ provisioning_reconcile <- function(register_url,
     # wrong this is the one that does not grant.
     if (isTRUE(reading_log[["ok"]])) {
       events <- rbind(events, reading_log[["log"]])
+    } else {
+      log_errors <- c(log_errors, reading_log[["errors"]])
     }
   }
 
@@ -976,8 +987,8 @@ provisioning_reconcile <- function(register_url,
     # verdicts while every row still reported its own fate correctly. A message
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
-      identity_written[["errors"]], import[["errors"]], posta[["errori"]],
-      seal_written[["errors"]]
+      identity_written[["errors"]], unique(log_errors), import[["errors"]],
+      posta[["errori"]], seal_written[["errors"]]
     )
   )
 }
