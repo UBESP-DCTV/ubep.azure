@@ -1,3 +1,42 @@
+# ubep.azure 0.18.0
+
+* **The welcome message says where REDCap opens.** It carried the user name
+  and the steps of the first sign-in, and not the instance: on the first real
+  request of the pilot the link had to be added by hand. It now names the
+  address of the row's instance, and says that access to the project normally
+  follows within four hours, which is the cadence of the round. The address
+  is not composed from `server` and is not written in this repository: the
+  round already receives the inventory's map from instance to host, and now
+  passes it on to the post. A row whose instance the map does not name gets
+  the welcome without those two lines, since a missing address is no reason
+  to lose the message. The message with the key still carries no context: no
+  instance, no project, no role, nobody in copy.
+
+* **A welcome that did not leave is now counted.** `mail_round()` discarded
+  what the send of the welcome returned, so a lost welcome reached neither the
+  telemetry nor an alarm. The round record gains `benvenuti_recapitati` and
+  `benvenuti_persi`, beside the two counters of the key and not added to
+  `posta_fallite`, and a failed send, a missing address included, adds
+  `POSTA_BENVENUTO_PERSO` to the errors. Like the key, the welcome is not
+  retried: the account is already born and the round does not create it
+  twice. Nor does a lost welcome hold its row back, which would keep the
+  outcome out of the register without sending the welcome again.
+
+* **The message with the key says how to hand it over.** Another channel if
+  there is one, otherwise a new message with the key alone, written by the
+  referent to the address they know from their own correspondence rather than
+  the one copied from the request, and never a forward. If the two addresses
+  differ the referent stops and replies, since the welcome went to the one in
+  the request.
+
+* **The collection rule has to learn the two columns before this release
+  lands**, because the ingestion API drops in silence a column the rule does
+  not know. Then the package; last, once a record has brought the two columns
+  with a value, the new alarm on lost welcomes and the rule on incomplete
+  records, which names the columns it requires and must gain these two. No
+  dictionary change and no change to what the runner calls, so the runner
+  copy under `/opt` stays as it is.
+
 # ubep.azure 0.17.0
 
 * **A bench that is switched off no longer keeps the observer's alarm on
