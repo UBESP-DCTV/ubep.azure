@@ -21,6 +21,6 @@ it is handed, so the caller restricts it to the rows that changed.
 }
 \description{
 \code{change_needs_approval()} asked once per row, of the authors the row's log
-names and of the creator the creation log names.
+names, \code{log_pending_authors()}, and of the creator the creation log names.
 }
 \keyword{internal}

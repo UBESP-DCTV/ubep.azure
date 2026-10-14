@@ -719,6 +719,75 @@ test_that("conta chi ha cambiato la riga dopo l'ultima esecuzione, e nessun altr
 })
 
 
+test_that("una modifica di un altro sotto l'ultima esecuzione conta, se nessuno l'ha approvata", { # nolint: line_length_linter.
+  # eval
+  # Newest first. Bruno's edit is below the round's last seal: the round read
+  # the row before it, and wrote the seal after it.
+  eventi <- eventi_finti(
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    applicata,
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  detto <- log_pending_authors(eventi, "1", creatrice)
+
+  # test
+  # The last execution covers what the round read, and the round applies a
+  # change by somebody other than the creator only once the creator has
+  # approved it. Below the seal and with no approval above it, Bruno's edit
+  # was never carried out with the creator's leave.
+  expect_equal(log_uncovered_authors(eventi, "1", creatrice),
+               "bruno.verdi@ubep.unipd.it")
+  expect_equal(detto, c(creatrice, "bruno.verdi@ubep.unipd.it"))
+  expect_true(change_needs_approval(detto, creatrice))
+})
+
+
+test_that("una modifica di un altro approvata e poi eseguita non conta piu'", {
+  # eval
+  approvata <- function(sigillo) {
+    eventi_finti(
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      applicata,
+      list(
+        username = creatrice,
+        details = paste0("approved_seal = '", sigillo, "'")
+      ),
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      )
+    )
+  }
+
+  # test
+  # The creator approved the version the round then sealed: that execution
+  # carried Bruno's edit out with her leave.
+  expect_equal(
+    log_uncovered_authors(approvata("000000000000"), "1", creatrice),
+    character()
+  )
+  expect_equal(
+    log_pending_authors(approvata("000000000000"), "1", creatrice), creatrice
+  )
+  # An approval of some other version does not cover it.
+  expect_equal(
+    log_uncovered_authors(approvata("111111111111"), "1", creatrice),
+    "bruno.verdi@ubep.unipd.it"
+  )
+  # Nor does anything when the creator is not known.
+  expect_true(
+    is.na(log_uncovered_authors(approvata("000000000000"), "1", ""))
+  )
+})
+
+
 test_that("senza la scrittura del sigillo conta tutta la storia della riga", {
   # eval
   detto <- log_change_authors(

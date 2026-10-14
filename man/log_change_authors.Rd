@@ -29,6 +29,12 @@ is now asked to carry out. Where the row's log no longer holds that event
 the whole history counts, which can only ask for an approval more often.
 }
 \details{
+"Carried out already" holds for what the round read, and the seal is
+written at the end of the round: a change made while the round ran sits
+below it and was not. \code{log_uncovered_authors()} looks for those, and
+\code{log_pending_authors()} is the two together, which is what the round
+judges.
+
 The round's own writes are not a change. It writes \code{username} back when it
 resolves it, and \code{username} is an intent field: counted, the channel would
 be an author of every row whose username it settles. Its account is the one

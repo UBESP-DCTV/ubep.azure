@@ -424,6 +424,12 @@ log_creators <- function(events, records) {
 #' is now asked to carry out. Where the row's log no longer holds that event
 #' the whole history counts, which can only ask for an approval more often.
 #'
+#' "Carried out already" holds for what the round read, and the seal is
+#' written at the end of the round: a change made while the round ran sits
+#' below it and was not. `log_uncovered_authors()` looks for those, and
+#' `log_pending_authors()` is the two together, which is what the round
+#' judges.
+#'
 #' The round's own writes are not a change. It writes `username` back when it
 #' resolves it, and `username` is an intent field: counted, the channel would
 #' be an author of every row whose username it settles. Its account is the one
@@ -473,6 +479,144 @@ log_change_authors <- function(events, record,
 }
 
 
+#' The value each event wrote into one field
+#'
+#' Reads `details`, `applied_seal = '0a1b2c3d4e5f'`. Meant for the seals, which
+#' are twelve hex characters and so never hold the quote that would end the
+#' value early.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param field One field name.
+#'
+#' @return A character vector, one value per event, `""` where the event did
+#'   not write the field.
+#'
+#' @keywords internal
+log_value <- function(events, field) {
+  stopifnot(is.character(field), length(field) == 1L)
+
+  details <- as.character(events[["details"]])
+  pattern <- paste0("\\b", field, "\\s*=\\s*'([^']*)'")
+  found <- regmatches(details, regexec(pattern, details))
+  vapply(found, function(hit) {
+    if (length(hit) < 2L) "" else trimws(hit[[2L]])
+  }, character(1))
+}
+
+
+#' Who changed a row before its last execution without the creator's leave
+#'
+#' `log_change_authors()` drops what stands below the round's newest seal as
+#' already carried out. That holds for what the round **read**, and the seal is
+#' written last: an edit somebody makes while the round sweeps the tenant and
+#' talks to the instances lands below the seal in the log and was never
+#' applied. Dropped with the rest, it would pass for the creator's as soon as
+#' the creator edits the row again.
+#'
+#' So the stretch between the newest seal and the one before it (or the start
+#' of the log) is read again, for changes by anybody other than the creator.
+#' The round applies such a change only once the creator has approved it, so
+#' one that the round did carry out has the creator's approval above it in
+#' that stretch, carrying the very seal the execution wrote. A change with no
+#' such approval above it is one the execution did not cover, and it is still
+#' part of the change the round is being asked to carry out.
+#'
+#' One stretch is enough. An uncovered change makes the next round hold the
+#' row, and a held row writes no seal: the stretch does not move until the
+#' creator approves, and that approval covers the version holding the change.
+#'
+#' Unknown, `NA_character_`, when the creator is not known, when two accounts
+#' write the channel's fields, or when an uncovered change has a blank author:
+#' the caller holds the row on all three.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#'
+#' @return A character vector of usernames, newest first and each once;
+#'   `character()` when the stretch holds no uncovered change or the log holds
+#'   no seal at all; `NA_character_` when the log cannot say.
+#'
+#' @keywords internal
+log_uncovered_authors <- function(events, record, creator,
+                                  fields = register_intent_fields()) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.character(fields)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record)
+  if (length(channel) > 1L) {
+    return(NA_character_)
+  }
+  executed <- which(log_wrote(mine, "applied_seal"))
+  if (length(executed) == 0L) {
+    return(character())
+  }
+  creator <- trimws(creator)
+  if (is.na(creator) || !nzchar(creator)) {
+    return(NA_character_)
+  }
+
+  # Newest first: the stretch is what stands below the newest seal and above
+  # the one before it.
+  rows <- seq_len(nrow(mine))
+  last <- if (length(executed) > 1L) executed[[2L]] else nrow(mine) + 1L
+  stretch <- mine[rows > executed[[1L]] & rows < last, , drop = FALSE]
+  sealed <- log_value(mine[executed[[1L]], , drop = FALSE], "applied_seal")
+
+  authors <- trimws(as.character(stretch[["username"]]))
+  foreign <- which(
+    log_wrote(stretch, fields) & !authors %in% channel & authors != creator
+  )
+  leave <- which(
+    log_wrote(stretch, "approved_seal") & authors == creator &
+      log_value(stretch, "approved_seal") == sealed & nzchar(sealed)
+  )
+  # Covered is below an approval; what stands above the newest one is not.
+  if (length(leave) > 0L) {
+    foreign <- foreign[foreign < min(leave)]
+  }
+  if (any(!nzchar(authors[foreign]))) {
+    return(NA_character_)
+  }
+
+  unique(authors[foreign])
+}
+
+
+#' Who has a hand in the version the round is asked to carry out
+#'
+#' The changes since the round's last execution, `log_change_authors()`, and
+#' the changes below it that the execution did not cover,
+#' `log_uncovered_authors()`. What `change_needs_approval()` judges, and what
+#' the held message names.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#'
+#' @return A character vector of usernames, each once; `NA_character_` when
+#'   either half cannot say.
+#'
+#' @keywords internal
+log_pending_authors <- function(events, record, creator,
+                                fields = register_intent_fields()) {
+  authors <- c(
+    log_change_authors(events, record, fields),
+    log_uncovered_authors(events, record, creator, fields)
+  )
+  if (anyNA(authors)) {
+    return(NA_character_)
+  }
+
+  unique(authors)
+}
+
+
 #' Whether a change to an applied row waits for an approval
 #'
 #' **The one place the rule lives**, decided on 2026-10-14. A request belongs
@@ -494,8 +638,8 @@ log_change_authors <- function(events, record,
 #' is where it goes, and it will need the change's fields and the editor's
 #' rights on the project, which this function does not receive today.
 #'
-#' @param authors Who changed the row since its last execution, as
-#'   `log_change_authors()` answers.
+#' @param authors Who has a hand in the version the round would carry out,
+#'   as `log_pending_authors()` answers.
 #' @param creator Who created the row, as `log_creators()` answers.
 #'
 #' @return `TRUE` when the change has to wait for the creator's approval.
@@ -520,7 +664,7 @@ change_needs_approval <- function(authors, creator) {
 #' Whether each changed row waits for an approval
 #'
 #' `change_needs_approval()` asked once per row, of the authors the row's log
-#' names and of the creator the creation log names.
+#' names, `log_pending_authors()`, and of the creator the creation log names.
 #'
 #' @param register The register as read, one row per request.
 #' @param events The event log of the rows that changed, as `register_log()`
@@ -542,7 +686,8 @@ seal_needs_approval <- function(register, events, creators) {
   intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
     change_needs_approval(
-      log_change_authors(events, ids[[i]], intent), creators[[i]]
+      log_pending_authors(events, ids[[i]], creators[[i]], intent),
+      creators[[i]]
     )
   }, logical(1))
 }

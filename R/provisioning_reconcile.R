@@ -409,7 +409,9 @@ provisioning_reconcile <- function(register_url,
   # a withdrawn one stops, until the creator approves: applying it would grant
   # whatever the edit says on the authority of a round that ran before the
   # edit existed, and of a request somebody else filed. The rule is in
-  # `change_needs_approval()` and nowhere else.
+  # `change_needs_approval()` and nowhere else. An edit made while an earlier
+  # round ran counts as well: it sits below that round's seal, which covers
+  # only what the round had read, and `log_pending_authors()` finds it there.
   awaits <- tampered
   awaits[tampered] <- seal_needs_approval(
     register[tampered, , drop = FALSE], events, creators[tampered]
@@ -912,7 +914,9 @@ provisioning_reconcile <- function(register_url,
     if (!tampered[[i]]) {
       return("")
     }
-    authors <- log_change_authors(events, record_ids[[i]], intent)
+    authors <- log_pending_authors(
+      events, record_ids[[i]], creators[[i]], intent
+    )
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
   posta <- posted(

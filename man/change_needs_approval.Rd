@@ -7,8 +7,8 @@
 change_needs_approval(authors, creator)
 }
 \arguments{
-\item{authors}{Who changed the row since its last execution, as
-\code{log_change_authors()} answers.}
+\item{authors}{Who has a hand in the version the round would carry out,
+as \code{log_pending_authors()} answers.}
 
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 }

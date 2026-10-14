@@ -2283,6 +2283,31 @@ test_that("un'approvazione scritta prima della modifica non la approva", {
 })
 
 
+test_that("una modifica fatta mentre il giro girava non diventa di chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # Newest first. A round read the row with role data entry; while it was
+  # sweeping the tenant Bruno set read only; the round applied what it had
+  # read and wrote its seal last, above Bruno's edit. Anna then changed the
+  # expiration.
+  letta <- sigillo_cambiata(role_name = "data entry")
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"), esecuzione(letta),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(expiration = "2027-01-31", applied_seal = letta)
+  )
+
+  # test
+  # The seal covers the row the round read, not the one it found when it
+  # wrote. Bruno's edit sits below it in the log and the round never applied
+  # it: dropped as already executed, Anna's later edit would carry it out as
+  # hers.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # eval
   approvato <- request_seal(riga_come_registro(record_id = "1"))
