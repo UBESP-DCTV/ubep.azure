@@ -2363,7 +2363,9 @@ test_that("chi cambia una richiesta di un altro non ancora eseguita la ferma", {
   esiti <- vapply(c("", "pending", "transport_error"), function(prima) {
     esito <- giro(
       registro_doppio(
-        record_json(list(record_id = "1", role_name = "admin", outcome = prima)),
+        record_json(
+          list(record_id = "1", role_name = "admin", outcome = prima)
+        ),
         eventi = eventi_json(
           list(username = bruno, details = "role_name = 'admin'")
         )

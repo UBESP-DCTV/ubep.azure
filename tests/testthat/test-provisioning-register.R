@@ -808,11 +808,10 @@ test_that("con due esecuzioni il confine e' la piu' recente", {
   # tells the newest from the oldest. Counted from the oldest, Bruno's change
   # -- approved and carried out -- would come back as an author, and the
   # creator's own edit would wait for an approval.
+  detto <- log_pending_authors(eventi, "1", creatrice)
   expect_equal(log_change_authors(eventi, "1"), creatrice)
-  expect_equal(log_pending_authors(eventi, "1", creatrice), creatrice)
-  expect_false(
-    change_needs_approval(log_pending_authors(eventi, "1", creatrice), creatrice)
-  )
+  expect_equal(detto, creatrice)
+  expect_false(change_needs_approval(detto, creatrice))
 })
 
 
