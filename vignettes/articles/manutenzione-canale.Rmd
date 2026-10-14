@@ -383,18 +383,74 @@ libro mastro; un registro si rifiuta.
 
 REDCap non ha una proprietà per riga: i diritti sono per strumento, e la sola
 cosa che partiziona le righe sono i gruppi di accesso, che qui non ci sono per
-scelta — nasconderebbero le righe altrui e renderebbero i doppioni
+scelta: nasconderebbero le righe altrui e renderebbero i doppioni
 incomprensibili. Chiunque abbia il registro può quindi modificare la riga di
 un altro.
 
 Il giro scrive accanto a ogni riga applicata il **sigillo** di ciò che ha
 applicato: dodici caratteri sui campi di intento, e su nessun altro. Un
 sigillo che al giro dopo non corrisponde significa «modificata dopo
-l'applicazione»: la riga prende l'esito `held`, si ferma dove si ferma una
-revocata — prima che il piano si formi, quindi **nessuna istanza viene
-interrogata** — e la notizia va a `requested_by`.
+l'applicazione».
 
-Tre cose da sapere quando si tocca questo meccanismo:
+**Chi può cambiare una riga, e chi la sblocca.** Una richiesta è di chi l'ha
+creata, e la regola, decisa il 2026-10-14, segue da lì:
+
+- se la modifica l'ha fatta **solo il creatore**, il giro la esegue come
+  qualunque altra riga e la risigilla, senza chiedere niente a nessuno;
+- se nella modifica ha messo mano **qualcun altro**, la riga prende l'esito
+  `held` e si ferma dove si ferma una revocata, prima che il piano si formi,
+  quindi **nessuna istanza viene interrogata**. Resta ferma finché il
+  creatore non incolla il sigillo corrente in `approved_seal`; l'approvazione
+  di chiunque altro, compreso chi ha fatto la modifica, non vale. Una
+  modifica successiva del creatore non sblocca la riga: non dice che ha visto
+  quella dell'altro, e l'approvazione è l'atto che lo dice.
+
+Il creatore è quello del registro delle creazioni (`log_creators()`, con
+`logtype = "record_add"`), non `requested_by`: è la stessa utenza che il
+cancello dell'ambito giudica a ogni giro. Per questo chi approva non ha
+bisogno di un controllo dei diritti suo: l'unico che può approvare è anche
+l'unico i cui diritti sul progetto il giro controlla comunque.
+
+La regola sta in un punto solo, `change_needs_approval()`. La revoca
+(`request_status` che passa a `revoked`) per ora la segue come ogni altra
+modifica. Se si deciderà che un referente con i diritti sul progetto può
+ritirare la richiesta di un altro senza il creatore, è lì che va, e a quella
+funzione serviranno i campi cambiati e i diritti di chi ha cambiato, che oggi
+non riceve.
+
+**Chi ha cambiato la riga.** Il giro legge il registro degli eventi della sola
+riga, tutta la sua storia, con una chiamata per riga cambiata: nessuna nella
+notte ordinaria. Contano gli autori dei campi di intento dopo l'ultima
+scrittura di `applied_seal`, che è il segno dell'ultima esecuzione; ciò che
+viene prima era già stato eseguito. Se quella scrittura non è più nel log
+conta tutta la storia, che può solo far chiedere un'approvazione più spesso.
+
+Le scritture del canale non contano. Il giro riscrive lo `username` che
+risolve prima di leggere il log, e `username` è un campo di intento: contata,
+quella scrittura farebbe del canale l'autore di ogni modifica, e di chiunque
+altro il suo approvatore. Il canale si riconosce senza configurazione come
+l'utenza che ha scritto i campi che scrive solo lui (esito, identità,
+sigillo), e si riconosce **per utenza e non per evento**: REDCap registra solo
+i campi che un import ha cambiato, quindi la riscrittura dello `username`
+arriva da sola, senza niente nell'evento che dica chi l'ha fatta.
+
+**Quando il registro degli eventi non basta.** Un autore o un creatore che il
+log non stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato»
+non è «è stato il creatore». Vale anche quando due utenze diverse risultano
+aver scritto i campi del canale, o quando una modifica di intento non ha
+autore. Un log che non si legge porta in più il suo codice `TRASPORTO_` negli
+`errori` del record del giro: la riga ferma non dice perché lo è, il record
+sì.
+
+**Il messaggio.** Va al creatore, non a `requested_by`; solo se il creatore
+non si legge va a `requested_by`, e la riga resta ferma finché il log delle
+creazioni non risponde. Nomina chi ha cambiato la riga e porta il sigillo da
+incollare. Lo stesso sigillo sta nel dettaglio dell'esito,
+`SIGILLO_DIVERSO:<sigillo>`, ed è questo che porta il sigillo nuovo al
+creatore quando la riga cambia ancora mentre è ferma: il dettaglio cambia con
+lei, l'esito risulta cambiato e il messaggio riparte.
+
+Quattro cose da sapere quando si tocca questo meccanismo:
 
 - **il sigillo copre ciò che è stato chiesto, non ciò che è successo.** Se si
   muovesse quando il giro scrive l'esito, ogni riga applicata sembrerebbe
@@ -404,25 +460,31 @@ Tre cose da sapere quando si tocca questo meccanismo:
   quella che ha letto. Il giro risolve `username` e lo riscrive nella stessa
   passata, e `username` sta dentro al sigillo perché cambiarlo cambia a chi si
   dà l'accesso. Sigillare la riga come letta sarebbe lo stesso difetto di
-  sopra, per mano del giro invece che dell'esito;
+  sopra, per mano del giro invece che dell'esito. Per la stessa ragione il
+  sigillo che il messaggio chiede di incollare è quello della riga con lo
+  `username` risolto: è su quella riga che il creatore lo incolla;
 - **il campo di approvazione sta fuori dal sigillo pur non essendo
   `@READONLY`.** Porta il sigillo che approva, quindi scriverlo non può
   spostare ciò che confronta. È il primo campo per cui «scritto dal canale» e
   «fuori dal sigillo» smettono di essere lo stesso insieme, ed è per questo
-  che sono due liste.
+  che sono due liste;
+- **un campo di intento aggiunto al dizionario sposta tutti i sigilli
+  insieme.** I campi di intento si derivano dal dizionario impacchettato, e un
+  campo in più entra nel sigillo di ogni riga: al primo giro dopo il rilascio
+  ogni riga applicata risulta cambiata, nessuna ha un autore dopo l'ultima
+  esecuzione, e tutte aspettano il proprio creatore, con una chiamata al log
+  per ciascuna a ogni giro.
 
 L'approvazione vale a due condizioni: porta il sigillo di **quella** versione
-della riga, e viene da **qualcun altro**. La seconda si verifica leggendo il
+della riga, e viene da **chi l'ha creata**. Entrambe si verificano sul
 registro degli eventi di REDCap, che dice chi era **autenticato** e non che
-cosa qualcuno ha scritto in un campo — la stessa ragione per cui
-`requested_by` non basta da solo il giorno in cui si concede il Data Import
-Tool. Un registro degli eventi illeggibile lascia la riga ferma: «non ho
-potuto chiedere chi è stato» non è «l'ha approvata un altro».
+cosa qualcuno ha scritto in un campo: la stessa ragione per cui `requested_by`
+non basta da solo il giorno in cui si concede il Data Import Tool.
 
-La finestra del log si chiede **nell'ora dell'istanza**, non in UTC: REDCap
-timbra col proprio orologio, e il giro delle 21:03 UTC compare alle 23:03. Lo
-scarto non è una costante, perché cambia con l'ora legale — per questo la
-finestra è larga un giorno e la conversione è una comodità, non un cardine.
+Il log della riga si chiede **senza finestra di tempo**. Fino alla 0.18.0 si
+chiedevano le ultime 24 ore di tutto il registro: una modifica più vecchia
+restava fuori e l'approvazione dentro, la modifica risultava senza autore e
+l'approvazione di chi l'aveva fatta passava per quella di un altro.
 
 ### Verificare che il progetto sia ancora quello che il canale si aspetta
 
