@@ -1481,6 +1481,44 @@ test_that("il messaggio nomina l'identita' che questo giro ha stabilito", {
 })
 
 
+test_that("il giro passa al benvenuto l'host dell'istanza della riga", {
+  # eval
+  mandate <- list()
+  giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject, body = body
+      )
+      list(ok = TRUE, errors = character())
+    }
+  )
+  a <- function(chi, oggetto) {
+    Filter(function(m) {
+      identical(m[["to"]], chi) && grepl(oggetto, m[["subject"]], fixed = TRUE)
+    }, mandate)
+  }
+
+  # test
+  # The address is not composed from `server` and not written anywhere in the
+  # package: the round already holds the inventory's map, and this is the test
+  # that it hands it on. Forgetting to would cost nothing visible -- the
+  # welcome leaves without the two lines -- which is why it is pinned here.
+  benvenuto <- a("mario.rossi@example.org", "Il tuo account UBEP")
+  chiave <- a("anna.bianchi@ubep.unipd.it", "Accesso al nuovo account")
+  expect_length(benvenuto, 1L)
+  expect_length(chiave, 1L)
+  expect_match(
+    benvenuto[[1L]][["body"]], "REDCap si apre da: https://edc10.example.org/",
+    fixed = TRUE
+  )
+  expect_false(grepl("example.org", chiave[[1L]][["body"]], fixed = TRUE))
+})
+
+
 test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
   # eval
   esito <- giro(

@@ -13,7 +13,8 @@ mail_round(
   redirect_to = NULL,
   copy_to = NULL,
   reply_to = NULL,
-  identified = NULL
+  identified = NULL,
+  hosts = NULL
 )
 }
 \arguments{
@@ -41,6 +42,11 @@ mailer closure is what carries it to the transport.}
 \code{record_id} and the fields it settled. \code{register} is the register as
 read, on purpose; this is how the message names what the round has just
 established rather than what the referent typed.}
+
+\item{hosts}{Named character vector, instance name to host, as
+\code{provisioning_reconcile()} receives it from the inventory. Only the
+welcome message reads it, to say where the row's instance opens; a row
+whose instance it does not name gets a welcome without that address.}
 }
 \value{
 A list with \code{recapitate}, \code{errori} and \code{contatori}.

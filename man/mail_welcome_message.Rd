@@ -4,12 +4,15 @@
 \alias{mail_welcome_message}
 \title{Tell a person an account now exists for them, and what stands in the way}
 \usage{
-mail_welcome_message(row, upn)
+mail_welcome_message(row, upn, url = NULL)
 }
 \arguments{
 \item{row}{One register row as a list.}
 
 \item{upn}{The account's user principal name, as created.}
+
+\item{url}{The address the row's instance opens at, from
+\code{mail_instance_url()}; \code{NULL}, \code{NA} or empty leaves it out.}
 }
 \value{
 A list with \code{subject} and \code{body}.
@@ -21,5 +24,15 @@ so a secret sent there would let anyone who can file a request have an
 account born in the tenant and its key delivered to an address of their own
 choosing. The referent who asked for the account hands it over instead; this
 message says so, and names them.
+}
+\details{
+It does name the instance, as the address REDCap opens at, and that is the
+same decision read from the other side. A message without a secret can carry
+the context, and of the two messages a creation sends this is the one that
+can: the message with the key carries none of it, because context is what
+makes a key spendable. It also says that access to the project normally
+follows within four hours, which is the cadence of the round. Without an
+address the message still leaves, without those two lines: a missing address
+is no reason to lose it.
 }
 \keyword{internal}
