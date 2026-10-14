@@ -1519,6 +1519,49 @@ test_that("il giro passa al benvenuto l'host dell'istanza della riga", {
 })
 
 
+test_that("un benvenuto perso arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      if (identical(to, "mario.rossi@example.org")) {
+        return(list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA"))
+      }
+      list(ok = TRUE, errors = character())
+    }
+  )
+  record <- round_record(esito, scrittura = TRUE, posta = TRUE)
+
+  # test
+  # Counted where the key is counted, and carried by the same road: the
+  # round's `posta`, then the record the alarm reads.
+  expect_true("POSTA_BENVENUTO_PERSO" %in% esito[["errori"]])
+  expect_identical(record[["benvenuti_persi"]], 1L)
+  expect_identical(record[["benvenuti_recapitati"]], 0L)
+  expect_identical(record[["credenziali_recapitate"]], 1L)
+  expect_identical(record[["posta_fallite"]], 0L)
+  # The outcome of the row that made the account still goes in.
+  expect_length(importazioni(campi_esito), 1L)
+})
+
+
+test_that("senza mailer il giro porta anche i benvenuti a zero", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_identical(esito[["posta"]][["benvenuti_recapitati"]], 0L)
+  expect_identical(esito[["posta"]][["benvenuti_persi"]], 0L)
+})
+
+
 test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
   # eval
   esito <- giro(

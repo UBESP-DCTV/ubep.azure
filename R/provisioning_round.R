@@ -513,8 +513,8 @@ round_record <- function(esito, scrittura, posta) {
       errori = esito[["errori"]] %||% character(),
       # One counter per condition rather than a single "failures" total, for
       # the same reason the outcome counters are named after the words: a
-      # message that did not leave has a next round, and a credential that did
-      # not leave has a person. Two conditions, two alarms.
+      # message that did not leave has a next round, and a credential or a
+      # welcome that did not leave has a person. Each condition, its own alarm.
       #
       # They are always present, zeroed when the round sent nothing. The alarm
       # on the record's shape counts columns, so a quiet night has to look like
@@ -525,6 +525,13 @@ round_record <- function(esito, scrittura, posta) {
       credenziali_recapitate =
         as.integer(contatori[["credenziali_recapitate"]] %||% 0L),
       credenziali_perse = as.integer(contatori[["credenziali_perse"]] %||% 0L),
+      # The welcome's twin of the two above. A welcome that did not leave has
+      # no next round either, and it has a person who does not know an account
+      # was made for them; summed into `posta_fallite` it would read as a
+      # message the next round will retry.
+      benvenuti_recapitati =
+        as.integer(contatori[["benvenuti_recapitati"]] %||% 0L),
+      benvenuti_persi = as.integer(contatori[["benvenuti_persi"]] %||% 0L),
       # A redirect left on by mistake would otherwise be silent: every referent
       # would stop hearing from the channel and nothing would say so.
       posta_dirottata = isTRUE(contatori[["posta_dirottata"]])

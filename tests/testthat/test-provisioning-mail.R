@@ -629,6 +629,191 @@ test_that("una chiave d'ingresso non recapitata ha un codice suo", {
 })
 
 
+# A mailer that fails for one recipient only, so a test can lose the welcome
+# and keep the key, or the other way round.
+rifiuta_a <- function(chi) {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list(to = to, subject = subject)
+      if (identical(to, chi)) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    },
+    mandate = function() mandate
+  )
+}
+
+
+nascita_di_prova <- function(credential, record_id = "16") {
+  list(list(
+    record_id = record_id, upn = "sara@ubep.unipd.it", credential = credential
+  ))
+}
+
+
+test_that("un benvenuto recapitato si conta, accanto alla chiave", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore()[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  conto <- detto[["contatori"]]
+  expect_equal(conto[["benvenuti_recapitati"]], 1L)
+  expect_equal(conto[["benvenuti_persi"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 0L)
+  # Not added to the outcome messages: those have a next round, and these two
+  # do not.
+  expect_equal(conto[["posta_partite"]], 0L)
+  expect_equal(conto[["posta_fallite"]], 0L)
+  expect_equal(detto[["errori"]], character())
+})
+
+
+test_that("un benvenuto non recapitato ha un codice suo", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = rifiuta_a("sara.esterna@example.org")[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  # The code alone, as for the key: the transport's word is in the journal,
+  # and this string reaches the telemetry record.
+  conto <- detto[["contatori"]]
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(conto[["benvenuti_persi"]], 1L)
+  expect_equal(conto[["benvenuti_recapitati"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 0L)
+  expect_equal(conto[["posta_fallite"]], 0L)
+})
+
+
+test_that("un benvenuto senza destinatario e' un benvenuto perso", {
+  # eval
+  registro <- registro_di_prova(contact_email = "")
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = posta[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 1L)
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(detto[["contatori"]][["benvenuti_persi"]], 1L)
+  expect_equal(detto[["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("benvenuto e chiave persi insieme si contano tutti e due", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore(riesce = FALSE)[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  conto <- detto[["contatori"]]
+  expect_equal(
+    detto[["errori"]], c("POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+  )
+  expect_equal(conto[["benvenuti_persi"]], 1L)
+  expect_equal(conto[["credenziali_perse"]], 1L)
+  expect_equal(conto[["benvenuti_recapitati"]], 0L)
+  expect_equal(conto[["credenziali_recapitate"]], 0L)
+})
+
+
+test_that("una nascita senza riga nel registro perde benvenuto e chiave", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+
+  # eval
+  detto <- mail_round(
+    changed, registro,
+    born = nascita_di_prova(finti[["parola"]], record_id = "99"),
+    mailer = posta[["mailer"]], dry_run = FALSE
+  )
+
+  # test
+  # Neither message has anybody to go to, and both are lost the same way.
+  expect_length(posta[["mandate"]](), 0L)
+  expect_equal(
+    detto[["errori"]], c("POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+  )
+  expect_equal(detto[["contatori"]][["benvenuti_persi"]], 1L)
+  expect_equal(detto[["contatori"]][["credenziali_perse"]], 1L)
+})
+
+
+test_that("un benvenuto perso non si ritenta, e non trattiene nessuna riga", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = rifiuta_a("sara.esterna@example.org")[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  # The account is already born and the round does not create it twice, so
+  # the next round has no occasion to send the welcome again. Holding the row
+  # back would not bring it back: it would only stop the outcome being written.
+  expect_equal(nrow(detto[["recapitate"]]), 1L)
+  expect_equal(detto[["errori"]], "POSTA_BENVENUTO_PERSO")
+  expect_equal(detto[["contatori"]][["posta_partite"]], 1L)
+})
+
+
+test_that("un giro che simula o non manda porta i quattro contatori a zero", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+
+  # eval
+  detto <- mail_round(
+    changed, registro, born = nascita_di_prova(finti[["parola"]]),
+    mailer = raccoglitore()[["mailer"]], dry_run = TRUE
+  )
+
+  # test
+  for (campo in c(
+    "benvenuti_recapitati", "benvenuti_persi",
+    "credenziali_recapitate", "credenziali_perse"
+  )) {
+    expect_identical(detto[["contatori"]][[campo]], 0L)
+  }
+})
+
+
 test_that("il dirottamento sostituisce i destinatari e lo dichiara nel corpo", {
   # eval
   registro <- registro_di_prova()

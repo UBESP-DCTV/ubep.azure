@@ -156,6 +156,7 @@ provisioning_reconcile <- function(register_url,
         contatori = list(
           posta_partite = 0L, posta_fallite = 0L,
           credenziali_recapitate = 0L, credenziali_perse = 0L,
+          benvenuti_recapitati = 0L, benvenuti_persi = 0L,
           posta_dirottata = FALSE
         )
       ))

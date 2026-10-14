@@ -605,10 +605,15 @@ mail_redirect_note <- function(body, to, cc) {
 #' again and retries -- the queue is the register, and no second state exists
 #' to keep aligned. The cost accepted in exchange is a duplicate, never a loss.
 #'
-#' The credential message is the asymmetry. The account is already born, the
-#' round does not create it twice, and the managed identity cannot repair it.
-#' So its failure is not a retry: it is a person's job, and it goes out under
-#' its own code so an alarm can tell the two apart.
+#' The two messages a creation sends are the asymmetry. The account is already
+#' born, the round does not create it twice, and the managed identity cannot
+#' repair it, so neither the welcome nor the key has a next round. Their
+#' failure is not a retry: it is a person's job, and each goes out under its
+#' own code, `POSTA_BENVENUTO_PERSO` and `POSTA_CREDENZIALE_PERSA`, so an alarm
+#' can tell them apart from a message that will simply be retried. They are
+#' counted apart from the outcome messages for the same reason, and a welcome
+#' that did not leave holds no row back: holding it would not send the welcome
+#' again, it would only keep the outcome out of the register.
 #'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
@@ -666,6 +671,7 @@ mail_round <- function(changed,
   conto <- list(
     posta_partite = 0L, posta_fallite = 0L,
     credenziali_recapitate = 0L, credenziali_perse = 0L,
+    benvenuti_recapitati = 0L, benvenuti_persi = 0L,
     posta_dirottata = !is.null(redirect_to)
   )
 
@@ -747,16 +753,29 @@ mail_round <- function(changed,
   for (nato in born) {
     riga <- riga_di(nato[["record_id"]])
     if (is.null(riga)) {
-      errori <- c(errori, "POSTA_CREDENZIALE_PERSA")
+      # Neither message has a row to be composed from, so both are lost, and
+      # they are counted the way each is counted when its own send fails.
+      errori <- c(errori, "POSTA_BENVENUTO_PERSO", "POSTA_CREDENZIALE_PERSA")
+      conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
       conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
       next
     }
-    consegna(
+    # The welcome is not retried either, for the reason the key is not: the
+    # account is born and nothing in the next round sends it again. A row
+    # held back for it would not bring it back, so its failure is counted and
+    # coded instead, like the key's, and the outcome goes in all the same.
+    benvenuto <- consegna(
       riga[["contact_email"]], NULL,
       mail_welcome_message(
         riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]])
       )
     )
+    if (isTRUE(benvenuto[["ok"]])) {
+      conto[["benvenuti_recapitati"]] <- conto[["benvenuti_recapitati"]] + 1L
+    } else {
+      conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
+      errori <- c(errori, "POSTA_BENVENUTO_PERSO")
+    }
     segreto <- consegna(
       riga[["requested_by"]], NULL,
       mail_credential_message(

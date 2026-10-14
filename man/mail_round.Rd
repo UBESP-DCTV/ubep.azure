@@ -58,9 +58,14 @@ again and retries -- the queue is the register, and no second state exists
 to keep aligned. The cost accepted in exchange is a duplicate, never a loss.
 }
 \details{
-The credential message is the asymmetry. The account is already born, the
-round does not create it twice, and the managed identity cannot repair it.
-So its failure is not a retry: it is a person's job, and it goes out under
-its own code so an alarm can tell the two apart.
+The two messages a creation sends are the asymmetry. The account is already
+born, the round does not create it twice, and the managed identity cannot
+repair it, so neither the welcome nor the key has a next round. Their
+failure is not a retry: it is a person's job, and each goes out under its
+own code, \code{POSTA_BENVENUTO_PERSO} and \code{POSTA_CREDENZIALE_PERSA}, so an alarm
+can tell them apart from a message that will simply be retried. They are
+counted apart from the outcome messages for the same reason, and a welcome
+that did not leave holds no row back: holding it would not send the welcome
+again, it would only keep the outcome out of the register.
 }
 \keyword{internal}
