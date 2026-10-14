@@ -1646,7 +1646,7 @@ eventi_json <- function(...) {
 }
 
 
-test_that("l'approvazione di chi ha creato la riga la sblocca, e la risigilla", {
+test_that("l'approvazione di chi ha creato la riga la sblocca, e la risigilla", { # nolint: line_length_linter.
   # eval
   # Two seals, and the test is worth writing because they differ. What the
   # approval has to carry is the seal of the row **as the register holds it**,
@@ -2100,7 +2100,9 @@ test_that("chi ha creato la riga e la cambia dopo un altro non fa sua la modific
 
 test_that("la revoca della richiesta di un altro segue la stessa regola", {
   # eval
-  revocata <- riga_cambiata(role_name = "data entry", request_status = "revoked")
+  revocata <- riga_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
   esito <- giro_cambiata(
     list(cambio(bruno, "request_status = 'revoked'")),
     riga = revocata
@@ -2117,7 +2119,9 @@ test_that("la revoca della richiesta di un altro segue la stessa regola", {
 
 test_that("chi ha creato la riga revoca la propria richiesta subito", {
   # eval
-  revocata <- riga_cambiata(role_name = "data entry", request_status = "revoked")
+  revocata <- riga_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
   esito <- giro_cambiata(
     list(cambio(anna, "request_status = 'revoked'")),
     istanza = istanza_doppia(

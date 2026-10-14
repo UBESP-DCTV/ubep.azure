@@ -685,7 +685,7 @@ test_that("senza la scrittura del sigillo conta tutta la storia della riga", {
 })
 
 
-test_that("due utenze che scrivono i campi del canale rendono ignoto l'autore", {
+test_that("due utenze che scrivono i campi del canale rendono ignoto l'autore", { # nolint: line_length_linter.
   # eval
   detto <- log_change_authors(
     eventi_finti(

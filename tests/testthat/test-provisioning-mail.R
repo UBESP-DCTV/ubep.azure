@@ -980,7 +980,7 @@ test_that("la riga trattenuta dice che approva solo chi l'ha creata", {
 })
 
 
-test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", {
+test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", { # nolint: line_length_linter.
   # eval
   corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
 
