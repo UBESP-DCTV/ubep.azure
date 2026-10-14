@@ -1736,15 +1736,20 @@ test_that("il giro dopo non retrocede una riga approvata a intatta", {
 # not: `beginTime` keeps only the events from that hour on, in the instance's
 # clock, and `record` only that row's. And every import the round makes
 # becomes an event signed by the account that holds the token, on top of the
-# log, which is what happens on REDCap -- so a round that wrote something
-# before reading the log reads its own write. `storia` is what happened before
-# the round, newest first.
+# log, carrying only the fields it changed -- which is what REDCap does, so a
+# round that wrote something before reading the log reads its own write, and
+# reads it without the fields that did not move. `storia` is what happened
+# before the round, newest first.
 registro_con_log <- function(records,
                              storia = list(),
                              canale = "svc-canale-ubep",
                              creazioni = NULL) {
   base <- registro_doppio(records, creazioni = creazioni)
   scritti <- list()
+  righe <- jsonlite::fromJSON(records, simplifyVector = FALSE)
+  names(righe) <- vapply(
+    righe, function(r) as.character(r[["record_id"]]), character(1)
+  )
   completa <- function(e) {
     utils::modifyList(
       list(
@@ -1760,15 +1765,25 @@ registro_con_log <- function(records,
         form_field_value(data[["data"]]), simplifyVector = FALSE
       )
       for (r in sent) {
-        campi <- setdiff(names(r), "record_id")
+        id <- as.character(r[["record_id"]])
+        campi <- Filter(function(campo) {
+          !identical(
+            as.character(righe[[id]][[campo]] %||% ""),
+            as.character(r[[campo]])
+          )
+        }, setdiff(names(r), "record_id"))
+        if (length(campi) == 0L) {
+          next
+        }
+        righe[[id]][campi] <<- r[campi] # nolint: assignment_linter.
         scritti <<- c(list(list( # nolint: assignment_linter.
           timestamp = "2026-08-14 05:00", username = canale,
-          action = "Update record (API)",
+          action = paste0("Update record (API) ", id),
           details = paste0(
             campi, " = '", vapply(r[campi], as.character, ""), "'",
             collapse = ", "
           ),
-          record = as.character(r[["record_id"]])
+          record = id
         )), scritti)
       }
     }
@@ -1850,6 +1865,62 @@ test_that("una modifica di due giorni fa e' ancora di chi l'ha fatta", {
   # The log is asked for the row and for all of it: who changed a row since
   # it was applied does not stop mattering after a day.
   expect_equal(log_chiesti(), list(list(beginTime = "", record = "1")))
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+# What the round wrote when it applied the row, in an earlier pass: the event
+# that names the channel's account in the row's log.
+esecuzione <- function(sigillo = "000000000000") {
+  list(
+    timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+    action = "Update record (API) 1",
+    details = paste0(
+      "identity = 'existing', outcome = 'applied', ",
+      "outcome_at = '2026-08-12 03:00', applied_seal = '", sigillo, "', ",
+      "seal_state = 'intact'"
+    )
+  )
+}
+
+
+test_that("la riscrittura dello username da parte del canale non sblocca chi ha modificato", { # nolint: line_length_linter.
+  # eval
+  # Bruno changes the role of a row the round applied and blanks its username.
+  # The round resolves the username again and writes it back before it reads
+  # the log, so the newest write of an intent field is the channel's.
+  riga <- list(
+    record_id = "1", identity = "existing", outcome = "applied",
+    role_name = "read only", username = "", applied_seal = "000000000000",
+    seal_state = "intact"
+  )
+  attuale <- request_seal(do.call(riga_come_registro, riga))
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(c(riga, list(approved_seal = attuale)))),
+      storia = list(
+        list(
+          username = "bruno.verdi@ubep.unipd.it",
+          details = paste0("approved_seal = '", attuale, "'")
+        ),
+        list(
+          username = "bruno.verdi@ubep.unipd.it",
+          details = "role_name = 'read only', username = ''"
+        ),
+        esecuzione()
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Precondition: the round did rewrite the username, which is the write that
+  # lands in the log under the channel's name.
+  expect_equal(
+    as.character(identita_scritte()[["username"]]), "mario.rossi@ubep.unipd.it"
+  )
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
   expect_length(scritture(), 0L)
 })

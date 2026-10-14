@@ -540,6 +540,79 @@ test_that("un terzo che approva col sigillo giusto sblocca la riga", {
 })
 
 
+test_that("il canale e' chi ha scritto i campi che scrive solo lui", {
+  # eval
+  # Newest first. The channel's username rewrite carries `username` alone,
+  # since REDCap logs only the fields an import changed: the event that names
+  # the channel is the older one, the round that applied the row.
+  detto <- log_channel_accounts(
+    eventi_finti(
+      list(
+        username = "svc-canale-ubep", action = "Update record (API) 1",
+        details = "username = 'mario.rossi@ubep.unipd.it'"
+      ),
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only', username = ''"
+      ),
+      list(
+        username = "svc-canale-ubep", action = "Update record (API) 1",
+        details = paste0(
+          "outcome = 'applied', outcome_at = '2026-08-12 03:00', ",
+          "applied_seal = '000000000000', seal_state = 'intact'"
+        )
+      ),
+      list(
+        username = "anna.bianchi@ubep.unipd.it", action = "Create record 1",
+        details = "record_id = '1', requested_by = 'anna.bianchi@ubep.unipd.it'"
+      )
+    ),
+    "1"
+  )
+
+  # test
+  # No configuration names the channel's account, and none is needed: the
+  # outcome fields are `@READONLY` on the form and the import right is granted
+  # to nobody, so whoever wrote them is the account that holds the token.
+  # `requested_by` is the one read-only field a person does write, through
+  # `@USERNAME` when the row is created, and it does not count.
+  expect_equal(detto, "svc-canale-ubep")
+})
+
+
+test_that("la riscrittura dello username da parte del canale non rende valida l'autoapprovazione", { # nolint: line_length_linter.
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  # Newest first. Bruno changes the role and blanks the username, the round
+  # writes back the username it resolves, Bruno approves.
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = paste0("approved_seal = '", request_seal(riga), "'")
+    ),
+    list(
+      username = "svc-canale-ubep", action = "Update record (API) 1",
+      details = "username = 'mario.rossi@ubep.unipd.it'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only', username = ''"
+    ),
+    list(
+      username = "svc-canale-ubep", action = "Update record (API) 1",
+      details = "outcome = 'applied', applied_seal = '000000000000'"
+    )
+  )
+
+  # test
+  # `username` is an intent field, so the channel's rewrite is the newest
+  # write of one. Read as a change, it would make the channel the author of
+  # the edit, and anybody but the channel -- Bruno included -- its approver.
+  expect_false(seal_approved(riga, eventi))
+})
+
+
 test_that("the creator is who REDCap authenticated, not who the row names", {
   # eval
   # The forgery, written out: an import that hands `requested_by` a name that

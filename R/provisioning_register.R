@@ -119,6 +119,24 @@ register_unsealed_fields <- function() {
 }
 
 
+#' The fields only the channel writes
+#'
+#' Every read-only field but `requested_by`, which `@USERNAME` fills in with
+#' the account that creates the row: it is the one read-only field a person
+#' writes. The rest are `@READONLY` on the form, and the import right that
+#' would let a person write them anyway is granted to nobody, so an event that
+#' wrote one of them was written by the account that holds the round's token.
+#' That is how the round tells its own writes apart in the event log without
+#' anybody configuring the name of that account.
+#'
+#' @return A character vector of field names.
+#'
+#' @keywords internal
+register_channel_fields <- function() {
+  setdiff(register_readonly_fields(), "requested_by")
+}
+
+
 #' The fields a row carries because somebody asked for them
 #'
 #' Derived and not listed: everything in the dictionary the seal has to cover.
@@ -249,33 +267,102 @@ seal_payload <- function(record_id, seal, state) {
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
 #' @param fields Field names to look for in `details`.
+#' @param ignore Accounts whose events do not count, as
+#'   `log_channel_accounts()` names them: the round's own writes are not
+#'   anybody's change.
 #'
 #' @return The username, or `""` when no event touched any of those fields.
 #'
 #' @keywords internal
-log_last_author <- function(events, record, fields) {
-  stopifnot(is.data.frame(events), is.character(fields))
+log_last_author <- function(events, record, fields, ignore = character()) {
+  stopifnot(
+    is.data.frame(events), is.character(fields), is.character(ignore)
+  )
 
-  mine <- events[
-    trimws(as.character(events[["record"]])) == as.character(record), ,
+  mine <- log_of_record(events, record)
+  mine <- mine[
+    !trimws(as.character(mine[["username"]])) %in% ignore, ,
     drop = FALSE
   ]
   if (nrow(mine) == 0L || length(fields) == 0L) {
     return("")
   }
 
-  # `\b` and `=` together: without the word boundary `seal_state` would match
-  # inside nothing, but `name` would match inside `role_name`, and the answer
-  # would be an author who touched a different field.
-  pattern <- paste0(
-    "\\b(", paste(fields, collapse = "|"), ")\\s*="
-  )
-  hit <- grepl(pattern, as.character(mine[["details"]]))
+  hit <- log_wrote(mine, fields)
   if (!any(hit)) {
     return("")
   }
 
   trimws(as.character(mine[["username"]][which(hit)[[1L]]]))
+}
+
+
+#' The events of one record, in the order REDCap gave them
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id.
+#'
+#' @return The rows of `events` that belong to `record`.
+#'
+#' @keywords internal
+log_of_record <- function(events, record) {
+  events[
+    trimws(as.character(events[["record"]])) == as.character(record), ,
+    drop = FALSE
+  ]
+}
+
+
+#' Which events wrote one of these fields
+#'
+#' Reads `details`, which REDCap fills with the fields an event wrote and the
+#' values it gave them, `role_name = 'read only'`.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param fields Field names to look for.
+#'
+#' @return A logical vector, one answer per event.
+#'
+#' @keywords internal
+log_wrote <- function(events, fields) {
+  if (length(fields) == 0L || nrow(events) == 0L) {
+    return(logical(nrow(events)))
+  }
+  # `\b` and `=` together: without the word boundary `seal_state` would match
+  # inside nothing, but `name` would match inside `role_name`, and the answer
+  # would be an author who touched a different field.
+  pattern <- paste0("\\b(", paste(fields, collapse = "|"), ")\\s*=")
+  grepl(pattern, as.character(events[["details"]]))
+}
+
+
+#' Which accounts in a row's log are the channel
+#'
+#' The authors of the events that wrote a field only the channel writes,
+#' `register_channel_fields()`. No configuration names the account that holds
+#' the round's token, and none is needed: on any row the round has applied
+#' the log carries at least the write of its seal, and that write is signed by
+#' that account.
+#'
+#' It has to be recognized by the account and not by the event. REDCap logs
+#' only the fields an import changed, so when the round writes back a username
+#' it resolved and the verdict has not moved, the event carries `username`
+#' alone -- an intent field, written by the channel, with nothing in the event
+#' itself to say so.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#'
+#' @return A character vector of usernames, empty when no event wrote one of
+#'   those fields.
+#'
+#' @keywords internal
+log_channel_accounts <- function(events, record) {
+  stopifnot(is.data.frame(events))
+
+  mine <- log_of_record(events, record)
+  authors <- trimws(as.character(mine[["username"]]))
+  unique(authors[log_wrote(mine, register_channel_fields()) & nzchar(authors)])
 }
 
 
@@ -376,7 +463,13 @@ seal_approved <- function(register, events) {
     }
 
     approver <- log_last_author(events, ids[[i]], "approved_seal")
-    editor <- log_last_author(events, ids[[i]], intent)
+    # The round writes `username` back when it resolves it, and that is an
+    # intent field: read as a change, the channel would be its author and
+    # anybody else its approver.
+    editor <- log_last_author(
+      events, ids[[i]], intent,
+      ignore = log_channel_accounts(events, ids[[i]])
+    )
 
     nzchar(approver) && !identical(approver, editor)
   }, logical(1))
