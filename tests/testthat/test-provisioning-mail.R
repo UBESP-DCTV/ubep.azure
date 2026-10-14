@@ -980,6 +980,26 @@ test_that("la riga trattenuta dice che approva solo chi l'ha creata", {
 })
 
 
+test_that("la riga trattenuta vale anche per una richiesta non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
+
+  # test
+  # A request is held for somebody else's change before the round applies it
+  # as well as after, so the message cannot say it was applied. And the
+  # approval is spent by the execution it allows: said otherwise, a referent
+  # would expect an old seal to approve the row again.
+  expect_false(
+    grepl("modificata dopo essere stata eseguita", corpo, fixed = TRUE)
+  )
+  expect_false(grepl("after it had been applied", corpo, fixed = TRUE))
+  expect_match(corpo, "Vale una volta sola", fixed = TRUE)
+  expect_match(corpo, "It counts once", fixed = TRUE)
+  expect_match(corpo, "non ancora eseguita resta ferma", fixed = TRUE)
+  expect_match(corpo, "not applied yet stays held", fixed = TRUE)
+})
+
+
 test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", { # nolint: line_length_linter.
   # eval
   corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
