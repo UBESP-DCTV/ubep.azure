@@ -52,6 +52,9 @@ is not a constant and that would come and go with the change of hour.
 
 Callers therefore convert, and they are expected to convert generously: the
 window is cheap to widen and the filtering that matters is done on the rows,
-not on the boundary.
+not on the boundary. The round itself asks no window at all: the creations
+are asked whole, and row protection asks for one row and all of its
+history, since who changed a row since it was applied does not stop
+mattering after a day.
 }
 \keyword{internal}

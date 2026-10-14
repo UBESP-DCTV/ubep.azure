@@ -344,19 +344,20 @@ provisioning_reconcile <- function(register_url,
   sealed[is.na(sealed)] <- ""
   tampered <- nzchar(sealed) & sealed != request_seal(register)
 
-  # The log is read only when a row needs it, and it is one call for the whole
-  # round rather than one per row. On the ordinary night nothing is tampered
-  # with and the register is never asked for it at all.
+  # The log is read only for a row that needs it, one call per changed row and
+  # with no window: the question is who touched this row since the round last
+  # applied it, and that can be longer ago than any window. A window of a day
+  # lost the edit and kept the approval that came after it, so the change had
+  # no author and the approval passed for somebody else's. On the ordinary
+  # night nothing is tampered with and the register is never asked at all.
   events <- log_frame(list())
-  if (any(tampered)) {
-    reading_log <- register_log(
-      register_url, register_token, log_since(at)
-    )
-    # A log that could not be read leaves every changed row held. "I could not
-    # ask who did this" is not "somebody else approved it", and between the two
-    # ways of being wrong this is the one that does not grant.
+  for (id in record_ids[tampered]) {
+    reading_log <- register_log(register_url, register_token, record = id)
+    # A log that could not be read leaves the row held. "I could not ask who
+    # did this" is not "somebody else approved it", and between the two ways
+    # of being wrong this is the one that does not grant.
     if (isTRUE(reading_log[["ok"]])) {
-      events <- reading_log[["log"]]
+      events <- rbind(events, reading_log[["log"]])
     }
   }
 

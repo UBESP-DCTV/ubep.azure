@@ -1732,6 +1732,129 @@ test_that("il giro dopo non retrocede una riga approvata a intatta", {
 })
 
 
+# The register as REDCap answers its event log, which the double above does
+# not: `beginTime` keeps only the events from that hour on, in the instance's
+# clock, and `record` only that row's. And every import the round makes
+# becomes an event signed by the account that holds the token, on top of the
+# log, which is what happens on REDCap -- so a round that wrote something
+# before reading the log reads its own write. `storia` is what happened before
+# the round, newest first.
+registro_con_log <- function(records,
+                             storia = list(),
+                             canale = "svc-canale-ubep",
+                             creazioni = NULL) {
+  base <- registro_doppio(records, creazioni = creazioni)
+  scritti <- list()
+  completa <- function(e) {
+    utils::modifyList(
+      list(
+        timestamp = "2026-08-14 02:45", username = "",
+        action = "Update record", details = "", record = "1"
+      ),
+      e
+    )
+  }
+  function(data) {
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      for (r in sent) {
+        campi <- setdiff(names(r), "record_id")
+        scritti <<- c(list(list( # nolint: assignment_linter.
+          timestamp = "2026-08-14 05:00", username = canale,
+          action = "Update record (API)",
+          details = paste0(
+            campi, " = '", vapply(r[campi], as.character, ""), "'",
+            collapse = ", "
+          ),
+          record = as.character(r[["record_id"]])
+        )), scritti)
+      }
+    }
+    if (identical(form_field_value(data[["content"]]), "log") &&
+          is.null(data[["logtype"]])) {
+      inizio <- form_field_value(data[["beginTime"]] %||% "")
+      riga <- form_field_value(data[["record"]] %||% "")
+      eventi <- Filter(
+        function(e) {
+          (!nzchar(inizio) || e[["timestamp"]] >= inizio) &&
+            (!nzchar(riga) || identical(e[["record"]], riga))
+        },
+        lapply(c(scritti, storia), completa)
+      )
+      return(as.character(jsonlite::toJSON(eventi, auto_unbox = TRUE)))
+    }
+    base(data)
+  }
+}
+
+
+# What the round asked of the event log, creations aside: one list per call,
+# with the window and the record it named, `""` where it named none.
+log_chiesti <- function() {
+  lapply(
+    Filter(function(req) {
+      data <- req[["body"]][["data"]]
+      identical(form_field_value(data[["content"]] %||% ""), "log") &&
+        is.null(data[["logtype"]])
+    }, inviate),
+    function(req) {
+      data <- req[["body"]][["data"]]
+      list(
+        beginTime = form_field_value(data[["beginTime"]] %||% ""),
+        record = form_field_value(data[["record"]] %||% "")
+      )
+    }
+  )
+}
+
+
+test_that("una modifica di due giorni fa e' ancora di chi l'ha fatta", {
+  # eval
+  # Bruno edits the row applied on the 12th at 22:00, instance time; the
+  # rounds after hold it. On the 13th at 23:00 Bruno himself pastes the seal.
+  # A round of the 14th at 03:00 UTC that asked for the last 24 hours would
+  # see the approval and not the edit, find nobody who made the change, and
+  # take Bruno's approval as somebody else's. The username is already the one
+  # the round resolves, so the round writes nothing before reading the log.
+  approvato <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  esito <- giro(
+    registro_con_log(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", outcome = "applied",
+        applied_seal = "000000000000", seal_state = "intact",
+        approved_seal = approvato
+      )),
+      storia = list(
+        list(
+          timestamp = "2026-08-13 23:00",
+          username = "bruno.verdi@ubep.unipd.it",
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        list(
+          timestamp = "2026-08-12 22:00",
+          username = "bruno.verdi@ubep.unipd.it",
+          details = "role_name = 'data entry'"
+        )
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The log is asked for the row and for all of it: who changed a row since
+  # it was applied does not stop mattering after a day.
+  expect_equal(log_chiesti(), list(list(beginTime = "", record = "1")))
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # eval
   approvato <- request_seal(riga_come_registro(record_id = "1"))
