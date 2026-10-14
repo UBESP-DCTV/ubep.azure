@@ -1,3 +1,83 @@
+# ubep.azure 0.19.0
+
+* **A change to a request waits for whoever created it, and only for them.**
+  Decided on 2026-10-14. A request belongs to its creator: a change the
+  creator made alone is carried out on the next round and sealed again, with
+  nobody to ask. A change in which anybody else had a hand holds the row until
+  the creator pastes the current seal into `approved_seal`, and an approval
+  from anybody else, whoever made the change included, does not count. A
+  later edit by the creator does not clear somebody else's change either: it
+  does not say the creator saw it, and the approval is the act that does.
+
+  The creator is the account REDCap authenticated when the row was made, read
+  from the creation log as the scope gate already reads it, and not
+  `requested_by`. The gate checks that account's rights on the project every
+  round, so whoever approves has had their rights checked, and nobody else's
+  rights need to be. Until now any referent other than the author could
+  approve, including one with no rights on the project at all.
+
+  The rule lives in one function, `change_needs_approval()`. A revocation
+  follows it like any other change for now; whether a referent who manages
+  the project may withdraw somebody else's request without its creator is
+  still open, and that function is where the answer goes.
+
+  Rows held today change with the release. An approval already pasted by
+  somebody other than the creator stops counting, and the row stays held
+  until the creator approves.
+
+* **Who made a change is read from the row's whole log.** The round asked for
+  the last 24 hours of the whole register: an edit older than that fell out
+  while the approval that followed it stayed in, the change had no author,
+  and its author's own approval passed for somebody else's. It now asks for
+  the changed row alone, all of its history, one call per changed row and
+  none on the ordinary night. If an instance ignored the `record` parameter
+  the answer would be the whole log, and the round would still read only that
+  row's events from it. `log_since()` is gone.
+
+  What counts is the people who wrote an intent field after the round last
+  wrote the row's seal, which is the mark of its last execution. The round's
+  own writes do not count. It writes back the username it resolves before it
+  reads the log, and `username` is an intent field, so until now the channel
+  became the author of the change and anybody else, the real author included,
+  its approver. The channel's account is recognized without configuration, as
+  the one that wrote the fields only the channel writes, and by account
+  rather than by event, since REDCap logs only the fields an import changed.
+
+  A change whose authors or whose creator the log cannot establish holds the
+  row: a log that does not answer, a creation event no longer there, two
+  accounts writing what only the channel writes, an intent write with no
+  author.
+
+* **A log that cannot be read reaches the round's record.** Both log
+  questions, the creations and the history of a changed row, left their
+  `TRASPORTO_` code behind when they failed: the row was held, and nothing
+  said why. The code now goes into `errori`.
+
+* **A held row's message goes to its creator, and follows a second change.**
+  It went to `requested_by`; it now goes to the creator the log names, the
+  only person whose approval counts, and to `requested_by` only when the
+  creator could not be read. It names who changed the row, and says that only
+  the creator can approve.
+
+  The outcome detail of a held row now carries the seal to paste,
+  `SIGILLO_DIVERSO:<seal>`. A second change to a row already held left its
+  outcome as it was, so the round saw nothing to write and the creator kept a
+  seal that approved nothing any more; the seal moves with the row now, the
+  outcome reads as changed, and the message leaves again with the new value.
+  The seal is computed on the row as the round leaves it, with the username
+  it has just written, which is the row the creator pastes it into. On the
+  first round after the install every row held today changes detail, and its
+  creator receives one message.
+
+* **Release.** An install and not an import: the two field notes of
+  `seal_state` and `approved_seal` say who approves now, and the dictionary
+  comparison does not read notes, so the live register keeps the old ones
+  until the dictionary is imported again and does not drift meanwhile. No new
+  column in the round's record, so the collection rule stays as it is, and no
+  change to what the runner calls, so the runner copy under `/opt` stays as
+  it is. The register's service account still needs REDCap's **Logging**
+  privilege, as it has since row protection.
+
 # ubep.azure 0.18.0
 
 * **The welcome message says where REDCap opens.** It carried the user name

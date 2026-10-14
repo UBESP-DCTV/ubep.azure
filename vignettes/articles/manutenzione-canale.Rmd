@@ -717,6 +717,13 @@ un valore, la regola d'allarme nuova sul benvenuto perso e quella sul record
 incompleto, che elenca le colonne per nome e deve guadagnare anche queste due.
 Aggiornata prima del pacchetto, la seconda scatterebbe su ogni record sano.
 
+La 0.19.0 risponde **no** a tutte e due e non porta colonne nuove nel record
+del giro: si installa il pacchetto e basta. Cambiano le note di `seal_state` e
+`approved_seal` nel dizionario, ma il confronto non legge le note, quindi il
+registro vivo non deriva; le note nuove arrivano quando il dizionario si
+reimporta. Al primo giro dopo l'installazione ogni riga trattenuta cambia
+dettaglio, che ora porta il sigillo, e il suo creatore riceve un messaggio.
+
 ### La regola ritirata è disattivata, non cancellata
 
 La vecchia regola a quattro rami è ancora nella sottoscrizione, disattivata,
