@@ -475,10 +475,19 @@ eventi_finti <- function(...) {
 }
 
 
+# Who REDCap authenticated when the row was made, as `log_creators()` reads it
+# from the creation log: the one person a change by somebody else waits for.
+creatrice <- "anna.bianchi@ubep.unipd.it"
+
+
 test_that("an approval that does not carry the current seal does not count", {
   # eval
   detto <- seal_approved(
-    register_row(approved_seal = "000000000000"), eventi_finti()
+    register_row(approved_seal = "000000000000"),
+    eventi_finti(list(
+      username = creatrice, details = "approved_seal = '000000000000'"
+    )),
+    creatrice
   )
 
   # test
@@ -495,48 +504,240 @@ test_that("chi ha modificato la riga non puo' approvare la propria modifica", {
   riga <- register_row()
   riga[["approved_seal"]] <- request_seal(riga)
   # Most recent first, which is the order REDCap answers in.
-  detto <- seal_approved(riga, eventi_finti(
-    list(
-      username = "bruno.verdi@ubep.unipd.it",
-      details = "approved_seal = 'abc'"
+  detto <- seal_approved(
+    riga,
+    eventi_finti(
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "approved_seal = 'abc'"
+      ),
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      )
     ),
-    list(
-      username = "bruno.verdi@ubep.unipd.it",
-      details = "role_name = 'read only'"
-    )
-  ))
+    creatrice
+  )
 
   # test
   # Otherwise the protection is a formality: whoever edits another referent's
   # row would tick the box on the way out, and the round would apply a change
-  # nobody but its author ever saw. The seal detects the change; only the log
-  # can say the approval came from somebody else, because it names whoever was
-  # authenticated rather than a value somebody typed.
+  # nobody but its author ever saw.
   expect_false(detto)
 })
 
 
-test_that("un terzo che approva col sigillo giusto sblocca la riga", {
+test_that("un terzo che approva col sigillo giusto non sblocca la riga", {
   # eval
   riga <- register_row()
   riga[["approved_seal"]] <- request_seal(riga)
-  detto <- seal_approved(riga, eventi_finti(
-    list(
-      username = "cinzia.rossi@ubep.unipd.it",
-      details = "approved_seal = 'abc'"
+  detto <- seal_approved(
+    riga,
+    eventi_finti(
+      list(
+        username = "cinzia.rossi@ubep.unipd.it",
+        details = "approved_seal = 'abc'"
+      ),
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      )
     ),
-    list(
-      username = "bruno.verdi@ubep.unipd.it",
-      details = "role_name = 'read only'"
-    )
-  ))
+    creatrice
+  )
 
   # test
-  # The other side of the two tests above, and it has to be here or an
-  # implementation that answered FALSE to everything would pass them both. A
+  # Somebody other than the author is not enough. The request is the
+  # creator's, and the creator answers for it: the scope gate checks the
+  # creator's rights on the project every round, and nobody else's. An
+  # approval from a third referent would grant on the word of somebody whose
+  # rights on that project nobody has looked at.
+  expect_false(detto)
+})
+
+
+test_that("chi ha creato la riga la sblocca col sigillo giusto", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  detto <- seal_approved(
+    riga,
+    eventi_finti(
+      list(username = creatrice, details = "approved_seal = 'abc'"),
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      )
+    ),
+    creatrice
+  )
+
+  # test
+  # The other side of the tests above, and it has to be here or an
+  # implementation that answered FALSE to everything would pass them all. A
   # protection that never lets anything through is not a protection, it is an
   # outage.
   expect_true(detto)
+})
+
+
+test_that("senza il creatore nessuna approvazione vale", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  detto <- seal_approved(
+    riga,
+    eventi_finti(list(username = creatrice, details = "approved_seal = 'abc'")),
+    ""
+  )
+
+  # test
+  # The creation log could not be read, or no longer names the row. "I could
+  # not establish who made this" is not "whoever approved it made it".
+  expect_false(detto)
+})
+
+
+test_that("seal_approved non concede quando il log non nomina chi ha modificato", { # nolint: line_length_linter.
+  # eval
+  # The approval alone, as a window of a day would have returned it: the edit
+  # it approves is older than the window.
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  eventi <- eventi_finti(list(
+    timestamp = "2026-08-13 23:00",
+    username = "bruno.verdi@ubep.unipd.it",
+    details = paste0("approved_seal = '", request_seal(riga), "'")
+  ))
+
+  # test
+  # An author nobody can name is not a sign that anybody may approve.
+  expect_equal(log_change_authors(eventi, "1"), character())
+  expect_true(change_needs_approval(log_change_authors(eventi, "1"), creatrice))
+  expect_false(seal_approved(riga, eventi, creatrice))
+})
+
+
+# The round's write when it applied the row, in an earlier pass.
+applicata <- list(
+  username = "svc-canale-ubep", action = "Update record (API) 1",
+  details = paste0(
+    "outcome = 'applied', applied_seal = '000000000000', ",
+    "seal_state = 'intact'"
+  )
+)
+
+
+test_that("conta chi ha cambiato la riga dopo l'ultima esecuzione, e nessun altro", { # nolint: line_length_linter.
+  # eval
+  # Newest first. Bruno changed the row before the round applied it, and that
+  # change was applied; after it, Cinzia and then Anna.
+  detto <- log_change_authors(
+    eventi_finti(
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      list(
+        username = "svc-canale-ubep", action = "Update record (API) 1",
+        details = "username = 'mario.rossi@ubep.unipd.it'"
+      ),
+      list(
+        username = "cinzia.rossi@ubep.unipd.it",
+        details = "role_name = 'read only'"
+      ),
+      applicata,
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "dag_name = 'centro-02'"
+      ),
+      list(
+        username = creatrice, action = "Create record 1",
+        details = "record_id = '1', requested_by = 'anna.bianchi@ubep.unipd.it'"
+      )
+    ),
+    "1"
+  )
+
+  # test
+  # What was applied was already somebody's responsibility. What stands
+  # between the last execution and now is the change the round is about to
+  # carry out, and the channel's own writes are not a change.
+  expect_equal(detto, c(creatrice, "cinzia.rossi@ubep.unipd.it"))
+})
+
+
+test_that("senza la scrittura del sigillo conta tutta la storia della riga", {
+  # eval
+  detto <- log_change_authors(
+    eventi_finti(
+      list(username = creatrice, details = "role_name = 'read only'"),
+      list(
+        username = creatrice, action = "Create record 1",
+        details = "record_id = '1', requested_by = 'anna.bianchi@ubep.unipd.it'"
+      )
+    ),
+    "1"
+  )
+
+  # test
+  # Where the row's log no longer carries the round's last execution, the
+  # change could be anywhere in what is left, so all of it counts: a wider
+  # set of authors can only ask for an approval more often, never less.
+  expect_equal(detto, creatrice)
+})
+
+
+test_that("due utenze che scrivono i campi del canale rendono ignoto l'autore", {
+  # eval
+  detto <- log_change_authors(
+    eventi_finti(
+      list(
+        username = "bruno.verdi@ubep.unipd.it",
+        details = "role_name = 'read only', outcome = 'applied'"
+      ),
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      applicata
+    ),
+    "1"
+  )
+
+  # test
+  # The account that holds the round's token is one. A second account writing
+  # what only the channel writes is something nobody planned -- a value that
+  # reads as a field assignment, an import right granted after all -- and
+  # taking it for the channel would drop its author from the change.
+  expect_true(is.na(detto))
+  expect_true(change_needs_approval(detto, creatrice))
+})
+
+
+test_that("una modifica d'intenzione senza autore rende ignoto l'autore", {
+  # eval
+  detto <- log_change_authors(
+    eventi_finti(
+      list(username = "", details = "role_name = 'read only'"),
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      applicata
+    ),
+    "1"
+  )
+
+  # test
+  expect_true(is.na(detto))
+})
+
+
+test_that("solo una modifica tutta del creatore non chiede approvazione", {
+  # eval, test
+  # The one place the rule lives. A revocation follows it too, until it is
+  # decided whether a referent with rights on the project may withdraw
+  # somebody else's request without the creator.
+  expect_false(change_needs_approval(creatrice, creatrice))
+  expect_true(change_needs_approval("bruno.verdi@ubep.unipd.it", creatrice))
+  expect_true(
+    change_needs_approval(c(creatrice, "bruno.verdi@ubep.unipd.it"), creatrice)
+  )
+  expect_true(change_needs_approval(character(), creatrice))
+  expect_true(change_needs_approval(NA_character_, creatrice))
+  expect_true(change_needs_approval(creatrice, ""))
 })
 
 
@@ -609,7 +810,7 @@ test_that("la riscrittura dello username da parte del canale non rende valida l'
   # `username` is an intent field, so the channel's rewrite is the newest
   # write of one. Read as a change, it would make the channel the author of
   # the edit, and anybody but the channel -- Bruno included -- its approver.
-  expect_false(seal_approved(riga, eventi))
+  expect_false(seal_approved(riga, eventi, creatrice))
 })
 
 

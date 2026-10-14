@@ -4,7 +4,7 @@
 \alias{log_last_author}
 \title{Who last wrote one of these fields on this row}
 \usage{
-log_last_author(events, record, fields, ignore = character())
+log_last_author(events, record, fields)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -12,10 +12,6 @@ log_last_author(events, record, fields, ignore = character())
 \item{record}{The record id to look at.}
 
 \item{fields}{Field names to look for in \code{details}.}
-
-\item{ignore}{Accounts whose events do not count, as
-\code{log_channel_accounts()} names them: the round's own writes are not
-anybody's change.}
 }
 \value{
 The username, or \code{""} when no event touched any of those fields.

@@ -90,7 +90,15 @@ and have the gate check that colleague's rights. So between step 3 and step
 4 the round asks REDCap who was authenticated when each row was created and
 puts that name in the column the gate reads. One call, \code{logtype = "record_add"} and no window: a record is created once, so the answer holds
 one row per record that ever existed rather than one per event, and it is
-asked only when a row is still standing to be judged.
+asked only when a row is still standing to be judged or has changed since
+it was applied.
+
+\strong{A row changed after it was applied waits for its creator}, unless the
+creator made the change alone. The same creator the gate judges is the one
+person who can approve somebody else's change, so whoever approves has
+already had their rights on the project checked, and will again on every
+round. Who made the change is read from that row's own log, whole, and
+without the round's own writes; the rule is \code{change_needs_approval()}.
 
 A row the log cannot name is \strong{held and not refused}, which is the same
 distinction step 6 already makes between a permission that does not grant

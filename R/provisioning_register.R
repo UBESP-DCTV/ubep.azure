@@ -267,23 +267,14 @@ seal_payload <- function(record_id, seal, state) {
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
 #' @param fields Field names to look for in `details`.
-#' @param ignore Accounts whose events do not count, as
-#'   `log_channel_accounts()` names them: the round's own writes are not
-#'   anybody's change.
 #'
 #' @return The username, or `""` when no event touched any of those fields.
 #'
 #' @keywords internal
-log_last_author <- function(events, record, fields, ignore = character()) {
-  stopifnot(
-    is.data.frame(events), is.character(fields), is.character(ignore)
-  )
+log_last_author <- function(events, record, fields) {
+  stopifnot(is.data.frame(events), is.character(fields))
 
   mine <- log_of_record(events, record)
-  mine <- mine[
-    !trimws(as.character(mine[["username"]])) %in% ignore, ,
-    drop = FALSE
-  ]
   if (nrow(mine) == 0L || length(fields) == 0L) {
     return("")
   }
@@ -423,6 +414,134 @@ log_creators <- function(events, records) {
 }
 
 
+#' Who changed a row since the round last applied it
+#'
+#' The people whose writes to an intent field stand between the round's last
+#' execution of the row and now, newest first. The last execution is the
+#' newest event that wrote `applied_seal`, which only the round writes and
+#' only when it has applied the row: what came before it was carried out
+#' already, under somebody's responsibility, and is not the change the round
+#' is now asked to carry out. Where the row's log no longer holds that event
+#' the whole history counts, which can only ask for an approval more often.
+#'
+#' The round's own writes are not a change. It writes `username` back when it
+#' resolves it, and `username` is an intent field: counted, the channel would
+#' be an author of every row whose username it settles. Its account is the one
+#' `log_channel_accounts()` names, and its events are dropped by account.
+#'
+#' Two cases make the answer unknown rather than short, and the caller holds
+#' the row on both. A second account writing what only the channel writes is
+#' nothing anybody planned -- a value that happens to read as a field
+#' assignment, an import right granted after all -- and taking it for the
+#' channel would drop its author from the change. And an intent write whose
+#' author is blank names nobody, which is not the same as naming the creator.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#'
+#' @return A character vector of usernames, newest first and each once;
+#'   `character()` when nobody changed an intent field; `NA_character_` when
+#'   the log cannot say who did.
+#'
+#' @keywords internal
+log_change_authors <- function(events, record) {
+  stopifnot(is.data.frame(events))
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record)
+  if (length(channel) > 1L) {
+    return(NA_character_)
+  }
+
+  # Newest first, which is REDCap's order: what stands above the newest write
+  # of the seal happened after the round last applied the row.
+  executed <- which(log_wrote(mine, "applied_seal"))
+  if (length(executed) > 0L) {
+    mine <- mine[seq_len(executed[[1L]] - 1L), , drop = FALSE]
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  edits <- log_wrote(mine, register_intent_fields()) & !authors %in% channel
+  if (any(edits & !nzchar(authors))) {
+    return(NA_character_)
+  }
+
+  unique(authors[edits])
+}
+
+
+#' Whether a change to an applied row waits for an approval
+#'
+#' **The one place the rule lives**, decided on 2026-10-14. A request belongs
+#' to whoever created it, and the creator answers for it: the scope gate asks
+#' the creator's rights on the project every round, and the credentials of an
+#' account it makes go to the creator. So:
+#'
+#' - a change made only by the creator is carried out on the next round, with
+#'   nobody to ask;
+#' - a change in which anybody else had a hand waits for the creator, even
+#'   when the creator edited the row afterwards: a later edit does not say the
+#'   creator saw the other one, and an approval is the act that does;
+#' - a change whose authors or whose creator the log cannot establish waits
+#'   too. "I could not establish who did this" is not "the creator did it".
+#'
+#' A revocation, `request_status` moving to `revoked`, follows the same rule
+#' for now. Whether a referent who manages the project may withdraw somebody
+#' else's request without its creator is still open; if it is allowed, this
+#' is where it goes, and it will need the change's fields and the editor's
+#' rights on the project, which this function does not receive today.
+#'
+#' @param authors Who changed the row since its last execution, as
+#'   `log_change_authors()` answers.
+#' @param creator Who created the row, as `log_creators()` answers.
+#'
+#' @return `TRUE` when the change has to wait for the creator's approval.
+#'
+#' @keywords internal
+change_needs_approval <- function(authors, creator) {
+  stopifnot(
+    is.character(authors), is.character(creator), length(creator) == 1L
+  )
+
+  creator <- trimws(creator)
+  if (is.na(creator) || !nzchar(creator)) {
+    return(TRUE)
+  }
+  if (length(authors) == 0L || anyNA(authors)) {
+    return(TRUE)
+  }
+  any(authors != creator)
+}
+
+
+#' Whether each changed row waits for an approval
+#'
+#' `change_needs_approval()` asked once per row, of the authors the row's log
+#' names and of the creator the creation log names.
+#'
+#' @param register The register as read, one row per request.
+#' @param events The event log of the rows that changed, as `register_log()`
+#'   returns it.
+#' @param creators Who created each row, as `log_creators()` answers, in the
+#'   order of `register`.
+#'
+#' @return A logical vector, one answer per row. It answers about every row
+#'   it is handed, so the caller restricts it to the rows that changed.
+#'
+#' @keywords internal
+seal_needs_approval <- function(register, events, creators) {
+  stopifnot(
+    is.data.frame(register), is.data.frame(events),
+    is.character(creators), length(creators) == nrow(register)
+  )
+
+  ids <- as.character(register[["record_id"]])
+  vapply(seq_along(ids), function(i) {
+    change_needs_approval(log_change_authors(events, ids[[i]]), creators[[i]])
+  }, logical(1))
+}
+
+
 #' Whether a change to an applied row has been approved
 #'
 #' Two conditions, and neither is enough on its own.
@@ -431,47 +550,52 @@ log_creators <- function(events, records) {
 #' seal approves some other version of the row, and accepting it would make one
 #' approval stand for every change that came after it.
 #'
-#' And it has to come from **somebody else**. Otherwise the protection is a
-#' formality: whoever edits another referent's row would paste the seal on the
-#' way out, and the round would apply a change nobody but its author ever saw.
-#' The seal detects that the row moved; only the log can say who moved it,
-#' because it names whoever was authenticated rather than a value somebody
-#' typed — which is the same reason `requested_by` cannot be trusted alone.
+#' And it has to come from **whoever created the row**. Not merely from
+#' somebody other than the author of the change: the request is the creator's,
+#' the scope gate checks the creator's rights on the project every round and
+#' nobody else's, so an approval from a third referent would grant on the word
+#' of somebody whose rights on that project nobody has looked at. The seal
+#' detects that the row moved; only the log can say who approved it and who
+#' created the row, because it names whoever was authenticated rather than a
+#' value somebody typed -- which is the same reason `requested_by` cannot be
+#' trusted alone.
 #'
 #' An unreadable log is not this function's to decide. It answers about the
-#' events it was handed, and a caller holding no events gets `FALSE` on every
-#' changed row: the row waits, which is the direction that does not grant.
+#' events and the creators it was handed, and a caller holding neither gets
+#' `FALSE` on every changed row: the row waits, which is the direction that
+#' does not grant.
 #'
 #' @param register The register as read, one row per request.
 #' @param events The event log, as `register_log()` returns it.
+#' @param creators Who created each row, as `log_creators()` answers, in the
+#'   order of `register`. `""` approves nothing.
 #'
 #' @return A logical vector, one answer per row.
 #'
 #' @keywords internal
-seal_approved <- function(register, events) {
-  stopifnot(is.data.frame(register), is.data.frame(events))
+seal_approved <- function(register, events, creators) {
+  stopifnot(
+    is.data.frame(register), is.data.frame(events),
+    is.character(creators), length(creators) == nrow(register)
+  )
 
   current <- request_seal(register)
   approved <- trimws(as.character(register[["approved_seal"]] %||% ""))
   approved[is.na(approved)] <- ""
   ids <- as.character(register[["record_id"]])
-  intent <- register_intent_fields()
+  creators <- trimws(creators)
 
   vapply(seq_len(nrow(register)), function(i) {
     if (!nzchar(approved[[i]]) || !identical(approved[[i]], current[[i]])) {
       return(FALSE)
     }
+    if (is.na(creators[[i]]) || !nzchar(creators[[i]])) {
+      return(FALSE)
+    }
 
-    approver <- log_last_author(events, ids[[i]], "approved_seal")
-    # The round writes `username` back when it resolves it, and that is an
-    # intent field: read as a change, the channel would be its author and
-    # anybody else its approver.
-    editor <- log_last_author(
-      events, ids[[i]], intent,
-      ignore = log_channel_accounts(events, ids[[i]])
+    identical(
+      log_last_author(events, ids[[i]], "approved_seal"), creators[[i]]
     )
-
-    nzchar(approver) && !identical(approver, editor)
   }, logical(1))
 }
 

@@ -1646,7 +1646,7 @@ eventi_json <- function(...) {
 }
 
 
-test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
+test_that("l'approvazione di chi ha creato la riga la sblocca, e la risigilla", {
   # eval
   # Two seals, and the test is worth writing because they differ. What the
   # approval has to carry is the seal of the row **as the register holds it**,
@@ -1664,7 +1664,7 @@ test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
       )),
       eventi = eventi_json(
         list(
-          username = "cinzia.rossi@ubep.unipd.it",
+          username = "anna.bianchi@ubep.unipd.it",
           details = paste0("approved_seal = '", approvato, "'")
         ),
         list(
@@ -1680,9 +1680,9 @@ test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
   # test
   # The other half of the protection, and the half that has to work or the
   # register fills up with rows nobody can ever clear. The approval carries
-  # this row's seal and comes from somebody who did not make the change, so
-  # the round applies it -- and seals the row again, at its new value, so the
-  # approval covers this change and stops there.
+  # this row's seal and comes from whoever created the row, who is not who
+  # changed it, so the round applies it -- and seals the row again, at its new
+  # value, so the approval covers this change and stops there.
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
   expect_equal(
     as.character(sigilli_scritti()[["applied_seal"]]), risigillato
@@ -1923,6 +1923,269 @@ test_that("la riscrittura dello username da parte del canale non sblocca chi ha 
   )
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
   expect_length(scritture(), 0L)
+})
+
+
+# A row the round applied in an earlier pass and somebody changed since: the
+# role is not the one sealed. The username is already the one the round
+# resolves, so nothing is written before the log is read.
+riga_cambiata <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "1", username = "mario.rossi@ubep.unipd.it",
+      identity = "existing", outcome = "applied", role_name = "read only",
+      applied_seal = "000000000000", seal_state = "intact"
+    ),
+    list(...)
+  )
+}
+
+
+sigillo_cambiata <- function(...) {
+  request_seal(do.call(riga_come_registro, riga_cambiata(...)))
+}
+
+
+# One round over that row. `storia` is what people did after the round applied
+# it, newest first; the execution itself is appended below it.
+giro_cambiata <- function(storia,
+                          approvato = "",
+                          istanza = istanza_che_scrive(),
+                          riga = riga_cambiata(),
+                          ...) {
+  giro(
+    registro_con_log(
+      record_json(utils::modifyList(riga, list(approved_seal = approvato))),
+      storia = c(storia, list(esecuzione()))
+    ),
+    istanza,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+
+cambio <- function(chi, details = "role_name = 'read only'", ...) {
+  list(username = chi, details = details, ...)
+}
+
+
+approvazione <- function(chi, sigillo = sigillo_cambiata(), ...) {
+  list(username = chi, details = paste0("approved_seal = '", sigillo, "'"), ...)
+}
+
+
+anna <- "anna.bianchi@ubep.unipd.it"
+bruno <- "bruno.verdi@ubep.unipd.it"
+cinzia <- "cinzia.rossi@ubep.unipd.it"
+
+
+test_that("chi ha creato la riga la cambia, e il giro la esegue subito", {
+  # eval
+  esito <- giro_cambiata(list(cambio(anna)))
+
+  # test
+  # Anna's own request, changed by Anna: nobody else's work was touched, so
+  # nobody else has anything to approve. The round carries it out and seals
+  # the new version, as after any execution.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_cambiata()
+  )
+  # `intact`: the row was changed, not contested.
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "intact")
+})
+
+
+test_that("chi cambia la riga di un altro la ferma finche' chi l'ha creata non approva", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(list(cambio(bruno)))
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "modified")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), "000000000000"
+  )
+})
+
+
+test_that("l'approvazione di chi ha cambiato la riga non vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(bruno), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("l'approvazione di un terzo non vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(cinzia), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # Cinzia did not make the change and did not make the request either. The
+  # one person a change to Anna's request waits for is Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("l'approvazione di chi ha creato la riga vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("chi ha creato la riga e la cambia dopo un altro non fa sua la modifica dell'altro", { # nolint: line_length_linter.
+  # eval
+  # Bruno changes the role, Anna then changes the expiration. The version the
+  # round would carry out holds Bruno's change too.
+  esito <- giro_cambiata(
+    list(cambio(anna, "expiration = '2027-01-31'"), cambio(bruno)),
+    riga = riga_cambiata(expiration = "2027-01-31")
+  )
+
+  # test
+  # A later edit by the creator is not an approval: it does not say she saw
+  # what Bruno did, and an approval is the one act that does. Waiting for the
+  # seal costs her a paste; reading her edit as consent would carry out a
+  # change to her request that nobody approved.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la revoca della richiesta di un altro segue la stessa regola", {
+  # eval
+  revocata <- riga_cambiata(role_name = "data entry", request_status = "revoked")
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata
+  )
+
+  # test
+  # For now. Whether a referent who manages the project may withdraw somebody
+  # else's request without its creator is still to be decided, and the
+  # decision has one place to go: `change_needs_approval()`.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("chi ha creato la riga revoca la propria richiesta subito", {
+  # eval
+  revocata <- riga_cambiata(role_name = "data entry", request_status = "revoked")
+  esito <- giro_cambiata(
+    list(cambio(anna, "request_status = 'revoked'")),
+    istanza = istanza_doppia(
+      list(),
+      list(
+        username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    riga = revocata
+  )
+
+  # test
+  # The revoke is carried out: the double keeps the row it was asked to
+  # remove, so the read-back still shows it and the round does not call the
+  # revoke applied -- what this test pins is that it was sent at all.
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_true(any(vapply(interrogazioni(), function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, logical(1))))
+})
+
+
+test_that("l'approvazione passa dal cancello sui diritti di chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # Anna approves Bruno's change, and Anna no longer manages the project.
+  esito <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_doppia(list(user_rights = 0L))
+  )
+
+  # test
+  # Whoever approves does not need rights of their own checked, because the
+  # only person who can approve is the creator, and the scope gate asks the
+  # creator's rights on every round. An approval is not a way past it.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un terzo con pieni diritti sul progetto non approva la richiesta di un altro", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(cinzia), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_doppia(
+      list(),
+      list(username = cinzia, user_rights = 1L)
+    )
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una modifica di due giorni fa approvata da chi ha creato la riga si esegue", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(
+      approvazione(anna, timestamp = "2026-08-13 23:00"),
+      cambio(bruno, timestamp = "2026-08-12 22:00")
+    ),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("una modifica che il log non attribuisce aspetta chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # The seal moved and the row's log says nobody changed it since the round
+  # applied it: a log purged in between, a field the dictionary gained.
+  ferma <- giro_cambiata(list())
+  fermi <- scritture()
+  approvata <- giro_cambiata(
+    list(approvazione(anna)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # Nobody established is not the creator established: the row waits, and
+  # the creator can release it the ordinary way.
+  expect_equal(as.character(ferma[["esiti"]][["outcome"]]), "held")
+  expect_length(fermi, 0L)
+  expect_equal(as.character(approvata[["esiti"]][["outcome"]]), "applied")
 })
 
 

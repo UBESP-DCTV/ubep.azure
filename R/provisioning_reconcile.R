@@ -31,7 +31,15 @@
 #' puts that name in the column the gate reads. One call, `logtype =
 #' "record_add"` and no window: a record is created once, so the answer holds
 #' one row per record that ever existed rather than one per event, and it is
-#' asked only when a row is still standing to be judged.
+#' asked only when a row is still standing to be judged or has changed since
+#' it was applied.
+#'
+#' **A row changed after it was applied waits for its creator**, unless the
+#' creator made the change alone. The same creator the gate judges is the one
+#' person who can approve somebody else's change, so whoever approves has
+#' already had their rights on the project checked, and will again on every
+#' round. Who made the change is read from that row's own log, whole, and
+#' without the round's own writes; the rule is `change_needs_approval()`.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
@@ -336,13 +344,37 @@ provisioning_reconcile <- function(register_url,
   # so any referent can edit any row, in good faith or by mistake. The seal is
   # what notices: it covers what was asked and not what happened, so it moves
   # only when somebody changed the request itself.
-  #
-  # Applying again would grant whatever the edit says on the authority of a
-  # round that ran before the edit existed. So the row stops here, exactly
-  # where a withdrawn one stops, and waits for a person.
   sealed <- trimws(as.character(register[["applied_seal"]] %||% ""))
   sealed[is.na(sealed)] <- ""
   tampered <- nzchar(sealed) & sealed != request_seal(register)
+
+  # Who was authenticated when each row was made. It is the name the gate has
+  # to judge, and since 2026-10-14 it is also the one person a change to the
+  # row by somebody else waits for, so it is read before the changed rows are
+  # judged. `requested_by` cannot be it: `@USERNAME` is an action tag, it
+  # governs the form REDCap draws, and an import draws none -- measured on
+  # 2026-09-02, an import writes that field verbatim, so anyone with the Data
+  # Import Tool could declare themselves somebody who manages the project and
+  # have the gate check that somebody's rights.
+  #
+  # Asked with `logtype = "record_add"` and no window at all, and both halves
+  # matter. The classification is REDCap's, so this package never reads the
+  # prose of `action` -- one act reads `Create record 7` from the form and
+  # `Create record (import) 20` from an import. And a record is created once,
+  # so the answer holds one row per record that ever existed: it grows with
+  # the register rather than with the traffic, where a window would lose the
+  # creation of every row filed before yesterday.
+  #
+  # Still one call for the whole round, and still only when a row needs it.
+  creators <- rep("", nrow(register))
+  if (any(admitted | awaiting | tampered)) {
+    reading_creations <- register_log(
+      register_url, register_token, logtype = "record_add"
+    )
+    if (isTRUE(reading_creations[["ok"]])) {
+      creators <- log_creators(reading_creations[["log"]], record_ids)
+    }
+  }
 
   # The log is read only for a row that needs it, one call per changed row and
   # with no window: the question is who touched this row since the round last
@@ -354,14 +386,22 @@ provisioning_reconcile <- function(register_url,
   for (id in record_ids[tampered]) {
     reading_log <- register_log(register_url, register_token, record = id)
     # A log that could not be read leaves the row held. "I could not ask who
-    # did this" is not "somebody else approved it", and between the two ways
-    # of being wrong this is the one that does not grant.
+    # did this" is not "the creator did it", and between the two ways of being
+    # wrong this is the one that does not grant.
     if (isTRUE(reading_log[["ok"]])) {
       events <- rbind(events, reading_log[["log"]])
     }
   }
 
-  held <- tampered & !seal_approved(register, events)
+  # A change made by the creator alone is the creator's to make, and goes on
+  # as any other row. Anybody else's hand in it and the row stops here, where
+  # a withdrawn one stops, until the creator approves: applying it would grant
+  # whatever the edit says on the authority of a round that ran before the
+  # edit existed, and of a request somebody else filed. The rule is in
+  # `change_needs_approval()` and nowhere else.
+  awaits <- tampered & seal_needs_approval(register, events, creators)
+  cleared <- awaits & seal_approved(register, events, creators)
+  held <- awaits & !cleared
   standing <- (admitted | awaiting) & !held
 
   stopped <- do.call(rbind, c(
@@ -411,32 +451,7 @@ provisioning_reconcile <- function(register_url,
   # `register_to_desired()` builds a pair out of `username`, and the value it
   # must build it out of is the resolved one. An `absent` row travels with an
   # empty one, so it reaches the scope question without ever becoming a pair.
-  # Who was authenticated when each row was made, which is the name the gate
-  # has to judge. `requested_by` cannot be it: `@USERNAME` is an action tag,
-  # it governs the form REDCap draws, and an import draws none -- measured on
-  # 2026-09-02, an import writes that field verbatim, so anyone with the
-  # Data Import Tool could declare themselves somebody who manages the project
-  # and have the gate check that somebody's rights.
-  #
-  # Asked with `logtype = "record_add"` and no window at all, and both halves
-  # matter. The classification is REDCap's, so this package never reads the
-  # prose of `action` -- one act reads `Create record 7` from the form and
-  # `Create record (import) 20` from an import. And a record is created once,
-  # so the answer holds one row per record that ever existed: it grows with
-  # the register rather than with the traffic, where a window would lose the
-  # creation of every row filed before yesterday.
-  #
-  # Still one call for the whole round, and still only when a row needs it.
-  creators <- rep("", nrow(register))
-  if (any(standing)) {
-    reading_creations <- register_log(
-      register_url, register_token, logtype = "record_add"
-    )
-    if (isTRUE(reading_creations[["ok"]])) {
-      creators <- log_creators(reading_creations[["log"]], record_ids)
-    }
-  }
-
+  # `requested_by` carries the creator the log named, for the gate.
   resolved <- register
   resolved[["username"]] <- resolved_names
   resolved[["identity"]] <- verdicts
@@ -905,11 +920,12 @@ provisioning_reconcile <- function(register_url,
         seal_payload(
           id,
           request_seal(register_after[i, , drop = FALSE]),
-          # Applied while tampered is the one way past `held`, so it says an
-          # approval carried this row here. Otherwise the row keeps what it
-          # had: a change approved once stays approved until somebody edits
-          # the row again, which is when `modified` takes over below.
-          if (tampered[[i]] || identical(state_before[[i]], "approved")) {
+          # Applied while waiting for an approval says an approval carried
+          # this row here. A change the creator made alone was nobody's to
+          # contest, and leaves the row as it was. Otherwise the row keeps
+          # what it had: a change approved once stays approved until somebody
+          # edits the row again, which is when `modified` takes over below.
+          if (cleared[[i]] || identical(state_before[[i]], "approved")) {
             "approved"
           } else {
             "intact"
