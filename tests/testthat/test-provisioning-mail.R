@@ -199,6 +199,69 @@ test_that("il messaggio d'ingresso non nomina istanza, progetto, ruolo", {
 })
 
 
+test_that("il messaggio con la chiave dice come consegnarla", {
+  # eval
+  detto <- mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # The rule the referent follows, decided on 2026-10-14: a new message with
+  # the key alone, to the address they know, never a forward of this one.
+  it <- c(
+    paste0(
+      "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
+      "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
+      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
+      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
+      "non coincidono, fermati e rispondi a questo messaggio: quel messaggio ",
+      "a parte e' andato all'indirizzo della richiesta."
+    ),
+    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
+  )
+  en <- c(
+    paste0(
+      "Hand the key to the person, and do not forward this message. If you ",
+      "have a channel other than e-mail, use it; otherwise write them a new ",
+      "e-mail with the key alone: the user name has already reached them in a ",
+      "separate message. Use the address you know from your own ",
+      "correspondence with them, not the one copied from the request. If the ",
+      "two differ, stop and reply to this message: that separate message went ",
+      "to the address in the request."
+    ),
+    paste0(
+      "It must be changed at first sign-in, and whoever uses it first takes ",
+      "the account."
+    )
+  )
+  righe <- strsplit(detto, "\n", fixed = TRUE)[[1]]
+  for (frase in c(it, en)) {
+    expect_true(frase %in% righe, info = frase)
+  }
+  expect_false(grepl("per una via sicura", detto, fixed = TRUE))
+  expect_false(grepl("Hand it over securely", detto, fixed = TRUE))
+})
+
+
+test_that("il messaggio con la chiave non porta il contesto della persona", {
+  # eval
+  riga <- riga_di_prova()
+  detto <- mail_credential_message(
+    riga, upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # It tells the referent to use the address they know, and does not name the
+  # one in the request: copying it from here is what the rule forbids.
+  expect_false(grepl(riga[["contact_email"]], detto, fixed = TRUE))
+  expect_false(grepl(riga[["last_name"]], detto, fixed = TRUE))
+  expect_false(grepl("https://", detto, fixed = TRUE))
+})
+
+
 test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
   # eval
   riga <- riga_di_prova()

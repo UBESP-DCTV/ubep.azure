@@ -414,6 +414,13 @@ mail_welcome_message <- function(row, upn, url = NULL) {
 #' instance, nobody in copy: a message with a way in must not also carry the
 #' context that makes it spendable.
 #'
+#' What it asks of the referent is the rule decided for handing the key over:
+#' another channel if there is one, otherwise a new message with the key
+#' alone, never a forward of this one, and to the address the referent knows
+#' from their own correspondence rather than the one copied from the request.
+#' The welcome went to the address in the request, so a referent who finds the
+#' two different is asked to stop and reply instead of sending.
+#'
 #' This message has no second chance, and that is what separates it from every
 #' other one the round sends. The account is already born and the round does
 #' not create it twice, so a send that fails leaves an account nobody can get
@@ -443,10 +450,16 @@ mail_credential_message <- function(row, upn, credential) {
     paste0("Chiave d'ingresso: ", credential),
     "",
     paste0(
-      "Consegnala alla persona per una via sicura, e non inoltrare questo ",
-      "messaggio. Va cambiata al primo accesso, e chi la usa per prima si ",
-      "prende l'account."
-    )
+      "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
+      "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
+      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
+      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
+      "non coincidono, fermati e rispondi a questo messaggio: quel messaggio ",
+      "a parte e' andato all'indirizzo della richiesta."
+    ),
+    "",
+    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
   )
 
   en <- c(
@@ -456,8 +469,18 @@ mail_credential_message <- function(row, upn, credential) {
     paste0("Way in: ", credential),
     "",
     paste0(
-      "Hand it over securely, and do not forward this message. It must be ",
-      "changed at first sign-in, and whoever uses it first takes the account."
+      "Hand the key to the person, and do not forward this message. If you ",
+      "have a channel other than e-mail, use it; otherwise write them a new ",
+      "e-mail with the key alone: the user name has already reached them in a ",
+      "separate message. Use the address you know from your own ",
+      "correspondence with them, not the one copied from the request. If the ",
+      "two differ, stop and reply to this message: that separate message went ",
+      "to the address in the request."
+    ),
+    "",
+    paste0(
+      "It must be changed at first sign-in, and whoever uses it first takes ",
+      "the account."
     )
   )
 
