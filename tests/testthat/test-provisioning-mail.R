@@ -216,8 +216,9 @@ test_that("il messaggio con la chiave dice come consegnarla", {
       "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
       "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
       "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
-      "non coincidono, fermati e rispondi a questo messaggio: quel messaggio ",
-      "a parte e' andato all'indirizzo della richiesta."
+      "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
+      "(togli il testo citato): quel messaggio a parte e' andato ",
+      "all'indirizzo della richiesta."
     ),
     "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
   )
@@ -228,8 +229,9 @@ test_that("il messaggio con la chiave dice come consegnarla", {
       "e-mail with the key alone: the user name has already reached them in a ",
       "separate message. Use the address you know from your own ",
       "correspondence with them, not the one copied from the request. If the ",
-      "two differ, stop and reply to this message: that separate message went ",
-      "to the address in the request."
+      "two differ, stop and reply to this message without the key (delete ",
+      "the quoted text): that separate message went to the address in the ",
+      "request."
     ),
     paste0(
       "It must be changed at first sign-in, and whoever uses it first takes ",
@@ -242,6 +244,24 @@ test_that("il messaggio con la chiave dice come consegnarla", {
   }
   expect_false(grepl("per una via sicura", detto, fixed = TRUE))
   expect_false(grepl("Hand it over securely", detto, fixed = TRUE))
+})
+
+
+test_that("la risposta chiesta dal messaggio con la chiave la lascia fuori", {
+  # eval
+  detto <- mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]]
+
+  # test
+  # A reply goes to reply_to, the shared mailbox of IT, and a mail client
+  # quotes the body by default: the key, still unused, would land there. So
+  # the very sentence that asks for a reply says to leave the key out of it.
+  expect_match(
+    detto, "rispondi a questo messaggio senza la chiave", fixed = TRUE
+  )
+  expect_match(detto, "reply to this message without the key", fixed = TRUE)
 })
 
 

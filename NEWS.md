@@ -27,7 +27,9 @@
   referent to the address they know from their own correspondence rather than
   the one copied from the request, and never a forward. If the two addresses
   differ the referent stops and replies, since the welcome went to the one in
-  the request.
+  the request, and leaves the key out of the reply: a mail client quotes the
+  body by default, and the reply goes to the round's reply address, where a
+  key not yet used would stay readable.
 
 * **The collection rule has to learn the two columns before this release
   lands**, because the ingestion API drops in silence a column the rule does

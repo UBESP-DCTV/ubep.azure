@@ -419,7 +419,10 @@ mail_welcome_message <- function(row, upn, url = NULL) {
 #' alone, never a forward of this one, and to the address the referent knows
 #' from their own correspondence rather than the one copied from the request.
 #' The welcome went to the address in the request, so a referent who finds the
-#' two different is asked to stop and reply instead of sending.
+#' two different is asked to stop and reply instead of sending. The same
+#' sentence asks them to leave the key out of the reply: a mail client quotes
+#' this body by default, and the reply goes to the round's reply address,
+#' where a key not yet used would stay readable.
 #'
 #' This message has no second chance, and that is what separates it from every
 #' other one the round sends. The account is already born and the round does
@@ -455,8 +458,9 @@ mail_credential_message <- function(row, upn, credential) {
       "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
       "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
       "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
-      "non coincidono, fermati e rispondi a questo messaggio: quel messaggio ",
-      "a parte e' andato all'indirizzo della richiesta."
+      "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
+      "(togli il testo citato): quel messaggio a parte e' andato ",
+      "all'indirizzo della richiesta."
     ),
     "",
     "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
@@ -474,8 +478,9 @@ mail_credential_message <- function(row, upn, credential) {
       "e-mail with the key alone: the user name has already reached them in a ",
       "separate message. Use the address you know from your own ",
       "correspondence with them, not the one copied from the request. If the ",
-      "two differ, stop and reply to this message: that separate message went ",
-      "to the address in the request."
+      "two differ, stop and reply to this message without the key (delete ",
+      "the quoted text): that separate message went to the address in the ",
+      "request."
     ),
     "",
     paste0(
