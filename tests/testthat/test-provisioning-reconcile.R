@@ -2198,6 +2198,29 @@ test_that("una modifica di due giorni fa approvata da chi ha creato la riga si e
 })
 
 
+test_that("una modifica di due giorni fa resta di chi l'ha fatta anche dopo una del creatore", { # nolint: line_length_linter.
+  # eval
+  # Bruno changed the role on the 12th at 22:00, instance time; Anna changed
+  # the expiration on the 13th at 23:00; nobody approved. The round runs on
+  # the 14th at 03:00 UTC.
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'", timestamp = "2026-08-13 23:00"),
+      cambio(bruno, timestamp = "2026-08-12 22:00")
+    ),
+    riga = riga_cambiata(expiration = "2027-01-31")
+  )
+
+  # test
+  # A window of a day, whether asked of REDCap or applied to what it
+  # answered, keeps Anna's edit and loses Bruno's and the execution below
+  # it: the change would be Anna's alone and would be carried out. Asserting
+  # on the request is not enough, so this asserts on what the round did.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("una modifica che il log non attribuisce aspetta chi ha creato la riga", { # nolint: line_length_linter.
   # eval
   # The seal moved and the row's log says nobody changed it since the round
