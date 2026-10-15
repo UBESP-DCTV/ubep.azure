@@ -80,6 +80,19 @@
   author. A log that does not answer, or a creator it does not name, is a
   different case (below).
 
+* **Only the row that stands now is read.** REDCap reuses the ids of
+  deleted records, and a row's log, asked with no window, also holds the
+  earlier lives of its id: the register was emptied on 2026-09-01, and the
+  requests filed since take, one after the other, the ids the field tests
+  had. Read whole, a change somebody else made to a field test after its
+  seal held the new request on its first round, as if another referent had
+  changed it. The round now reads a row's log from its newest creation on
+  (`log_current_life()`, through `log_of_record()`, so for every question it
+  asks of the log). Only the creation cuts: the wording of a deletion was
+  never measured. A log that holds no creation is read whole, as before, and
+  the round stops the row anyway, since the creation log does not name its
+  creator either.
+
 * **A log that cannot be read reaches the round's record.** Both log
   questions, the creations and the history of a changed row, left their
   `TRASPORTO_` code behind when they failed: the row was held, and nothing

@@ -564,6 +564,18 @@ chiedevano le ultime 24 ore di tutto il registro: una modifica più vecchia
 restava fuori e l'approvazione dentro, la modifica risultava senza autore e
 l'approvazione di chi l'aveva fatta passava per quella di un altro.
 
+Senza finestra, il log porta anche le **vite precedenti dell'id**. REDCap
+riusa gli id dei record cancellati, e dallo svuotamento del registro del
+2026-09-01 le richieste nuove riprendono, una dopo l'altra, gli id dei
+collaudi. Il giro legge solo la vita attuale della riga, dall'ultima creazione
+in poi (`log_current_life()`, attraverso `log_of_record()`, quindi per ogni
+domanda che fa al log): la modifica di un altro al collaudo non ferma la
+richiesta che ne ha preso l'id. Taglia solo la creazione, che resta nella vita
+attuale; la cancellazione no, perché la sua dicitura non è misurata e un
+evento che le somigliasse dentro la vita attuale ne toglierebbe le modifiche,
+nella direzione che concede. Un log senza creazione si legge intero, come
+prima.
+
 ### Una persona da creare
 
 Una riga il cui verdetto è `absent` è l'unica che il giro chiude creando, e
