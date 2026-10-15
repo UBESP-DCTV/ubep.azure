@@ -15,7 +15,7 @@ looks exactly like an account that does not carry it."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,6 +75,14 @@ on a field the sweep never asked for. They were missing from the plan's
 select, which was written before that confirmation was traced through; the
 historical flow populates both, through <code>-GivenName</code> and <code>-Surname</code> in
 <code>ps1_creators.R</code>.</p>
+<p><code>lastPasswordChangeDateTime</code> is here for the monthly report and not for the
+resolution, which never reads it. Graph sets it when the key is created and
+moves it when the key changes, and an account the round creates must change
+its key at first sign-in: beside <code>createdDateTime</code> it says whether anybody
+has signed in yet. It asks for no permission <code>User.Read.All</code> does not
+already give, and like <code>createdDateTime</code> and <code>accountEnabled</code> Graph returns
+it only when <code>$select</code> names it. One list for both readers rather than a
+second sweep, because the sweep is the same eight pages either way.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

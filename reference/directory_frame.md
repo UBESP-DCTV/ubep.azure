@@ -1,7 +1,7 @@
 # Turn parsed Graph user records into a frame of one row per account
 
 Every column keeps the type the wire gives it, which is not the same as
-guessing one. Eight of the nine fields arrive as strings and stay
+guessing one. Ten of the twelve fields arrive as strings and stay
 character, with a field the record does not carry becoming `""` rather
 than `NA` — the absence is what it means, and 1.170 accounts of the
 tenant have no `officeLocation`. `accountEnabled` is a JSON boolean and

@@ -10,7 +10,7 @@ and one forever.
 ## Usage
 
 ``` r
-register_call(url, token, params)
+register_call(url, token, params, writes = FALSE)
 ```
 
 ## Arguments
@@ -30,6 +30,17 @@ register_call(url, token, params)
 
   Named list of REDCap API parameters, without `token`, `format` and
   `returnFormat`, which are set here.
+
+- writes:
+
+  Whether the call is meant to write. Every reading goes through this
+  door, so a write is declared and not inherited: a call whose `action`
+  writes, `import`, `delete` or `rename`, is refused unless it says so,
+  before anything leaves. The one caller that does is
+  [`register_field_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_field_import.md),
+  which fixes the columns at its own door. Found by an adversarial
+  review on 2026-10-15: a guard looking for the writers by name did not
+  see a write made through the door of the readings.
 
 ## Value
 

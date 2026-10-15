@@ -1,5 +1,131 @@
 # Changelog
 
+## ubep.azure 0.20.0
+
+- **A monthly report to each referent, phase 1.** Decided on 2026-10-15.
+  Once a month every referent receives what is new or unexpected about
+  the requests they created, and not the list of all their accounts: the
+  accesses activated in the month, for information, and the people who
+  have not signed in a first time 30 days or more after their access was
+  activated. The third item, people with no access in more than a year,
+  needs the module and comes with phase 2; until then the mail says it
+  was not checked, since an all-clear that covered it would say
+  something false.
+  [`provisioning_report()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.md)
+  runs it, and **it reads and sends mail, and nothing else**: it does
+  not write in the register and does not touch Entra, and a guard
+  follows every function it reaches to keep it so.
+
+  A request belongs to whoever created it, as the creation log says, the
+  same person the round asks to approve a change; a person asked for by
+  two referents is in both reports, each with their own rows. Only
+  active and applied rows count. The date of activation is the channel’s
+  first write of the seal in the row’s log, not `outcome_at`, which
+  moves at every outcome; a row executed again after a change is listed
+  as modified, and a new one says whether its account was new: Entra
+  made it no earlier than the minute the row was made. Not from
+  `identity`, which the round turns from `created` to `existing` one
+  round after the creation, so every account the channel made would have
+  read as an old one (measured in production on 2026-10-16). The log is
+  filtered by record here too, although `exportLogging` was measured on
+  2026-10-16 to honor the parameter, and read from the row’s newest
+  creation on, as the round reads it, since the register reuses ids; it
+  is in Italian time, measured again the same day, as the month is cut.
+
+  Whether a person has signed in is read from Entra with the permission
+  the round already holds: an enabled account whose
+  `lastPasswordChangeDateTime` is within 60 seconds of its
+  `createdDateTime`
+  ([`report_tolerance()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_tolerance.md),
+  one constant) has never been entered, since the round creates accounts
+  with the change of key forced at first sign-in. The tolerance was
+  confirmed on 2026-10-16 over the enabled accounts of the tenant: the
+  accounts known never to have been used at 0 seconds, none between 1
+  and 30. A key reset by IT hides the person, and phase 2 removes that.
+  The 30 days run from the person and not from the row: from the later
+  of the channel’s first execution after the newest write of `username`,
+  and the birth of the account on Entra
+  ([`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md)),
+  so a username corrected by a modification, or an account made again,
+  does not inherit somebody else’s months. The item names the earlier
+  reports of the same referent that named the person, and how many
+  months it has been.
+
+  Two forms, told apart by the first word of the subject:
+  `Tutto in ordine`, or `N da guardare` with N the people listed.
+  Italian above, English below, IT in copy at the address of
+  `UBEP_POSTA_COPIA`. What has no referent to go to (a creator the log
+  does not name, or whose account is disabled or missing; a person whose
+  account cannot be judged; a row the log does not date, told apart as
+  having no seal by the channel or seals by two accounts) goes in one
+  mail to IT, at the same address, only when there is something in it. A
+  referent whose people went to IT without being judged is told how many
+  in a line of its own, which changes neither the verdict nor the number
+  in the subject.
+
+- **The report is a job of its own, run every day.**
+  `dev/runner-rapporto.R`, beside the round’s and the observer’s. A log
+  alert looks back two days at most, so the job runs daily: it reads,
+  computes and leaves a record every day, and from the 1st it sends the
+  previous month’s report to whoever has not had it yet. A ledger in the
+  unit’s state directory, one file per month, says which reports left
+  and which people they named; it is written after a send, so a failed
+  write costs a duplicate and never a loss. A day on which anything
+  could not be read sends nothing, and judges the month on the reports
+  the last whole reading found due, kept beside the ledger; with none on
+  record the month is not called late. Only the covered month’s ledger
+  stops the post: an earlier one that does not read costs its people the
+  sentence on earlier reports, and the record
+  `RAPPORTO_STORICO_ILLEGGIBILE`. A report of the month before still
+  unsent on the 1st is not sent any more, and the record carries
+  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` while it is missing.
+
+  The post is off by default (`UBEP_RAPPORTO_POSTA`), and
+  `UBEP_RAPPORTO_POSTA_A` redirects it for a field test; they are not
+  the round’s two, so a redirect for the report leaves the round’s
+  outcomes alone. `--mese AAAA-MM` forces the month for a run by hand;
+  it is an argument so that it cannot be left on in the environment the
+  jobs share. Neither a redirected run nor one with a forced month
+  writes the real ledger: a field test at the end of October would
+  otherwise make October read as sent, and nothing would leave on the
+  1st of November. A redirected run keeps a ledger of its own, so the
+  timer of a field test does not send everything again every day; a run
+  with a forced month writes nothing, and with the post on it requires
+  the redirect.
+
+  The record goes to its own table, through `UBEP_DCR_RAPPORTO` and
+  `UBEP_STREAM_RAPPORTO`, with the columns of the design
+  ([`report_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_record.md)).
+  `mese_completo` is the design’s `gia_mandati + mandati == referenti`,
+  and `in_ritardo` is computed here and not in the query, so a test
+  covers it: from the second day of the month, with the month not
+  complete.
+
+- **The register’s door refuses a write that was not declared.**
+  [`register_call()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_call.md)
+  is the door every reading of the register goes through, and a call
+  with `action = "import"` wrote through it all the same, unseen by a
+  guard looking for the writers by name. It now refuses `import`,
+  `delete` and `rename` unless the caller passes `writes = TRUE`, which
+  only
+  [`register_field_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_field_import.md)
+  does. The round writes as before.
+
+- **The sweep asks for `lastPasswordChangeDateTime` too.** One more
+  field in
+  [`directory_fields()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_fields.md),
+  which builds the select and names the columns, so the round’s sweep
+  carries it as well. The resolution does not read it, and it asks for
+  no permission beyond `User.Read.All`.
+
+- **Shape of the release.** No dictionary to import, and the round and
+  the observer are called as before, so their jobs stay as they are.
+  What is new is outside the package and goes in this order: the table
+  and its collection rule, before anything emits; the four variables;
+  the package, and the new job in `/opt`; its unit and daily timer; a
+  run by hand with a forced month and the post redirected; the three
+  alarms, after the first record. The post is switched on last.
+
 ## ubep.azure 0.19.0
 
 - **A change to a request waits for whoever created it, and only for

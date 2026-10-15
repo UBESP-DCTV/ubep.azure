@@ -15,7 +15,7 @@ with the number of projects, and here the project is one, and one forever."></he
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@ with the number of projects, and here the project is one, and one forever.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_call</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, <span class="va">params</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_call</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, <span class="va">params</span>, writes <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -75,6 +75,17 @@ silently downgrading the channel.</p></dd>
 <dt id="arg-params">params<a class="anchor" aria-label="anchor" href="#arg-params"></a></dt>
 <dd><p>Named list of REDCap API parameters, without <code>token</code>,
 <code>format</code> and <code>returnFormat</code>, which are set here.</p></dd>
+
+
+<dt id="arg-writes">writes<a class="anchor" aria-label="anchor" href="#arg-writes"></a></dt>
+<dd><p>Whether the call is meant to write. Every reading goes
+through this door, so a write is declared and not inherited: a call
+whose <code>action</code> writes, <code>import</code>, <code>delete</code> or <code>rename</code>, is refused unless
+it says so, before anything leaves. The one caller that does is
+<code><a href="register_field_import.html">register_field_import()</a></code>, which fixes the columns at its own door.
+Found by an adversarial review on 2026-10-15: a guard looking for the
+writers by name did not see a write made through the door of the
+readings.</p></dd>
 
 </dl></div>
     <div class="section level2">

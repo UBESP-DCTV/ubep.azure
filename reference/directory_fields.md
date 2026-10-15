@@ -31,3 +31,13 @@ cannot refuse on a field the sweep never asked for. They were missing
 from the plan's select, which was written before that confirmation was
 traced through; the historical flow populates both, through `-GivenName`
 and `-Surname` in `ps1_creators.R`.
+
+`lastPasswordChangeDateTime` is here for the monthly report and not for
+the resolution, which never reads it. Graph sets it when the key is
+created and moves it when the key changes, and an account the round
+creates must change its key at first sign-in: beside `createdDateTime`
+it says whether anybody has signed in yet. It asks for no permission
+`User.Read.All` does not already give, and like `createdDateTime` and
+`accountEnabled` Graph returns it only when `$select` names it. One list
+for both readers rather than a second sweep, because the sweep is the
+same eight pages either way.

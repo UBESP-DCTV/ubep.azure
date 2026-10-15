@@ -125,6 +125,11 @@ hanno cadenze diverse e conseguenze diverse, e un guasto nell’uno non
 deve fermare l’altro. Le ragioni della divisione, e perché solo
 l’osservatore doveva restare senza confronto, stanno nel §2.
 
+**Dalla 0.20.0 la macchina ne ospita una terza**, il rapporto mensile ai
+referenti. Legge il registro e l’anagrafica e manda posta, e basta: non
+scrive nel registro, non tocca Entra, non chiede niente alle istanze. Ha
+la sua unità, la sua tabella e i suoi allarmi, e sta nel §9.
+
 **La cadenza di quattro ore è una decisione, non un caso.** Dice: chi
 compila una richiesta sa entro quattro ore se è formalmente corretta e,
 quando la scrittura è accesa, se è stata evasa. Non sono due tempi — il
@@ -1137,6 +1142,277 @@ misure, e il loro valore corretto è quello che la lavorazione riporta.
 Stanno nel foglio perché chi legge un allarme deve poter confrontare ciò
 che vede con ciò che era normale l’ultima volta che qualcuno ha
 guardato.
+
+## 9. Il rapporto mensile ai referenti
+
+**Una mail al mese per referente, con solo il nuovo e l’inatteso.** Non
+l’elenco di tutte le utenze: gli accessi attivati nel mese, per
+informazione, e le persone che a 30 giorni dall’attivazione non sono
+ancora entrate. La terza voce, le persone senza accessi da più di un
+anno, chiede di leggere l’ultimo login sulle istanze, quindi il modulo:
+arriva con la fase 2, e finché non c’è la mail scrive «non ancora
+controllato». Un «tutto in ordine» che coprisse una voce non misurata
+direbbe il falso.
+
+**Il rapporto legge e manda posta, e basta.** Non scrive nel registro,
+non tocca Entra, in fase 1 non chiede niente alle istanze. È questo che
+gli permette di stare fuori dal cammino del canale, e una guardia in
+`tests/testthat/test-runner-guardie.R` lo tiene tale: segue per nome
+ogni funzione che
+[`provisioning_report()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.md)
+raggiunge, anche attraverso gli aiuti, e nega qualunque scrittura; una
+seconda guardia legge la lavorazione.
+
+### A chi va, e che cosa dice
+
+Una riga del registro è **di chi l’ha creata**, letto dal log delle
+creazioni come lo legge il cancello, e non `requested_by`, che un import
+scrive com’è. È la stessa persona che il giro chiama ad approvare una
+modifica altrui. Una persona chiesta da due referenti compare nel
+rapporto di ciascuno, con le sole righe sue. Contano le righe con
+`request_status = active` e `outcome = applied`; riceve il rapporto chi
+ne ha almeno una attivata entro la fine del mese coperto, e un «tutto in
+ordine» è un rapporto anche lui.
+
+Nella voce A una richiesta nuova dice se l’account era nuovo: lo è
+quando Entra l’ha creato non prima del minuto in cui è nata la riga,
+entrambe le ore in ora italiana, e la nascita della riga si legge dallo
+stesso evento da cui si prende il creatore. Non da `identity`, che il
+giro porta da `created` a `existing` già al giro dopo la creazione
+(misurato in produzione il 2026-10-16): letta lì, ogni account fatto dal
+canale risulterebbe già esistente. Un account fatto a mano da IT dopo la
+richiesta risulta nuovo, che è ciò che vede il referente; se manca una
+delle due date la frase non c’è.
+
+Le due forme si distinguono dalla **prima parola dell’oggetto**, che è
+ciò che si vede nell’elenco della posta: `Tutto in ordine` oppure
+`N da guardare`, con N le persone elencate per esteso. La voce A non
+conta: sono gli accessi che il referente ha chiesto. Italiano sopra,
+inglese sotto, IT in copia all’indirizzo di `UBEP_POSTA_COPIA`.
+
+Ciò che non ha un referente a cui andare va **a IT, e a nessun altro**,
+in una mail sola e solo quando c’è qualcosa, allo stesso indirizzo:
+
+- le righe il cui creatore il log non nomina, o ha l’account
+  disabilitato, assente o non leggibile su Entra; il creatore
+  disabilitato non riceve niente;
+- le persone il cui account non si sa giudicare: disabilitato, assente,
+  senza data di creazione;
+- le righe applicate di cui il log non dice da quando: perché non porta
+  la scrittura del sigillo da parte del canale, oppure perché i campi
+  del canale li scrivono due account e non si sa quale abbia eseguito la
+  riga. La mail distingue i due casi, che mandano a cercare cose
+  diverse.
+
+Il referente a cui appartengono persone mandate a IT senza giudizio lo
+legge nella sua mail, in una riga di conteggio («Persone non
+giudicabili, segnalate a IT: N»). Non cambia il verdetto né il numero
+nell’oggetto, che dicono ciò che si è misurato; ma un «tutto in ordine»
+che tacesse quelle persone coprirebbe una voce non misurata.
+
+### La data di attivazione
+
+È il **primo evento del log della riga che scrive `applied_seal`**,
+firmato dall’utenza del canale, e non `outcome_at`: l’esito si riscrive
+a ogni esito, e una riga passata da `applied` a `transport_error` e
+tornata `applied` sembrerebbe attivata due volte. Una riga rieseguita
+dopo una modifica scrive un sigillo nuovo, e la voce A la elenca come
+modificata.
+
+Tre cose da sapere quando si legge il codice:
+
+- il log si chiede con `record`, e **gli eventi si filtrano per riga
+  anche nel pacchetto**: misurato il 2026-10-16 che `exportLogging`
+  rispetta il parametro, il filtro resta perché non costa niente, e
+  un’istanza che lo ignorasse risponderebbe col log intero;
+- il log porta l’ora locale dell’istanza, misurato di nuovo il
+  2026-10-16 (primo sigillo alle 22:04 del log, `outcome_at` alle 20:03
+  UTC), e il mese si taglia in ora italiana: si confronta la stringa,
+  senza conversioni che possano spostare di mese una riga attivata
+  l’ultima sera;
+- **il registro riusa i `record_id`**: un id cancellato e ricreato porta
+  nel log anche la storia della riga di prima. Il rapporto legge il log
+  da
+  [`log_of_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_of_record.md),
+  che ne tiene la sola vita attuale, dall’ultima creazione in poi, come
+  per il giro (§4); il creatore è quello della riga di oggi, perché
+  [`log_creators()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.md)
+  prende la creazione più recente.
+
+### Il primo accesso, da Entra
+
+Un account abilitato la cui `lastPasswordChangeDateTime` coincide con la
+`createdDateTime` **entro 60 secondi** non è mai stato usato: il canale
+crea gli account con il cambio della chiave obbligatorio al primo
+accesso, e la chiave nasce nella stessa chiamata che crea l’account. La
+tolleranza sta in
+[`report_tolerance()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_tolerance.md),
+in un posto solo, e una misura nuova la cambia in una riga. Confermata
+il 2026-10-16 sugli account abilitati del tenant: quelli che risultano
+mai usati stanno a 0 secondi, nessuno fra 1 e 30, pochi fra 31 e 120; un
+account fatto a mano dal portale e usato una volta sta a 172. Il
+permesso è `User.Read.All`, quello che il giro ha già, e il campo in più
+sta in
+[`directory_fields()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_fields.md),
+quindi anche la spazzata del giro lo chiede.
+
+Che cosa non vede, ed è dichiarato:
+
+- una **chiave reimpostata da IT** sposta la data anche se la persona
+  non è mai entrata, e la persona sparisce dalla voce; la fase 2 lo
+  toglie;
+- un **account che esisteva da prima** ha le date diverse da anni: il
+  segnale dice «è entrata con l’account UBEP», non «è entrata su
+  REDCap».
+
+**I 30 giorni partono dalla persona, non dalla riga.** Contano dal più
+tardo fra il primo sigillo del canale dopo l’ultima scrittura di
+`username` nella vita attuale della riga
+([`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md))
+e la nascita dell’account su Entra, in ora italiana. Uno `username`
+corretto con una modifica, o un account ricreato, altrimenti
+erediterebbero i mesi di un’altra persona. La voce A resta datata dalla
+riga: la richiesta è quella attivata allora.
+
+La voce dice da quanti mesi di trenta giorni la persona risulta senza
+primo accesso, e in quali rapporti precedenti dello stesso referente è
+già comparsa: si rilegge dal registro degli invii dei mesi prima. Se il
+file di uno di quei mesi non si legge, per le persone che poteva
+contenere la mail non dice né «prima segnalazione» né «segnalata anche»,
+e il record porta `RAPPORTO_STORICO_ILLEGGIBILE`: quei file servono a
+quella frase e a niente altro, quindi non fermano l’invio.
+
+### Ogni giorno, non una volta al mese
+
+Una regola d’allarme sui log guarda indietro al più due giorni, quindi
+una lavorazione mensile non si sorveglia con «nessun record nell’ultimo
+mese». Il rapporto gira **ogni giorno**: legge, calcola e lascia un
+record; dal primo del mese manda il rapporto del mese prima a chi non
+l’ha ancora ricevuto, finché il mese non è completo. Un registro
+illeggibile il 28 si vede il 28.
+
+**Il registro degli invii** sta nella cartella di stato dell’unità, un
+file per mese coperto (`AAAA-MM.json`): per ogni rapporto, quando è
+partito e quali persone nominava senza primo accesso. Non è una copia
+dello stato che il canale rilegge: nel file non c’è niente del registro
+né di Entra, solo la traccia di un evento che altrimenti non ne lascia.
+Si scrive **dopo** l’invio riuscito, come il giro scrive nel registro
+dopo aver mandato: il prezzo accettato è un doppione, mai una perdita.
+Un file del mese coperto che non si legge non vale per vuoto: il
+rapporto non manda niente e lo dice con `RAPPORTO_INVII_ILLEGGIBILI`.
+
+**Un giorno in cui qualcosa non si è letto non manda niente**: registro,
+creazioni, anagrafica, il log di una riga attiva, il registro degli
+invii del mese coperto. Un rapporto composto su mezza lettura sarebbe
+sbagliato per qualcuno, e il giorno dopo si riprova. Quel giorno non sa
+nemmeno chi è dovuto, quindi **giudica il mese sui dovuti dell’ultima
+lettura completa**, che ogni lettura completa tiene accanto al registro
+degli invii (`AAAA-MM.dovuti.json`, i soli nomi che il registro degli
+invii già porta). Così una lettura mancata il 15 non fa sembrare in
+ritardo un mese consegnato il primo; senza nessuna lettura completa del
+mese, il mese non si dice in ritardo, e a parlare è l’allarme
+sull’assenza.
+
+**Il mese prima non si recupera, ma non si perde in silenzio.** Il primo
+del mese il rapporto passa al mese appena finito, e un rapporto di
+quello prima ancora non partito non parte più: descriverebbe un mese di
+due indietro. Ogni esecuzione confronta il registro degli invii del mese
+prima con i suoi dovuti, e finché ne manca uno il record porta
+`RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+
+### Le variabili, e il mese forzato
+
+| Variabile | Che cosa porta | Se manca |
+|----|----|----|
+| `UBEP_RAPPORTO_POSTA` | `1` perché mandi | calcola e lascia il record, non manda |
+| `UBEP_RAPPORTO_POSTA_A` | un indirizzo al posto di ogni destinatario | nessun dirottamento |
+| `UBEP_DCR_RAPPORTO` | la regola di raccolta del rapporto | il record non si emette |
+| `UBEP_STREAM_RAPPORTO` | il flusso della sua tabella | idem |
+
+Le due della posta non sono quelle del giro: un dirottamento acceso per
+collaudare il rapporto dirotterebbe anche gli esiti del canale.
+Mittente, risposte, copia, Key Vault, endpoint di Graph e punto di
+raccolta sono invece quelli che le altre lavorazioni già leggono; la
+cartella del registro degli invii la passa systemd in `STATE_DIRECTORY`.
+
+**Il mese si forza con un argomento, `--mese AAAA-MM`**, e non con una
+variabile: l’unità del timer non passa argomenti, quindi un mese forzato
+non può restare acceso per sbaglio nel file d’ambiente che le tre
+lavorazioni condividono. Serve all’esecuzione a mano del collaudo, per
+mostrare un mese che di norma non è ancora finito. Tre regole lo
+accompagnano:
+
+- **né un’esecuzione col mese forzato né una dirottata scrivono nel
+  registro degli invii vero**: scritto, un collaudo a fine ottobre
+  farebbe risultare mandato ottobre, e il primo novembre non partirebbe
+  niente. Un’esecuzione dirottata sul mese dell’orologio tiene un
+  registro suo, `AAAA-MM.collaudo.json`, così anche il timer di un
+  collaudo manda una volta e non ogni giorno; una col mese forzato non
+  scrive niente; con la posta spenta non c’è niente da scrivere;
+- con la posta accesa, il mese forzato **vuole il dirottamento**: senza,
+  i rapporti di un mese non finito andrebbero ai referenti veri, e la
+  lavorazione si ferma prima di leggere qualunque cosa;
+- un’esecuzione forzata riporta `in_ritardo` falso: parla di un altro
+  mese, e la prossima esecuzione del timer dice com’è quello vero.
+
+### Il record e gli allarmi
+
+Il record va nella **sua tabella**, non in quella del giro né in quella
+dell’osservatore, per la ragione del §5: le loro regole leggono l’ultimo
+record senza chiedersi chi l’abbia scritto. Porta conteggi e codici, mai
+una persona. Le colonne sono quelle di
+[`report_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_record.md);
+tre sono da capire prima di leggere un allarme:
+
+- `referenti` conta i rapporti del mese, quello a IT compreso: quelli
+  dovuti oggi e quelli che il registro degli invii dice partiti nei
+  giorni prima;
+- `mese_completo` è vero quando `gia_mandati + mandati` fa `referenti`,
+  sui dovuti della lettura di oggi o, in un giorno che non legge,
+  dell’ultima lettura completa;
+- `in_ritardo` si calcola nel pacchetto e non nella query, così lo copre
+  un test: dal giorno 2 del mese, con il mese non completo.
+
+`istanze_non_lette` e `voci_senza_accessi` sono zero in fase 1. I codici
+in `errori` propri del rapporto cominciano per `RAPPORTO_`: il registro
+degli invii o i dovuti non letti o non scritti, un registro di un mese
+vecchio illeggibile, il mese prima rimasto incompleto.
+
+Tre regole, con la forma di quelle del canale e i nomi nel foglio dei
+parametri:
+
+- **nessuna esecuzione ha letto registro e anagrafica nelle ultime 26
+  ore** (gravità 1): la lavorazione non è partita, è morta prima di
+  emettere, o non riesce a leggere. Guardare lo stato dell’unità e il
+  suo journal; se il record c’è, `errori` dice quale lettura è mancata;
+- **l’ultimo record non porta tutte le colonne** (gravità 1): come per
+  le altre lavorazioni, o la regola di raccolta non conosce una colonna
+  nuova o la lavorazione è indietro rispetto al pacchetto;
+- **il rapporto del mese è in ritardo** (gravità 2): dal giorno 2
+  qualche rapporto non è partito. Prima cosa, `posta`: con la posta
+  spenta è l’atteso. Poi `falliti` ed `errori`, e sullo standard error
+  della lavorazione la tabella dei rapporti, uno per riga con
+  destinatario, forma ed esito. Si richiude da sé quando l’ultimo è
+  partito, e anche il primo del mese dopo, quando il rapporto passa al
+  mese nuovo: da lì il mese rimasto indietro lo dice
+  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`.
+
+### La forma del rilascio
+
+Nessun dizionario da importare, e giro e osservatore si chiamano come
+prima: le loro lavorazioni restano come sono. Ciò che è nuovo sta fuori
+dal pacchetto, e va in quest’ordine, per la ragione del §5 (la regola di
+raccolta impara le colonne prima che qualcuno le emetta):
+
+1.  la tabella e la sua regola di raccolta;
+2.  le quattro variabili, con `UBEP_RAPPORTO_POSTA_A` su un indirizzo
+    IT;
+3.  il pacchetto, e la lavorazione nuova in `/opt`;
+4.  l’unità e il timer giornaliero;
+5.  un’esecuzione a mano col mese forzato e la posta accesa ma
+    dirottata, per leggere il record e le mail;
+6.  i tre allarmi, dopo il primo record;
+7.  per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
 
 ## Che cosa questa guida non copre
 
