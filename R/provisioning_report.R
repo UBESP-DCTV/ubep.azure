@@ -349,11 +349,14 @@ report_expired <- function(expiration, today) {
 #' it: `attivata` when its first execution falls in the month, `modificata`
 #' when it was executed again in the month after a change, `""` otherwise.
 #'
-#' A row whose log was read and carries no execution by the channel is kept
-#' with `senza_data`: it is applied and the log does not say since when, which
-#' is a question for IT. A row whose log could not be read is left out, since
-#' it cannot be judged on a reading that did not happen; the caller sends
-#' nothing on such a day.
+#' A row whose log was read and does not date it is kept with `senza_data`:
+#' it is applied and the log does not say since when, which is a question for
+#' IT. `data_motivo` says which of the two ways: `senza_sigillo`, no seal
+#' written by the channel; `log_ambiguo`, the channel's fields written by
+#' more than one account, so that which one executed the row is unknown. The
+#' two send IT to look for different things. A row whose log could not be
+#' read is left out, since it cannot be judged on a reading that did not
+#' happen; the caller sends nothing on such a day.
 #'
 #' @param register The register as read.
 #' @param creators Who created each row, as `log_creators()` answers, in the
@@ -363,7 +366,7 @@ report_expired <- function(expiration, today) {
 #' @param period What `report_month()` answered.
 #'
 #' @return The kept rows of `register`, with `creator`, `attivata_il`,
-#'   `nel_mese` and `senza_data` added.
+#'   `nel_mese`, `senza_data` and `data_motivo` added.
 #'
 #' @keywords internal
 report_rows <- function(register, creators, executions, period) {
@@ -389,6 +392,9 @@ report_rows <- function(register, creators, executions, period) {
   dated <- vapply(executions, function(stamps) {
     !is.null(stamps) && length(stamps) > 0L && !anyNA(stamps)
   }, logical(1))
+  ambiguous <- vapply(executions, function(stamps) {
+    !is.null(stamps) && anyNA(stamps)
+  }, logical(1))
   stamps <- lapply(seq_along(executions), function(i) {
     if (dated[[i]]) sort(executions[[i]]) else character()
   })
@@ -412,6 +418,9 @@ report_rows <- function(register, creators, executions, period) {
   rows[["attivata_il"]] <- first[keep]
   rows[["nel_mese"]] <- news[keep]
   rows[["senza_data"]] <- !dated[keep]
+  rows[["data_motivo"]] <- ifelse(
+    dated, "", ifelse(ambiguous, "log_ambiguo", "senza_sigillo")
+  )[keep]
   rownames(rows) <- NULL
   rows
 }
@@ -1095,6 +1104,9 @@ report_it_message <- function(it, period) {
   undated <- it[["senza_data"]]
   if (!is.null(undated) && nrow(undated) > 0L) {
     creator <- value(undated, "creator")
+    # Two different things to look for: a seal nobody wrote, or a seal written
+    # by two accounts, of which only one can be the channel.
+    ambiguous <- value(undated, "data_motivo") == "log_ambiguo"
     words <- row_words(undated)
     sections[[length(sections) + 1L]] <- list(
       n = nrow(undated),
@@ -1104,12 +1116,24 @@ report_it_message <- function(it, period) {
           nrow(undated), ")"
         ),
         paste0(
-          "   Risultano eseguite, ma il registro degli eventi non porta la ",
-          "scrittura del sigillo da parte del canale."
+          "   Risultano eseguite, ma il registro degli eventi non dice da ",
+          "quando."
         ),
         paste0(
-          words[["it"]], " Referente: ",
-          ifelse(nzchar(creator), creator, "non stabilito"), "."
+          words[["it"]], " ",
+          ifelse(
+            ambiguous,
+            paste0(
+              "Nel registro degli eventi i campi del canale li scrive piu' ",
+              "di un account, e non si sa quale abbia eseguito la riga."
+            ),
+            paste0(
+              "Il registro degli eventi non porta la scrittura del sigillo ",
+              "da parte del canale."
+            )
+          ),
+          " Referente: ", ifelse(nzchar(creator), creator, "non stabilito"),
+          "."
         )
       ),
       en = c(
@@ -1118,12 +1142,21 @@ report_it_message <- function(it, period) {
           nrow(undated), ")"
         ),
         paste0(
-          "   They are on record as applied, but the event log carries no ",
-          "seal written by the channel."
+          "   They are on record as applied, but the event log does not say ",
+          "since when."
         ),
         paste0(
-          words[["en"]], " Referent: ",
-          ifelse(nzchar(creator), creator, "not established"), "."
+          words[["en"]], " ",
+          ifelse(
+            ambiguous,
+            paste0(
+              "In the event log the channel's fields are written by more ",
+              "than one account, and which one executed the row is not known."
+            ),
+            "The event log carries no seal written by the channel."
+          ),
+          " Referent: ", ifelse(nzchar(creator), creator, "not established"),
+          "."
         )
       )
     )

@@ -448,6 +448,9 @@ test_that("a row without a date is kept for IT, an unread one is left out", {
   # test
   expect_equal(righe[["record_id"]], c("41", "42"))
   expect_equal(righe[["senza_data"]], c(TRUE, TRUE))
+  # No seal by the channel, and seals by two accounts: IT looks for different
+  # things in the two.
+  expect_equal(righe[["data_motivo"]], c("senza_sigillo", "log_ambiguo"))
 })
 
 
@@ -1526,4 +1529,34 @@ test_that("late means from the 2nd on, with the month not complete", {
   expect_true(report_late(28L, completo = FALSE, forzato = FALSE))
   expect_false(report_late(2L, completo = TRUE, forzato = FALSE))
   expect_false(report_late(2L, completo = FALSE, forzato = TRUE))
+})
+
+
+# --- what the adversarial review found -------------------------------------
+
+test_that("an ambiguous log is told to IT as such, not as a missing seal", {
+  # eval
+  dati <- scenario()
+  dati[["registro"]] <- dati[["registro"]][1L, ]
+  dati[["eventi"]] <- rbind(
+    evento("2026-10-02 23:03", "altro.account@ubep.unipd.it",
+           "applied_seal = 'ffffffffffff'"),
+    evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'")
+  )
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esegui(cartella, posta)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  it <- mail[[which(vapply(mail, `[[`, "", "to") == it_prova)]]
+  # Two accounts wrote the seal: saying there is none sends IT to look for
+  # the wrong thing.
+  expect_false(grepl(
+    "non porta la scrittura del sigillo", it[["body"]], fixed = TRUE
+  ))
+  expect_match(it[["body"]], "piu' di un account", fixed = TRUE)
+  expect_match(it[["body"]], "more than one account", fixed = TRUE)
 })

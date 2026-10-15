@@ -19,7 +19,7 @@ register's order.}
 }
 \value{
 The kept rows of \code{register}, with \code{creator}, \code{attivata_il},
-\code{nel_mese} and \code{senza_data} added.
+\code{nel_mese}, \code{senza_data} and \code{data_motivo} added.
 }
 \description{
 A row counts while it is an access: \code{request_status} is \code{active} and
@@ -34,10 +34,13 @@ report, and every other one is kept. \code{nel_mese} says what the month did to
 it: \code{attivata} when its first execution falls in the month, \code{modificata}
 when it was executed again in the month after a change, \code{""} otherwise.
 
-A row whose log was read and carries no execution by the channel is kept
-with \code{senza_data}: it is applied and the log does not say since when, which
-is a question for IT. A row whose log could not be read is left out, since
-it cannot be judged on a reading that did not happen; the caller sends
-nothing on such a day.
+A row whose log was read and does not date it is kept with \code{senza_data}:
+it is applied and the log does not say since when, which is a question for
+IT. \code{data_motivo} says which of the two ways: \code{senza_sigillo}, no seal
+written by the channel; \code{log_ambiguo}, the channel's fields written by
+more than one account, so that which one executed the row is unknown. The
+two send IT to look for different things. A row whose log could not be
+read is left out, since it cannot be judged on a reading that did not
+happen; the caller sends nothing on such a day.
 }
 \keyword{internal}
