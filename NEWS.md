@@ -16,10 +16,8 @@
   rights need to be. Until now any referent other than the author could
   approve, including one with no rights on the project at all.
 
-  The rule lives in one function, `change_needs_approval()`. A revocation
-  follows it like any other change for now; whether a referent who manages
-  the project may withdraw somebody else's request without its creator is
-  still open, and that function is where the answer goes.
+  The rule lives in one function, `change_needs_approval()`, and has one
+  exception, a revocation by somebody who manages the project (below).
 
   Rows held today change with the release. An approval already pasted by
   somebody other than the creator stops counting, and the row stays held
@@ -53,7 +51,8 @@
   reading its log. The round now reads the log of every row not applied yet
   that it could act on and whose creator it knows, and applies the same rule;
   a log that names nobody says nobody changed it, since there is no seal that
-  moved, and a log that cannot be read holds the row. It costs one call per
+  moved, and a log that cannot be read stops it on a transport code (below).
+  It costs one call per
   waiting row for each round it waits. Setting the fields back does not
   release such a row, since the other change stays in its log: the message
   carries the seal of the restored version for the creator to paste.
@@ -76,10 +75,10 @@
   the one that wrote the fields only the channel writes, and by account
   rather than by event, since REDCap logs only the fields an import changed.
 
-  A change whose authors or whose creator the log cannot establish holds the
-  row: a log that does not answer, a creation event no longer there, two
+  A change whose authors the log cannot establish holds the row: two
   accounts writing what only the channel writes, an intent write with no
-  author.
+  author. A log that does not answer, or a creator it does not name, is a
+  different case (below).
 
 * **A log that cannot be read reaches the round's record.** Both log
   questions, the creations and the history of a changed row, left their
@@ -88,9 +87,9 @@
 
 * **A held row's message goes to its creator, and follows a second change.**
   It went to `requested_by`; it now goes to the creator the log names, the
-  only person whose approval counts, and to `requested_by` only when the
-  creator could not be read. It names who changed the row, and says that only
-  the creator can approve.
+  only referent whose approval counts. A held row always has its creator
+  read now. It names who changed the row, and says that only the creator, or
+  IT, can approve.
 
   The outcome detail of a held row now carries the seal to paste,
   `SIGILLO_DIVERSO:<seal>`. A second change to a row already held left its
@@ -102,14 +101,52 @@
   first round after the install every row held today changes detail, and its
   creator receives one message.
 
+* **A revocation by somebody who manages the project does not wait.**
+  Decided on 2026-10-15. Somebody else's withdrawal of a request is carried
+  out without its creator when everybody other than the creator who had a
+  hand in it holds User Rights with Full Access on the project: taking an
+  access away grants nothing, and they could have done it by hand. Narrow on
+  purpose (`log_revocation_only()`): the row asks for `revoked`, and what the
+  others wrote is that and nothing else; a withdrawal that also moves the
+  role, the person or the project waits for the creator. The rights come
+  from the instance, so such a row is not held before the plan: it stands
+  provisionally and the gate decides on the rights of whoever touched it
+  (`scope_withdrawal()`). One who does not manage the project sends it back
+  to wait for the creator, as `held`; a permission that cannot be read keeps
+  it queued on `TRASPORTO_PERMESSO_NON_LEGGIBILE`; the creator's own rights
+  are asked only when the creator had a hand in it.
+
+* **IT approves as the creator does.** Decided on 2026-10-15, so that a
+  request whose creator has left UBEP does not wait for ever and keeps its
+  creator on record. `provisioning_reconcile()` takes `approvers`, the REDCap
+  usernames whose approval counts on any row, under the same three
+  conditions as the creator's; the runner reads them from
+  `UBEP_APPROVATORI_IT`, comma separated, on the machine and never from this
+  repository. Without the variable only the creator approves. The scope gate
+  still asks the creator's rights, so no approval carries the row of a
+  creator who no longer manages the project.
+
+* **A changed row whose log cannot be read is a transport error, not a held
+  row.** It took `held`, and its message asked for a seal to paste with
+  "Edited by: not established", sent to `requested_by` when the creator was
+  the unreadable part, while saying it went to the creator. Nobody could
+  approve it: there was no creator to ask, or no log to check the approval
+  against. A changed row whose own log could not be read, or whose creator
+  the log does not name, now takes `TRASPORTO_AUTORE_NON_LEGGIBILE`, the code
+  the gate already gives a row with no author: it is not applied, it comes
+  back next round, and the message says the failure is ours. The register's
+  own code still goes into `errori`.
+
 * **Release.** An install and not an import: the two field notes of
   `seal_state` and `approved_seal` say who approves now, and the dictionary
   comparison does not read notes, so the live register keeps the old ones
   until the dictionary is imported again and does not drift meanwhile. No new
-  column in the round's record, so the collection rule stays as it is, and no
-  change to what the runner calls, so the runner copy under `/opt` stays as
-  it is. The register's service account still needs REDCap's **Logging**
-  privilege, as it has since row protection.
+  column in the round's record, so the collection rule stays as it is. The
+  runner passes `approvers` now, so its copy under `/opt` has to be replaced,
+  and `UBEP_APPROVATORI_IT` set in the unit's environment; a runner left as
+  it was keeps the creator as the only approver. The register's service
+  account still needs REDCap's **Logging** privilege, as it has since row
+  protection.
 
   On the first round after the install every request still waiting to be
   applied costs one log call, and one changed by somebody other than its
