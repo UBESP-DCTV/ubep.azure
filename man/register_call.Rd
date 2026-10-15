@@ -4,7 +4,7 @@
 \alias{register_call}
 \title{Call the register's REDCap API once}
 \usage{
-register_call(url, token, params)
+register_call(url, token, params, writes = FALSE)
 }
 \arguments{
 \item{url}{Hostname of the instance hosting the register, optionally
@@ -16,6 +16,15 @@ silently downgrading the channel.}
 
 \item{params}{Named list of REDCap API parameters, without \code{token},
 \code{format} and \code{returnFormat}, which are set here.}
+
+\item{writes}{Whether the call is meant to write. Every reading goes
+through this door, so a write is declared and not inherited: a call
+whose \code{action} writes, \code{import}, \code{delete} or \code{rename}, is refused unless
+it says so, before anything leaves. The one caller that does is
+\code{register_field_import()}, which fixes the columns at its own door.
+Found by an adversarial review on 2026-10-15: a guard looking for the
+writers by name did not see a write made through the door of the
+readings.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{payload}, shaped like the module

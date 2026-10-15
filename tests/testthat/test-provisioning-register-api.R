@@ -50,6 +50,37 @@ test_that("the export posts to the API endpoint with the token in the body", {
 })
 
 
+test_that("the door of the readings refuses a write that was not declared", {
+  # eval
+  # Found by an adversarial review on 2026-10-15: every reading goes through
+  # register_call(), so one call with `action = "import"` wrote through the
+  # same door, and nothing in the door said it could.
+  chiamate <- 0L
+  scrivi <- function(action, ...) {
+    httr2::with_mocked_responses(
+      function(req) {
+        chiamate <<- chiamate + 1L
+        httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
+      },
+      register_call(
+        "registro.example.org", "t0ken",
+        list(content = "record", action = action), ...
+      )
+    )
+  }
+
+  # test
+  for (action in c("import", "delete", "rename")) {
+    expect_error(scrivi(action), "register_field_import", fixed = TRUE)
+  }
+  # Refused before anything left.
+  expect_equal(chiamate, 0L)
+  # Declared, it goes: that is what register_field_import() does.
+  expect_true(scrivi("import", writes = TRUE)[["ok"]])
+  expect_equal(chiamate, 1L)
+})
+
+
 test_that("a rejected token is a transport error and never echoes the token", {
   # eval
   result <- httr2::with_mocked_responses(

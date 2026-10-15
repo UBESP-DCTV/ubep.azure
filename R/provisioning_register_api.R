@@ -19,17 +19,36 @@
 #' @param token The API token of the service account, sent in the body.
 #' @param params Named list of REDCap API parameters, without `token`,
 #'   `format` and `returnFormat`, which are set here.
+#' @param writes Whether the call is meant to write. Every reading goes
+#'   through this door, so a write is declared and not inherited: a call
+#'   whose `action` writes, `import`, `delete` or `rename`, is refused unless
+#'   it says so, before anything leaves. The one caller that does is
+#'   `register_field_import()`, which fixes the columns at its own door.
+#'   Found by an adversarial review on 2026-10-15: a guard looking for the
+#'   writers by name did not see a write made through the door of the
+#'   readings.
 #'
 #' @return A list with `ok`, `errors` and `payload`, shaped like the module
 #'   client's answer because it answers the same kind of question.
 #'
 #' @keywords internal
-register_call <- function(url, token, params) {
+register_call <- function(url, token, params, writes = FALSE) {
   stopifnot(
     is.character(url), length(url) == 1L,
     is.character(token), length(token) == 1L, nzchar(token),
-    is.list(params), length(params) > 0L, !is.null(names(params))
+    is.list(params), length(params) > 0L, !is.null(names(params)),
+    is.logical(writes), length(writes) == 1L, !is.na(writes)
   )
+
+  action <- as.character(params[["action"]] %||% "")
+  if (!writes && length(action) == 1L &&
+        action %in% c("import", "delete", "rename")) {
+    stop(
+      "register_call(): action = \"", action, "\" writes in the register, ",
+      "and a write goes through register_field_import(), which declares it.",
+      call. = FALSE
+    )
+  }
 
   base <- sub("^[A-Za-z][A-Za-z0-9+.-]*://", "", url)
   base <- sub("/+$", "", base)
@@ -539,7 +558,7 @@ register_field_import <- function(url, token, payload, expected, caller,
   # as a word somebody wrote. An empty cell is the absence this means.
   payload[is.na(payload)] <- ""
 
-  answer <- register_call(url, token, list(
+  answer <- register_call(url, token, writes = TRUE, params = list(
     content = "record",
     action = "import",
     type = "flat",
