@@ -1084,6 +1084,15 @@ righe sue. Contano le righe con `request_status = active` e `outcome =
 applied`; riceve il rapporto chi ne ha almeno una attivata entro la fine del
 mese coperto, e un «tutto in ordine» è un rapporto anche lui.
 
+Nella voce A una richiesta nuova dice se l'account era nuovo: lo è quando
+Entra l'ha creato non prima del minuto in cui è nata la riga, entrambe le ore
+in ora italiana, e la nascita della riga si legge dallo stesso evento da cui
+si prende il creatore. Non da `identity`, che il giro porta da `created` a
+`existing` già al giro dopo la creazione (misurato in produzione il
+2026-10-16): letta lì, ogni account fatto dal canale risulterebbe già
+esistente. Un account fatto a mano da IT dopo la richiesta risulta nuovo, che
+è ciò che vede il referente; se manca una delle due date la frase non c'è.
+
 Le due forme si distinguono dalla **prima parola dell'oggetto**, che è ciò che
 si vede nell'elenco della posta: `Tutto in ordine` oppure `N da guardare`, con
 N le persone elencate per esteso. La voce A non conta: sono gli accessi che il
@@ -1119,13 +1128,14 @@ sigillo nuovo, e la voce A la elenca come modificata.
 
 Tre cose da sapere quando si legge il codice:
 
-- il log si chiede con `record`, ma **gli eventi si filtrano per riga anche
-  nel pacchetto**: che `exportLogging` rispetti il parametro si misura solo
-  con la 0.19.0 in esercizio, e un'istanza che lo ignorasse risponderebbe col
-  log intero;
-- il log porta l'ora locale dell'istanza, e il mese si taglia in ora
-  italiana: si confronta la stringa, senza conversioni che possano spostare
-  di mese una riga attivata l'ultima sera;
+- il log si chiede con `record`, e **gli eventi si filtrano per riga anche
+  nel pacchetto**: misurato il 2026-10-16 che `exportLogging` rispetta il
+  parametro, il filtro resta perché non costa niente, e un'istanza che lo
+  ignorasse risponderebbe col log intero;
+- il log porta l'ora locale dell'istanza, misurato di nuovo il 2026-10-16
+  (primo sigillo alle 22:04 del log, `outcome_at` alle 20:03 UTC), e il mese
+  si taglia in ora italiana: si confronta la stringa, senza conversioni che
+  possano spostare di mese una riga attivata l'ultima sera;
 - **il registro riusa i `record_id`**: un id cancellato e ricreato porta nel
   log anche la storia della riga di prima. Il rapporto legge il log da
   `log_of_record()`, che ne tiene la sola vita attuale, dall'ultima creazione
@@ -1139,7 +1149,9 @@ Un account abilitato la cui `lastPasswordChangeDateTime` coincide con la
 account con il cambio della chiave obbligatorio al primo accesso, e la chiave
 nasce nella stessa chiamata che crea l'account. La tolleranza sta in
 `report_tolerance()`, in un posto solo, e una misura nuova la cambia in una
-riga. Il permesso è `User.Read.All`, quello che il giro ha già, e il campo in
+riga. Confermata il 2026-10-16 sugli account abilitati del tenant: quelli che
+risultano mai usati stanno a 0 secondi, nessuno fra 1 e 30, pochi fra 31 e
+120; un account fatto a mano dal portale e usato una volta sta a 172. Il permesso è `User.Read.All`, quello che il giro ha già, e il campo in
 più sta in `directory_fields()`, quindi anche la spazzata del giro lo chiede.
 
 Che cosa non vede, ed è dichiarato:

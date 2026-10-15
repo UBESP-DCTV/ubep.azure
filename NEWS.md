@@ -17,23 +17,31 @@
   referents is in both reports, each with their own rows. Only active and
   applied rows count. The date of activation is the channel's first write of
   the seal in the row's log, not `outcome_at`, which moves at every outcome;
-  a row executed again after a change is listed as modified. The log is
-  filtered by record here too, whatever REDCap does with the parameter, and
+  a row executed again after a change is listed as modified, and a new one
+  says whether its account was new: Entra made it no earlier than the minute
+  the row was made. Not from `identity`, which the round turns from
+  `created` to `existing` one round after the creation, so every account the
+  channel made would have read as an old one (measured in production on
+  2026-10-16). The log is filtered by record here too, although
+  `exportLogging` was measured on 2026-10-16 to honor the parameter, and
   read from the row's newest creation on, as the round reads it, since the
-  register reuses ids; it is in Italian time, as the month is cut.
+  register reuses ids; it is in Italian time, measured again the same day,
+  as the month is cut.
 
   Whether a person has signed in is read from Entra with the permission the
   round already holds: an enabled account whose `lastPasswordChangeDateTime`
   is within 60 seconds of its `createdDateTime` (`report_tolerance()`, one
   constant) has never been entered, since the round creates accounts with the
-  change of key forced at first sign-in. A key reset by IT hides the person,
-  and phase 2 removes that. The 30 days run from the person and not from the
-  row: from the later of the channel's first execution after the newest
-  write of `username`, and the birth of the account on Entra
-  (`report_person_since()`), so a username corrected by a modification, or an
-  account made again, does not inherit somebody else's months. The item names
-  the earlier reports of the same referent that named the person, and how
-  many months it has been.
+  change of key forced at first sign-in. The tolerance was confirmed on
+  2026-10-16 over the enabled accounts of the tenant: the accounts known
+  never to have been used at 0 seconds, none between 1 and 30. A key reset
+  by IT hides the person, and phase 2 removes that. The 30 days run from the
+  person and not from the row: from the later of the channel's first
+  execution after the newest write of `username`, and the birth of the
+  account on Entra (`report_person_since()`), so a username corrected by a
+  modification, or an account made again, does not inherit somebody else's
+  months. The item names the earlier reports of the same referent that named
+  the person, and how many months it has been.
 
   Two forms, told apart by the first word of the subject: `Tutto in ordine`,
   or `N da guardare` with N the people listed. Italian above, English below,
