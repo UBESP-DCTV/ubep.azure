@@ -157,7 +157,8 @@ mail_outcome_message <- function(row) {
           "Questa richiesta e' stata modificata, prima o dopo essere stata ",
           "eseguita, e il canale non ha applicato la modifica perche' non ",
           "risulta fatta solo da chi l'ha creata. La puo' approvare solo chi ",
-          "l'ha creata: questo messaggio va a chi risulta averla creata."
+          "l'ha creata, oppure IT: questo messaggio va a chi risulta averla ",
+          "creata."
         ),
         paste0("Modificata da: ", mail_said_or(
           row[["edited_by"]], "non stabilito dal registro degli eventi"
@@ -175,10 +176,10 @@ mail_outcome_message <- function(row) {
           "riga cambia ancora, arriva un sigillo nuovo. Vale una volta sola: ",
           "eseguita la modifica, l'approvazione e' consumata, e un sigillo ",
           "incollato prima della modifica non la approva. L'approvazione di ",
-          "chiunque altro, compreso chi ha fatto la modifica, non vale: il ",
-          "registro degli eventi di REDCap dice chi ha creato la riga e chi ",
-          "ha scritto che cosa. Approvata, la modifica diventa effettiva al ",
-          "giro successivo."
+          "qualunque altro referente, compreso chi ha fatto la modifica, non ",
+          "vale: il registro degli eventi di REDCap dice chi ha creato la ",
+          "riga e chi ha scritto che cosa. Approvata, la modifica diventa ",
+          "effettiva al giro successivo."
         ),
         "",
         paste0(
@@ -193,9 +194,9 @@ mail_outcome_message <- function(row) {
         paste0(
           "This request was edited, before or after it was applied, and the ",
           "channel did not apply the edit because it is not on record as made ",
-          "by the request's creator alone. Only whoever created the request ",
-          "can approve it: this message goes to whoever is on record as its ",
-          "creator."
+          "by the request's creator alone. Only whoever created the request, ",
+          "or IT, can approve it: this message goes to whoever is on record ",
+          "as its creator."
         ),
         paste0("Edited by: ", mail_said_or(
           row[["edited_by"]], "not established from the event log"
@@ -212,7 +213,7 @@ mail_outcome_message <- function(row) {
           "It approves this version of the row and no later one: if the row ",
           "changes again, a new seal follows. It counts once: when the edit ",
           "has been applied the approval is spent, and a seal pasted before ",
-          "the edit does not approve it. An approval by anybody else, ",
+          "the edit does not approve it. An approval by any other referent, ",
           "including whoever made the edit, does not count: REDCap's event ",
           "log says who created the row and who wrote what. Once approved, ",
           "the edit takes effect on the next round."

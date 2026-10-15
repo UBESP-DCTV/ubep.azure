@@ -2141,6 +2141,35 @@ test_that("la revoca della richiesta di un altro segue la stessa regola", {
 })
 
 
+test_that("l'approvazione di IT sblocca la modifica di un altro", {
+  # eval
+  it <- "it.redcap@ubep.unipd.it"
+  esito <- giro_cambiata(
+    list(approvazione(it), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    approvers = it
+  )
+
+  # test
+  # Decided on 2026-10-15: IT approves any change, so a request whose creator
+  # left is not stuck, and keeps its creator on record.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("senza l'elenco di IT nessun altro approva", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione("it.redcap@ubep.unipd.it"), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+})
+
+
 test_that("chi ha creato la riga revoca la propria richiesta subito", {
   # eval
   revocata <- riga_cambiata(

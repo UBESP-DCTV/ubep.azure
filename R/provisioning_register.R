@@ -735,6 +735,15 @@ seal_needs_approval <- function(register, events, creators) {
 #' to it; and the seal is a public hash of the intent fields, so it can be
 #' pasted before the change it names exists.
 #'
+#' **IT approves as the creator does**, decided on 2026-10-15: the accounts
+#' named in `approvers` stand where the creator stands, under the same three
+#' conditions. It is what keeps a request whose creator has left UBEP from
+#' waiting for ever, without deleting the row and losing who filed it. The
+#' list lives on the machine that runs the round and never in this
+#' repository. One limit is worth knowing: the scope gate still asks the
+#' creator's rights on the project, so an approval -- IT's or anybody's --
+#' does not carry a row whose creator no longer manages the project.
+#'
 #' An unreadable log is not this function's to decide. It answers about the
 #' events and the creators it was handed, and a caller holding neither gets
 #' `FALSE` on every changed row: the row waits, which is the direction that
@@ -744,14 +753,18 @@ seal_needs_approval <- function(register, events, creators) {
 #' @param events The event log, as `register_log()` returns it.
 #' @param creators Who created each row, as `log_creators()` answers, in the
 #'   order of `register`. `""` approves nothing.
+#' @param approvers The IT accounts whose approval counts on any row, as REDCap
+#'   usernames.
 #'
 #' @return A logical vector, one answer per row.
 #'
 #' @keywords internal
-seal_approved <- function(register, events, creators) {
+seal_approved <- function(register, events, creators,
+                          approvers = character()) {
   stopifnot(
     is.data.frame(register), is.data.frame(events),
-    is.character(creators), length(creators) == nrow(register)
+    is.character(creators), length(creators) == nrow(register),
+    is.character(approvers)
   )
 
   current <- request_seal(register)
@@ -769,7 +782,7 @@ seal_approved <- function(register, events, creators) {
       return(FALSE)
     }
 
-    log_approval_stands(events, ids[[i]], creators[[i]], intent)
+    log_approval_stands(events, ids[[i]], creators[[i]], intent, approvers)
   }, logical(1))
 }
 
@@ -777,7 +790,8 @@ seal_approved <- function(register, events, creators) {
 #' Whether the newest approval in a row's log still stands
 #'
 #' The log half of `seal_approved()`: the newest write of `approved_seal` is
-#' the creator's, and nothing it could not have seen stands above it.
+#' the creator's, or one of the IT accounts', and nothing it could not have
+#' seen stands above it.
 #'
 #' - **No execution above it.** The newest write of `applied_seal` is the
 #'   round's last execution, and an approval below it was the one that
@@ -797,15 +811,17 @@ seal_approved <- function(register, events, creators) {
 #' @param record The record id to look at.
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
+#' @param approvers The IT accounts whose approval counts on any row.
 #'
 #' @return `TRUE` when the approval stands.
 #'
 #' @keywords internal
 log_approval_stands <- function(events, record, creator,
-                                fields = register_intent_fields()) {
+                                fields = register_intent_fields(),
+                                approvers = character()) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
-    is.character(fields)
+    is.character(fields), is.character(approvers)
   )
 
   mine <- log_of_record(events, record)
@@ -816,8 +832,11 @@ log_approval_stands <- function(events, record, creator,
 
   authors <- trimws(as.character(mine[["username"]]))
   approvals <- which(log_wrote(mine, "approved_seal"))
+  # A blank name is nobody, whatever the list holds: dropping it keeps an
+  # empty entry in `approvers` from approving a write logged with no author.
+  allowed <- setdiff(c(trimws(creator), trimws(approvers)), "")
   if (length(approvals) == 0L ||
-        !identical(authors[[approvals[[1L]]]], trimws(creator))) {
+        !authors[[approvals[[1L]]]] %in% allowed) {
     return(FALSE)
   }
   newest <- approvals[[1L]]

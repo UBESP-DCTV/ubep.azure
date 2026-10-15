@@ -907,6 +907,39 @@ test_that("una richiesta mai eseguita aspetta solo se qualcun altro l'ha cambiat
 })
 
 
+test_that("l'approvazione di IT vale come quella di chi ha creato la riga", {
+  # eval
+  it <- "it.redcap@ubep.unipd.it"
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  eventi <- eventi_finti(
+    list(username = it, details = "approved_seal = 'abc'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    )
+  )
+  prima_della_modifica <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    list(username = it, details = "approved_seal = 'abc'")
+  )
+
+  # test
+  # Decided on 2026-10-15, so that a request whose creator has left is not
+  # stuck for ever, and keeps its creator on record.
+  expect_true(seal_approved(riga, eventi, creatrice, approvers = it))
+  # Only the accounts the machine names: without the list nobody else counts.
+  expect_false(seal_approved(riga, eventi, creatrice))
+  # The same conditions as any other approval: newer than what it approves.
+  expect_false(
+    seal_approved(riga, prima_della_modifica, creatrice, approvers = it)
+  )
+})
+
+
 test_that("il canale e' chi ha scritto i campi che scrive solo lui", {
   # eval
   # Newest first. The channel's username rewrite carries `username` alone,

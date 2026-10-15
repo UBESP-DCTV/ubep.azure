@@ -17,6 +17,7 @@ provisioning_reconcile(
   redirect_to = NULL,
   copy_to = NULL,
   reply_to = NULL,
+  approvers = character(),
   at = format(Sys.time(), "\%Y-\%m-\%d \%H:\%M", tz = "UTC")
 )
 }
@@ -45,6 +46,11 @@ carries it, for the dictionary comparison. \code{NULL} compares the other
 fields and declares the substitution.}
 
 \item{dry_run}{Whether to simulate. Defaults to \code{TRUE}.}
+
+\item{approvers}{The IT accounts whose approval of a change counts on any
+row, as REDCap usernames. Read by the runner from the machine and empty
+by default, so a runner that does not pass it leaves the creator as the
+only one who approves.}
 
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
@@ -101,7 +107,8 @@ will again on every round. Who made the change is read from that row's own
 log, whole, and without the round's own writes; the rule is
 \code{change_needs_approval()}. The log is asked once per row that needs it: a
 row whose seal moved, and a row not applied yet that the round could act
-on.
+on. The IT accounts in \code{approvers} approve as the creator does, decided on
+2026-10-15.
 
 A row the log cannot name is \strong{held and not refused}, which is the same
 distinction step 6 already makes between a permission that does not grant

@@ -4,7 +4,13 @@
 \alias{log_approval_stands}
 \title{Whether the newest approval in a row's log still stands}
 \usage{
-log_approval_stands(events, record, creator, fields = register_intent_fields())
+log_approval_stands(
+  events,
+  record,
+  creator,
+  fields = register_intent_fields(),
+  approvers = character()
+)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -14,13 +20,16 @@ log_approval_stands(events, record, creator, fields = register_intent_fields())
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 
 \item{fields}{The intent fields.}
+
+\item{approvers}{The IT accounts whose approval counts on any row.}
 }
 \value{
 \code{TRUE} when the approval stands.
 }
 \description{
 The log half of \code{seal_approved()}: the newest write of \code{approved_seal} is
-the creator's, and nothing it could not have seen stands above it.
+the creator's, or one of the IT accounts', and nothing it could not have
+seen stands above it.
 }
 \details{
 \itemize{

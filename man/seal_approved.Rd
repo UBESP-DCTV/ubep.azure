@@ -4,7 +4,7 @@
 \alias{seal_approved}
 \title{Whether a change to an applied row has been approved}
 \usage{
-seal_approved(register, events, creators)
+seal_approved(register, events, creators, approvers = character())
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
@@ -13,6 +13,9 @@ seal_approved(register, events, creators)
 
 \item{creators}{Who created each row, as \code{log_creators()} answers, in the
 order of \code{register}. \code{""} approves nothing.}
+
+\item{approvers}{The IT accounts whose approval counts on any row, as REDCap
+usernames.}
 }
 \value{
 A logical vector, one answer per row.
@@ -42,6 +45,15 @@ execution and above every change somebody other than the creator made, as
 carried out would approve again any later change that brings the row back
 to it; and the seal is a public hash of the intent fields, so it can be
 pasted before the change it names exists.
+
+\strong{IT approves as the creator does}, decided on 2026-10-15: the accounts
+named in \code{approvers} stand where the creator stands, under the same three
+conditions. It is what keeps a request whose creator has left UBEP from
+waiting for ever, without deleting the row and losing who filed it. The
+list lives on the machine that runs the round and never in this
+repository. One limit is worth knowing: the scope gate still asks the
+creator's rights on the project, so an approval -- IT's or anybody's --
+does not carry a row whose creator no longer manages the project.
 
 An unreadable log is not this function's to decide. It answers about the
 events and the creators it was handed, and a caller holding neither gets

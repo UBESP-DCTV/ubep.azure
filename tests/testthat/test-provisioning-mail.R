@@ -958,18 +958,21 @@ riga_trattenuta <- function(...) {
 }
 
 
-test_that("la riga trattenuta dice che approva solo chi l'ha creata", {
+test_that("la riga trattenuta dice che approva solo chi l'ha creata, o IT", {
   # eval
   corpo <- mail_outcome_message(
     riga_trattenuta(edited_by = "bruno.verdi@ubep.unipd.it")
   )[["body"]]
 
   # test
-  # The message goes to the creator and has to say why: the approval of
-  # anybody else, the author of the change included, does not count. Sending
-  # the reader to "another referent" would ask for an act the round ignores.
-  expect_match(corpo, "solo chi l'ha creata", fixed = TRUE)
-  expect_match(corpo, "Only whoever created the request", fixed = TRUE)
+  # The message goes to the creator and has to say why: the approval of any
+  # other referent, the author of the change included, does not count.
+  # Sending the reader to "another referent" would ask for an act the round
+  # ignores. IT approves too since 2026-10-15, and the message says so.
+  expect_match(corpo, "solo chi l'ha creata, oppure IT", fixed = TRUE)
+  expect_match(
+    corpo, "Only whoever created the request, or IT,", fixed = TRUE
+  )
   expect_false(grepl("un altro referente", corpo, fixed = TRUE))
   expect_false(grepl("another referent", corpo, fixed = TRUE))
   # Who changed the row is what the creator needs to judge the change.

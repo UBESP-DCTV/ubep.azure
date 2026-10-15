@@ -74,6 +74,15 @@ POSTA_DA <- Sys.getenv("UBEP_POSTA_DA")
 POSTA_COPIA <- Sys.getenv("UBEP_POSTA_COPIA")
 POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
 
+# Le utenze IT che approvano una modifica su qualunque riga, come chi l'ha
+# creata (decisione del 2026-10-15): nomi utente REDCap separati da virgole.
+# L'elenco sta sulla macchina e non qui, perche' il repository e' pubblico.
+# Senza la variabile approva solo chi ha creato la riga, come prima.
+APPROVATORI_IT <- trimws(strsplit(
+  Sys.getenv("UBEP_APPROVATORI_IT"), ",", fixed = TRUE
+)[[1L]])
+APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
+
 # Ci si ferma qui e non alla prima mail rifiutata. Senza mittente ogni
 # messaggio verrebbe respinto, quindi nessuna riga sarebbe scritta: il giro
 # girerebbe a vuoto riportando esiti che non arrivano da nessuna parte, e il
@@ -212,6 +221,7 @@ esito <- ubep.azure:::provisioning_reconcile(
   redirect_to = if (nzchar(POSTA_A)) POSTA_A else NULL,
   copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
   reply_to = if (nzchar(POSTA_RISPOSTE)) POSTA_RISPOSTE else NULL,
+  approvers = APPROVATORI_IT,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 
