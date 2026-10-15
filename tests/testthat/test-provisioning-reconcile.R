@@ -2695,6 +2695,26 @@ test_that("una revoca libera gia' eseguita non fa aspettare chi riattiva", {
 })
 
 
+test_that("la revoca altrui di una persona assente non si chiude senza cancello", { # nolint: line_length_linter.
+  # eval
+  # The tenant no longer holds the person, so the row is `absent` and
+  # revoked: there is no pair, and no instance would be asked about Bruno.
+  esito <- giro(
+    registro_con_log(
+      record_json(riga_cambiata(request_status = "revoked")),
+      storia = list(cambio(bruno, "request_status = 'revoked'"), esecuzione())
+    ),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The exception is decided at the gate, on Bruno's rights. A row that never
+  # reaches the gate waits for its creator, as before the exception existed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+})
+
 
 test_that("chi ha creato la riga revoca la propria richiesta subito", {
   # eval

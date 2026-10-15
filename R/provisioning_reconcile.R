@@ -488,7 +488,10 @@ provisioning_reconcile <- function(register_url,
   intent <- register_intent_fields()
   revoked_now <- trimws(as.character(register[["request_status"]])) %in%
     "revoked"
-  withdrawal <- awaits & !cleared & !blind & revoked_now
+  # Only a row the gate will see: one with a person to take the access from.
+  # A revoked row whose person the tenant no longer holds is settled before
+  # any instance is asked, so nobody's rights would ever be read for it.
+  withdrawal <- awaits & !cleared & !blind & revoked_now & admitted
   withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
     log_revocation_only(
       events, record_ids[[i]], creators[[i]], intent, approvers
