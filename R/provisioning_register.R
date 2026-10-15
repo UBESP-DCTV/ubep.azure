@@ -304,6 +304,45 @@ log_of_record <- function(events, record) {
 }
 
 
+#' The events of the row that stands now, without those of an earlier one
+#'
+#' A record id can be used twice: deleted, and made again by somebody else for
+#' another request. The log keeps both lives under the same `record`, and
+#' everything below the newest creation, or the newest deletion when the
+#' creation is not in the answer, belongs to a row that no longer exists.
+#'
+#' Which event is newest comes from the order of the answer, REDCap's own,
+#' newest first, as for `log_creators()`; the stamps are to the minute and
+#' cannot tell apart a deletion and a creation made in the same one. The
+#' creation is read as `log_creators()` reads it, from the start of `action`,
+#' whose wording for a creation was measured on 2026-09-02; the wording for a
+#' deletion is assumed by analogy and not measured. Read as a guard, a
+#' wording that does not match cuts nothing, and the log is read whole as
+#' before.
+#'
+#' Read by the monthly report, `report_executions()`. The round's own readers
+#' of a row's log do not call it, and read both lives.
+#'
+#' @param events The events of one record, as `log_of_record()` returns them.
+#'
+#' @return The events above the newest creation or deletion, or all of them
+#'   when there is neither.
+#'
+#' @keywords internal
+log_current_life <- function(events) {
+  stopifnot(is.data.frame(events))
+
+  said <- trimws(as.character(events[["action"]]))
+  born <- which(
+    startsWith(said, "Create record") | startsWith(said, "Delete record")
+  )
+  if (length(born) == 0L) {
+    return(events)
+  }
+  events[seq_len(born[[1L]] - 1L), , drop = FALSE]
+}
+
+
 #' Which events wrote one of these fields
 #'
 #' Reads `details`, which REDCap fills with the fields an event wrote and the
