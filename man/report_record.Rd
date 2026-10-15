@@ -24,10 +24,13 @@ nothing to count, because the rule on the incomplete record counts them.
 }
 \details{
 \code{referenti} counts the reports of the month, the one to IT included: those
-due today and those the ledger says left on earlier days. \code{mese_completo}
-is the design's \code{gia_mandati + mandati == referenti}, and false whenever the
-run could not read everything it needs to say who is due: a month nobody
-could count is not a complete one. \code{in_ritardo} is \code{report_late()}.
+due, as today's reading or the last whole one found them, and those the
+ledger says left on earlier days. \code{mese_completo} is the design's
+\code{gia_mandati + mandati == referenti}, on those. A day that cannot read
+judges the month on the last whole reading, so a reading that fails after
+the month was sent does not make it late; with no whole reading on record
+nothing is due, and the month is not called late on a guess.
+\code{in_ritardo} is \code{report_late()}.
 
 Phase 1 asks no instance and does not measure the year without access, so
 \code{istanze_non_lette} and \code{voci_senza_accessi} are zero.

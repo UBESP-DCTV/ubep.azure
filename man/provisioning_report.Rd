@@ -62,7 +62,10 @@ tells them apart.
 A day on which anything it needs could not be read sends nothing: the
 register, the creations, the directory, any active row's log, the ledgers.
 A report composed on half a reading would be wrong for somebody, and the
-next day tries again.
+next day tries again. Such a day also does not know who is due, so it
+judges the month on the reports the last whole reading found due, kept
+beside the ledger (\code{report_due_read()}); with none on record it says
+nothing is due, and the alarm on absence is the one that speaks.
 
 \strong{The ledger is written only by a real run}: the post on, nobody
 redirected, the month the clock gives. A run with the post off sends

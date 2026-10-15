@@ -22,8 +22,7 @@ when it was written and as it was otherwise.
 \description{
 Written after the send and never before, as the channel writes into the
 register only after the message left: the price accepted is a report sent
-twice when the write fails, never one that is lost. The file is written
-beside its final name and moved over it, so a run killed halfway leaves the
-old ledger or the new one, and not half of either.
+twice when the write fails, never one that is lost. The file is replaced
+whole, \code{report_write_json()}.
 }
 \keyword{internal}

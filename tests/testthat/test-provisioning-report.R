@@ -1285,7 +1285,7 @@ test_that("the next day sends nothing, and the month stays complete", {
 })
 
 
-test_that("with the post off the run computes and writes no ledger", {
+test_that("with the post off the run computes and writes no ledger of sends", {
   # eval
   doppie()
   cartella <- withr::local_tempdir()
@@ -1296,7 +1296,9 @@ test_that("with the post off the run computes and writes no ledger", {
   )
 
   # test
-  expect_equal(list.files(cartella), character())
+  # What is due is kept, so a later day that cannot read still knows the
+  # month; nothing is recorded as sent.
+  expect_equal(list.files(cartella), "2026-10.dovuti.json")
   expect_false(primo[["posta"]])
   expect_true(primo[["giorno_di_invio"]])
   expect_equal(primo[["mandati"]], 0L)
@@ -1327,8 +1329,8 @@ test_that("a redirected run sends to the test address and keeps no ledger", {
   expect_null(mail[[1L]][["cc"]])
   expect_match(mail[[1L]][["body"]], "^\\[PROVA\\]")
   expect_match(mail[[1L]][["body"]], referente, fixed = TRUE)
-  # Recorded, the real month would read as sent.
-  expect_equal(list.files(cartella), character())
+  # Recorded, the real month would read as sent. What is due is kept.
+  expect_equal(list.files(cartella), "2026-10.dovuti.json")
   expect_true(record[["posta_dirottata"]])
 })
 
@@ -1345,6 +1347,7 @@ test_that("a run with a forced month leaves the real month to be sent", {
     esegui(cartella, collaudo, ora = "2026-10-20 08:00", month = "2026-10"),
     posta = TRUE
   )
+  dopo_il_collaudo <- list.files(cartella)
   posta <- posta_finta()
   vero <- report_record(esegui(cartella, posta), posta = TRUE)
 
@@ -1358,7 +1361,11 @@ test_that("a run with a forced month leaves the real month to be sent", {
   expect_length(posta[["inviate"]][["mail"]], 2L)
   expect_equal(vero[["gia_mandati"]], 0L)
   expect_equal(vero[["mandati"]], 2L)
-  expect_equal(list.files(cartella), "2026-10.json")
+  # A forced run writes nothing at all.
+  expect_equal(dopo_il_collaudo, character())
+  expect_setequal(
+    list.files(cartella), c("2026-10.json", "2026-10.dovuti.json")
+  )
 })
 
 
@@ -1385,10 +1392,14 @@ test_that("a refused mail is retried the day after, and only that one", {
 })
 
 
-test_that("an unreadable register sends nothing, and the month is not done", {
+test_that("an unreadable register sends nothing, and judges the month known", {
   # eval
-  doppie(letto = FALSE)
+  # The 1st reads everything with the post off, so nothing leaves; the 2nd
+  # cannot read the register, and judges the month on what the 1st found due.
   cartella <- withr::local_tempdir()
+  doppie()
+  esegui(cartella)
+  doppie(letto = FALSE)
   posta <- posta_finta()
 
   record <- report_record(
@@ -1400,9 +1411,28 @@ test_that("an unreadable register sends nothing, and the month is not done", {
   expect_false(record[["registro_letto"]])
   expect_true(record[["directory_letta"]])
   expect_equal(record[["errori"]], "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE")
-  # A month nobody could count is not a complete one.
+  expect_equal(record[["referenti"]], 2L)
+  expect_equal(record[["falliti"]], 2L)
   expect_false(record[["mese_completo"]])
   expect_true(record[["in_ritardo"]])
+})
+
+
+test_that("a month never read whole is not called late", {
+  # eval
+  doppie(letto = FALSE)
+  cartella <- withr::local_tempdir()
+
+  record <- report_record(
+    esegui(cartella, posta_finta(), ora = "2026-11-02 06:30"), posta = TRUE
+  )
+
+  # test
+  # Nothing says what is due: the reading that failed is reported by the
+  # alarm on absence, and this one stays quiet rather than guess.
+  expect_equal(record[["referenti"]], 0L)
+  expect_true(record[["mese_completo"]])
+  expect_false(record[["in_ritardo"]])
 })
 
 
@@ -1426,15 +1456,20 @@ test_that("no endpoint for Graph is a directory not read, said as such", {
 
 test_that("a row's log that does not answer holds the day's reports", {
   # eval
-  doppie(log_letto = FALSE)
   cartella <- withr::local_tempdir()
+  doppie()
+  esegui(cartella)
+  doppie(log_letto = FALSE)
   posta <- posta_finta()
 
-  record <- report_record(esegui(cartella, posta), posta = TRUE)
+  record <- report_record(
+    esegui(cartella, posta, ora = "2026-11-02 06:30"), posta = TRUE
+  )
 
   # test
   expect_length(posta[["inviate"]][["mail"]], 0L)
   expect_equal(record[["errori"]], "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE")
+  expect_equal(record[["falliti"]], 2L)
   expect_false(record[["mese_completo"]])
 })
 
@@ -1704,4 +1739,26 @@ test_that("the person's date is the first seal when the username never moved", {
   # test
   expect_equal(report_person_since(eventi, "41"), "2026-08-03 23:03")
   expect_equal(report_person_since(in_attesa, "41"), character())
+})
+
+
+test_that("a reading that fails on the 15th does not make a sent month late", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  primo <- report_record(esegui(cartella, posta_finta()), posta = TRUE)
+
+  # On the 15th the register does not answer; October left whole on the 1st.
+  doppie(letto = FALSE)
+  quindici <- report_record(
+    esegui(cartella, posta_finta(), ora = "2026-11-15 06:30"), posta = TRUE
+  )
+
+  # test
+  expect_true(primo[["mese_completo"]])
+  expect_equal(quindici[["gia_mandati"]], 2L)
+  expect_equal(quindici[["referenti"]], 2L)
+  # The design's own rule, on what the last whole reading found due.
+  expect_true(quindici[["mese_completo"]])
+  expect_false(quindici[["in_ritardo"]])
 })

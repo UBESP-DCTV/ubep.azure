@@ -1457,13 +1457,117 @@ report_ledger_previous <- function(dir, month) {
 }
 
 
+#' Write a file of the state directory whole, or leave the old one
+#'
+#' Written beside its final name and moved over it, so a run killed halfway
+#' leaves the old file or the new one, and not half of either.
+#'
+#' @param path Where the file lives.
+#' @param json The content.
+#'
+#' @return Whether the file now holds `json`.
+#'
+#' @keywords internal
+report_write_json <- function(path, json) {
+  dir <- dirname(path)
+  temporary <- tempfile("rapporto-", tmpdir = dir, fileext = ".tmp")
+  written <- tryCatch(
+    {
+      dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+      writeLines(json, temporary, useBytes = TRUE)
+      file.rename(temporary, path)
+    },
+    error = function(e) FALSE,
+    warning = function(w) FALSE
+  )
+  if (!isTRUE(written)) {
+    unlink(temporary)
+  }
+  isTRUE(written)
+}
+
+
+#' Where a month's list of the reports due is kept
+#'
+#' @inheritParams report_ledger_read
+#'
+#' @return A path.
+#'
+#' @keywords internal
+report_due_path <- function(dir, month) {
+  file.path(dir, paste0(month, ".dovuti.json"))
+}
+
+
+#' Read which reports the last whole reading of a month found due
+#'
+#' A day that cannot read the register, the directory or a row's log does not
+#' know who is due, and judging the month on that would make a month already
+#' sent look late, or a late one look done. So every run that reads whole
+#' keeps the list of the reports due beside the ledger, and a run that cannot
+#' judges on it. Who is due, and nothing about them: the list holds the names
+#' the ledger holds.
+#'
+#' @inheritParams report_ledger_read
+#'
+#' @return A list with `ok`, `errors` and `dovuti`, `NULL` when no whole
+#'   reading of the month is on record.
+#'
+#' @keywords internal
+report_due_read <- function(dir, month) {
+  path <- report_due_path(dir, month)
+  if (!file.exists(path)) {
+    return(list(ok = TRUE, errors = character(), dovuti = NULL))
+  }
+
+  parsed <- tryCatch(
+    jsonlite::fromJSON(path, simplifyVector = FALSE),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+  if (!is.list(parsed) || is.null(names(parsed)) ||
+        !identical(parsed[["mese"]], month) ||
+        !is.list(parsed[["dovuti"]])) {
+    return(list(
+      ok = FALSE, errors = "RAPPORTO_DOVUTI_ILLEGGIBILI", dovuti = NULL
+    ))
+  }
+
+  list(
+    ok = TRUE, errors = character(),
+    dovuti = as.character(unlist(parsed[["dovuti"]]))
+  )
+}
+
+
+#' Keep which reports a whole reading of a month found due
+#'
+#' @inheritParams report_ledger_read
+#' @param due The names of the reports due, as the ledger records them.
+#' @param at When the reading was made, `"%Y-%m-%d %H:%M"` in Rome.
+#'
+#' @return A list with `ok` and `errors`.
+#'
+#' @keywords internal
+report_due_write <- function(dir, month, due, at) {
+  json <- jsonlite::toJSON(
+    list(mese = month, letto = at, dovuti = I(as.character(due))),
+    auto_unbox = TRUE, pretty = TRUE
+  )
+  if (report_write_json(report_due_path(dir, month), json)) {
+    list(ok = TRUE, errors = character())
+  } else {
+    list(ok = FALSE, errors = "RAPPORTO_DOVUTI_NON_SCRITTI")
+  }
+}
+
+
 #' Add one sent report to a month's ledger
 #'
 #' Written after the send and never before, as the channel writes into the
 #' register only after the message left: the price accepted is a report sent
-#' twice when the write fails, never one that is lost. The file is written
-#' beside its final name and moved over it, so a run killed halfway leaves the
-#' old ledger or the new one, and not half of either.
+#' twice when the write fails, never one that is lost. The file is replaced
+#' whole, `report_write_json()`.
 #'
 #' @inheritParams report_ledger_read
 #' @param ledger The ledger as read, from `report_ledger_read()`.
@@ -1497,19 +1601,7 @@ report_ledger_add <- function(dir, month, ledger, entry) {
     auto_unbox = TRUE, pretty = TRUE
   )
 
-  temporary <- tempfile("invii-", tmpdir = dir, fileext = ".tmp")
-  written <- tryCatch(
-    {
-      dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-      writeLines(json, temporary, useBytes = TRUE)
-      file.rename(temporary, report_ledger_path(dir, month))
-    },
-    error = function(e) FALSE,
-    warning = function(w) FALSE
-  )
-
-  if (!isTRUE(written)) {
-    unlink(temporary)
+  if (!report_write_json(report_ledger_path(dir, month), json)) {
     return(list(
       ok = FALSE, errors = "RAPPORTO_INVII_NON_SCRITTI", ledger = ledger
     ))
@@ -1573,7 +1665,10 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' A day on which anything it needs could not be read sends nothing: the
 #' register, the creations, the directory, any active row's log, the ledgers.
 #' A report composed on half a reading would be wrong for somebody, and the
-#' next day tries again.
+#' next day tries again. Such a day also does not know who is due, so it
+#' judges the month on the reports the last whole reading found due, kept
+#' beside the ledger (`report_due_read()`); with none on record it says
+#' nothing is due, and the alarm on absence is the one that speaks.
 #'
 #' **The ledger is written only by a real run**: the post on, nobody
 #' redirected, the month the clock gives. A run with the post off sends
@@ -1695,12 +1790,28 @@ provisioning_report <- function(register_url,
   if (!is.null(assembled[["it"]])) {
     reports[[report_it_key()]] <- report_it_message(assembled[["it"]], period)
   }
-  due <- names(reports) %||% character()
+
+  # Who is due: today's reading when it is whole, and kept for the days that
+  # are not; otherwise the last whole reading's. A forced run speaks about a
+  # month that is not the real one, and keeps nothing.
+  read_whole <- register_read && directory_read && logs_read
+  if (read_whole) {
+    due <- names(reports) %||% character()
+    if (!isTRUE(period[["forzato"]])) {
+      kept <- report_due_write(
+        ledger_dir, period[["mese"]], due, period[["letto"]]
+      )
+      errors <- c(errors, kept[["errors"]])
+    }
+  } else {
+    known <- report_due_read(ledger_dir, period[["mese"]])
+    errors <- c(errors, known[["errors"]])
+    due <- known[["dovuti"]] %||% character()
+  }
   already <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
   pending <- setdiff(due, already)
 
-  complete <- register_read && directory_read && logs_read &&
-    isTRUE(ledger[["ok"]]) && isTRUE(previous[["ok"]])
+  complete <- read_whole && isTRUE(ledger[["ok"]]) && isTRUE(previous[["ok"]])
   keeps_ledger <- !is.null(mailer) && is.null(redirect_to) &&
     !isTRUE(period[["forzato"]])
 
@@ -1759,7 +1870,14 @@ provisioning_report <- function(register_url,
   }
 
   forms <- vapply(reports, `[[`, "", "forma", USE.NAMES = FALSE)
-  counts <- vapply(reports, `[[`, 0L, "n", USE.NAMES = FALSE)
+  # One row per report due, also when the due ones come from an earlier
+  # reading and today composed none of them.
+  composed <- match(due, names(reports))
+  form_of <- ifelse(is.na(composed), "", forms[composed])
+  count_of <- ifelse(
+    is.na(composed), NA_integer_,
+    vapply(reports, `[[`, 0L, "n", USE.NAMES = FALSE)[composed]
+  )
 
   list(
     at = format(now, "%Y-%m-%d %H:%M", tz = "UTC"),
@@ -1786,8 +1904,8 @@ provisioning_report <- function(register_url,
     senza_creatore = as.integer(assembled[["senza_creatore"]]),
     rapporti = data.frame(
       destinatario = due,
-      forma = forms,
-      voci = counts,
+      forma = form_of,
+      voci = count_of,
       esito = ifelse(
         due %in% sent, "mandato",
         ifelse(due %in% already, "gia_mandato",
@@ -1828,10 +1946,13 @@ report_late <- function(giorno, completo, forzato) {
 #' nothing to count, because the rule on the incomplete record counts them.
 #'
 #' `referenti` counts the reports of the month, the one to IT included: those
-#' due today and those the ledger says left on earlier days. `mese_completo`
-#' is the design's `gia_mandati + mandati == referenti`, and false whenever the
-#' run could not read everything it needs to say who is due: a month nobody
-#' could count is not a complete one. `in_ritardo` is `report_late()`.
+#' due, as today's reading or the last whole one found them, and those the
+#' ledger says left on earlier days. `mese_completo` is the design's
+#' `gia_mandati + mandati == referenti`, on those. A day that cannot read
+#' judges the month on the last whole reading, so a reading that fails after
+#' the month was sent does not make it late; with no whole reading on record
+#' nothing is due, and the month is not called late on a guess.
+#' `in_ritardo` is `report_late()`.
 #'
 #' Phase 1 asks no instance and does not measure the year without access, so
 #' `istanze_non_lette` and `voci_senza_accessi` are zero.
@@ -1858,8 +1979,7 @@ report_record <- function(esito, posta) {
   forms <- as.character(esito[["forme"]] %||% character())
 
   referenti <- length(union(due, already))
-  completo <- isTRUE(esito[["letture_complete"]]) &&
-    length(already) + length(sent) == referenti
+  completo <- length(already) + length(sent) == referenti
 
   list(
     at = as.character(esito[["at"]]),
