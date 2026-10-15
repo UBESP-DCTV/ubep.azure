@@ -1838,3 +1838,41 @@ test_that("a broken ledger of an old month blocks no later one", {
     dicembre[["mandati"]] + dicembre[["gia_mandati"]], dicembre[["referenti"]]
   )
 })
+
+
+test_that("a month left unsent is said when the next one starts", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  # On the 1st and on the 31st of October September's report is refused.
+  esegui(cartella, posta_finta(rifiuta = referente), ora = "2026-10-01 06:30")
+  fine <- report_record(
+    esegui(cartella, posta_finta(rifiuta = referente),
+           ora = "2026-10-31 06:30"),
+    posta = TRUE
+  )
+
+  posta <- posta_finta()
+  primo <- report_record(esegui(cartella, posta), posta = TRUE)
+
+  # test
+  expect_true(fine[["in_ritardo"]])
+  # On the 1st of November the run covers October and September is not sent
+  # again; it is not dropped in silence either.
+  oggetti <- vapply(posta[["inviate"]][["mail"]], `[[`, "", "subject")
+  expect_false(any(grepl("settembre", oggetti)))
+  expect_true("RAPPORTO_MESE_PRECEDENTE_INCOMPLETO" %in% primo[["errori"]])
+})
+
+
+test_that("a month sent whole raises nothing the month after", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  esegui(cartella, posta_finta(), ora = "2026-10-01 06:30")
+
+  primo <- report_record(esegui(cartella, posta_finta()), posta = TRUE)
+
+  # test
+  expect_equal(primo[["errori"]], character())
+})

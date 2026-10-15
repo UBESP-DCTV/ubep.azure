@@ -1710,6 +1710,13 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' beside the ledger (`report_due_read()`); with none on record it says
 #' nothing is due, and the alarm on absence is the one that speaks.
 #'
+#' On the 1st the run moves on to the month just ended, and a report of the
+#' month before that still not sent is not sent any more: it would describe a
+#' month two behind. It is not dropped in silence either. Every run of the
+#' real month compares the month before's ledger with what its last whole
+#' reading found due, and while a report is missing the record carries
+#' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+#'
 #' **The real ledger is written only by a real run**: the post on, nobody
 #' redirected, the month the clock gives. A run with the post off sends
 #' nothing to record. A redirected run is a field test: recorded in the real
@@ -1767,6 +1774,22 @@ provisioning_report <- function(register_url,
   ledger <- report_ledger_read(ledger_dir, period[["mese"]], test_run)
   previous <- report_ledger_previous(ledger_dir, period[["mese"]])
   errors <- c(errors, ledger[["errors"]], previous[["errors"]])
+
+  # The month before is over for good: what it left unsent is said, and not
+  # sent. Its ledger, when it does not read, is already named above.
+  if (!test_run && !isTRUE(period[["forzato"]])) {
+    before <- report_shift_month(period[["mese"]], -1L)
+    before_due <- report_due_read(ledger_dir, before)
+    before_ledger <- report_ledger_read(ledger_dir, before)
+    errors <- c(errors, before_due[["errors"]])
+    left <- setdiff(
+      before_due[["dovuti"]] %||% character(),
+      vapply(before_ledger[["invii"]], `[[`, "", "destinatario")
+    )
+    if (isTRUE(before_ledger[["ok"]]) && length(left) > 0L) {
+      errors <- c(errors, "RAPPORTO_MESE_PRECEDENTE_INCOMPLETO")
+    }
+  }
 
   # The register and its creations, asked as the round asks them: the
   # creations in one call and with no window, since a record is created once.
