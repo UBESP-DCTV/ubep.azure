@@ -1215,3 +1215,231 @@ test_that("an edit does not pass for a creation if REDCap ignored the filter", {
   # rather than judged on the wrong person.
   expect_equal(detto, "anna.bianchi@ubep.unipd.it")
 })
+
+
+# A record id used twice, newest first as REDCap answers. Id 1 was a field
+# test: created, applied by the round, and changed by Bruno after its seal.
+# The register was emptied on 2026-09-01, and the id came back as a request
+# Anna filed. `...` is what happened to her row after it was created, newest
+# first; `eseguita` says whether the round has applied it.
+id_riusato <- function(..., eseguita = TRUE, cancellazione = "",
+                       canale_prima = "svc-canale-ubep") {
+  nuova <- c(
+    list(...),
+    if (eseguita) list(applicata),
+    list(list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    ))
+  )
+  vecchia <- list(
+    list(
+      username = "amministratore.prova@ubep.unipd.it",
+      action = "Delete record 1", details = cancellazione
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    list(
+      username = canale_prima, action = "Update record (API) 1",
+      details = "outcome = 'applied', applied_seal = 'eeeeeeeeeeee'"
+    ),
+    list(
+      username = "collaudo.prova@ubep.unipd.it", action = "Create record 1",
+      details = "record_id = '1', role_name = 'read only'"
+    )
+  )
+  do.call(eventi_finti, c(nuova, vecchia))
+}
+
+
+test_that("la vita attuale di una riga comincia dalla sua ultima creazione", {
+  # eval
+  vita <- log_current_life(id_riusato())
+  importata <- log_current_life(eventi_finti(
+    list(username = creatrice, details = "role_name = 'read only'"),
+    list(username = creatrice, action = "Create record (import) 1"),
+    list(username = "collaudo.prova@ubep.unipd.it", action = "Create record 1")
+  ))
+
+  # test
+  # The creation is the first event of the row that stands now, and stays.
+  # What is below it, the deletion included, belonged to another row.
+  expect_equal(vita[["action"]], c("Update record (API) 1", "Create record 1"))
+  expect_equal(vita[["username"]], c("svc-canale-ubep", creatrice))
+  # The same act from an import, measured on 2026-09-02.
+  expect_equal(importata[["username"]], c(creatrice, creatrice))
+})
+
+
+test_that("una riga a vita unica si legge come prima", {
+  # eval
+  # The shape every log in this file had before ids were reused: one
+  # creation, at the bottom.
+  eventi <- eventi_finti(
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    applicata,
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  creata <- eventi_finti(list(
+    username = creatrice, action = "Create record 1",
+    details = "record_id = '1', role_name = 'data entry'"
+  ))
+
+  # test
+  # Nothing is cut, so every reader answers as it did before the cut.
+  expect_identical(log_current_life(eventi), eventi)
+  expect_identical(log_current_life(creata), creata)
+  expect_equal(
+    log_pending_authors(eventi, "1", creatrice),
+    c(creatrice, "bruno.verdi@ubep.unipd.it")
+  )
+  # A row only created has its creator for author, and that is no change
+  # anybody else made.
+  expect_equal(log_pending_authors(creata, "1", creatrice), creatrice)
+  expect_false(change_needs_approval(creatrice, creatrice, sealed = FALSE))
+})
+
+
+test_that("un log senza creazione si legge intero, anche con una cancellazione", { # nolint: line_length_linter.
+  # eval
+  # The wording of a deletion was never measured. An event that reads like
+  # one, inside the row that stands now, must not cut it: below it may stand
+  # a change by somebody else, and cut there that change would be carried
+  # out with nobody asked.
+  in_mezzo <- eventi_finti(
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    list(
+      username = "amministratore.prova@ubep.unipd.it",
+      action = "Delete record 1", details = ""
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  # And a log that does not hold the creation of the row that stands now,
+  # or holds no creation at all, the deletion still there: purged, or
+  # worded in a way nobody measured. It is read whole, as before the cut.
+  senza_la_nuova <- id_riusato()[-2L, , drop = FALSE]
+  senza_creazioni <- id_riusato()[-c(2L, 6L), , drop = FALSE]
+
+  # test
+  expect_identical(log_current_life(in_mezzo), in_mezzo)
+  expect_true(change_needs_approval(
+    log_pending_authors(in_mezzo, "1", creatrice), creatrice
+  ))
+  expect_identical(log_current_life(senza_la_nuova), senza_la_nuova)
+  expect_identical(log_current_life(senza_creazioni), senza_creazioni)
+})
+
+
+test_that("una riga con l'id riusato non eredita gli autori della vita di prima", { # nolint: line_length_linter.
+  # eval, test
+  # Bruno changed the field test after its seal, and nobody approved it. The
+  # round never carried that out, and never will: the row is gone. Read as
+  # part of Anna's row, it stood in the stretch below her first execution
+  # and held every change she made to her own request. With the deletion
+  # logged with or without its details.
+  for (cancellazione in c("", "record_id = '1'")) {
+    applicata_ora <- id_riusato(cancellazione = cancellazione)
+    expect_equal(log_change_authors(applicata_ora, "1"), character())
+    expect_equal(
+      log_uncovered_authors(applicata_ora, "1", creatrice), character()
+    )
+    expect_equal(
+      log_pending_authors(applicata_ora, "1", creatrice), character()
+    )
+
+    # Anna changes her applied request: the change is hers alone.
+    cambiata <- id_riusato(
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      cancellazione = cancellazione
+    )
+    autori <- log_pending_authors(cambiata, "1", creatrice)
+    expect_equal(autori, creatrice)
+    expect_false(change_needs_approval(autori, creatrice))
+
+    # A manager revokes it: still a revocation and nothing else.
+    revocata <- id_riusato(
+      list(
+        username = "cinzia.rossi@ubep.unipd.it",
+        details = "request_status = 'revoked'"
+      ),
+      cancellazione = cancellazione
+    )
+    expect_true(log_revocation_only(revocata, "1", creatrice))
+  }
+})
+
+
+test_that("una richiesta nuova con l'id riusato e non ancora eseguita non aspetta nessuno", { # nolint: line_length_linter.
+  # eval
+  nuova <- id_riusato(eseguita = FALSE)
+
+  # test
+  # Before the cut: Anna, Bruno and whoever ran the field test, and the first
+  # real request after the register was emptied held on its first round.
+  autori <- log_pending_authors(nuova, "1", creatrice)
+  expect_equal(autori, creatrice)
+  expect_false(change_needs_approval(autori, creatrice, sealed = FALSE))
+})
+
+
+test_that("un'altra utenza che serviva la vita di prima non rende ignoto l'autore", { # nolint: line_length_linter.
+  # eval
+  # The field test ran under a different token, so the channel's fields were
+  # written by a second account. Counted on the whole log, two accounts
+  # write what only the channel writes, and nobody can be named.
+  eventi <- id_riusato(
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    canale_prima = "svc-collaudo-prova"
+  )
+
+  # test
+  expect_equal(log_channel_accounts(eventi, "1"), "svc-canale-ubep")
+  expect_equal(log_pending_authors(eventi, "1", creatrice), creatrice)
+})
+
+
+test_that("una modifica di un altro nella vita attuale ferma ancora la riga", { # nolint: line_length_linter.
+  # eval
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  cambio <- list(username = bruno, details = "role_name = 'admin'")
+
+  # test
+  # The cut takes away another row's history and nothing of this one's.
+  # After the round applied Anna's row:
+  dopo <- id_riusato(cambio)
+  expect_equal(log_pending_authors(dopo, "1", creatrice), bruno)
+  expect_true(change_needs_approval(
+    log_pending_authors(dopo, "1", creatrice), creatrice
+  ))
+
+  # while the round was applying it, below its first seal and above the
+  # creation, with no approval of Anna's:
+  durante <- id_riusato()
+  durante <- rbind(durante[1L, ], eventi_finti(cambio), durante[-1L, ])
+  expect_equal(log_uncovered_authors(durante, "1", creatrice), bruno)
+  expect_true(change_needs_approval(
+    log_pending_authors(durante, "1", creatrice), creatrice
+  ))
+
+  # and before the round ever applied it.
+  prima <- id_riusato(cambio, eseguita = FALSE)
+  expect_equal(log_pending_authors(prima, "1", creatrice), c(bruno, creatrice))
+  expect_true(change_needs_approval(
+    log_pending_authors(prima, "1", creatrice), creatrice, sealed = FALSE
+  ))
+})

@@ -2982,6 +2982,66 @@ test_that("chi ha creato una richiesta non ancora eseguita la cambia, e il giro 
 })
 
 
+test_that("una richiesta nuova con l'id di una riga cancellata non eredita chi aveva cambiato quella", { # nolint: line_length_linter.
+  # eval
+  # REDCap reuses the ids of deleted records. Id 1 was a field test, applied
+  # and then changed by Bruno; the register was emptied, and the id came
+  # back as Anna's request. Asked for record 1, REDCap answers with both
+  # lives, newest first, and the creation log holds both creations.
+  vecchia_vita <- list(
+    list(
+      username = "amministratore.prova@ubep.unipd.it",
+      action = "Delete record 1", details = "record_id = '1'"
+    ),
+    list(username = bruno, details = "role_name = 'admin'"),
+    list(
+      username = "svc-canale-ubep", action = "Update record (API) 1",
+      details = "outcome = 'applied', applied_seal = 'eeeeeeeeeeee'"
+    ),
+    list(
+      username = "collaudo.prova@ubep.unipd.it", action = "Create record 1",
+      details = "record_id = '1', role_name = 'read only'"
+    )
+  )
+  creata <- list(
+    username = anna, action = "Create record 1",
+    details = "record_id = '1', role_name = 'data entry'"
+  )
+  giro_con <- function(...) {
+    giro(
+      registro_doppio(
+        record_json(list(record_id = "1")),
+        eventi = do.call(eventi_json, c(list(...), list(creata), vecchia_vita)),
+        creazioni = creazioni_finte(
+          list(username = anna, action = "Create record 1"),
+          list(
+            username = "collaudo.prova@ubep.unipd.it",
+            action = "Create record 1"
+          )
+        )
+      ),
+      istanza_che_scrive(),
+      dry_run = FALSE
+    )
+  }
+
+  # test
+  # Read whole, the log named Bruno, the field test's creator and whoever
+  # deleted it, and the first real request on a reused id was held on its
+  # first round, waiting for an approval of changes made to another row.
+  esito <- giro_con()
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+
+  # Bruno's hand in Anna's row, and not in the old one, still holds it.
+  esito <- giro_con(list(
+    username = bruno, details = "contact_email = 'mario.rossi@example.org'"
+  ))
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("l'approvazione di chi l'ha creata sblocca una richiesta non ancora eseguita", { # nolint: line_length_linter.
   # eval
   riga <- list(

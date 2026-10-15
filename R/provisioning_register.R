@@ -288,19 +288,29 @@ log_last_author <- function(events, record, fields) {
 }
 
 
-#' The events of one record, in the order REDCap gave them
+#' The events of the row that stands now under a record id
+#'
+#' The rows of the log that belong to `record`, in the order REDCap gave
+#' them, and of those only the current life of the row, `log_current_life()`.
+#' Every reader of a row's log comes through here (who changed the row, who
+#' approved it, which account is the channel), so none of them reads the
+#' history of an earlier row that had the same id. REDCap reuses the ids of
+#' deleted records: the register was emptied on 2026-09-01, and the first
+#' request filed after it took id 1, which had been a field test's.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id.
 #'
-#' @return The rows of `events` that belong to `record`.
+#' @return The rows of `events` that belong to `record`, from its newest
+#'   creation on.
 #'
 #' @keywords internal
 log_of_record <- function(events, record) {
-  events[
+  mine <- events[
     trimws(as.character(events[["record"]])) == as.character(record), ,
     drop = FALSE
   ]
+  log_current_life(mine)
 }
 
 
@@ -308,38 +318,43 @@ log_of_record <- function(events, record) {
 #'
 #' A record id can be used twice: deleted, and made again by somebody else for
 #' another request. The log keeps both lives under the same `record`, and
-#' everything below the newest creation, or the newest deletion when the
-#' creation is not in the answer, belongs to a row that no longer exists.
+#' everything below the newest creation belongs to a row that no longer
+#' exists. The creation itself is the first event of the row that stands now,
+#' and stays: a row with one life is answered whole, as before the cut.
 #'
 #' Which event is newest comes from the order of the answer, REDCap's own,
-#' newest first, as for `log_creators()`; the stamps are to the minute and
-#' cannot tell apart a deletion and a creation made in the same one. The
-#' creation is read as `log_creators()` reads it, from the start of `action`,
-#' whose wording for a creation was measured on 2026-09-02; the wording for a
-#' deletion is assumed by analogy and not measured. Read as a guard, a
-#' wording that does not match cuts nothing, and the log is read whole as
-#' before.
+#' newest first, as for `log_creators()`, which names as the creator the
+#' author of this same event; the stamps are to the minute, and two lives can
+#' share one. The creation is read as `log_creators()` reads it, from the
+#' start of `action`, whose wording was measured on 2026-09-02. Read as a
+#' guard, a wording that does not match cuts nothing, and the log is read
+#' whole as before; `log_creators()` then names nobody, and the round holds
+#' the row.
 #'
-#' Read by the monthly report, `report_executions()`. The round's own readers
-#' of a row's log do not call it, and read both lives.
+#' Only the creation cuts, and not the deletion, whose wording was never
+#' measured. Nothing is lost by it, since the deletion of an earlier life
+#' stands below the creation of the current one. And an event that only
+#' reads like a deletion, inside the current life, would cut that life's own
+#' changes in the direction that grants: below it may stand a change by
+#' somebody else, which the round would then carry out with nobody asked.
 #'
-#' @param events The events of one record, as `log_of_record()` returns them.
+#' Read by `log_of_record()`, so by every reader of a row's log.
 #'
-#' @return The events above the newest creation or deletion, or all of them
-#'   when there is neither.
+#' @param events The events of one record, newest first.
+#'
+#' @return The events from the newest creation on, or all of them when there
+#'   is none.
 #'
 #' @keywords internal
 log_current_life <- function(events) {
   stopifnot(is.data.frame(events))
 
   said <- trimws(as.character(events[["action"]]))
-  born <- which(
-    startsWith(said, "Create record") | startsWith(said, "Delete record")
-  )
+  born <- which(startsWith(said, "Create record"))
   if (length(born) == 0L) {
     return(events)
   }
-  events[seq_len(born[[1L]] - 1L), , drop = FALSE]
+  events[seq_len(born[[1L]]), , drop = FALSE]
 }
 
 
@@ -576,7 +591,8 @@ log_approver <- function(authors, creator, approvers = character()) {
 #' the creator edits the row again.
 #'
 #' So the stretch between the newest seal and the one before it (or the start
-#' of the log) is read again, for changes by anybody other than the creator.
+#' of the row's log, its creation when the log holds it) is read again, for
+#' changes by anybody other than the creator.
 #' The round applies such a change only once the creator has approved it, so
 #' one that the round did carry out has the creator's approval above it in
 #' that stretch, carrying the very seal the execution wrote. A change with no

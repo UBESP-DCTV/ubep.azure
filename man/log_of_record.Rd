@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_register.R
 \name{log_of_record}
 \alias{log_of_record}
-\title{The events of one record, in the order REDCap gave them}
+\title{The events of the row that stands now under a record id}
 \usage{
 log_of_record(events, record)
 }
@@ -12,9 +12,16 @@ log_of_record(events, record)
 \item{record}{The record id.}
 }
 \value{
-The rows of \code{events} that belong to \code{record}.
+The rows of \code{events} that belong to \code{record}, from its newest
+creation on.
 }
 \description{
-The events of one record, in the order REDCap gave them
+The rows of the log that belong to \code{record}, in the order REDCap gave
+them, and of those only the current life of the row, \code{log_current_life()}.
+Every reader of a row's log comes through here (who changed the row, who
+approved it, which account is the channel), so none of them reads the
+history of an earlier row that had the same id. REDCap reuses the ids of
+deleted records: the register was emptied on 2026-09-01, and the first
+request filed after it took id 1, which had been a field test's.
 }
 \keyword{internal}

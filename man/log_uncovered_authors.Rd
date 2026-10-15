@@ -38,7 +38,8 @@ the creator edits the row again.
 }
 \details{
 So the stretch between the newest seal and the one before it (or the start
-of the log) is read again, for changes by anybody other than the creator.
+of the row's log, its creation when the log holds it) is read again, for
+changes by anybody other than the creator.
 The round applies such a change only once the creator has approved it, so
 one that the round did carry out has the creator's approval above it in
 that stretch, carrying the very seal the execution wrote. A change with no

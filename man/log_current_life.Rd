@@ -7,29 +7,36 @@
 log_current_life(events)
 }
 \arguments{
-\item{events}{The events of one record, as \code{log_of_record()} returns them.}
+\item{events}{The events of one record, newest first.}
 }
 \value{
-The events above the newest creation or deletion, or all of them
-when there is neither.
+The events from the newest creation on, or all of them when there
+is none.
 }
 \description{
 A record id can be used twice: deleted, and made again by somebody else for
 another request. The log keeps both lives under the same \code{record}, and
-everything below the newest creation, or the newest deletion when the
-creation is not in the answer, belongs to a row that no longer exists.
+everything below the newest creation belongs to a row that no longer
+exists. The creation itself is the first event of the row that stands now,
+and stays: a row with one life is answered whole, as before the cut.
 }
 \details{
 Which event is newest comes from the order of the answer, REDCap's own,
-newest first, as for \code{log_creators()}; the stamps are to the minute and
-cannot tell apart a deletion and a creation made in the same one. The
-creation is read as \code{log_creators()} reads it, from the start of \code{action},
-whose wording for a creation was measured on 2026-09-02; the wording for a
-deletion is assumed by analogy and not measured. Read as a guard, a
-wording that does not match cuts nothing, and the log is read whole as
-before.
+newest first, as for \code{log_creators()}, which names as the creator the
+author of this same event; the stamps are to the minute, and two lives can
+share one. The creation is read as \code{log_creators()} reads it, from the
+start of \code{action}, whose wording was measured on 2026-09-02. Read as a
+guard, a wording that does not match cuts nothing, and the log is read
+whole as before; \code{log_creators()} then names nobody, and the round holds
+the row.
 
-Read by the monthly report, \code{report_executions()}. The round's own readers
-of a row's log do not call it, and read both lives.
+Only the creation cuts, and not the deletion, whose wording was never
+measured. Nothing is lost by it, since the deletion of an earlier life
+stands below the creation of the current one. And an event that only
+reads like a deletion, inside the current life, would cut that life's own
+changes in the direction that grants: below it may stand a change by
+somebody else, which the round would then carry out with nobody asked.
+
+Read by \code{log_of_record()}, so by every reader of a row's log.
 }
 \keyword{internal}
