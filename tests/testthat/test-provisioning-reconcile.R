@@ -1191,13 +1191,23 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
 })
 
 
+# A post that takes every message. The creation branch runs only with one:
+# without it the key would die with the process, so a test that wants the
+# round to reach a creation, or to prove that something else stopped it, has
+# to switch the post on first, or it would pass on the missing post alone.
+posta_accesa <- function(to, cc, subject, body) {
+  list(ok = TRUE, errors = character())
+}
+
+
 test_that("an absence in scope is created, under the name the round found free", { # nolint: line_length_linter.
   # eval
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1224,7 +1234,8 @@ test_that("a simulated round makes nobody exist", {
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
-    directory_vuota()
+    directory_vuota(),
+    mailer = posta_accesa
   )
 
   # test
@@ -1237,6 +1248,49 @@ test_that("a simulated round makes nobody exist", {
 })
 
 
+test_that("nobody is created while the post is off, and the round says so", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+  record <- round_record(esito, scrittura = TRUE, posta = FALSE)
+
+  # test
+  # `UBEP_SCRITTURA=1` with `UBEP_POSTA` off. The account would be born and
+  # its key would have no road out: the post is the only one, and without it
+  # the key dies with the process. So the row waits, as it waits for a silent
+  # instance, and the round's record carries why. The code can only come
+  # from the creation step, which is what proves the row got that far: the
+  # instance answered, the gate let it through, and only the post stopped it.
+  expect_length(creazioni(), 0L)
+  expect_gt(length(interrogazioni()), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% record[["errori"]])
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+})
+
+
+test_that("a round with nobody to create does not complain about the post", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The code names a creation that was withheld, not a switch that is off:
+  # with nobody to create, writing with the post off is the configuration the
+  # runner documents, and it must not fail every round.
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_false("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+})
+
+
 test_that("nobody is created for a row whose requester could not have granted it", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -1245,7 +1299,8 @@ test_that("nobody is created for a row whose requester could not have granted it
       list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
     ),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1268,7 +1323,8 @@ test_that("nobody is born from a request revoked before it was ever served", {
     registro_doppio(record_json(list(request_status = "revoked"))),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1315,7 +1371,8 @@ test_that("nobody is created while the instance that would say so is silent", {
     registro_doppio(record_json(list())),
     istanza_muta(),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1341,7 +1398,8 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
         body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
       )
     },
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1363,7 +1421,8 @@ test_that("the credential leaves by one road and is on none of the others", {
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
   credenziale <- esito[["credenziali"]][["credential"]][[1]]
   record <- round_record(esito, scrittura = TRUE, posta = TRUE)
@@ -2748,7 +2807,8 @@ test_that("a row held for an unreadable log makes nobody exist either", {
     ),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test

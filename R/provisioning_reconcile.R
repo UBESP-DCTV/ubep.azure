@@ -109,6 +109,14 @@
 #'   carries it, for the dictionary comparison. `NULL` compares the other
 #'   fields and declares the substitution.
 #' @param dry_run Whether to simulate. Defaults to `TRUE`.
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`,
+#'   or `NULL` for no post. With no post the round writes what changed and
+#'   sends nothing, as it did before the post existed, and it **creates
+#'   nobody**, even when it writes: the key an account is born with leaves by
+#'   the post and by no other road, so a creation without it would leave an
+#'   account whose key nobody holds. The row waits, and the round's errors
+#'   carry `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+#' @inheritParams mail_round
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -151,7 +159,8 @@ provisioning_reconcile <- function(register_url,
   # With no mailer the round behaves exactly as it did before the mail existed:
   # everything changed is written, nothing is sent. That is the default on
   # purpose, because installing the package must not start a mail on the next
-  # timer.
+  # timer. The one thing it does not do is create: this function does not look
+  # at the births when there is no mailer, so step 10 makes nobody exist.
   #
   # It is a function and not two call sites because the round writes to the
   # register in two places -- here and on a failed sweep -- and a notification
@@ -866,11 +875,26 @@ provisioning_reconcile <- function(register_url,
   # A simulated round creates nobody. It is the same line the instance writes
   # are on, and the one place it could have been forgotten: a creation is not a
   # write on an instance, so nothing else in the round would have stopped it.
+  #
+  # Nor does a round whose post is off, although it writes. The key leaves by
+  # one road, the post, and every other place it could go is a place it would
+  # outlive the act that made it; with no mailer `posted()` sends nothing and
+  # looks at no birth, so the key dies with the process and the account stays
+  # behind with rights nobody can use. The runner allows that configuration --
+  # `UBEP_SCRITTURA=1` without `UBEP_POSTA=1` is the round as it was before the
+  # post existed -- so the round has to refuse it here, where the act is. The
+  # row waits exactly as it waits for a silent instance, and the record of the
+  # round says why under a `TRASPORTO_` code, as the parameters sheet has a
+  # missing `UBEP_GRAPH` do: ours, and it passes when somebody switches the
+  # post on. Only when somebody was actually kept from being born, so that a
+  # round with nobody to create does not fail on a switch it never needed.
   in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
-  creations <- if (dry_run) {
+  creatable <- which(awaiting & record_ids %in% in_scope)
+  unposted <- !dry_run && is.null(mailer) && length(creatable) > 0L
+  creations <- if (dry_run || unposted) {
     list()
   } else {
-    lapply(which(awaiting & record_ids %in% in_scope), function(i) {
+    lapply(creatable, function(i) {
       c(
         directory_create_user(
           graph_token, graph_url,
@@ -1048,7 +1072,8 @@ provisioning_reconcile <- function(register_url,
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
       identity_written[["errors"]], unique(log_errors), import[["errors"]],
-      posta[["errori"]], seal_written[["errors"]]
+      posta[["errori"]], seal_written[["errors"]],
+      if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA"
     )
   )
 }

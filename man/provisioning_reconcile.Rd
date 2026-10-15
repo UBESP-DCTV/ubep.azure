@@ -46,6 +46,21 @@ fields and declares the substitution.}
 
 \item{dry_run}{Whether to simulate. Defaults to \code{TRUE}.}
 
+\item{mailer}{\verb{function(to, cc, subject, body)} returning \code{ok} and \code{errors},
+or \code{NULL} for no post. With no post the round writes what changed and
+sends nothing, as it did before the post existed, and it \strong{creates
+nobody}, even when it writes: the key an account is born with leaves by
+the post and by no other road, so a creation without it would leave an
+account whose key nobody holds. The row waits, and the round's errors
+carry \code{TRASPORTO_CREAZIONE_SENZA_POSTA}.}
+
+\item{redirect_to}{One address replacing every recipient, for a field test.}
+
+\item{copy_to}{Address in copy, on the outcome message only.}
+
+\item{reply_to}{Kept for the caller's symmetry with \code{mail_send()}; the
+mailer closure is what carries it to the transport.}
+
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
 \value{
