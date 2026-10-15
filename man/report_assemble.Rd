@@ -45,10 +45,14 @@ information, and does not count among the things to look at;
 \item \strong{no first sign-in}, one item per person, with every project of theirs:
 the requests of that person activated at least \code{report_grace_days()}
 before the reading and not expired, when Entra says nobody has entered the
-account (\code{report_first_access()}). The item carries the earliest date of
-activation among them, how many days and months of thirty days ago it
-was, and the dates of the earlier reports of the same referent that named
-the person;
+account (\code{report_first_access()}). The thirty days run from the later of
+two dates, in Italian time: the channel's first execution for the
+username the row names now (\code{report_person_since()}), and the birth of
+that account on Entra. A username corrected by a modification, or an
+account made again, is not dated by an activation that was somebody
+else's. The item carries the earliest of those dates among the person's
+requests, how many days and months of thirty days ago it was, and the
+dates of the earlier reports of the same referent that named the person;
 \item \strong{no access for more than a year} is phase 2, and the mail says it was
 not checked.
 }

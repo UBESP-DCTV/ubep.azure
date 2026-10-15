@@ -4,7 +4,7 @@
 \alias{report_rows}
 \title{The rows a month's report speaks about, with their creator and their date}
 \usage{
-report_rows(register, creators, executions, period)
+report_rows(register, creators, executions, period, since = NULL)
 }
 \arguments{
 \item{register}{The register as read.}
@@ -16,10 +16,13 @@ register's order.}
 \code{report_executions()} answered, or \code{NULL} where the log was not read.}
 
 \item{period}{What \code{report_month()} answered.}
+
+\item{since}{One element per row, what \code{report_person_since()} answered,
+or \code{NULL} to date the person by the row's first execution.}
 }
 \value{
 The kept rows of \code{register}, with \code{creator}, \code{attivata_il},
-\code{nel_mese}, \code{senza_data} and \code{data_motivo} added.
+\code{nel_mese}, \code{senza_data}, \code{data_motivo} and \code{persona_dal} added.
 }
 \description{
 A row counts while it is an access: \code{request_status} is \code{active} and

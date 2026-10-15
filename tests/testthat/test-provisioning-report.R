@@ -1613,3 +1613,95 @@ test_that("a person not judged is counted in a report to review too", {
     "   Persone non giudicabili, segnalate a IT: 1." %in% testo[["it"]]
   )
 })
+
+
+test_that("an account made after the activation dates the first-access item", {
+  # eval
+  # Activated on 3 August for one person; on 25 October the username was
+  # corrected to Dario Nuovo, whose account the round created that day.
+  registro <- registro_di(
+    richiesta(record_id = "41", username = "dario.nuovo@ubep.unipd.it",
+              first_name = "Dario", last_name = "Nuovo")
+  )
+  righe <- report_rows(
+    registro, referente, list(c("2026-08-03 23:03", "2026-10-25 10:03")),
+    novembre()
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "dario.nuovo@ubep.unipd.it",
+          createdDateTime = "2026-10-25T08:00:00Z",
+          lastPasswordChangeDateTime = "2026-10-25T08:00:00Z")
+  )
+
+  rapporto <- report_assemble(righe, rubrica, novembre())
+
+  # test
+  # Dario has had the access for seven days.
+  expect_length(
+    rapporto[["referenti"]][[referente]][["senza_primo_accesso"]], 0L
+  )
+})
+
+
+test_that("a username changed by a modification restarts the thirty days", {
+  # eval
+  # Newest first. Executed on 3 August for Carla; on 25 October the referent
+  # wrote another username, the round resolved it and executed the row again.
+  # Dario's account is old and was never used.
+  eventi <- rbind(
+    evento("2026-10-25 23:03", canale, "applied_seal = 'bbbbbbbbbbbb'"),
+    evento("2026-10-25 23:02", canale, "identity = 'existing'"),
+    evento("2026-10-25 10:00", referente,
+           "username = 'dario.vecchio@ubep.unipd.it'"),
+    evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'"),
+    evento("2026-08-03 23:02", canale,
+           "username = 'carla.inventata@ubep.unipd.it', identity = 'created'"),
+    evento("2026-08-03 10:00", referente, "record_id = '41'",
+           action = "Create record 41")
+  )
+  registro <- registro_di(
+    richiesta(record_id = "41", username = "dario.vecchio@ubep.unipd.it",
+              first_name = "Dario", last_name = "Vecchio")
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "dario.vecchio@ubep.unipd.it",
+          createdDateTime = "2024-05-01T08:00:00Z",
+          lastPasswordChangeDateTime = "2024-05-01T08:00:00Z")
+  )
+
+  righe <- report_rows(
+    registro, referente, list(report_executions(eventi, "41")), novembre(),
+    since = list(report_person_since(eventi, "41"))
+  )
+  rapporto <- report_assemble(righe, rubrica, novembre())
+
+  # test
+  expect_equal(report_person_since(eventi, "41"), "2026-10-25 23:03")
+  # The request is still the one activated in August, for the A item.
+  expect_equal(righe[["attivata_il"]], "2026-08-03 23:03")
+  expect_length(
+    rapporto[["referenti"]][[referente]][["senza_primo_accesso"]], 0L
+  )
+})
+
+
+test_that("the person's date is the first seal when the username never moved", {
+  # eval
+  eventi <- rbind(
+    evento("2026-10-12 06:03", canale, "applied_seal = 'bbbbbbbbbbbb'"),
+    evento("2026-10-11 15:20", referente, "role_name = 'data_entry'"),
+    evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'"),
+    evento("2026-08-03 23:02", canale,
+           "username = 'carla.inventata@ubep.unipd.it'")
+  )
+  # A username written and not executed yet: no date for that person.
+  in_attesa <- rbind(
+    evento("2026-10-25 10:00", referente,
+           "username = 'dario.vecchio@ubep.unipd.it'"),
+    eventi
+  )
+
+  # test
+  expect_equal(report_person_since(eventi, "41"), "2026-08-03 23:03")
+  expect_equal(report_person_since(in_attesa, "41"), character())
+})

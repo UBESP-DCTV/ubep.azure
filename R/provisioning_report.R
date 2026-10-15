@@ -204,6 +204,57 @@ report_executions <- function(events, record) {
 }
 
 
+#' Since when the person a row names now has had its access
+#'
+#' The first execution by the channel after the newest write of `username` in
+#' the row's current life. The row's first execution dates the request; this
+#' dates the person. They differ when a modification changed `username`: the
+#' row was activated for somebody, and the person it names now got the access
+#' when the round executed it again. Dated by the row, that person would
+#' count months of somebody else's.
+#'
+#' The newest write of `username` is read from the order of the answer,
+#' newest first, like every other reading of the log here; the event that
+#' writes it counts as after it, in case one event wrote both. Every
+#' `username` write counts, the round's own included: the round writes back
+#' the name it resolved, in the same pass and before the seal, so on a row
+#' never modified the answer is its first execution.
+#'
+#' @inheritParams report_executions
+#'
+#' @return One stamp, `"%Y-%m-%d %H:%M"` in Rome; `character()` when the
+#'   username has been written and not executed since; `NA_character_` when
+#'   the log cannot say.
+#'
+#' @keywords internal
+report_person_since <- function(events, record) {
+  stopifnot(is.data.frame(events))
+
+  mine <- log_current_life(log_of_record(events, record))
+  channel <- log_channel_accounts(mine, record)
+  if (length(channel) > 1L) {
+    return(NA_character_)
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  sealed <- log_wrote(mine, "applied_seal") & authors %in% channel &
+    nzchar(log_value(mine, "applied_seal"))
+  moved <- which(log_wrote(mine, "username"))
+  if (length(moved) > 0L) {
+    sealed <- sealed & seq_len(nrow(mine)) <= moved[[1L]]
+  }
+  stamps <- trimws(as.character(mine[["timestamp"]][sealed]))
+
+  if (!all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}", stamps))) {
+    return(NA_character_)
+  }
+  if (length(stamps) == 0L) {
+    return(character())
+  }
+  sort(stamps)[[1L]]
+}
+
+
 #' Read a time as Microsoft Graph writes it
 #'
 #' @param value A string such as `"2026-10-08T09:12:33Z"`, or `""`.
@@ -364,17 +415,21 @@ report_expired <- function(expiration, today) {
 #' @param executions One element per row, in the register's order: what
 #'   `report_executions()` answered, or `NULL` where the log was not read.
 #' @param period What `report_month()` answered.
+#' @param since One element per row, what `report_person_since()` answered,
+#'   or `NULL` to date the person by the row's first execution.
 #'
 #' @return The kept rows of `register`, with `creator`, `attivata_il`,
-#'   `nel_mese`, `senza_data` and `data_motivo` added.
+#'   `nel_mese`, `senza_data`, `data_motivo` and `persona_dal` added.
 #'
 #' @keywords internal
-report_rows <- function(register, creators, executions, period) {
+report_rows <- function(register, creators, executions, period,
+                        since = NULL) {
   stopifnot(
     is.data.frame(register),
     is.character(creators), length(creators) == nrow(register),
     is.list(executions), length(executions) == nrow(register),
-    is.list(period)
+    is.list(period),
+    is.null(since) || (is.list(since) && length(since) == nrow(register))
   )
 
   field <- function(name) {
@@ -421,6 +476,18 @@ report_rows <- function(register, creators, executions, period) {
   rows[["data_motivo"]] <- ifelse(
     dated, "", ifelse(ambiguous, "log_ambiguo", "senza_sigillo")
   )[keep]
+  person <- if (is.null(since)) {
+    first
+  } else {
+    vapply(since, function(stamps) {
+      if (is.null(stamps) || length(stamps) == 0L || anyNA(stamps)) {
+        ""
+      } else {
+        sort(stamps)[[1L]]
+      }
+    }, character(1))
+  }
+  rows[["persona_dal"]] <- person[keep]
   rownames(rows) <- NULL
   rows
 }
@@ -440,10 +507,14 @@ report_rows <- function(register, creators, executions, period) {
 #' - **no first sign-in**, one item per person, with every project of theirs:
 #'   the requests of that person activated at least `report_grace_days()`
 #'   before the reading and not expired, when Entra says nobody has entered the
-#'   account (`report_first_access()`). The item carries the earliest date of
-#'   activation among them, how many days and months of thirty days ago it
-#'   was, and the dates of the earlier reports of the same referent that named
-#'   the person;
+#'   account (`report_first_access()`). The thirty days run from the later of
+#'   two dates, in Italian time: the channel's first execution for the
+#'   username the row names now (`report_person_since()`), and the birth of
+#'   that account on Entra. A username corrected by a modification, or an
+#'   account made again, is not dated by an activation that was somebody
+#'   else's. The item carries the earliest of those dates among the person's
+#'   requests, how many days and months of thirty days ago it was, and the
+#'   dates of the earlier reports of the same referent that named the person;
 #' - **no access for more than a year** is phase 2, and the mail says it was
 #'   not checked.
 #'
@@ -505,10 +576,33 @@ report_assemble <- function(rows, directory, period, previous = list()) {
   orphan <- !undated & state != "attivo"
   own <- !undated & state == "attivo"
 
+  # Since when the person the row names now has had the access: the channel's
+  # first execution for that username, and not before the account existed.
+  # A username changed by a modification, or an account made again, would
+  # otherwise be dated by somebody else's activation.
+  since <- if (is.null(rows[["persona_dal"]])) {
+    activated
+  } else {
+    text("persona_dal")
+  }
+  born <- vapply(username, function(upn) {
+    account <- report_account(directory, upn)
+    if (is.na(account[["riga"]])) {
+      return("")
+    }
+    moment <- report_graph_time(
+      directory[["createdDateTime"]][[account[["riga"]]]]
+    )
+    if (is.na(moment)) {
+      return("")
+    }
+    format(moment, "%Y-%m-%d %H:%M", tz = "Europe/Rome")
+  }, character(1), USE.NAMES = FALSE)
+  start <- ifelse(nzchar(since), pmax(since, born), "")
+
   days <- rep(NA_integer_, nrow(rows))
-  days[!undated] <- as.integer(
-    today - as.Date(substr(activated[!undated], 1L, 10L))
-  )
+  dated <- nzchar(start)
+  days[dated] <- as.integer(today - as.Date(substr(start[dated], 1L, 10L)))
   judged <- own & !report_expired(text("expiration"), today) &
     !is.na(days) & days >= report_grace_days()
 
@@ -558,7 +652,7 @@ report_assemble <- function(rows, directory, period, previous = list()) {
     keys <- tolower(username[candidates])
     for (key in unique(keys)) {
       at <- candidates[keys == key]
-      at <- at[order(activated[at])]
+      at <- at[order(start[at])]
       oldest <- at[[1L]]
       person <- list(
         nome = trimws(paste(
@@ -570,7 +664,7 @@ report_assemble <- function(rows, directory, period, previous = list()) {
       verdict <- report_first_access(directory, username[[oldest]])
       if (identical(verdict, "mai_entrata")) {
         people[[length(people) + 1L]] <- c(person, list(
-          attivata_il = substr(activated[[oldest]], 1L, 10L),
+          attivata_il = substr(start[[oldest]], 1L, 10L),
           giorni = days[[oldest]],
           mesi = days[[oldest]] %/% 30L,
           segnalata = reported(who, key)
@@ -1577,19 +1671,21 @@ provisioning_report <- function(register_url,
     # months old. Today that is one call; past five hundred rows it is worth
     # looking at again.
     executions <- rep(list(NULL), nrow(register))
+    since <- rep(list(NULL), nrow(register))
     active <- field("request_status") == "active" &
       field("outcome") == "applied"
     for (i in which(active)) {
       answer <- register_log(register_url, register_token, record = ids[[i]])
       if (isTRUE(answer[["ok"]])) {
         executions[i] <- list(report_executions(answer[["log"]], ids[[i]]))
+        since[i] <- list(report_person_since(answer[["log"]], ids[[i]]))
       } else {
         logs_read <- FALSE
         errors <- c(errors, answer[["errors"]])
       }
     }
 
-    rows <- report_rows(register, creators, executions, period)
+    rows <- report_rows(register, creators, executions, period, since)
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]]
     )
