@@ -1173,11 +1173,16 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   # round could actually have acted on, every register row for the server
   # collected TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been
   # asked for.
+  #
+  # The second row is a namesake of the first with another contact address,
+  # so the gate stops it as `ambiguous`. It used to be a person the tenant does
+  # not hold, which the gate does not stop: that row waits for a creation, and
+  # since 0.19.0 it takes the instance's code like a pair does.
   esito <- giro(
     registro_doppio(record_json(
       list(record_id = "1"),
-      list(record_id = "2", first_name = "Giulia", last_name = "Verdi",
-           contact_email = "giulia.verdi@example.org", project_id = "9004")
+      list(record_id = "2", contact_email = "altro.rossi@example.org",
+           project_id = "9004")
     )),
     istanza_muta()
   )
@@ -1187,8 +1192,21 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   expect_equal(
     esiti[["outcome"]][esiti[["record_id"]] == "1"], "transport_error"
   )
-  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "pending")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_RECAPITO_NON_IDENTIFICA"
+  )
 })
+
+
+# A post that takes every message. The creation branch runs only with one:
+# without it the key would die with the process, so a test that wants the
+# round to reach a creation, or to prove that something else stopped it, has
+# to switch the post on first, or it would pass on the missing post alone.
+posta_accesa <- function(to, cc, subject, body) {
+  list(ok = TRUE, errors = character())
+}
 
 
 test_that("an absence in scope is created, under the name the round found free", { # nolint: line_length_linter.
@@ -1197,7 +1215,8 @@ test_that("an absence in scope is created, under the name the round found free",
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1224,7 +1243,8 @@ test_that("a simulated round makes nobody exist", {
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
-    directory_vuota()
+    directory_vuota(),
+    mailer = posta_accesa
   )
 
   # test
@@ -1237,6 +1257,49 @@ test_that("a simulated round makes nobody exist", {
 })
 
 
+test_that("nobody is created while the post is off, and the round says so", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+  record <- round_record(esito, scrittura = TRUE, posta = FALSE)
+
+  # test
+  # `UBEP_SCRITTURA=1` with `UBEP_POSTA` off. The account would be born and
+  # its key would have no road out: the post is the only one, and without it
+  # the key dies with the process. So the row waits, as it waits for a silent
+  # instance, and the round's record carries why. The code can only come
+  # from the creation step, which is what proves the row got that far: the
+  # instance answered, the gate let it through, and only the post stopped it.
+  expect_length(creazioni(), 0L)
+  expect_gt(length(interrogazioni()), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% record[["errori"]])
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+})
+
+
+test_that("a round with nobody to create does not complain about the post", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The code names a creation that was withheld, not a switch that is off:
+  # with nobody to create, writing with the post off is the configuration the
+  # runner documents, and it must not fail every round.
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_false("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+})
+
+
 test_that("nobody is created for a row whose requester could not have granted it", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -1245,7 +1308,8 @@ test_that("nobody is created for a row whose requester could not have granted it
       list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
     ),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1268,7 +1332,8 @@ test_that("nobody is born from a request revoked before it was ever served", {
     registro_doppio(record_json(list(request_status = "revoked"))),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1315,16 +1380,51 @@ test_that("nobody is created while the instance that would say so is silent", {
     registro_doppio(record_json(list())),
     istanza_muta(),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
   # An instance that did not answer has not said "yes" and has not said "no".
   # Fail closed: the row waits, and the next round asks again. Creating on an
   # unanswered question would make the gate a thing that holds only while the
-  # network does.
+  # network does. It waits as a transport error, the next test says why.
   expect_length(creazioni(), 0L)
-  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+})
+
+
+test_that("a person to create on a silent instance waits with the instance's code", { # nolint: line_length_linter.
+  # eval
+  muta <- giro(
+    registro_doppio(record_json(list())),
+    istanza_muta(),
+    directory_vuota()
+  )
+  senza_modulo <- giro(
+    registro_doppio(record_json(list(server = "edc07"))),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # The row is `absent`, so it is not a pair and never enters the plan; it
+  # reaches the instance only for the scope question. Left `pending`, it
+  # waited without limit and without a word: the referent had the first
+  # message and nothing after it, and nothing told us an instance was silent
+  # for that row. It now waits the way a pair on the same instance waits, as a
+  # transport error under the instance's own code, which comes back to the
+  # queue every round and reaches us.
+  expect_equal(identita_scritte()[["identity"]], "absent")
+  expect_equal(muta[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    muta[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+  expect_equal(senza_modulo[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    senza_modulo[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_ISTANZA_SENZA_MODULO"
+  )
 })
 
 
@@ -1341,7 +1441,8 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
         body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
       )
     },
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1357,13 +1458,235 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
 })
 
 
+test_that("a creation whose answer was lost counts as a lost key and welcome", {
+  # eval
+  persa <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) stop("Operation timed out"),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  record <- round_record(persa, scrittura = TRUE, posta = TRUE)
+  rifiutata <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) {
+      httr2::response(
+        status_code = 403L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
+      )
+    },
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # The POST went out and nothing came back. If Graph made the account, its
+  # key was drawn in this process and dies with it: next round the sweep finds
+  # the account, the row becomes `created` and then `applied`, and a person
+  # holds rights on an account whose key nobody knows, with no alarm. So the
+  # round counts it now as a key and a welcome lost -- the alarm on the lost
+  # key is the one that sends IT to reset it -- and names the creation code
+  # among its errors and on the row, which is where IT finds the person.
+  expect_length(creazioni(), 1L)
+  expect_equal(persa[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    persa[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE"
+  )
+  expect_identical(record[["credenziali_perse"]], 1L)
+  expect_identical(record[["benvenuti_persi"]], 1L)
+  expect_identical(record[["credenziali_recapitate"]], 0L)
+  expect_true("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE" %in% record[["errori"]])
+  expect_equal(nrow(persa[["credenziali"]]), 0L)
+  # Graph's own refusal says nobody was born, and there is no key to lose.
+  expect_identical(rifiutata[["posta"]][["credenziali_perse"]], 0L)
+  expect_identical(rifiutata[["posta"]][["benvenuti_persi"]], 0L)
+})
+
+
+test_that("a person is not created for a request whose last day has passed", {
+  # eval
+  oggetti <- character()
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "1999-01-01"))),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      oggetti <<- c(oggetti, subject) # nolint: assignment_linter.
+      list(ok = TRUE, errors = character())
+    }
+  )
+
+  # test
+  # A row whose person does not exist yet is not a pair, so it never went
+  # through `validate_request()`: the account was born, the welcome and the
+  # key left, and the error appeared one round later, on a person who now
+  # exists for a request that could never be served. The code is the one the
+  # validation gives, so it proves the row was validated before the creation
+  # and not stopped somewhere else.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_false(any(grepl("Il tuo account UBEP", oggetti, fixed = TRUE)))
+})
+
+
+test_that("a person asked for twice on one project is created once", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"), list(record_id = "2")
+    )),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  esiti <- esito[["esiti"]]
+
+  # test
+  # The pair the two rows will make once the person exists is one pair, and
+  # the register already has a rule for that: the oldest row keeps it and the
+  # others are duplicates. Applied only after the creation, it let both rows
+  # try to make the same account in the same round.
+  expect_length(creazioni(), 1L)
+  expect_equal(esito[["credenziali"]][["record_id"]], "1")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_COPPIA_DUPLICATA"
+  )
+})
+
+
+# An instance that knows only some roles and refuses the others the way the
+# module does. `Applier::resolveNames()` runs on a simulation too, so a dry-run
+# apply already names a role the project does not have.
+istanza_con_ruoli <- function(ruoli, ...) {
+  base <- istanza_doppia(...)
+  function(data) {
+    body <- base(data)
+    if (!identical(data[["operation"]], "apply")) {
+      return(body)
+    }
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]] <- lapply(parsed[["results"]], function(entry) {
+      ruolo <- entry[["after"]][["role_name"]]
+      if (!is.null(ruolo) && !ruolo %in% ruoli) {
+        entry[["outcome"]] <- "errore"
+        entry[["errors"]] <- list(list(
+          code = "DATO_RUOLO_INESISTENTE",
+          message = "role is not defined in this project"
+        ))
+      }
+      entry
+    })
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+}
+
+
+test_that("a person is not created for a role the project does not have", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  prove <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+  controllo <- giro(
+    registro_doppio(record_json(list())),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Whether the role exists is the instance's to say, and only a write tells
+  # it -- so the round rehearses the grant the person will get, as a dry run,
+  # under the name it is about to create, before the person exists. The code
+  # can only have come from that rehearsal, and the control shows the same
+  # instance letting a role it knows through to the creation.
+  expect_length(prove, 1L)
+  expect_true(prove[[1]][["body"]][["data"]][["dry_run"]])
+  expect_equal(
+    prove[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_equal(nrow(controllo[["credenziali"]]), 1L)
+  expect_equal(controllo[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("a simulated round already says the role does not exist", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota()
+  )
+
+  # test
+  # The simulation is where the referents read what the round would do, and a
+  # rehearsal that cannot refuse what the performance refuses cannot warn.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+})
+
+
+test_that("a rehearsal the instance does not answer makes nobody exist", {
+  # eval
+  # The instance answers the state read and then stops answering.
+  a_meta <- function(data) {
+    if (identical(data[["operation"]], "apply")) {
+      stop("Could not resolve host")
+    }
+    istanza_doppia(list())(data)
+  }
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    a_meta,
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Not validated is not valid: the row waits, under the code of the call
+  # that did not come back, and the next round rehearses again.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+})
+
+
 test_that("the credential leaves by one road and is on none of the others", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
   credenziale <- esito[["credenziali"]][["credential"]][[1]]
   record <- round_record(esito, scrittura = TRUE, posta = TRUE)
@@ -2958,7 +3281,8 @@ test_that("a row held for an unreadable log makes nobody exist either", {
     ),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test

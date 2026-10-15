@@ -14,7 +14,8 @@
 #'    errors;
 #' 5. per instance, read the state **once** for the grantees and the requesters
 #'    together;
-#' 6. ask the scope gate about the instances that answered, and only those;
+#' 6. ask the scope gate about the instances that answered, and only those,
+#'    and rehearse there the grant of a person still to be created;
 #' 7. diff against the real rows somebody asked about;
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
@@ -71,7 +72,18 @@
 #' travel as far as the scope question, because whoever could not have granted
 #' that project by hand must not be able to make the person to grant it to
 #' either. An instance that did not answer has neither allowed nor refused, and
-#' the row waits.
+#' the row waits, under the instance's transport code as a pair on that
+#' instance does.
+#'
+#' **The person is validated as the pair they will become, before being
+#' made.** Step 4 hands the row to `register_to_desired()` under the name the
+#' round would create, for the same data errors and the same rule on repeated
+#' pairs a resolved row meets, and keeps only the errors. And once the scope
+#' gate has let the row through, the instance rehearses the grant as a dry
+#' run, which is the only way to learn whether the role and the group exist in
+#' the project. A row that fails either takes its own code and nobody is born;
+#' otherwise the account, its welcome and its key would precede a refusal that
+#' arrives one round later and that no new round can take back.
 #'
 #' **The row it creates stays `absent` for this pass** and becomes `created` at
 #' the next one, which is decision 4 working as written rather than a delay
@@ -116,6 +128,14 @@
 #'   carries it, for the dictionary comparison. `NULL` compares the other
 #'   fields and declares the substitution.
 #' @param dry_run Whether to simulate. Defaults to `TRUE`.
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`,
+#'   or `NULL` for no post. With no post the round writes what changed and
+#'   sends nothing, as it did before the post existed, and it **creates
+#'   nobody**, even when it writes: the key an account is born with leaves by
+#'   the post and by no other road, so a creation without it would leave an
+#'   account whose key nobody holds. The row waits, and the round's errors
+#'   carry `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+#' @inheritParams mail_round
 #' @param approvers The IT accounts whose approval of a change counts on any
 #'   row, as REDCap usernames. Read by the runner from the machine and empty
 #'   by default, so a runner that does not pass it leaves the creator as the
@@ -164,7 +184,8 @@ provisioning_reconcile <- function(register_url,
   # With no mailer the round behaves exactly as it did before the mail existed:
   # everything changed is written, nothing is sent. That is the default on
   # purpose, because installing the package must not start a mail on the next
-  # timer.
+  # timer. The one thing it does not do is create: this function does not look
+  # at the births when there is no mailer, so step 10 makes nobody exist.
   #
   # It is a function and not two call sites because the round writes to the
   # register in two places -- here and on a failed sweep -- and a notification
@@ -597,6 +618,29 @@ provisioning_reconcile <- function(register_url,
     drop = FALSE
   ]
 
+  # The person still to be created, judged as the pair they will become. Such
+  # a row carries no username, so `register_to_desired()` passes over it, and
+  # until now nothing else validated it: the account was born, the welcome and
+  # the key left, and a past expiration or a second row for the same pair
+  # surfaced one round later, on a person who now existed for a request that
+  # could never be served. Handed the name the round is about to create, the
+  # same function gives the same answers -- `validate_request()` and the rule
+  # that the oldest row of a repeated pair keeps it -- and nothing of what it
+  # builds enters the plan: these rows stay out of the desired state until the
+  # person exists, and only their errors and their entries travel on, the
+  # entries for the rehearsal on the instance below.
+  #
+  # Among themselves only. A name `absent` was found free in the tenant, so it
+  # cannot be the username of a row that resolved to an account.
+  arriving <- identity_normalize(resolved[["identity"]]) == "absent"
+  arrivals <- resolved[arriving, , drop = FALSE]
+  arrivals[["username"]] <- vapply(
+    resolutions[standing][arriving],
+    function(answer) as.character(answer[["composed"]] %||% ""),
+    character(1)
+  )
+  arrivals <- register_to_desired(arrivals)
+
   # A project_id the register accepted but that is not a number is a data
   # error, and it has to be named here. `validate_request()` catches the ones
   # that will not coerce; this catches the ones that coerce to something else,
@@ -613,6 +657,11 @@ provisioning_reconcile <- function(register_url,
     (is.na(numbers) | !grepl("^[0-9]+$", trimmed_ids))
 
   row_errors <- plan[["errors"]]
+  for (id in names(arrivals[["errors"]])) {
+    if (is.null(row_errors[[id]])) {
+      row_errors[[id]] <- arrivals[["errors"]][[id]]
+    }
+  }
   for (id in as.character(resolved[["record_id"]])[malformed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "DATO_PROGETTO_INESISTENTE"
@@ -649,7 +698,7 @@ provisioning_reconcile <- function(register_url,
     ))
   }
 
-  entries <- c(plan[["desired"]], plan[["revoked"]])
+  entries <- c(plan[["desired"]], plan[["revoked"]], arrivals[["desired"]])
   servers <- sort(unique(c(
     vapply(entries, function(e) as.character(e[["server"]]), character(1)),
     asks[["server"]]
@@ -692,13 +741,25 @@ provisioning_reconcile <- function(register_url,
     # instance would collect a transport error on a row the round never
     # touched, contradicting the early-feedback promise the scope-refusal path
     # below still keeps for exactly those rows.
+    #
+    # A row waiting for its person to be created is one the round could have
+    # acted on too, although it is not a pair: it comes this far for the scope
+    # question, and a creation hangs on the answer. Left out, a silent instance
+    # kept it `pending` without limit and without a code -- the referent had
+    # the first message and nothing after it, and nothing reached us -- while
+    # a pair on the same instance came back with the instance's code. It
+    # waits the same way now.
+    newcomers <- as.character(rows[["record_id"]])[
+      identity_normalize(rows[["identity"]]) == "absent"
+    ]
     asked_for <- unique(c(
       vapply(
         wanted, function(e) as.character(e[["record_id"]]), character(1)
       ),
       vapply(
         revoked, function(e) as.character(e[["record_id"]]), character(1)
-      )
+      ),
+      newcomers
     ))
 
     unreachable <- function(code) {
@@ -768,6 +829,76 @@ provisioning_reconcile <- function(register_url,
     }
     wanted <- Filter(in_scope, wanted)
     revoked <- Filter(in_scope, revoked)
+
+    # The rehearsal of a person still to be created. Whether the role and the
+    # group a request names exist in its project is the instance's to say, and
+    # only a write makes it say so: `Applier::resolveNames()` runs on every
+    # plan, simulated or not, and refuses a name the project does not have. So
+    # the grant the person will get once they exist is rehearsed now, as a dry
+    # run and under the name the round is about to create, and only a row the
+    # rehearsal let through may be born. Without it the account was made, its
+    # welcome and its key left, and the refusal came one round later on the
+    # first real grant: a person who exists for a request that cannot be
+    # served.
+    #
+    # A dry run whatever the round is doing, and in a simulated round too: it
+    # writes nothing, and a simulation that could not refuse what the real
+    # round refuses could not warn. Batched by project like everything else
+    # the round sends, for the reason `round_batches()` gives.
+    #
+    # Not answered is not allowed. A batch the instance did not answer keeps
+    # its rows from being born under the code of the call that failed, and so
+    # does a row the answer does not mention, which simply waits.
+    to_create <- Filter(in_scope, Filter(served, mine(arrivals[["desired"]])))
+    rehearsals <- lapply(round_batches(to_create), function(batch) {
+      answer <- module_apply(
+        hosts[[server]], secrets[[server]],
+        requests = batch[["requests"]], dry_run = TRUE
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        return(list(
+          fit = character(),
+          esiti = outcome_rows(
+            batch[["record_ids"]], "transport_error",
+            detail = answer[["errors"]]
+          )
+        ))
+      }
+      # A list, for the reason `by_pair` below is one: a miss falls through.
+      by_pair <- as.list(batch[["record_ids"]])
+      names(by_pair) <- vapply(batch[["requests"]], function(r) {
+        paste(r[["username"]], r[["project_id"]], sep = "\r")
+      }, character(1))
+      fit <- character()
+      esiti <- list(empty_outcomes)
+      for (entry in answer[["payload"]][["results"]] %||% list()) {
+        id <- by_pair[[paste(
+          as.character(entry[["username"]]), as.integer(entry[["project_id"]]),
+          sep = "\r"
+        )]] %||% NA_character_
+        if (is.na(id)) {
+          next
+        }
+        codes <- vapply(
+          entry[["errors"]] %||% list(),
+          function(error) as.character(error[["code"]]),
+          character(1)
+        )
+        if (length(codes) == 0L) {
+          fit <- c(fit, id)
+          next
+        }
+        esiti[[length(esiti) + 1L]] <- outcome_payload(
+          id, round_outcome_kind(codes, dry_run),
+          detail = paste(codes, collapse = ","), at = at
+        )
+      }
+      list(fit = fit, esiti = do.call(rbind, esiti))
+    })
+    unready <- setdiff(
+      vapply(to_create, function(e) as.character(e[["record_id"]]), ""),
+      unlist(lapply(rehearsals, function(r) r[["fit"]]))
+    )
 
     results <- state[["payload"]][["results"]] %||% list()
 
@@ -927,8 +1058,9 @@ provisioning_reconcile <- function(register_url,
       # The rows this instance was asked about and did not refuse. Only present
       # when the instance answered: the early returns above carry no such key,
       # and their silence is what keeps a creation from happening on a question
-      # nobody got to ask.
-      in_scope = setdiff(ids, c(names(refused), waits)),
+      # nobody got to ask. A person the rehearsal did not let through is not
+      # among them, for the same reason.
+      in_scope = setdiff(ids, c(names(refused), waits, unready)),
       # The withdrawals the gate sent back to wait for their creator.
       trattenute = waits,
       esiti = do.call(rbind, c(
@@ -944,6 +1076,7 @@ provisioning_reconcile <- function(register_url,
             id, round_outcome_kind(code, dry_run), detail = code, at = at
           )
         }),
+        lapply(rehearsals, function(r) r[["esiti"]]),
         list(settled, written)
       ))
     )
@@ -959,6 +1092,19 @@ provisioning_reconcile <- function(register_url,
   # A simulated round creates nobody. It is the same line the instance writes
   # are on, and the one place it could have been forgotten: a creation is not a
   # write on an instance, so nothing else in the round would have stopped it.
+  #
+  # Nor does a round whose post is off, although it writes. The key leaves by
+  # one road, the post, and every other place it could go is a place it would
+  # outlive the act that made it; with no mailer `posted()` sends nothing and
+  # looks at no birth, so the key dies with the process and the account stays
+  # behind with rights nobody can use. The runner allows that configuration --
+  # `UBEP_SCRITTURA=1` without `UBEP_POSTA=1` is the round as it was before the
+  # post existed -- so the round has to refuse it here, where the act is. The
+  # row waits exactly as it waits for a silent instance, and the record of the
+  # round says why under a `TRASPORTO_` code, as the parameters sheet has a
+  # missing `UBEP_GRAPH` do: ours, and it passes when somebody switches the
+  # post on. Only when somebody was actually kept from being born, so that a
+  # round with nobody to create does not fail on a switch it never needed.
   in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
 
   # The withdrawals the gate did not free are held as if they had been held
@@ -970,10 +1116,12 @@ provisioning_reconcile <- function(register_url,
     rbind, c(list(empty_outcomes), lapply(which(late), held_outcome))
   )
 
-  creations <- if (dry_run) {
+  creatable <- which(awaiting & record_ids %in% in_scope)
+  unposted <- !dry_run && is.null(mailer) && length(creatable) > 0L
+  creations <- if (dry_run || unposted) {
     list()
   } else {
-    lapply(which(awaiting & record_ids %in% in_scope), function(i) {
+    lapply(creatable, function(i) {
       c(
         directory_create_user(
           graph_token, graph_url,
@@ -996,6 +1144,30 @@ provisioning_reconcile <- function(register_url,
   # anything being created twice.
   refused_creations <- Filter(function(a) !isTRUE(a[["ok"]]), creations)
   born <- Filter(function(a) isTRUE(a[["ok"]]), creations)
+
+  # Idempotent, and silent too, which is the part that cannot stay. A creation
+  # whose answer was lost may have made the account: its key was drawn in this
+  # process and dies with it, the next sweep finds the account, the row turns
+  # `created` and then `applied`, and a person holds rights on an account whose
+  # key nobody knows -- with `credenziali_perse` at zero and no alarm. So it is
+  # counted here as what it may be, a key and a welcome lost: the key's alarm
+  # is the one that sends IT to reset it and write to the person, and the
+  # welcome is part of what IT then writes.
+  #
+  # Counted in this round, and not in the next one when the account shows up,
+  # although the next one would be exact where this can be wrong: when the
+  # request never reached Graph, the alarm fires for an account that does not
+  # exist, and the next round creates it with its key. The exact count needs a
+  # memory, the row's previous detail, and the next round may not find it: a
+  # failed sweep rewrites every row's detail, and a row whose message did not
+  # leave is not written at all -- failures that come together with a lost
+  # answer more often than apart. Between an alarm IT closes by finding no
+  # account on Entra and an account with rights that nobody hears of, this is
+  # the side that tells somebody. The row carries the creation code, which is
+  # where IT finds the person.
+  unanswered <- Filter(
+    function(a) isTRUE(a[["unconfirmed"]]), refused_creations
+  )
 
   created_outcomes <- do.call(rbind, c(
     list(empty_outcomes),
@@ -1056,6 +1228,18 @@ provisioning_reconcile <- function(register_url,
   )
   import <- register_import(
     register_url, register_token, posta[["recapitate"]]
+  )
+
+  # Beside what the post counted, because neither message of an unanswered
+  # creation had anything to be composed from. The code is the creation's own:
+  # it says why both are missing, where `POSTA_` would send whoever reads the
+  # record to look at the mail service.
+  for (lost in c("credenziali_perse", "benvenuti_persi")) {
+    posta[["contatori"]][[lost]] <-
+      posta[["contatori"]][[lost]] + length(unanswered)
+  }
+  posta[["errori"]] <- c(
+    posta[["errori"]], unlist(lapply(unanswered, function(a) a[["errors"]]))
   )
 
   # The seals, written last and through a door that takes nothing else.
@@ -1150,7 +1334,8 @@ provisioning_reconcile <- function(register_url,
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
       identity_written[["errors"]], unique(log_errors), import[["errors"]],
-      posta[["errori"]], seal_written[["errors"]]
+      posta[["errori"]], seal_written[["errors"]],
+      if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA"
     )
   )
 }

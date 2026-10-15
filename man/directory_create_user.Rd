@@ -27,7 +27,8 @@ sending a bearer token in clear.}
 A list with \code{ok}, \code{errors}, \code{payload}, \code{upn}, and \code{credential} — the
 one the account was born with, present only on success. It leaves by the
 return value and by no other road: not the register, not the telemetry
-record, not standard output.
+record, not standard output. \code{unconfirmed} is \code{TRUE} on a failure that
+does not say whether the account was born, see \code{creation_failure()}.
 }
 \description{
 The second and last thing this package does on Microsoft Graph, and it does

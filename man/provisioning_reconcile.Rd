@@ -47,6 +47,21 @@ fields and declares the substitution.}
 
 \item{dry_run}{Whether to simulate. Defaults to \code{TRUE}.}
 
+\item{mailer}{\verb{function(to, cc, subject, body)} returning \code{ok} and \code{errors},
+or \code{NULL} for no post. With no post the round writes what changed and
+sends nothing, as it did before the post existed, and it \strong{creates
+nobody}, even when it writes: the key an account is born with leaves by
+the post and by no other road, so a creation without it would leave an
+account whose key nobody holds. The row waits, and the round's errors
+carry \code{TRASPORTO_CREAZIONE_SENZA_POSTA}.}
+
+\item{redirect_to}{One address replacing every recipient, for a field test.}
+
+\item{copy_to}{Address in copy, on the outcome message only.}
+
+\item{reply_to}{Kept for the caller's symmetry with \code{mail_send()}; the
+mailer closure is what carries it to the transport.}
+
 \item{approvers}{The IT accounts whose approval of a change counts on any
 row, as REDCap usernames. Read by the runner from the machine and empty
 by default, so a runner that does not pass it leaves the creator as the
@@ -79,7 +94,8 @@ and write the verdict back;
 errors;
 \item per instance, read the state \strong{once} for the grantees and the requesters
 together;
-\item ask the scope gate about the instances that answered, and only those;
+\item ask the scope gate about the instances that answered, and only those,
+and rehearse there the grant of a person still to be created;
 \item diff against the real rows somebody asked about;
 \item batch by \verb{(server, project_id)}, never across two projects;
 \item read back what a real write did, before calling it applied;
@@ -136,7 +152,18 @@ to grant a right to — so it never enters the desired state; but it does
 travel as far as the scope question, because whoever could not have granted
 that project by hand must not be able to make the person to grant it to
 either. An instance that did not answer has neither allowed nor refused, and
-the row waits.
+the row waits, under the instance's transport code as a pair on that
+instance does.
+
+\strong{The person is validated as the pair they will become, before being
+made.} Step 4 hands the row to \code{register_to_desired()} under the name the
+round would create, for the same data errors and the same rule on repeated
+pairs a resolved row meets, and keeps only the errors. And once the scope
+gate has let the row through, the instance rehearses the grant as a dry
+run, which is the only way to learn whether the role and the group exist in
+the project. A row that fails either takes its own code and nobody is born;
+otherwise the account, its welcome and its key would precede a refusal that
+arrives one round later and that no new round can take back.
 
 \strong{The row it creates stays \code{absent} for this pass} and becomes \code{created} at
 the next one, which is decision 4 working as written rather than a delay
