@@ -825,8 +825,8 @@ seal_needs_approval <- function(register, events, creators) {
 #' waiting for ever, without deleting the row and losing who filed it. The
 #' list lives on the machine that runs the round and never in this
 #' repository. One limit is worth knowing: the scope gate still asks the
-#' creator's rights on the project, so an approval -- IT's or anybody's --
-#' does not carry a row whose creator no longer manages the project.
+#' creator's rights on the project, so no approval, from IT or anybody else,
+#' carries a row whose creator no longer manages the project.
 #'
 #' An unreadable log is not this function's to decide. It answers about the
 #' events and the creators it was handed, and a caller holding neither gets

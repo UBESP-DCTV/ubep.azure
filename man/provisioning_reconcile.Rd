@@ -123,7 +123,7 @@ will again on every round. Who made the change is read from that row's own
 log, whole, and without the round's own writes; the rule is
 \code{change_needs_approval()}. The log is asked once per row that needs it: a
 row whose seal moved, and a row not applied yet that the round could act
-on. Two widenings, both decided on 2026-10-15. A revocation and nothing
+on. Two exceptions, both decided on 2026-10-15. A revocation and nothing
 else, made by somebody who manages the project, does not wait: it is
 judged at the gate, step 6, because the rights come from the instance. And
 the IT accounts in \code{approvers} approve as the creator does.
