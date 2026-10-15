@@ -1173,11 +1173,16 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   # round could actually have acted on, every register row for the server
   # collected TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been
   # asked for.
+  #
+  # The second row is a namesake of the first with another contact address,
+  # so the gate stops it as `ambiguous`. It used to be a person the tenant does
+  # not hold, which the gate does not stop: that row waits for a creation, and
+  # since 0.19.0 it takes the instance's code like a pair does.
   esito <- giro(
     registro_doppio(record_json(
       list(record_id = "1"),
-      list(record_id = "2", first_name = "Giulia", last_name = "Verdi",
-           contact_email = "giulia.verdi@example.org", project_id = "9004")
+      list(record_id = "2", contact_email = "altro.rossi@example.org",
+           project_id = "9004")
     )),
     istanza_muta()
   )
@@ -1187,8 +1192,21 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   expect_equal(
     esiti[["outcome"]][esiti[["record_id"]] == "1"], "transport_error"
   )
-  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "pending")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_RECAPITO_NON_IDENTIFICA"
+  )
 })
+
+
+# A post that takes every message. The creation branch runs only with one:
+# without it the key would die with the process, so a test that wants the
+# round to reach a creation, or to prove that something else stopped it, has
+# to switch the post on first, or it would pass on the missing post alone.
+posta_accesa <- function(to, cc, subject, body) {
+  list(ok = TRUE, errors = character())
+}
 
 
 test_that("an absence in scope is created, under the name the round found free", { # nolint: line_length_linter.
@@ -1197,7 +1215,8 @@ test_that("an absence in scope is created, under the name the round found free",
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1224,7 +1243,8 @@ test_that("a simulated round makes nobody exist", {
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
-    directory_vuota()
+    directory_vuota(),
+    mailer = posta_accesa
   )
 
   # test
@@ -1237,6 +1257,49 @@ test_that("a simulated round makes nobody exist", {
 })
 
 
+test_that("nobody is created while the post is off, and the round says so", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+  record <- round_record(esito, scrittura = TRUE, posta = FALSE)
+
+  # test
+  # `UBEP_SCRITTURA=1` with `UBEP_POSTA` off. The account would be born and
+  # its key would have no road out: the post is the only one, and without it
+  # the key dies with the process. So the row waits, as it waits for a silent
+  # instance, and the round's record carries why. The code can only come
+  # from the creation step, which is what proves the row got that far: the
+  # instance answered, the gate let it through, and only the post stopped it.
+  expect_length(creazioni(), 0L)
+  expect_gt(length(interrogazioni()), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% record[["errori"]])
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+})
+
+
+test_that("a round with nobody to create does not complain about the post", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The code names a creation that was withheld, not a switch that is off:
+  # with nobody to create, writing with the post off is the configuration the
+  # runner documents, and it must not fail every round.
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_false("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% esito[["errori"]])
+})
+
+
 test_that("nobody is created for a row whose requester could not have granted it", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -1245,7 +1308,8 @@ test_that("nobody is created for a row whose requester could not have granted it
       list(username = "anna.bianchi@ubep.unipd.it", user_rights = 0L)
     ),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1268,7 +1332,8 @@ test_that("nobody is born from a request revoked before it was ever served", {
     registro_doppio(record_json(list(request_status = "revoked"))),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1315,16 +1380,51 @@ test_that("nobody is created while the instance that would say so is silent", {
     registro_doppio(record_json(list())),
     istanza_muta(),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
   # An instance that did not answer has not said "yes" and has not said "no".
   # Fail closed: the row waits, and the next round asks again. Creating on an
   # unanswered question would make the gate a thing that holds only while the
-  # network does.
+  # network does. It waits as a transport error, the next test says why.
   expect_length(creazioni(), 0L)
-  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+})
+
+
+test_that("a person to create on a silent instance waits with the instance's code", { # nolint: line_length_linter.
+  # eval
+  muta <- giro(
+    registro_doppio(record_json(list())),
+    istanza_muta(),
+    directory_vuota()
+  )
+  senza_modulo <- giro(
+    registro_doppio(record_json(list(server = "edc07"))),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # The row is `absent`, so it is not a pair and never enters the plan; it
+  # reaches the instance only for the scope question. Left `pending`, it
+  # waited without limit and without a word: the referent had the first
+  # message and nothing after it, and nothing told us an instance was silent
+  # for that row. It now waits the way a pair on the same instance waits, as a
+  # transport error under the instance's own code, which comes back to the
+  # queue every round and reaches us.
+  expect_equal(identita_scritte()[["identity"]], "absent")
+  expect_equal(muta[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    muta[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+  expect_equal(senza_modulo[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    senza_modulo[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_ISTANZA_SENZA_MODULO"
+  )
 })
 
 
@@ -1341,7 +1441,8 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
         body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
       )
     },
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test
@@ -1357,13 +1458,235 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
 })
 
 
+test_that("a creation whose answer was lost counts as a lost key and welcome", {
+  # eval
+  persa <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) stop("Operation timed out"),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  record <- round_record(persa, scrittura = TRUE, posta = TRUE)
+  rifiutata <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) {
+      httr2::response(
+        status_code = 403L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
+      )
+    },
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # The POST went out and nothing came back. If Graph made the account, its
+  # key was drawn in this process and dies with it: next round the sweep finds
+  # the account, the row becomes `created` and then `applied`, and a person
+  # holds rights on an account whose key nobody knows, with no alarm. So the
+  # round counts it now as a key and a welcome lost -- the alarm on the lost
+  # key is the one that sends IT to reset it -- and names the creation code
+  # among its errors and on the row, which is where IT finds the person.
+  expect_length(creazioni(), 1L)
+  expect_equal(persa[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    persa[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE"
+  )
+  expect_identical(record[["credenziali_perse"]], 1L)
+  expect_identical(record[["benvenuti_persi"]], 1L)
+  expect_identical(record[["credenziali_recapitate"]], 0L)
+  expect_true("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE" %in% record[["errori"]])
+  expect_equal(nrow(persa[["credenziali"]]), 0L)
+  # Graph's own refusal says nobody was born, and there is no key to lose.
+  expect_identical(rifiutata[["posta"]][["credenziali_perse"]], 0L)
+  expect_identical(rifiutata[["posta"]][["benvenuti_persi"]], 0L)
+})
+
+
+test_that("a person is not created for a request whose last day has passed", {
+  # eval
+  oggetti <- character()
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "1999-01-01"))),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      oggetti <<- c(oggetti, subject) # nolint: assignment_linter.
+      list(ok = TRUE, errors = character())
+    }
+  )
+
+  # test
+  # A row whose person does not exist yet is not a pair, so it never went
+  # through `validate_request()`: the account was born, the welcome and the
+  # key left, and the error appeared one round later, on a person who now
+  # exists for a request that could never be served. The code is the one the
+  # validation gives, so it proves the row was validated before the creation
+  # and not stopped somewhere else.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_false(any(grepl("Il tuo account UBEP", oggetti, fixed = TRUE)))
+})
+
+
+test_that("a person asked for twice on one project is created once", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"), list(record_id = "2")
+    )),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  esiti <- esito[["esiti"]]
+
+  # test
+  # The pair the two rows will make once the person exists is one pair, and
+  # the register already has a rule for that: the oldest row keeps it and the
+  # others are duplicates. Applied only after the creation, it let both rows
+  # try to make the same account in the same round.
+  expect_length(creazioni(), 1L)
+  expect_equal(esito[["credenziali"]][["record_id"]], "1")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_COPPIA_DUPLICATA"
+  )
+})
+
+
+# An instance that knows only some roles and refuses the others the way the
+# module does. `Applier::resolveNames()` runs on a simulation too, so a dry-run
+# apply already names a role the project does not have.
+istanza_con_ruoli <- function(ruoli, ...) {
+  base <- istanza_doppia(...)
+  function(data) {
+    body <- base(data)
+    if (!identical(data[["operation"]], "apply")) {
+      return(body)
+    }
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]] <- lapply(parsed[["results"]], function(entry) {
+      ruolo <- entry[["after"]][["role_name"]]
+      if (!is.null(ruolo) && !ruolo %in% ruoli) {
+        entry[["outcome"]] <- "errore"
+        entry[["errors"]] <- list(list(
+          code = "DATO_RUOLO_INESISTENTE",
+          message = "role is not defined in this project"
+        ))
+      }
+      entry
+    })
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+}
+
+
+test_that("a person is not created for a role the project does not have", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  prove <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+  controllo <- giro(
+    registro_doppio(record_json(list())),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Whether the role exists is the instance's to say, and only a write tells
+  # it -- so the round rehearses the grant the person will get, as a dry run,
+  # under the name it is about to create, before the person exists. The code
+  # can only have come from that rehearsal, and the control shows the same
+  # instance letting a role it knows through to the creation.
+  expect_length(prove, 1L)
+  expect_true(prove[[1]][["body"]][["data"]][["dry_run"]])
+  expect_equal(
+    prove[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_equal(nrow(controllo[["credenziali"]]), 1L)
+  expect_equal(controllo[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("a simulated round already says the role does not exist", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota()
+  )
+
+  # test
+  # The simulation is where the referents read what the round would do, and a
+  # rehearsal that cannot refuse what the performance refuses cannot warn.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+})
+
+
+test_that("a rehearsal the instance does not answer makes nobody exist", {
+  # eval
+  # The instance answers the state read and then stops answering.
+  a_meta <- function(data) {
+    if (identical(data[["operation"]], "apply")) {
+      stop("Could not resolve host")
+    }
+    istanza_doppia(list())(data)
+  }
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    a_meta,
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Not validated is not valid: the row waits, under the code of the call
+  # that did not come back, and the next round rehearses again.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+})
+
+
 test_that("the credential leaves by one road and is on none of the others", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
   credenziale <- esito[["credenziali"]][["credential"]][[1]]
   record <- round_record(esito, scrittura = TRUE, posta = TRUE)
@@ -1646,7 +1969,7 @@ eventi_json <- function(...) {
 }
 
 
-test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
+test_that("l'approvazione di chi ha creato la riga la sblocca, e la risigilla", { # nolint: line_length_linter.
   # eval
   # Two seals, and the test is worth writing because they differ. What the
   # approval has to carry is the seal of the row **as the register holds it**,
@@ -1664,7 +1987,7 @@ test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
       )),
       eventi = eventi_json(
         list(
-          username = "cinzia.rossi@ubep.unipd.it",
+          username = "anna.bianchi@ubep.unipd.it",
           details = paste0("approved_seal = '", approvato, "'")
         ),
         list(
@@ -1680,9 +2003,9 @@ test_that("l'approvazione di un terzo sblocca la riga, e la risigilla", {
   # test
   # The other half of the protection, and the half that has to work or the
   # register fills up with rows nobody can ever clear. The approval carries
-  # this row's seal and comes from somebody who did not make the change, so
-  # the round applies it -- and seals the row again, at its new value, so the
-  # approval covers this change and stops there.
+  # this row's seal and comes from whoever created the row, who is not who
+  # changed it, so the round applies it -- and seals the row again, at its new
+  # value, so the approval covers this change and stops there.
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
   expect_equal(
     as.character(sigilli_scritti()[["applied_seal"]]), risigillato
@@ -1732,32 +2055,6 @@ test_that("il giro dopo non retrocede una riga approvata a intatta", {
 })
 
 
-test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
-  # eval
-  approvato <- request_seal(riga_come_registro(record_id = "1"))
-  esito <- giro(
-    registro_doppio(
-      record_json(list(
-        record_id = "1",
-        applied_seal = "000000000000", approved_seal = approvato
-      )),
-      eventi = '{"error":"You do not have Logging rights"}'
-    ),
-    istanza_che_scrive(),
-    dry_run = FALSE
-  )
-
-  # test
-  # The approval is there and it is the right one, and it still does not
-  # count: without the log the round cannot tell whether it came from somebody
-  # other than whoever made the change, and that is the whole condition. "I
-  # could not ask who did this" is not "somebody else approved it" -- between
-  # the two ways of being wrong, this is the one that does not grant.
-  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
-  expect_length(scritture(), 0L)
-})
-
-
 # Creation events in the shape REDCap answers a `logtype = "record_add"` with.
 # `details` carries the forged name on purpose: it is where an importer's
 # chosen `requested_by` actually lands, and a reader that took it from there
@@ -1779,6 +2076,1208 @@ creazioni_finte <- function(...) {
     auto_unbox = TRUE
   ))
 }
+
+
+# The register as REDCap answers its event log, which the double above does
+# not: `beginTime` keeps only the events from that hour on, in the instance's
+# clock, and `record` only that row's. And every import the round makes
+# becomes an event signed by the account that holds the token, on top of the
+# log, carrying only the fields it changed -- which is what REDCap does, so a
+# round that wrote something before reading the log reads its own write, and
+# reads it without the fields that did not move. `storia` is what happened
+# before the round, newest first.
+registro_con_log <- function(records,
+                             storia = list(),
+                             canale = "svc-canale-ubep",
+                             creazioni = NULL) {
+  base <- registro_doppio(records, creazioni = creazioni)
+  scritti <- list()
+  righe <- jsonlite::fromJSON(records, simplifyVector = FALSE)
+  names(righe) <- vapply(
+    righe, function(r) as.character(r[["record_id"]]), character(1)
+  )
+  completa <- function(e) {
+    utils::modifyList(
+      list(
+        timestamp = "2026-08-14 02:45", username = "",
+        action = "Update record", details = "", record = "1"
+      ),
+      e
+    )
+  }
+  function(data) {
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      for (r in sent) {
+        id <- as.character(r[["record_id"]])
+        campi <- Filter(function(campo) {
+          !identical(
+            as.character(righe[[id]][[campo]] %||% ""),
+            as.character(r[[campo]])
+          )
+        }, setdiff(names(r), "record_id"))
+        if (length(campi) == 0L) {
+          next
+        }
+        righe[[id]][campi] <<- r[campi] # nolint: assignment_linter.
+        scritti <<- c(list(list( # nolint: assignment_linter.
+          timestamp = "2026-08-14 05:00", username = canale,
+          action = paste0("Update record (API) ", id),
+          details = paste0(
+            campi, " = '", vapply(r[campi], as.character, ""), "'",
+            collapse = ", "
+          ),
+          record = id
+        )), scritti)
+      }
+    }
+    if (identical(form_field_value(data[["content"]]), "log") &&
+          is.null(data[["logtype"]])) {
+      inizio <- form_field_value(data[["beginTime"]] %||% "")
+      riga <- form_field_value(data[["record"]] %||% "")
+      eventi <- Filter(
+        function(e) {
+          (!nzchar(inizio) || e[["timestamp"]] >= inizio) &&
+            (!nzchar(riga) || identical(e[["record"]], riga))
+        },
+        lapply(c(scritti, storia), completa)
+      )
+      return(as.character(jsonlite::toJSON(eventi, auto_unbox = TRUE)))
+    }
+    base(data)
+  }
+}
+
+
+# What the round asked of the event log, creations aside: one list per call,
+# with the window and the record it named, `""` where it named none.
+log_chiesti <- function() {
+  lapply(
+    Filter(function(req) {
+      data <- req[["body"]][["data"]]
+      identical(form_field_value(data[["content"]] %||% ""), "log") &&
+        is.null(data[["logtype"]])
+    }, inviate),
+    function(req) {
+      data <- req[["body"]][["data"]]
+      list(
+        beginTime = form_field_value(data[["beginTime"]] %||% ""),
+        record = form_field_value(data[["record"]] %||% "")
+      )
+    }
+  )
+}
+
+
+test_that("una modifica di due giorni fa e' ancora di chi l'ha fatta", {
+  # eval
+  # Bruno edits the row applied on the 12th at 22:00, instance time; the
+  # rounds after hold it. On the 13th at 23:00 Bruno himself pastes the seal.
+  # A round of the 14th at 03:00 UTC that asked for the last 24 hours would
+  # see the approval and not the edit, find nobody who made the change, and
+  # take Bruno's approval as somebody else's. The username is already the one
+  # the round resolves, so the round writes nothing before reading the log.
+  approvato <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  esito <- giro(
+    registro_con_log(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", outcome = "applied",
+        applied_seal = "000000000000", seal_state = "intact",
+        approved_seal = approvato
+      )),
+      storia = list(
+        list(
+          timestamp = "2026-08-13 23:00",
+          username = "bruno.verdi@ubep.unipd.it",
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        list(
+          timestamp = "2026-08-12 22:00",
+          username = "bruno.verdi@ubep.unipd.it",
+          details = "role_name = 'data entry'"
+        )
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The log is asked for the row and for all of it: who changed a row since
+  # it was applied does not stop mattering after a day.
+  expect_equal(log_chiesti(), list(list(beginTime = "", record = "1")))
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+# What the round wrote when it applied the row, in an earlier pass: the event
+# that names the channel's account in the row's log.
+esecuzione <- function(sigillo = "000000000000") {
+  list(
+    timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+    action = "Update record (API) 1",
+    details = paste0(
+      "identity = 'existing', outcome = 'applied', ",
+      "outcome_at = '2026-08-12 03:00', applied_seal = '", sigillo, "', ",
+      "seal_state = 'intact'"
+    )
+  )
+}
+
+
+test_that("la riscrittura dello username da parte del canale non sblocca chi ha modificato", { # nolint: line_length_linter.
+  # eval
+  # Bruno changes the role of a row the round applied and blanks its username.
+  # The round resolves the username again and writes it back before it reads
+  # the log, so the newest write of an intent field is the channel's.
+  riga <- list(
+    record_id = "1", identity = "existing", outcome = "applied",
+    role_name = "read only", username = "", applied_seal = "000000000000",
+    seal_state = "intact"
+  )
+  attuale <- request_seal(do.call(riga_come_registro, riga))
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(c(riga, list(approved_seal = attuale)))),
+      storia = list(
+        list(
+          username = "bruno.verdi@ubep.unipd.it",
+          details = paste0("approved_seal = '", attuale, "'")
+        ),
+        list(
+          username = "bruno.verdi@ubep.unipd.it",
+          details = "role_name = 'read only', username = ''"
+        ),
+        esecuzione()
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Precondition: the round did rewrite the username, which is the write that
+  # lands in the log under the channel's name.
+  expect_equal(
+    as.character(identita_scritte()[["username"]]), "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+# A row the round applied in an earlier pass and somebody changed since: the
+# role is not the one sealed. The username is already the one the round
+# resolves, so nothing is written before the log is read.
+riga_cambiata <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "1", username = "mario.rossi@ubep.unipd.it",
+      identity = "existing", outcome = "applied", role_name = "read only",
+      applied_seal = "000000000000", seal_state = "intact"
+    ),
+    list(...)
+  )
+}
+
+
+sigillo_cambiata <- function(...) {
+  request_seal(do.call(riga_come_registro, riga_cambiata(...)))
+}
+
+
+# One round over that row. `storia` is what people did after the round applied
+# it, newest first; the execution itself is appended below it.
+giro_cambiata <- function(storia,
+                          approvato = "",
+                          istanza = istanza_che_scrive(),
+                          riga = riga_cambiata(),
+                          creazioni = NULL,
+                          ...) {
+  giro(
+    registro_con_log(
+      record_json(utils::modifyList(riga, list(approved_seal = approvato))),
+      storia = c(storia, list(esecuzione())),
+      creazioni = creazioni
+    ),
+    istanza,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+
+cambio <- function(chi, details = "role_name = 'read only'", ...) {
+  list(username = chi, details = details, ...)
+}
+
+
+approvazione <- function(chi, sigillo = sigillo_cambiata(), ...) {
+  list(username = chi, details = paste0("approved_seal = '", sigillo, "'"), ...)
+}
+
+
+anna <- "anna.bianchi@ubep.unipd.it"
+bruno <- "bruno.verdi@ubep.unipd.it"
+cinzia <- "cinzia.rossi@ubep.unipd.it"
+
+
+test_that("chi ha creato la riga la cambia, e il giro la esegue subito", {
+  # eval
+  esito <- giro_cambiata(list(cambio(anna)))
+
+  # test
+  # Anna's own request, changed by Anna: nobody else's work was touched, so
+  # nobody else has anything to approve. The round carries it out and seals
+  # the new version, as after any execution.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_cambiata()
+  )
+  # `intact`: the row was changed, not contested.
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "intact")
+})
+
+
+test_that("chi cambia la riga di un altro la ferma finche' chi l'ha creata non approva", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(list(cambio(bruno)))
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "modified")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), "000000000000"
+  )
+})
+
+
+test_that("l'approvazione di chi ha cambiato la riga non vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(bruno), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("l'approvazione di un terzo non vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(cinzia), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # Cinzia did not make the change and did not make the request either. The
+  # one person a change to Anna's request waits for is Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("l'approvazione di chi ha creato la riga vale", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("chi ha creato la riga la cambia dopo una modifica approvata ed eseguita, e il giro la esegue", { # nolint: line_length_linter.
+  # eval
+  # Newest first. Bruno changed the row, Anna approved it, a round applied it
+  # and sealed 111111111111; then Anna changed the expiration.
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"),
+      esecuzione("111111111111"),
+      approvazione(anna, "111111111111"),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    )
+  )
+
+  # test
+  # Bruno's change is behind the newest execution and was carried out with
+  # Anna's leave. What is left is Anna's own edit, carried out at once.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("chi ha creato la riga e la cambia dopo un altro non fa sua la modifica dell'altro", { # nolint: line_length_linter.
+  # eval
+  # Bruno changes the role, Anna then changes the expiration. The version the
+  # round would carry out holds Bruno's change too.
+  esito <- giro_cambiata(
+    list(cambio(anna, "expiration = '2027-01-31'"), cambio(bruno)),
+    riga = riga_cambiata(expiration = "2027-01-31")
+  )
+
+  # test
+  # A later edit by the creator is not an approval: it does not say she saw
+  # what Bruno did, and an approval is the one act that does. Waiting for the
+  # seal costs her a paste; reading her edit as consent would carry out a
+  # change to her request that nobody approved.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+# The revokes the round sent for real, and the usernames the state read asked
+# about: the scope gate can judge only the rights the instance was asked for.
+revoche <- function() {
+  Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, scritture())
+}
+
+
+chiesti_allo_stato <- function() {
+  unique(unlist(lapply(interrogazioni(), function(req) {
+    data <- req[["body"]][["data"]]
+    if (!identical(data[["operation"]], "state")) {
+      return(character())
+    }
+    vapply(data[["requests"]] %||% list(), function(p) {
+      as.character(p[["username"]])
+    }, character(1))
+  })))
+}
+
+
+# A row Anna filed, applied, and now revoked; the instance holds the person.
+revocata <- function(...) {
+  riga_cambiata(role_name = "data entry", request_status = "revoked", ...)
+}
+
+
+con_mario <- function(...) {
+  c(
+    list(...),
+    list(list(
+      username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+      user_rights = 0L
+    ))
+  )
+}
+
+
+test_that("chi gestisce il progetto revoca la richiesta di un altro senza approvazione", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    ))
+  )
+
+  # test
+  # Decided on 2026-10-15: taking an access away grants nothing, and Bruno
+  # could have removed Mario from the project by hand. The double keeps the
+  # row it was asked to remove, so the read-back does not confirm the revoke;
+  # what this pins is that it was sent, and that Bruno's rights were asked.
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_length(revoche(), 1L)
+  expect_true(bruno %in% chiesti_allo_stato())
+})
+
+
+test_that("chi non gestisce il progetto non revoca la richiesta di un altro", {
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 0L)
+    ))
+  )
+
+  # test
+  # Without User Rights on the project the exception does not apply, and the
+  # revocation is a change like any other: it waits for Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", sigillo_cambiata(
+      role_name = "data entry", request_status = "revoked"
+    ))
+  )
+  expect_length(scritture(), 0L)
+  # Held at the gate, the row keeps its seal and its state says it moved.
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "modified")
+})
+
+
+test_that("una revoca che cambia anche il ruolo aspetta chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(
+      bruno, "request_status = 'revoked', role_name = 'data entry'"
+    )),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    ))
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la revoca libera non chiede i diritti di chi ha creato la riga", {
+  # eval
+  # Anna no longer manages the project; Bruno does, and revokes.
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(user_rights = 0L), list(username = bruno, user_rights = 1L)
+    ))
+  )
+
+  # test
+  # The revocation stands on Bruno's authority, which is the one the gate
+  # asks: Anna had no hand in it.
+  expect_false(
+    as.character(esito[["esiti"]][["outcome_detail"]]) ==
+      "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 1L)
+})
+
+
+test_that("diritti illeggibili di chi revoca tengono la riga in coda", {
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = NULL)
+    ))
+  )
+
+  # test
+  # A permission nobody could read is ours to fix, as on the ordinary gate.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_PERMESSO_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("chi gestisce il progetto revoca una richiesta di un altro non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", request_status = "revoked"
+      )),
+      storia = list(cambio(bruno, "request_status = 'revoked'"))
+    ),
+    do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    )),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_length(revoche(), 1L)
+})
+
+
+test_that("l'approvazione di IT sblocca la modifica di un altro", {
+  # eval
+  it <- "it.redcap@ubep.unipd.it"
+  esito <- giro_cambiata(
+    list(approvazione(it), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    approvers = it
+  )
+
+  # test
+  # Decided on 2026-10-15: IT approves any change, so a request whose creator
+  # left is not stuck, and keeps its creator on record.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("senza l'elenco di IT nessun altro approva", {
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione("it.redcap@ubep.unipd.it"), cambio(bruno)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+})
+
+
+test_that("un'esecuzione approvata da IT copre la modifica che ha eseguito", {
+  # eval
+  # Newest first: Bruno changed the role, IT approved, the round carried it
+  # out under seal 111111111111; then Anna, the creator, changed the
+  # expiration.
+  it <- "it.redcap@ubep.unipd.it"
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"),
+      esecuzione("111111111111"),
+      approvazione(it, "111111111111"),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    ),
+    approvers = it
+  )
+
+  # test
+  # IT's approval covered Bruno's change as the creator's would have: what
+  # remains is Anna's own edit, which needs nobody.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("una revoca libera gia' eseguita non fa aspettare chi riattiva", {
+  # eval
+  # Bruno revoked, the round carried it out under the seal of the revoked
+  # row; then Anna, the creator, set the request back to active.
+  revocata_eseguita <- sigillo_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "request_status = 'active'"),
+      esecuzione(revocata_eseguita),
+      cambio(bruno, "request_status = 'revoked'")
+    ),
+    riga = riga_cambiata(
+      role_name = "data entry", request_status = "active",
+      applied_seal = revocata_eseguita
+    )
+  )
+
+  # test
+  # A revocation alone grants nothing, so it does not stay "uncovered" below
+  # the execution that carried it out: the change is Anna's alone.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("la revoca altrui di una persona assente non si chiude senza cancello", { # nolint: line_length_linter.
+  # eval
+  # The tenant no longer holds the person, so the row is `absent` and
+  # revoked: there is no pair, and no instance would be asked about Bruno.
+  esito <- giro(
+    registro_con_log(
+      record_json(riga_cambiata(request_status = "revoked")),
+      storia = list(cambio(bruno, "request_status = 'revoked'"), esecuzione())
+    ),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The exception is decided at the gate, on Bruno's rights. A row that never
+  # reaches the gate waits for its creator, as before the exception existed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+})
+
+
+test_that("chi ha creato la riga revoca la propria richiesta subito", {
+  # eval
+  revocata <- riga_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
+  esito <- giro_cambiata(
+    list(cambio(anna, "request_status = 'revoked'")),
+    istanza = istanza_doppia(
+      list(),
+      list(
+        username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    riga = revocata
+  )
+
+  # test
+  # The revoke is carried out: the double keeps the row it was asked to
+  # remove, so the read-back still shows it and the round does not call the
+  # revoke applied -- what this test pins is that it was sent at all.
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_true(any(vapply(interrogazioni(), function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, logical(1))))
+})
+
+
+test_that("l'approvazione passa dal cancello sui diritti di chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # Anna approves Bruno's change, and Anna no longer manages the project.
+  esito <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_doppia(list(user_rights = 0L))
+  )
+
+  # test
+  # Whoever approves does not need rights of their own checked, because the
+  # only person who can approve is the creator, and the scope gate asks the
+  # creator's rights on every round. An approval is not a way past it.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un terzo con pieni diritti sul progetto non approva la richiesta di un altro", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(approvazione(cinzia), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_doppia(
+      list(),
+      list(username = cinzia, user_rights = 1L)
+    )
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una modifica di due giorni fa approvata da chi ha creato la riga si esegue", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(
+      approvazione(anna, timestamp = "2026-08-13 23:00"),
+      cambio(bruno, timestamp = "2026-08-12 22:00")
+    ),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("una modifica di due giorni fa resta di chi l'ha fatta anche dopo una del creatore", { # nolint: line_length_linter.
+  # eval
+  # Bruno changed the role on the 12th at 22:00, instance time; Anna changed
+  # the expiration on the 13th at 23:00; nobody approved. The round runs on
+  # the 14th at 03:00 UTC.
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'", timestamp = "2026-08-13 23:00"),
+      cambio(bruno, timestamp = "2026-08-12 22:00")
+    ),
+    riga = riga_cambiata(expiration = "2027-01-31")
+  )
+
+  # test
+  # A window of a day, whether asked of REDCap or applied to what it
+  # answered, keeps Anna's edit and loses Bruno's and the execution below
+  # it: the change would be Anna's alone and would be carried out. Asserting
+  # on the request is not enough, so this asserts on what the round did.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una modifica che il log non attribuisce aspetta chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # The seal moved and the row's log says nobody changed it since the round
+  # applied it: a log purged in between, a field the dictionary gained.
+  ferma <- giro_cambiata(list())
+  fermi <- scritture()
+  approvata <- giro_cambiata(
+    list(approvazione(anna)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # Nobody established is not the creator established: the row waits, and
+  # the creator can release it the ordinary way.
+  expect_equal(as.character(ferma[["esiti"]][["outcome"]]), "held")
+  expect_length(fermi, 0L)
+  expect_equal(as.character(approvata[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("un'approvazione gia' eseguita non vale per la modifica dopo", {
+  # eval
+  # Newest first. Bruno set the role, Anna approved it and the round applied
+  # it; Anna set it back to data entry herself and the round applied that;
+  # now Bruno sets it again. `approved_seal` still holds Anna's old approval,
+  # and the row is back to the version it approves.
+  in_uso <- sigillo_cambiata(role_name = "data entry")
+  esito <- giro_cambiata(
+    list(
+      cambio(bruno), esecuzione(in_uso),
+      cambio(anna, "role_name = 'data entry'"),
+      esecuzione(sigillo_cambiata()), approvazione(anna), cambio(bruno)
+    ),
+    approvato = sigillo_cambiata(),
+    riga = riga_cambiata(applied_seal = in_uso)
+  )
+
+  # test
+  # That approval was spent when the round carried it out. Taken again, one
+  # value would approve every later change that brings the row back to it,
+  # and the creator would never be asked nor told.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un'approvazione gia' eseguita non riattiva una richiesta revocata", {
+  # eval
+  revocata <- sigillo_cambiata(request_status = "revoked")
+  esito <- giro_cambiata(
+    list(
+      cambio(bruno, "request_status = 'active'"), esecuzione(revocata),
+      cambio(anna, "request_status = 'revoked'"),
+      esecuzione(sigillo_cambiata()), approvazione(anna), cambio(bruno)
+    ),
+    approvato = sigillo_cambiata(),
+    riga = riga_cambiata(applied_seal = revocata)
+  )
+
+  # test
+  # Anna withdrew the access; Bruno turning it back on is a change to her
+  # request like any other, whatever she approved before she withdrew it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un'approvazione scritta prima della modifica non la approva", {
+  # eval
+  # The seal is a public sha256 of the intent fields, so it can be computed
+  # for a version that does not exist yet: Anna pastes it, Bruno then makes
+  # the row match it.
+  esito <- giro_cambiata(
+    list(cambio(bruno), approvazione(anna)),
+    approvato = sigillo_cambiata()
+  )
+
+  # test
+  # An approval says the creator saw the change, and nobody sees a change
+  # before it is made.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una modifica fatta mentre il giro girava non diventa di chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  # Newest first. A round read the row with role data entry; while it was
+  # sweeping the tenant Bruno set read only; the round applied what it had
+  # read and wrote its seal last, above Bruno's edit. Anna then changed the
+  # expiration.
+  letta <- sigillo_cambiata(role_name = "data entry")
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"), esecuzione(letta),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(expiration = "2027-01-31", applied_seal = letta)
+  )
+
+  # test
+  # The seal covers the row the round read, not the one it found when it
+  # wrote. Bruno's edit sits below it in the log and the round never applied
+  # it: dropped as already executed, Anna's later edit would carry it out as
+  # hers.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("chi cambia una richiesta di un altro non ancora eseguita la ferma", { # nolint: line_length_linter.
+  # eval
+  # Anna filed the row; before any round applied it, Bruno, who manages
+  # nothing on 9003, set the role to admin. The row carries no seal, whether
+  # no round has reached it yet or the last one left it in the queue.
+  esiti <- vapply(c("", "pending", "transport_error"), function(prima) {
+    esito <- giro(
+      registro_doppio(
+        record_json(
+          list(record_id = "1", role_name = "admin", outcome = prima)
+        ),
+        eventi = eventi_json(
+          list(username = bruno, details = "role_name = 'admin'")
+        )
+      ),
+      istanza_che_scrive(),
+      dry_run = FALSE
+    )
+    paste(as.character(esito[["esiti"]][["outcome"]]), length(scritture()))
+  }, character(1))
+
+  # test
+  # Carried out, the change would run on Anna's authority -- hers are the
+  # rights the gate checks -- and nobody asked her. A request is its
+  # creator's before the round applies it as much as after.
+  expect_equal(unname(esiti), rep("held 0", 3L))
+})
+
+
+test_that("chi ha creato una richiesta non ancora eseguita la cambia, e il giro la esegue", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1")),
+      eventi = eventi_json(
+        list(username = anna, details = "role_name = 'data entry'"),
+        list(
+          username = anna, action = "Create record 1",
+          details = "record_id = '1', role_name = 'read only'"
+        )
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("l'approvazione di chi l'ha creata sblocca una richiesta non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  riga <- list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", role_name = "read only"
+  )
+  approvato <- request_seal(do.call(riga_come_registro, riga))
+  esito <- giro(
+    registro_doppio(
+      record_json(c(riga, list(approved_seal = approvato))),
+      eventi = eventi_json(
+        list(
+          username = anna,
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        list(username = bruno, details = "role_name = 'read only'")
+      )
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "approved")
+})
+
+
+test_that("un log illeggibile non lascia eseguire una richiesta non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Whether somebody else changed the request is the log's to say, and the
+  # log did not answer: the row waits, under a code that says the failure is
+  # ours and not a change to approve, and the reason reaches the round's
+  # record, where IT reads it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})
+
+
+test_that("un registro degli eventi illeggibile non lascia valere l'approvazione", { # nolint: line_length_linter.
+  # eval
+  approvato <- request_seal(riga_come_registro(record_id = "1"))
+  esito <- giro(
+    registro_doppio(
+      record_json(list(
+        record_id = "1",
+        applied_seal = "000000000000", approved_seal = approvato
+      )),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The approval is there and it is the right one, and it still does not
+  # count: without the log the round cannot tell whether it came from somebody
+  # other than whoever made the change, and that is the whole condition. "I
+  # could not ask who did this" is not "somebody else approved it" -- between
+  # the two ways of being wrong, this is the one that does not grant.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_length(scritture(), 0L)
+})
+
+
+# Every message the round sends, as the mailer received it.
+posta_raccolta <- function() {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject, body = body
+      )
+      list(ok = TRUE, errors = character())
+    },
+    mandate = function() mandate
+  )
+}
+
+
+test_that("la riga trattenuta si annuncia a chi l'ha creata, non a chi la riga nomina", { # nolint: line_length_linter.
+  # eval
+  # `requested_by` names Carla; the creation log says Anna made the row. The
+  # two agree on every row filed from the form, and an import is what makes
+  # them disagree.
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(bruno)),
+    riga = riga_cambiata(requested_by = "carla.neri@ubep.unipd.it"),
+    creazioni = creazioni_finte(list(username = anna)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The message asks its reader to approve, and only the creator can: sent to
+  # anybody else it asks for an act that will not count.
+  destinatari <- vapply(posta[["mandate"]](), `[[`, "", "to")
+  expect_equal(destinatari, anna)
+  # And it names who changed the row, read from the row's log.
+  expect_match(
+    posta[["mandate"]]()[[1L]][["body"]], paste("Modificata da:", bruno),
+    fixed = TRUE
+  )
+})
+
+
+test_that("una seconda modifica a una riga trattenuta porta al creatore il sigillo nuovo", { # nolint: line_length_linter.
+  # eval
+  # The first round holds Bruno's change and tells Anna its seal.
+  prima <- posta_raccolta()
+  esito_prima <- giro_cambiata(list(cambio(bruno)), mailer = prima[["mailer"]])
+  # Then Bruno changes the role again, before Anna has approved anything. The
+  # register carries what the first round wrote.
+  dopo <- posta_raccolta()
+  esito_dopo <- giro_cambiata(
+    list(cambio(bruno, "role_name = 'data manager'"), cambio(bruno)),
+    riga = riga_cambiata(
+      role_name = "data manager", outcome = "held",
+      outcome_detail = as.character(esito_prima[["esiti"]][["outcome_detail"]]),
+      seal_state = "modified"
+    ),
+    mailer = dopo[["mailer"]]
+  )
+
+  # test
+  # The seal Anna holds approves a version of the row that no longer exists.
+  # Without a message carrying the new one she cannot approve the row at all:
+  # it would stay held with nobody told why.
+  expect_equal(as.character(esito_dopo[["esiti"]][["outcome"]]), "held")
+  mandate <- dopo[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_match(
+    mandate[[1L]][["body"]], sigillo_cambiata(role_name = "data manager"),
+    fixed = TRUE
+  )
+  # The seal is in the outcome detail too, which is what makes the row count
+  # as changed, and what a referent who lost the message finds on the row.
+  expect_equal(
+    as.character(esito_dopo[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", sigillo_cambiata(role_name = "data manager"))
+  )
+})
+
+
+test_that("una riga trattenuta che non cambia non riscrive al creatore", {
+  # eval
+  prima <- posta_raccolta()
+  esito_prima <- giro_cambiata(list(cambio(bruno)), mailer = prima[["mailer"]])
+  dopo <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(bruno)),
+    riga = riga_cambiata(
+      outcome = "held",
+      outcome_detail = as.character(esito_prima[["esiti"]][["outcome_detail"]]),
+      seal_state = "modified"
+    ),
+    mailer = dopo[["mailer"]]
+  )
+
+  # test
+  # One message per version of the row, not one per round.
+  expect_length(prima[["mandate"]](), 1L)
+  expect_length(dopo[["mandate"]](), 0L)
+})
+
+
+test_that("il sigillo della riga trattenuta e' quello che la riga avra' dopo il giro", { # nolint: line_length_linter.
+  # eval
+  # Bruno blanks the username and changes the role; the round writes the
+  # username back in this same pass, before the message leaves.
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    list(cambio(bruno, "role_name = 'read only', username = ''")),
+    riga = riga_cambiata(username = ""),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Anna reads the message after the round, on a row that carries the
+  # resolved username: a seal of the row as read would never match it.
+  atteso <- sigillo_cambiata()
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", atteso)
+  )
+  expect_match(posta[["mandate"]]()[[1L]][["body"]], atteso, fixed = TRUE)
+})
+
+
+test_that("senza il creatore la riga cambiata non chiede un'approvazione", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The creator could not be read this round, and nobody can approve until it
+  # is. A held message would ask the reader for a seal that approves nothing
+  # and claim to reach the creator when it does not: the row takes the code
+  # the gate gives a row with no author, and the message says it is ours.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), anna)
+  expect_no_match(mandate[[1L]][["body"]], "approved_seal", fixed = TRUE)
+})
+
+
+test_that("la mail di un log illeggibile non chiede di incollare un sigillo", {
+  # eval
+  posta <- posta_raccolta()
+  giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, "TRASPORTO_AUTORE_NON_LEGGIBILE", fixed = TRUE)
+  expect_no_match(corpo, "approved_seal", fixed = TRUE)
+  expect_no_match(corpo, "Modificata da", fixed = TRUE)
+})
+
+
+test_that("un log illeggibile arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row says what failed only in general, `TRASPORTO_AUTORE_NON_LEGGIBILE`.
+  # Why the log could not be read is the register's answer, and it has to
+  # reach whoever reads the round's record, or the row waits in silence.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+  expect_true(
+    "TRASPORTO_REGISTRO_RIFIUTATO" %in%
+      round_record(esito, scrittura = TRUE, posta = FALSE)[["errori"]]
+  )
+})
+
+
+test_that("un log delle creazioni illeggibile arriva fino al record del giro", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The row carries its own code, `TRASPORTO_AUTORE_NON_LEGGIBILE`. The reason
+  # the log could not be read is the register's answer, and only the round's
+  # record can carry it.
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})
 
 
 test_that("the gate judges whoever filed the row, not whoever the row says filed it", { # nolint: line_length_linter.
@@ -1856,7 +3355,8 @@ test_that("a row held for an unreadable log makes nobody exist either", {
     ),
     istanza_doppia(list()),
     directory_vuota(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    mailer = posta_accesa
   )
 
   # test

@@ -142,45 +142,88 @@ mail_outcome_message <- function(row) {
 
   # A held row is the only outcome that asks the reader to do something whose
   # instructions are not in the work instruction, and the value it asks them to
-  # paste exists nowhere else: the current seal is computed from the row, not
-  # stored beside it. A referent who is not told it cannot approve anything,
-  # and a protection nobody can clear is an outage with a nicer name.
+  # paste is computed from the row: a referent who is not told it cannot
+  # approve anything, and a protection nobody can clear is an outage with a
+  # nicer name. The message goes to whoever created the row, the only person
+  # whose approval counts, so it says that, and names who changed the row:
+  # the creator is the one who has to judge the change. It does not say the
+  # request had been applied: one still in the queue is held the same way.
   trattenuta <- if (identical(as.character(row[["outcome"]]), "held")) {
     sigillo <- mail_said_or(row[["seal_now"]], "non disponibile, chiedi a IT")
     list(
       it = c(
         "",
         paste0(
-          "Questa riga e' stata modificata dopo essere stata eseguita, e il ",
-          "canale non ha riapplicato la modifica. Se la modifica e' giusta, ",
-          "falla approvare da un altro referente: deve incollare questo ",
-          "sigillo nel campo approved_seal della riga."
+          "Questa richiesta e' stata modificata, prima o dopo essere stata ",
+          "eseguita, e il canale non ha applicato la modifica perche' non ",
+          "risulta fatta solo da chi l'ha creata. La puo' approvare solo chi ",
+          "l'ha creata, oppure IT: questo messaggio va a chi risulta averla ",
+          "creata."
+        ),
+        paste0("Modificata da: ", mail_said_or(
+          row[["edited_by"]], "non stabilito dal registro degli eventi"
+        )),
+        "",
+        paste0(
+          "Se la modifica e' giusta, incolla questo sigillo nel campo ",
+          "approved_seal della riga:"
         ),
         "",
         paste0("    ", sigillo),
         "",
         paste0(
-          "Vale per questa modifica e non per quelle dopo, e chi ha fatto la ",
-          "modifica non puo' approvarla da se': il registro degli eventi di ",
-          "REDCap dice chi ha scritto che cosa. Approvata, la modifica ",
-          "diventa effettiva al giro successivo."
+          "Vale per questa versione della riga e non per quelle dopo: se la ",
+          "riga cambia ancora, arriva un sigillo nuovo. Vale una volta sola: ",
+          "eseguita la modifica, l'approvazione e' consumata, e un sigillo ",
+          "incollato prima della modifica non la approva. L'approvazione di ",
+          "qualunque altro referente, compreso chi ha fatto la modifica, non ",
+          "vale: il registro degli eventi di REDCap dice chi ha creato la ",
+          "riga e chi ha scritto che cosa. Approvata, la modifica diventa ",
+          "effettiva al giro successivo."
+        ),
+        "",
+        paste0(
+          "Se la modifica non e' giusta, riporta i campi ai valori di prima. ",
+          "Una richiesta gia' eseguita torna cosi' alla versione eseguita e ",
+          "non c'e' niente da approvare; una non ancora eseguita resta ferma, ",
+          "e arriva il sigillo della versione ripristinata da incollare."
         )
       ),
       en = c(
         "",
         paste0(
-          "This row was edited after it had been applied, and the channel did ",
-          "not apply the edit. If the edit is right, have another referent ",
-          "approve it: they paste this seal into the row's approved_seal ",
-          "field."
+          "This request was edited, before or after it was applied, and the ",
+          "channel did not apply the edit because it is not on record as made ",
+          "by the request's creator alone. Only whoever created the request, ",
+          "or IT, can approve it: this message goes to whoever is on record ",
+          "as its creator."
+        ),
+        paste0("Edited by: ", mail_said_or(
+          row[["edited_by"]], "not established from the event log"
+        )),
+        "",
+        paste0(
+          "If the edit is right, paste this seal into the row's approved_seal ",
+          "field:"
         ),
         "",
         paste0("    ", sigillo),
         "",
         paste0(
-          "It approves this edit and no later one, and whoever made the edit ",
-          "cannot approve it themselves: REDCap's event log says who wrote ",
-          "what. Once approved, the edit takes effect on the next round."
+          "It approves this version of the row and no later one: if the row ",
+          "changes again, a new seal follows. It counts once: when the edit ",
+          "has been applied the approval is spent, and a seal pasted before ",
+          "the edit does not approve it. An approval by any other referent, ",
+          "including whoever made the edit, does not count: REDCap's event ",
+          "log says who created the row and who wrote what. Once approved, ",
+          "the edit takes effect on the next round."
+        ),
+        "",
+        paste0(
+          "If the edit is wrong, set the fields back to what they were. A ",
+          "request already applied then returns to the version that was ",
+          "applied, with nothing to approve; one not applied yet stays held, ",
+          "and the seal of the restored version follows for you to paste."
         )
       )
     )
@@ -261,6 +304,34 @@ mail_outcome_message <- function(row) {
     ),
     body = paste(c(it, "", "---", "", en), collapse = "\n")
   )
+}
+
+
+#' Who the message about a row's outcome goes to
+#'
+#' `requested_by`, except on a held row, whose message asks its reader to
+#' approve a change. Only whoever created the row can, IT aside, and that is
+#' the account REDCap authenticated when the row was made, which the round
+#' reads from the creation log and passes on as `creator`. The two agree on
+#' every row filed from the form; an import is what makes them disagree, and
+#' then the message goes where the approval can come from. The round does not
+#' hold a row whose creator it could not read -- that row takes
+#' `TRASPORTO_AUTORE_NON_LEGGIBILE` -- so the fallback to `requested_by` is
+#' for a caller that hands this a held row without one.
+#'
+#' @param row One register row as a list, with this round's outcome.
+#'
+#' @return One address, possibly empty.
+#'
+#' @keywords internal
+mail_outcome_recipient <- function(row) {
+  stopifnot(is.list(row))
+
+  creator <- mail_said_or(row[["creator"]], "")
+  if (identical(as.character(row[["outcome"]]), "held") && nzchar(creator)) {
+    return(creator)
+  }
+  row[["requested_by"]]
 }
 
 
@@ -655,9 +726,11 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param copy_to Address in copy, on the outcome message only.
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
-#' @param identified The identity this round settled, as a frame with
-#'   `record_id` and the fields it settled. `register` is the register as
-#'   read, on purpose; this is how the message names what the round has just
+#' @param identified What this round settled about each row, as a frame with
+#'   `record_id` and the fields it settled: the identity; `creator`, who the
+#'   creation log says made the row; `edited_by`, who changed a held row since
+#'   it was applied, as the row's log says. `register` is the register as read,
+#'   on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
 #' @param hosts Named character vector, instance name to host, as
 #'   `provisioning_reconcile()` receives it from the inventory. Only the
@@ -722,24 +795,25 @@ mail_round <- function(changed,
       return(NULL)
     }
     riga <- as.list(register[at, , drop = FALSE])
+    found <- if (is.null(identified)) {
+      NA_integer_
+    } else {
+      match(as.character(record_id), as.character(identified[["record_id"]]))
+    }
+    if (!is.na(found)) {
+      for (campo in setdiff(names(identified), "record_id")) {
+        riga[[campo]] <- identified[[campo]][[found]]
+      }
+    }
     # What the row is worth now, which a held message has to carry: it is
-    # computed from the row and stored nowhere, so this is the only place it
-    # exists. Taken from `register` -- the register as read -- for the reason
-    # the whole frame is: a seal computed from what the round has been
-    # rewriting would name a version of the row the referent is not looking at.
-    riga[["seal_now"]] <- request_seal(register[at, , drop = FALSE])
-    if (is.null(identified)) {
-      return(riga)
-    }
-    found <- match(
-      as.character(record_id), as.character(identified[["record_id"]])
+    # computed from the row, and the round writes it into the outcome detail
+    # too. Computed after what the round settled, and not on the register as
+    # read: the round has already written the resolved username when this
+    # message leaves, `username` is inside the seal, and the referent pastes
+    # the value into a row that carries the resolved name.
+    riga[["seal_now"]] <- request_seal(
+      as.data.frame(riga, stringsAsFactors = FALSE, check.names = FALSE)
     )
-    if (is.na(found)) {
-      return(riga)
-    }
-    for (campo in setdiff(names(identified), "record_id")) {
-      riga[[campo]] <- identified[[campo]][[found]]
-    }
     riga
   }
 
@@ -772,7 +846,7 @@ mail_round <- function(changed,
       riga[[campo]] <- changed[[campo]][[i]]
     }
     esito <- consegna(
-      riga[["requested_by"]], copy_to, mail_outcome_message(riga)
+      mail_outcome_recipient(riga), copy_to, mail_outcome_message(riga)
     )
     partite[[i]] <- isTRUE(esito[["ok"]])
     if (!partite[[i]]) errori <- c(errori, esito[["errors"]])

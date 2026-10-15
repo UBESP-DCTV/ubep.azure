@@ -268,21 +268,30 @@ directory_endpoint <- function(base_url) {
 #'
 #' A creation that failed after Graph accepted it — a timeout on the way back —
 #' leaves an account whose credential this round has just discarded. It is the
-#' honest cost of not keeping one: the next round finds the account by its
-#' surname and contact address and writes `created`, and whoever needs to let
-#' that person in resets it once. Keeping a secret for a creation we cannot
-#' confirm is worse in the direction that matters.
+#' cost of not keeping one: the next round finds the account by its surname
+#' and contact address and writes `created`, and somebody has to reset the
+#' credential once. Keeping a secret for a creation we cannot confirm is worse
+#' in the direction that matters.
+#'
+#' What must not happen is that nobody learns of it, and `unconfirmed` is what
+#' prevents it. It is `TRUE` on the failures that do not say whether the
+#' account was born -- no answer at all, or one that is not Graph's -- and
+#' `FALSE` on the ones that do, a refusal or a throttle carrying Graph's own
+#' code. The round counts an unconfirmed creation as a key lost, so the alarm
+#' that sends IT to reset a key fires on it.
 #'
 #' @param code The transport code, one of the `TRASPORTO_CREAZIONE_*` family.
 #' @param payload Anything worth keeping for a diagnosis, or `NULL`.
+#' @param unconfirmed Whether the account may have been born all the same.
 #'
-#' @return A list with `ok`, `errors`, `payload`, `credential` and `upn`.
+#' @return A list with `ok`, `errors`, `payload`, `credential`, `upn` and
+#'   `unconfirmed`.
 #'
 #' @keywords internal
-creation_failure <- function(code, payload = NULL) {
+creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
   list(
     ok = FALSE, errors = code, payload = payload,
-    credential = NULL, upn = NULL
+    credential = NULL, upn = NULL, unconfirmed = unconfirmed
   )
 }
 
@@ -322,7 +331,8 @@ creation_failure <- function(code, payload = NULL) {
 #' @return A list with `ok`, `errors`, `payload`, `upn`, and `credential` — the
 #'   one the account was born with, present only on success. It leaves by the
 #'   return value and by no other road: not the register, not the telemetry
-#'   record, not standard output.
+#'   record, not standard output. `unconfirmed` is `TRUE` on a failure that
+#'   does not say whether the account was born, see `creation_failure()`.
 #'
 #' @keywords internal
 directory_create_user <- function(token, base_url, request, upn) {
@@ -362,8 +372,15 @@ directory_create_user <- function(token, base_url, request, upn) {
     error = function(e) NULL
   )
 
+  # The POST has left by now, so neither of the next two failures says the
+  # account was not born: a timeout is as likely to have lost the answer as
+  # the request, and a body that is not Graph's -- a gateway's error page
+  # after the work was done, a 201 whose body broke on the way -- says nothing
+  # about what happened behind it.
   if (is.null(response)) {
-    return(creation_failure("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE"))
+    return(creation_failure(
+      "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE", unconfirmed = TRUE
+    ))
   }
 
   payload <- tryCatch(
@@ -376,7 +393,9 @@ directory_create_user <- function(token, base_url, request, upn) {
   )
 
   if (is.null(payload) || !is.list(payload)) {
-    return(creation_failure("TRASPORTO_CREAZIONE_RISPOSTA_INATTESA"))
+    return(creation_failure(
+      "TRASPORTO_CREAZIONE_RISPOSTA_INATTESA", unconfirmed = TRUE
+    ))
   }
 
   status <- as.integer(httr2::resp_status(response))
@@ -406,7 +425,7 @@ directory_create_user <- function(token, base_url, request, upn) {
 
   list(
     ok = TRUE, errors = character(), payload = payload,
-    credential = credential, upn = upn
+    credential = credential, upn = upn, unconfirmed = FALSE
   )
 }
 

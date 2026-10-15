@@ -4,15 +4,18 @@
 \alias{creation_failure}
 \title{Say what went wrong creating an account, and hand back no credential}
 \usage{
-creation_failure(code, payload = NULL)
+creation_failure(code, payload = NULL, unconfirmed = FALSE)
 }
 \arguments{
 \item{code}{The transport code, one of the \verb{TRASPORTO_CREAZIONE_*} family.}
 
 \item{payload}{Anything worth keeping for a diagnosis, or \code{NULL}.}
+
+\item{unconfirmed}{Whether the account may have been born all the same.}
 }
 \value{
-A list with \code{ok}, \code{errors}, \code{payload}, \code{credential} and \code{upn}.
+A list with \code{ok}, \code{errors}, \code{payload}, \code{credential}, \code{upn} and
+\code{unconfirmed}.
 }
 \description{
 The credential is \code{NULL} on every failure, and that is the whole reason this
@@ -23,9 +26,16 @@ account that may not exist.
 \details{
 A creation that failed after Graph accepted it — a timeout on the way back —
 leaves an account whose credential this round has just discarded. It is the
-honest cost of not keeping one: the next round finds the account by its
-surname and contact address and writes \code{created}, and whoever needs to let
-that person in resets it once. Keeping a secret for a creation we cannot
-confirm is worse in the direction that matters.
+cost of not keeping one: the next round finds the account by its surname
+and contact address and writes \code{created}, and somebody has to reset the
+credential once. Keeping a secret for a creation we cannot confirm is worse
+in the direction that matters.
+
+What must not happen is that nobody learns of it, and \code{unconfirmed} is what
+prevents it. It is \code{TRUE} on the failures that do not say whether the
+account was born -- no answer at all, or one that is not Graph's -- and
+\code{FALSE} on the ones that do, a refusal or a throttle carrying Graph's own
+code. The round counts an unconfirmed creation as a key lost, so the alarm
+that sends IT to reset a key fires on it.
 }
 \keyword{internal}

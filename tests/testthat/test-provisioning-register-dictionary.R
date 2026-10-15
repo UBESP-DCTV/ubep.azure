@@ -552,3 +552,21 @@ test_that("the protection fields stay hidden until a row has been applied", {
     rows[["Branching Logic (Show field only if...)"]]
   )))
 })
+
+
+test_that("il campo dell'approvazione si vede anche su una riga mai eseguita", {
+  # eval
+  dizionario <- register_dictionary()
+  logica <- stats::setNames(
+    dizionario[["Branching Logic (Show field only if...)"]],
+    dizionario[["Variable / Field Name"]]
+  )
+
+  # test
+  # Since 2026-10-14 a row not applied yet is held when somebody else changes
+  # it, and it carries no seal. Shown only beside a seal, the field where the
+  # creator pastes the approval would be hidden on exactly that row, and the
+  # row could never be approved from the form.
+  expect_match(logica[["approved_seal"]], '[outcome] = "held"', fixed = TRUE)
+  expect_match(logica[["seal_state"]], '[outcome] = "held"', fixed = TRUE)
+})

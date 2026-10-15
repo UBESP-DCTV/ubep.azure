@@ -4,7 +4,7 @@
 \alias{register_log}
 \title{Read who touched the register, and when}
 \usage{
-register_log(url, token, since = NULL, logtype = NULL)
+register_log(url, token, since = NULL, logtype = NULL, record = NULL)
 }
 \arguments{
 \item{url}{Hostname of the instance hosting the register, optionally
@@ -25,6 +25,11 @@ prose of \code{action}, which is not stable: measured on 2026-09-02, one act
 reads \verb{Create record 7} from the form and \verb{Create record (import) 20}
 from an import, and a reader matching that string would have to keep up
 with REDCap's wording for ever.}
+
+\item{record}{One record id, or \code{NULL} for every record. With it REDCap
+answers with that row's events alone, its whole history unless \code{since}
+narrows it: the answer then grows with what happened to one row and not
+with the traffic of the whole register.}
 }
 \value{
 The \code{register_call()} list plus \code{log}, a data frame.
@@ -47,6 +52,9 @@ is not a constant and that would come and go with the change of hour.
 
 Callers therefore convert, and they are expected to convert generously: the
 window is cheap to widen and the filtering that matters is done on the rows,
-not on the boundary.
+not on the boundary. The round itself asks no window at all: the creations
+are asked whole, and row protection asks for one row and all of its
+history, since who changed a row since it was applied does not stop
+mattering after a day.
 }
 \keyword{internal}

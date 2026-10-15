@@ -941,6 +941,107 @@ test_that("una riga trattenuta dice quale sigillo incollare, e dove", {
 })
 
 
+riga_trattenuta <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "42", outcome = "held",
+      outcome_detail = "SIGILLO_DIVERSO:9f3c1a7b04de",
+      outcome_at = "2026-09-02 04:02", request_status = "active",
+      first_name = "Mario", last_name = "Rossi",
+      contact_email = "mario.rossi@example.org",
+      server = "edc10", project_id = "9003", role_name = "data entry",
+      username = "mario.rossi@ubep.unipd.it", applied_as = "",
+      seal_now = "9f3c1a7b04de"
+    ),
+    list(...)
+  )
+}
+
+
+test_that("la riga trattenuta dice che approva solo chi l'ha creata, o IT", {
+  # eval
+  corpo <- mail_outcome_message(
+    riga_trattenuta(edited_by = "bruno.verdi@ubep.unipd.it")
+  )[["body"]]
+
+  # test
+  # The message goes to the creator and has to say why: the approval of any
+  # other referent, the author of the change included, does not count.
+  # Sending the reader to "another referent" would ask for an act the round
+  # ignores. IT approves too since 2026-10-15, and the message says so.
+  expect_match(corpo, "solo chi l'ha creata, oppure IT", fixed = TRUE)
+  expect_match(
+    corpo, "Only whoever created the request, or IT,", fixed = TRUE
+  )
+  expect_false(grepl("un altro referente", corpo, fixed = TRUE))
+  expect_false(grepl("another referent", corpo, fixed = TRUE))
+  # Who changed the row is what the creator needs to judge the change.
+  expect_match(
+    corpo, "Modificata da: bruno.verdi@ubep.unipd.it", fixed = TRUE
+  )
+  expect_match(corpo, "Edited by: bruno.verdi@ubep.unipd.it", fixed = TRUE)
+})
+
+
+test_that("la riga trattenuta vale anche per una richiesta non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
+
+  # test
+  # A request is held for somebody else's change before the round applies it
+  # as well as after, so the message cannot say it was applied. And the
+  # approval is spent by the execution it allows: said otherwise, a referent
+  # would expect an old seal to approve the row again.
+  expect_false(
+    grepl("modificata dopo essere stata eseguita", corpo, fixed = TRUE)
+  )
+  expect_false(grepl("after it had been applied", corpo, fixed = TRUE))
+  expect_match(corpo, "Vale una volta sola", fixed = TRUE)
+  expect_match(corpo, "It counts once", fixed = TRUE)
+  expect_match(corpo, "non ancora eseguita resta ferma", fixed = TRUE)
+  expect_match(corpo, "not applied yet stays held", fixed = TRUE)
+})
+
+
+test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", { # nolint: line_length_linter.
+  # eval
+  corpo <- mail_outcome_message(riga_trattenuta())[["body"]]
+
+  # test
+  expect_match(corpo, "Modificata da: non stabilito", fixed = TRUE)
+  expect_match(corpo, "Edited by: not established", fixed = TRUE)
+})
+
+
+test_that("solo la riga trattenuta va al creatore, le altre a requested_by", {
+  # eval
+  riga <- list(
+    record_id = "42", requested_by = "carla.neri@ubep.unipd.it",
+    creator = "anna.bianchi@ubep.unipd.it"
+  )
+
+  # test
+  # The held message asks for an approval, which only the creator can give.
+  # Every other outcome tells whoever the row names, as it always has: moving
+  # them would change where a credential's notice goes on a question nobody
+  # asked here.
+  expect_equal(
+    mail_outcome_recipient(c(riga, outcome = "held")),
+    "anna.bianchi@ubep.unipd.it"
+  )
+  expect_equal(
+    mail_outcome_recipient(c(riga, outcome = "applied")),
+    "carla.neri@ubep.unipd.it"
+  )
+  expect_equal(
+    mail_outcome_recipient(
+      list(record_id = "42", outcome = "held", requested_by = "x@y.it")
+    ),
+    "x@y.it"
+  )
+})
+
+
 test_that("gli altri esiti non parlano di sigilli", {
   # eval
   messaggio <- mail_outcome_message(list(
@@ -979,4 +1080,33 @@ test_that("il giro mette nel messaggio il sigillo che la riga vale adesso", {
   # been rewriting would hand the referent a value for a row that no longer
   # matches what they are looking at.
   expect_true(grepl(request_seal(registro), corpo, fixed = TRUE))
+})
+
+
+test_that("il sigillo del messaggio porta lo username che il giro ha appena scritto", { # nolint: line_length_linter.
+  # eval
+  registro <- registro_di_prova(outcome = "held", username = "")
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  risolto <- registro
+  risolto[["username"]] <- "mario.rossi@ubep.unipd.it"
+
+  mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE,
+    identified = data.frame(
+      record_id = registro[["record_id"]],
+      username = "mario.rossi@ubep.unipd.it", identity = "existing",
+      stringsAsFactors = FALSE
+    )
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+
+  # test
+  # The round writes the username it resolved through its own door before the
+  # message leaves, and `username` is inside the seal. By the time the
+  # referent pastes the value the row holds the resolved name, so the seal
+  # computed from the row as read would never match it.
+  expect_true(grepl(request_seal(risolto), corpo, fixed = TRUE))
+  expect_false(grepl(request_seal(registro), corpo, fixed = TRUE))
 })

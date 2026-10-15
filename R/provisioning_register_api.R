@@ -245,46 +245,6 @@ log_frame <- function(entries) {
 }
 
 
-#' Where a log window starts, in the clock the instance stamps with
-#'
-#' Two jobs in one small function, and the second is what makes the first safe.
-#'
-#' It converts, because REDCap stamps the log with the server clock while the
-#' channel keeps UTC: measured on 2026-09-01, a round that ran at 21:03 UTC
-#' appears in the log at 23:03. And it reaches back, because that conversion
-#' assumes the instance sits in Italian civil time — true of the three served
-#' today, and not a property this package can check. With a day of margin an
-#' hour out in either direction still leaves every round since yesterday
-#' inside the window.
-#'
-#' The margin costs a longer answer and nothing else. What decides anything is
-#' the filtering done on the rows, never the boundary.
-#'
-#' @param at When the round ran, `"%Y-%m-%d %H:%M"` in UTC.
-#' @param hours How far back to reach.
-#'
-#' @return The start of the window as REDCap writes it, or `NA_character_` if
-#'   `at` does not parse — a window starting at a wrong hour is worse than a
-#'   caller that has to say it could not build one.
-#'
-#' @keywords internal
-log_since <- function(at, hours = 24L) {
-  stopifnot(
-    is.character(at), length(at) == 1L,
-    is.numeric(hours), length(hours) == 1L, !is.na(hours)
-  )
-
-  moment <- as.POSIXct(at, tz = "UTC", format = "%Y-%m-%d %H:%M")
-  if (is.na(moment)) {
-    return(NA_character_)
-  }
-
-  format(
-    moment - hours * 3600, "%Y-%m-%d %H:%M", tz = "Europe/Rome"
-  )
-}
-
-
 #' Read who touched the register, and when
 #'
 #' The one question the register's own fields cannot answer. `requested_by`
@@ -303,7 +263,10 @@ log_since <- function(at, hours = 24L) {
 #'
 #' Callers therefore convert, and they are expected to convert generously: the
 #' window is cheap to widen and the filtering that matters is done on the rows,
-#' not on the boundary.
+#' not on the boundary. The round itself asks no window at all: the creations
+#' are asked whole, and row protection asks for one row and all of its
+#' history, since who changed a row since it was applied does not stop
+#' mattering after a day.
 #'
 #' @inheritParams register_call
 #' @param since Beginning of the window, `"%Y-%m-%d %H:%M"`, in the
@@ -316,18 +279,24 @@ log_since <- function(at, hours = 24L) {
 #'   reads `Create record 7` from the form and `Create record (import) 20`
 #'   from an import, and a reader matching that string would have to keep up
 #'   with REDCap's wording for ever.
+#' @param record One record id, or `NULL` for every record. With it REDCap
+#'   answers with that row's events alone, its whole history unless `since`
+#'   narrows it: the answer then grows with what happened to one row and not
+#'   with the traffic of the whole register.
 #'
 #' @return The `register_call()` list plus `log`, a data frame.
 #'
 #' @keywords internal
-register_log <- function(url, token, since = NULL, logtype = NULL) {
+register_log <- function(url, token, since = NULL, logtype = NULL,
+                         record = NULL) {
   scalar <- function(value) {
     is.character(value) && length(value) == 1L &&
       !is.na(value) && nzchar(value)
   }
   stopifnot(
     is.null(since) || scalar(since),
-    is.null(logtype) || scalar(logtype)
+    is.null(logtype) || scalar(logtype),
+    is.null(record) || scalar(record)
   )
 
   # Accrued rather than declared whole, because a parameter sent empty is not
@@ -339,6 +308,9 @@ register_log <- function(url, token, since = NULL, logtype = NULL) {
   }
   if (!is.null(logtype)) {
     params[["logtype"]] <- logtype
+  }
+  if (!is.null(record)) {
+    params[["record"]] <- record
   }
 
   answer <- register_call(url, token, params)

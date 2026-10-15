@@ -14,7 +14,8 @@
 #'    errors;
 #' 5. per instance, read the state **once** for the grantees and the requesters
 #'    together;
-#' 6. ask the scope gate about the instances that answered, and only those;
+#' 6. ask the scope gate about the instances that answered, and only those,
+#'    and rehearse there the grant of a person still to be created;
 #' 7. diff against the real rows somebody asked about;
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
@@ -31,13 +32,31 @@
 #' puts that name in the column the gate reads. One call, `logtype =
 #' "record_add"` and no window: a record is created once, so the answer holds
 #' one row per record that ever existed rather than one per event, and it is
-#' asked only when a row is still standing to be judged.
+#' asked only when a row is still standing to be judged or has changed since
+#' it was applied.
+#'
+#' **A row somebody other than its creator changed waits for its creator**,
+#' whether the round has applied it already or not yet. The same creator the
+#' gate judges is the one person who can approve somebody else's change, so
+#' whoever approves has already had their rights on the project checked, and
+#' will again on every round. Who made the change is read from that row's own
+#' log, whole, and without the round's own writes; the rule is
+#' `change_needs_approval()`. The log is asked once per row that needs it: a
+#' row whose seal moved, and a row not applied yet that the round could act
+#' on. Two exceptions, both decided on 2026-10-15. A revocation and nothing
+#' else, made by somebody who manages the project, does not wait: it is
+#' judged at the gate, step 6, because the rights come from the instance. And
+#' the IT accounts in `approvers` approve as the creator does.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
 #' and one that could not be read. "I could not establish who filed this" is
 #' our failure and not the referent's, and the code that carries it is a
 #' `TRASPORTO_` one so the row comes back next round and the mail comes to us.
+#' The same holds for a changed row whose own log could not be read, or whose
+#' creator the log does not name: it takes `TRASPORTO_AUTORE_NON_LEGGIBILE`
+#' and not `held`, because a held message asks for an approval that nobody
+#' could give, from a creator nobody could name.
 #'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
@@ -53,7 +72,18 @@
 #' travel as far as the scope question, because whoever could not have granted
 #' that project by hand must not be able to make the person to grant it to
 #' either. An instance that did not answer has neither allowed nor refused, and
-#' the row waits.
+#' the row waits, under the instance's transport code as a pair on that
+#' instance does.
+#'
+#' **The person is validated as the pair they will become, before being
+#' made.** Step 4 hands the row to `register_to_desired()` under the name the
+#' round would create, for the same data errors and the same rule on repeated
+#' pairs a resolved row meets, and keeps only the errors. And once the scope
+#' gate has let the row through, the instance rehearses the grant as a dry
+#' run, which is the only way to learn whether the role and the group exist in
+#' the project. A row that fails either takes its own code and nobody is born;
+#' otherwise the account, its welcome and its key would precede a refusal that
+#' arrives one round later and that no new round can take back.
 #'
 #' **The row it creates stays `absent` for this pass** and becomes `created` at
 #' the next one, which is decision 4 working as written rather than a delay
@@ -98,6 +128,18 @@
 #'   carries it, for the dictionary comparison. `NULL` compares the other
 #'   fields and declares the substitution.
 #' @param dry_run Whether to simulate. Defaults to `TRUE`.
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`,
+#'   or `NULL` for no post. With no post the round writes what changed and
+#'   sends nothing, as it did before the post existed, and it **creates
+#'   nobody**, even when it writes: the key an account is born with leaves by
+#'   the post and by no other road, so a creation without it would leave an
+#'   account whose key nobody holds. The row waits, and the round's errors
+#'   carry `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+#' @inheritParams mail_round
+#' @param approvers The IT accounts whose approval of a change counts on any
+#'   row, as REDCap usernames. Read by the runner from the machine and empty
+#'   by default, so a runner that does not pass it leaves the creator as the
+#'   only one who approves.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -120,6 +162,7 @@ provisioning_reconcile <- function(register_url,
                                    redirect_to = NULL,
                                    copy_to = NULL,
                                    reply_to = NULL,
+                                   approvers = character(),
                                    at = format(
                                      Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"
                                    )) {
@@ -129,6 +172,7 @@ provisioning_reconcile <- function(register_url,
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
+    is.character(approvers),
     is.character(at), length(at) == 1L
   )
 
@@ -140,7 +184,8 @@ provisioning_reconcile <- function(register_url,
   # With no mailer the round behaves exactly as it did before the mail existed:
   # everything changed is written, nothing is sent. That is the default on
   # purpose, because installing the package must not start a mail on the next
-  # timer.
+  # timer. The one thing it does not do is create: this function does not look
+  # at the births when there is no mailer, so step 10 makes nobody exist.
   #
   # It is a function and not two call sites because the round writes to the
   # register in two places -- here and on a failed sweep -- and a notification
@@ -336,32 +381,159 @@ provisioning_reconcile <- function(register_url,
   # so any referent can edit any row, in good faith or by mistake. The seal is
   # what notices: it covers what was asked and not what happened, so it moves
   # only when somebody changed the request itself.
-  #
-  # Applying again would grant whatever the edit says on the authority of a
-  # round that ran before the edit existed. So the row stops here, exactly
-  # where a withdrawn one stops, and waits for a person.
   sealed <- trimws(as.character(register[["applied_seal"]] %||% ""))
   sealed[is.na(sealed)] <- ""
   tampered <- nzchar(sealed) & sealed != request_seal(register)
 
-  # The log is read only when a row needs it, and it is one call for the whole
-  # round rather than one per row. On the ordinary night nothing is tampered
-  # with and the register is never asked for it at all.
-  events <- log_frame(list())
-  if (any(tampered)) {
-    reading_log <- register_log(
-      register_url, register_token, log_since(at)
+  # Who was authenticated when each row was made. It is the name the gate has
+  # to judge, and since 2026-10-14 it is also the one person a change to the
+  # row by somebody else waits for, so it is read before the changed rows are
+  # judged. `requested_by` cannot be it: `@USERNAME` is an action tag, it
+  # governs the form REDCap draws, and an import draws none -- measured on
+  # 2026-09-02, an import writes that field verbatim, so anyone with the Data
+  # Import Tool could declare themselves somebody who manages the project and
+  # have the gate check that somebody's rights.
+  #
+  # Asked with `logtype = "record_add"` and no window at all, and both halves
+  # matter. The classification is REDCap's, so this package never reads the
+  # prose of `action` -- one act reads `Create record 7` from the form and
+  # `Create record (import) 20` from an import. And a record is created once,
+  # so the answer holds one row per record that ever existed: it grows with
+  # the register rather than with the traffic, where a window would lose the
+  # creation of every row filed before yesterday.
+  #
+  # Still one call for the whole round, and still only when a row needs it.
+  #
+  # A log that could not be read holds the rows that needed it, and the rows
+  # do not say why: a held row reads the same whether nobody approved it or
+  # nobody could ask. So the register's answer goes into the round's own
+  # errors, where it reaches whoever reads the record -- us, under the
+  # `TRASPORTO_` code the register gave -- instead of being dropped here.
+  log_errors <- character()
+  creators <- rep("", nrow(register))
+  if (any(admitted | awaiting | tampered)) {
+    reading_creations <- register_log(
+      register_url, register_token, logtype = "record_add"
     )
-    # A log that could not be read leaves every changed row held. "I could not
-    # ask who did this" is not "somebody else approved it", and between the two
-    # ways of being wrong this is the one that does not grant.
-    if (isTRUE(reading_log[["ok"]])) {
-      events <- reading_log[["log"]]
+    if (isTRUE(reading_creations[["ok"]])) {
+      creators <- log_creators(reading_creations[["log"]], record_ids)
+    } else {
+      log_errors <- c(log_errors, reading_creations[["errors"]])
     }
   }
 
-  held <- tampered & !seal_approved(register, events)
-  standing <- (admitted | awaiting) & !held
+  # A row the round has never applied carries no seal to compare, and is the
+  # creator's all the same: changed by somebody else while it waits in the
+  # queue, it would be carried out on the creator's authority -- the gate
+  # checks the creator's rights -- with nobody asking the creator. So its log
+  # is read too, whenever the round could act on it: the gate let it through
+  # or it waits to be created, and its creator is known. A row whose creator
+  # could not be read stops at the gate anyway, on a `TRASPORTO_` code.
+  fresh <- !nzchar(sealed) & (admitted | awaiting) & nzchar(creators)
+  checked <- tampered | fresh
+
+  # The log is read only for a row that needs it, one call per row and with no
+  # window: the question is who touched this row since the round last applied
+  # it, or since it was filed, and that can be longer ago than any window. A
+  # window of a day lost the edit and kept the approval that came after it, so
+  # the change had no author and the approval passed for somebody else's. On
+  # the ordinary night nothing is tampered with, every row has been applied,
+  # and the register is never asked at all; a row waiting to be applied costs
+  # one call for each round it waits.
+  events <- log_frame(list())
+  unread <- logical(length(record_ids))
+  for (i in which(checked)) {
+    reading_log <- register_log(
+      register_url, register_token, record = record_ids[[i]]
+    )
+    # A log that could not be read leaves the row held. "I could not ask who
+    # did this" is not "the creator did it", and between the two ways of being
+    # wrong this is the one that does not grant. It has to be said, not left
+    # to the empty log: on a row never applied an empty log reads as nobody
+    # having changed it.
+    if (isTRUE(reading_log[["ok"]])) {
+      events <- rbind(events, reading_log[["log"]])
+    } else {
+      unread[[i]] <- TRUE
+      log_errors <- c(log_errors, reading_log[["errors"]])
+    }
+  }
+
+  # A change made by the creator alone is the creator's to make, and goes on
+  # as any other row. Anybody else's hand in it and the row stops here, where
+  # a withdrawn one stops, until the creator approves: applying it would grant
+  # whatever the edit says on the authority of a round that ran before the
+  # edit existed, and of a request somebody else filed. The rule is in
+  # `change_needs_approval()` and nowhere else. An edit made while an earlier
+  # round ran counts as well: it sits below that round's seal, which covers
+  # only what the round had read, and `log_pending_authors()` finds it there.
+  awaits <- checked
+  awaits[checked] <- seal_needs_approval(
+    register[checked, , drop = FALSE], events, creators[checked], approvers
+  )
+  cleared <- awaits & seal_approved(register, events, creators, approvers)
+
+  # A changed row whose log could not be read, or whose creator the log does
+  # not name, is neither approved nor held: there is no change anybody could
+  # approve, nor a creator to ask. It stops on the code the gate gives a row
+  # with no author, so it comes back next round and the message says the
+  # failure is ours, instead of asking the referent for a seal that approves
+  # nothing.
+  blind <- (checked & unread) | (tampered & !nzchar(creators))
+
+  # A revocation and nothing else, by somebody other than the creator, is
+  # free when they manage the project, and only the instance can say whether
+  # they do. So it is not held here: it stands provisionally and the gate
+  # decides, asking the rights of everybody with a hand in it.
+  intent <- register_intent_fields()
+  revoked_now <- trimws(as.character(register[["request_status"]])) %in%
+    "revoked"
+  # Only a row the gate will see: one with a person to take the access from.
+  # A revoked row whose person the tenant no longer holds is settled before
+  # any instance is asked, so nobody's rights would ever be read for it.
+  withdrawal <- awaits & !cleared & !blind & revoked_now & admitted
+  withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
+    log_revocation_only(
+      events, record_ids[[i]], creators[[i]], intent, approvers
+    )
+  }, logical(1))
+  withdrawal_authors <- lapply(seq_along(record_ids), function(i) {
+    if (!withdrawal[[i]]) {
+      return(character())
+    }
+    log_pending_authors(
+      events, record_ids[[i]], creators[[i]], intent, approvers
+    )
+  })
+
+  held <- awaits & !cleared & !blind & !withdrawal
+  standing <- (admitted | awaiting) & !held & !blind
+
+  # The register as this round will have left it, and not as it read it. The
+  # round resolves `username` and writes it back in this same pass, so sealing
+  # the row as read would seal a version the register is about to stop
+  # holding: `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- and the next round would find every applied
+  # row modified, by the round's own hand. The mechanism would accuse itself
+  # on the ordinary path, on every row, one pass after each apply.
+  #
+  # The seal a held row asks its creator to paste is computed on it for the
+  # same reason: the creator reads the row after this round has written the
+  # username, and a seal of the row as read would never match it.
+  #
+  # `resolved_names` is what the register ends up with either way: written when
+  # it differs, already there when it does not.
+  register_after <- register
+  register_after[["username"]] <- resolved_names
+  seal_after <- request_seal(register_after)
+
+  held_outcome <- function(i) {
+    outcome_payload(
+      record_ids[[i]], "held",
+      detail = paste0("SIGILLO_DIVERSO:", seal_after[[i]]),
+      at = at
+    )
+  }
 
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
@@ -372,9 +544,21 @@ provisioning_reconcile <- function(register_url,
       # after it was applied" is the one that names what happened and who can
       # undo it. `ambiguous` would send the referent to fix a name nobody
       # complained about until the edit.
+      #
+      # The detail carries the seal the creator has to paste, and that is what
+      # tells the creator about a second change: the seal moves with it, so
+      # the outcome reads as changed and the message leaves again with the
+      # new value, while the one the creator holds approves nothing any more.
+      # It is also where a referent who lost the message finds it, on the row
+      # itself.
       if (held[[i]]) {
+        return(held_outcome(i))
+      }
+      if (blind[[i]]) {
         return(outcome_payload(
-          record_ids[[i]], "held", detail = "SIGILLO_DIVERSO", at = at
+          record_ids[[i]],
+          round_outcome_kind("TRASPORTO_AUTORE_NON_LEGGIBILE", dry_run),
+          detail = "TRASPORTO_AUTORE_NON_LEGGIBILE", at = at
         ))
       }
 
@@ -410,32 +594,7 @@ provisioning_reconcile <- function(register_url,
   # `register_to_desired()` builds a pair out of `username`, and the value it
   # must build it out of is the resolved one. An `absent` row travels with an
   # empty one, so it reaches the scope question without ever becoming a pair.
-  # Who was authenticated when each row was made, which is the name the gate
-  # has to judge. `requested_by` cannot be it: `@USERNAME` is an action tag,
-  # it governs the form REDCap draws, and an import draws none -- measured on
-  # 2026-09-02, an import writes that field verbatim, so anyone with the
-  # Data Import Tool could declare themselves somebody who manages the project
-  # and have the gate check that somebody's rights.
-  #
-  # Asked with `logtype = "record_add"` and no window at all, and both halves
-  # matter. The classification is REDCap's, so this package never reads the
-  # prose of `action` -- one act reads `Create record 7` from the form and
-  # `Create record (import) 20` from an import. And a record is created once,
-  # so the answer holds one row per record that ever existed: it grows with
-  # the register rather than with the traffic, where a window would lose the
-  # creation of every row filed before yesterday.
-  #
-  # Still one call for the whole round, and still only when a row needs it.
-  creators <- rep("", nrow(register))
-  if (any(standing)) {
-    reading_creations <- register_log(
-      register_url, register_token, logtype = "record_add"
-    )
-    if (isTRUE(reading_creations[["ok"]])) {
-      creators <- log_creators(reading_creations[["log"]], record_ids)
-    }
-  }
-
+  # `requested_by` carries the creator the log named, for the gate.
   resolved <- register
   resolved[["username"]] <- resolved_names
   resolved[["identity"]] <- verdicts
@@ -445,6 +604,49 @@ provisioning_reconcile <- function(register_url,
   # 4. the pure layer
   plan <- register_to_desired(resolved)
   asks <- scope_pairs(resolved)
+
+  # The rights a provisional withdrawal is judged on are those of whoever had a
+  # hand in it, and the instance answers only for the pairs it is asked about.
+  extra <- lapply(which(withdrawal & standing), function(i) {
+    who <- withdrawal_authors[[i]]
+    who <- who[!is.na(who) & nzchar(who)]
+    server <- trimws(as.character(register[["server"]][[i]]))
+    project <- trimws(as.character(register[["project_id"]][[i]]))
+    data.frame(
+      server = rep(server, length(who)),
+      project_id = rep(project, length(who)),
+      username = who,
+      stringsAsFactors = FALSE
+    )
+  })
+  asks <- do.call(rbind, c(list(asks), extra))
+  asks <- asks[
+    !duplicated(scope_key(asks$server, asks$project_id, asks$username)), ,
+    drop = FALSE
+  ]
+
+  # The person still to be created, judged as the pair they will become. Such
+  # a row carries no username, so `register_to_desired()` passes over it, and
+  # until now nothing else validated it: the account was born, the welcome and
+  # the key left, and a past expiration or a second row for the same pair
+  # surfaced one round later, on a person who now existed for a request that
+  # could never be served. Handed the name the round is about to create, the
+  # same function gives the same answers -- `validate_request()` and the rule
+  # that the oldest row of a repeated pair keeps it -- and nothing of what it
+  # builds enters the plan: these rows stay out of the desired state until the
+  # person exists, and only their errors and their entries travel on, the
+  # entries for the rehearsal on the instance below.
+  #
+  # Among themselves only. A name `absent` was found free in the tenant, so it
+  # cannot be the username of a row that resolved to an account.
+  arriving <- identity_normalize(resolved[["identity"]]) == "absent"
+  arrivals <- resolved[arriving, , drop = FALSE]
+  arrivals[["username"]] <- vapply(
+    resolutions[standing][arriving],
+    function(answer) as.character(answer[["composed"]] %||% ""),
+    character(1)
+  )
+  arrivals <- register_to_desired(arrivals)
 
   # A project_id the register accepted but that is not a number is a data
   # error, and it has to be named here. `validate_request()` catches the ones
@@ -462,6 +664,11 @@ provisioning_reconcile <- function(register_url,
     (is.na(numbers) | !grepl("^[0-9]+$", trimmed_ids))
 
   row_errors <- plan[["errors"]]
+  for (id in names(arrivals[["errors"]])) {
+    if (is.null(row_errors[[id]])) {
+      row_errors[[id]] <- arrivals[["errors"]][[id]]
+    }
+  }
   for (id in as.character(resolved[["record_id"]])[malformed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "DATO_PROGETTO_INESISTENTE"
@@ -498,7 +705,7 @@ provisioning_reconcile <- function(register_url,
     ))
   }
 
-  entries <- c(plan[["desired"]], plan[["revoked"]])
+  entries <- c(plan[["desired"]], plan[["revoked"]], arrivals[["desired"]])
   servers <- sort(unique(c(
     vapply(entries, function(e) as.character(e[["server"]]), character(1)),
     asks[["server"]]
@@ -541,13 +748,25 @@ provisioning_reconcile <- function(register_url,
     # instance would collect a transport error on a row the round never
     # touched, contradicting the early-feedback promise the scope-refusal path
     # below still keeps for exactly those rows.
+    #
+    # A row waiting for its person to be created is one the round could have
+    # acted on too, although it is not a pair: it comes this far for the scope
+    # question, and a creation hangs on the answer. Left out, a silent instance
+    # kept it `pending` without limit and without a code -- the referent had
+    # the first message and nothing after it, and nothing reached us -- while
+    # a pair on the same instance came back with the instance's code. It
+    # waits the same way now.
+    newcomers <- as.character(rows[["record_id"]])[
+      identity_normalize(rows[["identity"]]) == "absent"
+    ]
     asked_for <- unique(c(
       vapply(
         wanted, function(e) as.character(e[["record_id"]]), character(1)
       ),
       vapply(
         revoked, function(e) as.character(e[["record_id"]]), character(1)
-      )
+      ),
+      newcomers
     ))
 
     unreachable <- function(code) {
@@ -589,13 +808,104 @@ provisioning_reconcile <- function(register_url,
       return(answer)
     }
 
-    refused <- scope_errors(rows, round_rights(server, state))
+    rights <- round_rights(server, state)
+    provisional <- as.character(rows[["record_id"]]) %in%
+      record_ids[withdrawal]
+    refused <- scope_errors(rows[!provisional, , drop = FALSE], rights)
     refused <- refused[names(refused) %in% ids]
+
+    # A provisional withdrawal is judged on the rights of whoever had a hand
+    # in it, and not on the creator's alone: one that stands goes on as any
+    # other row, one that does not stand waits for the creator after all.
+    waits <- character()
+    for (id in intersect(ids, record_ids[withdrawal])) {
+      i <- match(id, record_ids)
+      verdict <- scope_withdrawal(
+        rows[as.character(rows[["record_id"]]) == id, , drop = FALSE],
+        withdrawal_authors[[i]], creators[[i]], nzchar(sealed[[i]]), rights
+      )
+      if (identical(verdict, "held")) {
+        waits <- c(waits, id)
+      } else if (nzchar(verdict)) {
+        refused[[id]] <- verdict
+      }
+    }
+
     in_scope <- function(e) {
-      !as.character(e[["record_id"]]) %in% names(refused)
+      !as.character(e[["record_id"]]) %in% c(names(refused), waits)
     }
     wanted <- Filter(in_scope, wanted)
     revoked <- Filter(in_scope, revoked)
+
+    # The rehearsal of a person still to be created. Whether the role and the
+    # group a request names exist in its project is the instance's to say, and
+    # only a write makes it say so: `Applier::resolveNames()` runs on every
+    # plan, simulated or not, and refuses a name the project does not have. So
+    # the grant the person will get once they exist is rehearsed now, as a dry
+    # run and under the name the round is about to create, and only a row the
+    # rehearsal let through may be born. Without it the account was made, its
+    # welcome and its key left, and the refusal came one round later on the
+    # first real grant: a person who exists for a request that cannot be
+    # served.
+    #
+    # A dry run whatever the round is doing, and in a simulated round too: it
+    # writes nothing, and a simulation that could not refuse what the real
+    # round refuses could not warn. Batched by project like everything else
+    # the round sends, for the reason `round_batches()` gives.
+    #
+    # Not answered is not allowed. A batch the instance did not answer keeps
+    # its rows from being born under the code of the call that failed, and so
+    # does a row the answer does not mention, which simply waits.
+    to_create <- Filter(in_scope, Filter(served, mine(arrivals[["desired"]])))
+    rehearsals <- lapply(round_batches(to_create), function(batch) {
+      answer <- module_apply(
+        hosts[[server]], secrets[[server]],
+        requests = batch[["requests"]], dry_run = TRUE
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        return(list(
+          fit = character(),
+          esiti = outcome_rows(
+            batch[["record_ids"]], "transport_error",
+            detail = answer[["errors"]]
+          )
+        ))
+      }
+      # A list, for the reason `by_pair` below is one: a miss falls through.
+      by_pair <- as.list(batch[["record_ids"]])
+      names(by_pair) <- vapply(batch[["requests"]], function(r) {
+        paste(r[["username"]], r[["project_id"]], sep = "\r")
+      }, character(1))
+      fit <- character()
+      esiti <- list(empty_outcomes)
+      for (entry in answer[["payload"]][["results"]] %||% list()) {
+        id <- by_pair[[paste(
+          as.character(entry[["username"]]), as.integer(entry[["project_id"]]),
+          sep = "\r"
+        )]] %||% NA_character_
+        if (is.na(id)) {
+          next
+        }
+        codes <- vapply(
+          entry[["errors"]] %||% list(),
+          function(error) as.character(error[["code"]]),
+          character(1)
+        )
+        if (length(codes) == 0L) {
+          fit <- c(fit, id)
+          next
+        }
+        esiti[[length(esiti) + 1L]] <- outcome_payload(
+          id, round_outcome_kind(codes, dry_run),
+          detail = paste(codes, collapse = ","), at = at
+        )
+      }
+      list(fit = fit, esiti = do.call(rbind, esiti))
+    })
+    unready <- setdiff(
+      vapply(to_create, function(e) as.character(e[["record_id"]]), ""),
+      unlist(lapply(rehearsals, function(r) r[["fit"]]))
+    )
 
     results <- state[["payload"]][["results"]] %||% list()
 
@@ -755,8 +1065,11 @@ provisioning_reconcile <- function(register_url,
       # The rows this instance was asked about and did not refuse. Only present
       # when the instance answered: the early returns above carry no such key,
       # and their silence is what keeps a creation from happening on a question
-      # nobody got to ask.
-      in_scope = setdiff(ids, names(refused)),
+      # nobody got to ask. A person the rehearsal did not let through is not
+      # among them, for the same reason.
+      in_scope = setdiff(ids, c(names(refused), waits, unready)),
+      # The withdrawals the gate sent back to wait for their creator.
+      trattenute = waits,
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -770,6 +1083,7 @@ provisioning_reconcile <- function(register_url,
             id, round_outcome_kind(code, dry_run), detail = code, at = at
           )
         }),
+        lapply(rehearsals, function(r) r[["esiti"]]),
         list(settled, written)
       ))
     )
@@ -785,11 +1099,36 @@ provisioning_reconcile <- function(register_url,
   # A simulated round creates nobody. It is the same line the instance writes
   # are on, and the one place it could have been forgotten: a creation is not a
   # write on an instance, so nothing else in the round would have stopped it.
+  #
+  # Nor does a round whose post is off, although it writes. The key leaves by
+  # one road, the post, and every other place it could go is a place it would
+  # outlive the act that made it; with no mailer `posted()` sends nothing and
+  # looks at no birth, so the key dies with the process and the account stays
+  # behind with rights nobody can use. The runner allows that configuration --
+  # `UBEP_SCRITTURA=1` without `UBEP_POSTA=1` is the round as it was before the
+  # post existed -- so the round has to refuse it here, where the act is. The
+  # row waits exactly as it waits for a silent instance, and the record of the
+  # round says why under a `TRASPORTO_` code, as the parameters sheet has a
+  # missing `UBEP_GRAPH` do: ours, and it passes when somebody switches the
+  # post on. Only when somebody was actually kept from being born, so that a
+  # round with nobody to create does not fail on a switch it never needed.
   in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
-  creations <- if (dry_run) {
+
+  # The withdrawals the gate did not free are held as if they had been held
+  # before the instance was asked: same outcome, same seal state, same message.
+  sent_back <- unlist(lapply(per_instance, function(a) a[["trattenute"]]))
+  late <- record_ids %in% sent_back
+  held <- held | late
+  late_held <- do.call(
+    rbind, c(list(empty_outcomes), lapply(which(late), held_outcome))
+  )
+
+  creatable <- which(awaiting & record_ids %in% in_scope)
+  unposted <- !dry_run && is.null(mailer) && length(creatable) > 0L
+  creations <- if (dry_run || unposted) {
     list()
   } else {
-    lapply(which(awaiting & record_ids %in% in_scope), function(i) {
+    lapply(creatable, function(i) {
       c(
         directory_create_user(
           graph_token, graph_url,
@@ -813,6 +1152,30 @@ provisioning_reconcile <- function(register_url,
   refused_creations <- Filter(function(a) !isTRUE(a[["ok"]]), creations)
   born <- Filter(function(a) isTRUE(a[["ok"]]), creations)
 
+  # Idempotent, and silent too, which is the part that cannot stay. A creation
+  # whose answer was lost may have made the account: its key was drawn in this
+  # process and dies with it, the next sweep finds the account, the row turns
+  # `created` and then `applied`, and a person holds rights on an account whose
+  # key nobody knows -- with `credenziali_perse` at zero and no alarm. So it is
+  # counted here as what it may be, a key and a welcome lost: the key's alarm
+  # is the one that sends IT to reset it and write to the person, and the
+  # welcome is part of what IT then writes.
+  #
+  # Counted in this round, and not in the next one when the account shows up,
+  # although the next one would be exact where this can be wrong: when the
+  # request never reached Graph, the alarm fires for an account that does not
+  # exist, and the next round creates it with its key. The exact count needs a
+  # memory, the row's previous detail, and the next round may not find it: a
+  # failed sweep rewrites every row's detail, and a row whose message did not
+  # leave is not written at all -- failures that come together with a lost
+  # answer more often than apart. Between an alarm IT closes by finding no
+  # account on Entra and an account with rights that nobody hears of, this is
+  # the side that tells somebody. The row carries the creation code, which is
+  # where IT finds the person.
+  unanswered <- Filter(
+    function(a) isTRUE(a[["unconfirmed"]]), refused_creations
+  )
+
   created_outcomes <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(refused_creations, function(answer) {
@@ -831,7 +1194,7 @@ provisioning_reconcile <- function(register_url,
   waiting <- outcome_rows(record_ids[awaiting], "pending")
 
   outcomes <- do.call(rbind, c(
-    list(stopped, form_errors),
+    list(stopped, late_held, form_errors),
     lapply(per_instance, function(answer) answer[["esiti"]]),
     list(created_outcomes, waiting)
   ))
@@ -846,18 +1209,44 @@ provisioning_reconcile <- function(register_url,
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
   # The same minutes the identity door wrote, so the message names what the
-  # round settled instead of what the referent left blank.
+  # round settled instead of what the referent left blank. And the creator the
+  # log named, which is where a held row's message goes: it asks its reader
+  # to approve, and the creator is the only one whose approval counts. With
+  # it, who changed the row, which is what the creator has to judge.
+  edited_by <- vapply(seq_along(record_ids), function(i) {
+    if (!checked[[i]]) {
+      return("")
+    }
+    authors <- log_pending_authors(
+      events, record_ids[[i]], creators[[i]], intent, approvers
+    )
+    if (anyNA(authors)) "" else paste(authors, collapse = ", ")
+  }, character(1))
   posta <- posted(
     changed, born,
     identified = data.frame(
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
+      creator = creators,
+      edited_by = edited_by,
       stringsAsFactors = FALSE
     )
   )
   import <- register_import(
     register_url, register_token, posta[["recapitate"]]
+  )
+
+  # Beside what the post counted, because neither message of an unanswered
+  # creation had anything to be composed from. The code is the creation's own:
+  # it says why both are missing, where `POSTA_` would send whoever reads the
+  # record to look at the mail service.
+  for (lost in c("credenziali_perse", "benvenuti_persi")) {
+    posta[["contatori"]][[lost]] <-
+      posta[["contatori"]][[lost]] + length(unanswered)
+  }
+  posta[["errori"]] <- c(
+    posta[["errori"]], unlist(lapply(unanswered, function(a) a[["errors"]]))
   )
 
   # The seals, written last and through a door that takes nothing else.
@@ -871,18 +1260,9 @@ provisioning_reconcile <- function(register_url,
   # apply anything. Rewriting it would adopt the very edit the round declined,
   # and the next pass would find the row conforming -- the protection would
   # erase its own evidence one round after firing.
-  # The register as this round will have left it, and not as it read it. The
-  # round resolves `username` and writes it back in this same pass, so sealing
-  # the row as read would seal a version the register is about to stop
-  # holding: `username` is inside the seal -- it has to be, since changing it
-  # changes who gets the access -- and the next round would find every applied
-  # row modified, by the round's own hand. The mechanism would accuse itself
-  # on the ordinary path, on every row, one pass after each apply.
   #
-  # `resolved_names` is what the register ends up with either way: written when
-  # it differs, already there when it does not.
-  register_after <- register
-  register_after[["username"]] <- resolved_names
+  # The seal of an applied row is computed on `register_after`, the register
+  # as this round will have left it, for the reason given where it is built.
 
   # `approved` is sticky, and it has to be to mean anything. Recomputed as
   # `intact` on every ordinary round it would name a state that lasts one
@@ -903,12 +1283,13 @@ provisioning_reconcile <- function(register_url,
         i <- match(id, record_ids)
         seal_payload(
           id,
-          request_seal(register_after[i, , drop = FALSE]),
-          # Applied while tampered is the one way past `held`, so it says an
-          # approval carried this row here. Otherwise the row keeps what it
-          # had: a change approved once stays approved until somebody edits
-          # the row again, which is when `modified` takes over below.
-          if (tampered[[i]] || identical(state_before[[i]], "approved")) {
+          seal_after[[i]],
+          # Applied while waiting for an approval says an approval carried
+          # this row here. A change the creator made alone was nobody's to
+          # contest, and leaves the row as it was. Otherwise the row keeps
+          # what it had: a change approved once stays approved until somebody
+          # edits the row again, which is when `modified` takes over below.
+          if (cleared[[i]] || identical(state_before[[i]], "approved")) {
             "approved"
           } else {
             "intact"
@@ -959,8 +1340,9 @@ provisioning_reconcile <- function(register_url,
     # verdicts while every row still reported its own fate correctly. A message
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
-      identity_written[["errors"]], import[["errors"]], posta[["errori"]],
-      seal_written[["errors"]]
+      identity_written[["errors"]], unique(log_errors), import[["errors"]],
+      posta[["errori"]], seal_written[["errors"]],
+      if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA"
     )
   )
 }

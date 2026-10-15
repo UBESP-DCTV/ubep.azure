@@ -4,33 +4,60 @@
 \alias{seal_approved}
 \title{Whether a change to an applied row has been approved}
 \usage{
-seal_approved(register, events)
+seal_approved(register, events, creators, approvers = character())
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
 
 \item{events}{The event log, as \code{register_log()} returns it.}
+
+\item{creators}{Who created each row, as \code{log_creators()} answers, in the
+order of \code{register}. \code{""} approves nothing.}
+
+\item{approvers}{The IT accounts whose approval counts on any row, as REDCap
+usernames.}
 }
 \value{
 A logical vector, one answer per row.
 }
 \description{
-Two conditions, and neither is enough on its own.
+Three conditions, and none is enough on its own.
 }
 \details{
 The approval has to carry \strong{this} row's seal. A value that is some other
 seal approves some other version of the row, and accepting it would make one
 approval stand for every change that came after it.
 
-And it has to come from \strong{somebody else}. Otherwise the protection is a
-formality: whoever edits another referent's row would paste the seal on the
-way out, and the round would apply a change nobody but its author ever saw.
-The seal detects that the row moved; only the log can say who moved it,
-because it names whoever was authenticated rather than a value somebody
-typed — which is the same reason \code{requested_by} cannot be trusted alone.
+It has to come from \strong{whoever created the row}. Not merely from
+somebody other than the author of the change: the request is the creator's,
+the scope gate checks the creator's rights on the project every round and
+nobody else's, so an approval from a third referent would grant on the word
+of somebody whose rights on that project nobody has looked at. The seal
+detects that the row moved; only the log can say who approved it and who
+created the row, because it names whoever was authenticated rather than a
+value somebody typed -- which is the same reason \code{requested_by} cannot be
+trusted alone.
+
+And it has to be \strong{newer than what it approves}: above the round's last
+execution and above every change somebody other than the creator made, as
+\code{log_approval_stands()} reads the log. The value alone cannot say so.
+\code{approved_seal} is never blanked, so an approval the round has already
+carried out would approve again any later change that brings the row back
+to it; and the seal is a public hash of the intent fields, so it can be
+pasted before the change it names exists.
+
+\strong{IT approves as the creator does}, decided on 2026-10-15: the accounts
+named in \code{approvers} stand where the creator stands, under the same three
+conditions. It is what keeps a request whose creator has left UBEP from
+waiting for ever, without deleting the row and losing who filed it. The
+list lives on the machine that runs the round and never in this
+repository. One limit is worth knowing: the scope gate still asks the
+creator's rights on the project, so no approval, from IT or anybody else,
+carries a row whose creator no longer manages the project.
 
 An unreadable log is not this function's to decide. It answers about the
-events it was handed, and a caller holding no events gets \code{FALSE} on every
-changed row: the row waits, which is the direction that does not grant.
+events and the creators it was handed, and a caller holding neither gets
+\code{FALSE} on every changed row: the row waits, which is the direction that
+does not grant.
 }
 \keyword{internal}
