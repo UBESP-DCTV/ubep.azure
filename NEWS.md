@@ -114,7 +114,15 @@
   (`scope_withdrawal()`). One who does not manage the project sends it back
   to wait for the creator, as `held`; a permission that cannot be read keeps
   it queued on `TRASPORTO_PERMESSO_NON_LEGGIBILE`; the creator's own rights
-  are asked only when the creator had a hand in it.
+  are asked only when the creator had a hand in it. Only a row with a person
+  to take the access from reaches the gate: a revoked row whose person the
+  tenant no longer holds is settled before any instance is asked, so it
+  waits for the creator as before.
+
+  A revocation alone is never counted as a change the last execution left
+  uncovered (`log_uncovered_authors()`): it grants nothing, and counted it
+  made the creator approve the reactivation of their own request after a
+  manager's free revocation.
 
 * **IT approves as the creator does.** Decided on 2026-10-15, so that a
   request whose creator has left UBEP does not wait for ever and keeps its
@@ -122,9 +130,12 @@
   usernames whose approval counts on any row, under the same three
   conditions as the creator's; the runner reads them from
   `UBEP_APPROVATORI_IT`, comma separated, on the machine and never from this
-  repository. Without the variable only the creator approves. The scope gate
-  still asks the creator's rights, so no approval carries the row of a
-  creator who no longer manages the project.
+  repository. Without the variable only the creator approves. IT's approval
+  also covers, below the execution it led to, the change it approved, as the
+  creator's does; and the list is compared without regard to case, so a
+  capital letter typed on the machine does not void it. The scope gate still
+  asks the creator's rights, so no approval carries the row of a creator who
+  no longer manages the project.
 
 * **A changed row whose log cannot be read is a transport error, not a held
   row.** It took `held`, and its message asked for a seal to paste with
@@ -161,10 +172,17 @@
   The cost is an alarm for an account never made, when the request did not
   reach Graph.
 
-* **Release.** An install and not an import: the two field notes of
-  `seal_state` and `approved_seal` say who approves now, and the dictionary
-  comparison does not read notes, so the live register keeps the old ones
-  until the dictionary is imported again and does not drift meanwhile. No new
+* **The approval field shows on a held row not applied yet.** Since a row
+  not applied yet can be held, `approved_seal` and `seal_state` show when the
+  row carries a seal or its outcome is `held`; shown beside a seal only, the
+  field to paste the approval into was hidden on exactly that row, and it
+  could not be approved from the form. Their notes say that IT approves too.
+
+* **Release.** An install, and an import of the dictionary on the register:
+  the branching logic and the notes of `seal_state` and `approved_seal`
+  changed. The dictionary comparison reads neither, so the two can come in
+  either order and nothing drifts meanwhile; but until the import a held row
+  not applied yet has no field to paste its approval into. No new
   column in the round's record, so the collection rule stays as it is. The
   runner passes `approvers` now, so its copy under `/opt` has to be replaced,
   and `UBEP_APPROVATORI_IT` set in the unit's environment; a runner left as
