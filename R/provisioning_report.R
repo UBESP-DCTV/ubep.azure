@@ -589,3 +589,583 @@ report_assemble <- function(rows, directory, period, previous = list()) {
     referenti = referenti, it = it, senza_creatore = nrow(senza_referente)
   )
 }
+
+
+#' Join words the way a sentence lists them
+#'
+#' @param words A character vector.
+#' @param conjunction The word before the last item, `"e"` or `"and"`.
+#'
+#' @return One string: `"a"`, `"a e b"`, `"a, b e c"`.
+#'
+#' @keywords internal
+report_join <- function(words, conjunction) {
+  words <- as.character(words)
+  if (length(words) <= 1L) {
+    return(paste(words, collapse = ""))
+  }
+  paste(
+    paste(words[-length(words)], collapse = ", "), conjunction,
+    words[[length(words)]]
+  )
+}
+
+
+#' Say the projects of a person, instance by instance
+#'
+#' @param projects A frame of `server` and `project_id`, as
+#'   `report_assemble()` builds it.
+#'
+#' @return A character vector named `it` and `en`, as in
+#'   `"edc10, progetti 9301 e 9302; edc12, progetto 9303"`.
+#'
+#' @keywords internal
+report_projects_words <- function(projects) {
+  servers <- unique(as.character(projects[["server"]]))
+  said <- lapply(servers, function(server) {
+    ids <- as.character(
+      projects[["project_id"]][projects[["server"]] == server]
+    )
+    many <- length(ids) > 1L
+    c(
+      it = paste0(
+        server, ", ", if (many) "progetti " else "progetto ",
+        report_join(ids, "e")
+      ),
+      en = paste0(
+        server, ", ", if (many) "projects " else "project ",
+        report_join(ids, "and")
+      )
+    )
+  })
+  c(
+    it = paste(vapply(said, `[[`, "", "it"), collapse = "; "),
+    en = paste(vapply(said, `[[`, "", "en"), collapse = "; ")
+  )
+}
+
+
+#' The lines of the accesses activated in the month, in both languages
+#'
+#' @param rows The `attivati` of a referent's report.
+#'
+#' @return A list of two character vectors, `it` and `en`.
+#'
+#' @keywords internal
+report_activated_lines <- function(rows) {
+  count <- nrow(rows)
+  if (count == 0L) {
+    return(list(
+      it = "Accessi attivati nel mese: nessuno.",
+      en = "Access granted this month: none."
+    ))
+  }
+
+  value <- function(name) {
+    found <- rows[[name]]
+    if (is.null(found)) {
+      return(rep("", count))
+    }
+    found <- trimws(as.character(found))
+    found[is.na(found)] <- ""
+    found
+  }
+
+  name <- trimws(paste(value("first_name"), value("last_name")))
+  dag <- value("dag_name")
+  expiration <- value("expiration")
+  modified <- value("nel_mese") == "modificata"
+  identity <- value("identity")
+
+  line <- function(project, role, group, until, none, tail) {
+    paste0(
+      "- ", name, ", ", value("username"), ": ", value("server"), ", ",
+      project, " ", value("project_id"), ", ", role, " ", value("role_name"),
+      ifelse(nzchar(dag), paste0(", ", group, " ", dag), ""), ", ",
+      ifelse(nzchar(expiration), paste(until, expiration), none), ".",
+      ifelse(nzchar(tail), paste0(" ", tail), "")
+    )
+  }
+
+  tail_it <- ifelse(
+    modified, "Richiesta modificata e rieseguita nel mese.",
+    ifelse(identity == "created", "Account nuovo.",
+           ifelse(identity == "existing", "Account gia' esistente.", ""))
+  )
+  tail_en <- ifelse(
+    modified, "Request modified and applied again this month.",
+    ifelse(identity == "created", "New account.",
+           ifelse(identity == "existing", "Existing account.", ""))
+  )
+
+  list(
+    it = c(
+      paste0("Accessi attivati nel mese (", count, "), per informazione:"),
+      line("progetto", "ruolo", "DAG", "scadenza", "senza scadenza", tail_it),
+      paste(
+        "Non serve fare niente.",
+        if (count == 1L) {
+          "Se non e' cio' che avevi chiesto,"
+        } else {
+          "Se uno di questi non e' cio' che avevi chiesto,"
+        },
+        "metti la richiesta a revoked nel registro."
+      )
+    ),
+    en = c(
+      paste0("Access granted this month (", count, "), for information:"),
+      line("project", "role", "DAG", "last day", "no end date", tail_en),
+      paste(
+        "Nothing to do.",
+        if (count == 1L) {
+          "If it is not what you asked for,"
+        } else {
+          "If one of these is not what you asked for,"
+        },
+        "set the request to revoked in the register."
+      )
+    )
+  )
+}
+
+
+#' The lines of the people with no first sign-in, in both languages
+#'
+#' @param people The `senza_primo_accesso` of a referent's report.
+#'
+#' @return A list of two character vectors, `it` and `en`.
+#'
+#' @keywords internal
+report_people_lines <- function(people) {
+  grace <- report_grace_days()
+
+  each <- lapply(people, function(person) {
+    projects <- report_projects_words(person[["progetti"]])
+    months <- as.integer(person[["mesi"]])
+    earlier <- as.character(person[["segnalata"]] %||% character())
+    who <- paste0("   - ", person[["nome"]], ", ", person[["upn"]], ": ")
+    list(
+      it = c(
+        paste0(
+          who, "attivata il ", person[["attivata_il"]], ", ",
+          person[["giorni"]], " giorni fa; senza primo accesso da ", months,
+          if (months == 1L) " mese." else " mesi."
+        ),
+        paste0(
+          "     ", projects[["it"]], ". ",
+          if (length(earlier) == 0L) {
+            "Prima segnalazione."
+          } else {
+            paste0(
+              "Segnalata anche ", report_join(paste("il", earlier), "e"), "."
+            )
+          }
+        )
+      ),
+      en = c(
+        paste0(
+          who, "activated on ", person[["attivata_il"]], ", ",
+          person[["giorni"]], " days ago; no first sign-in for ", months,
+          if (months == 1L) " month." else " months."
+        ),
+        paste0(
+          "     ", projects[["en"]], ". ",
+          if (length(earlier) == 0L) {
+            "First report."
+          } else {
+            paste0("Also reported on ", report_join(earlier, "and"), ".")
+          }
+        )
+      )
+    )
+  })
+
+  list(
+    it = c(
+      paste0(
+        "1. Senza primo accesso dopo ", grace, " giorni (", length(people),
+        ")"
+      ),
+      paste0(
+        "   Hanno l'accesso da almeno ", grace, " giorni e non sono ancora ",
+        "entrate con l'account UBEP."
+      ),
+      unlist(lapply(each, `[[`, "it")),
+      paste0(
+        "   Che cosa fare: chiedi alla persona se ha ricevuto il benvenuto e ",
+        "la chiave che le hai mandato. Se la chiave e' persa, scrivi a IT: ",
+        "la reimposta e la rimanda a te. Se l'accesso non serve piu', metti ",
+        "la richiesta a revoked."
+      )
+    ),
+    en = c(
+      paste0(
+        "1. No first sign-in after ", grace, " days (", length(people), ")"
+      ),
+      paste0(
+        "   They have had access for at least ", grace, " days and have not ",
+        "signed in with the UBEP account yet."
+      ),
+      unlist(lapply(each, `[[`, "en")),
+      paste0(
+        "   What to do: ask the person whether they received the welcome and ",
+        "the key you sent them. If the key is lost, write to IT: they reset ",
+        "it and send it back to you. If the access is no longer needed, set ",
+        "the request to revoked."
+      )
+    )
+  )
+}
+
+
+#' Say when the state was read, in both languages
+#'
+#' @inheritParams report_message
+#'
+#' @return A list of two strings, `it` and `en`, without the next report.
+#'
+#' @keywords internal
+report_read_words <- function(period) {
+  day <- substr(period[["letto"]], 1L, 10L)
+  hour <- substr(period[["letto"]], 12L, 16L)
+  list(
+    it = paste0(
+      "Situazione letta il ", day, " alle ", hour, " (ora italiana)."
+    ),
+    en = paste0("State read on ", day, " at ", hour, " (Italian time).")
+  )
+}
+
+
+#' Compose a referent's monthly report
+#'
+#' Two forms, told apart by the **first word of the subject**, which is what
+#' shows in a list of mail without opening anything: `Tutto in ordine` when
+#' there is nobody to look at, `N da guardare` otherwise. The mail is plain
+#' text, so the verdict is said again on the first line of the body, in
+#' capitals. N counts the people listed in full in the items to look at, and
+#' not the accesses activated, which are information; in the form to review
+#' the anomalies come first and the information after.
+#'
+#' The year without access is not measured in phase 1, and the mail says so
+#' in both forms: an all-clear that covered an item nobody looked at would
+#' say something false.
+#'
+#' Italian above and English below, as every mail of the channel, since the
+#' address says nothing about which one its reader reads.
+#'
+#' @param report One referent's report, as `report_assemble()` builds it.
+#' @param period What `report_month()` answered.
+#'
+#' @return A list with `subject`, `body`, `forma` (`in_ordine` or
+#'   `da_guardare`) and `n`.
+#'
+#' @keywords internal
+report_message <- function(report, period) {
+  stopifnot(is.list(report), is.list(period))
+
+  people <- report[["senza_primo_accesso"]] %||% list()
+  count <- length(people)
+  month <- report_month_words(period[["mese"]])
+  following <- report_day_words(period[["prossimo"]])
+  grace <- report_grace_days()
+  activated <- report_activated_lines(report[["attivati"]])
+  read <- report_read_words(period)
+
+  if (count == 0L) {
+    verdict <- c(it = "Tutto in ordine", en = "All clear")
+    items <- list(
+      it = c(
+        paste0(
+          "Persone senza primo accesso dopo ", grace, " giorni: nessuna."
+        ),
+        "Persone senza accessi da piu' di un anno: non ancora controllato."
+      ),
+      en = c(
+        paste0("People with no first sign-in after ", grace, " days: none."),
+        "People with no access in more than a year: not checked yet."
+      )
+    )
+  } else {
+    verdict <- c(
+      it = paste(count, "da guardare"), en = paste(count, "to review")
+    )
+    listed <- report_people_lines(people)
+    items <- list(
+      it = c(
+        listed[["it"]], "",
+        "2. Senza accessi da piu' di un anno: non ancora controllato."
+      ),
+      en = c(
+        listed[["en"]], "",
+        "2. No access in more than a year: not checked yet."
+      )
+    )
+  }
+
+  it <- c(
+    toupper(verdict[["it"]]),
+    "",
+    paste0(
+      "Rapporto mensile sulle richieste di accesso a REDCap create da te. ",
+      "Mese: ", month[["it"]], "."
+    ),
+    "",
+    items[["it"]],
+    "",
+    activated[["it"]],
+    "",
+    paste0(read[["it"]], " Prossimo rapporto: ", following[["it"]], "."),
+    "Per domande rispondi a questo messaggio: la risposta arriva a IT."
+  )
+
+  en <- c(
+    toupper(verdict[["en"]]),
+    "",
+    paste0(
+      "Monthly report on the REDCap access requests you created. ",
+      "Month: ", month[["en"]], "."
+    ),
+    "",
+    items[["en"]],
+    "",
+    activated[["en"]],
+    "",
+    paste0(read[["en"]], " Next report: ", following[["en"]], "."),
+    "For questions, reply to this message: the reply reaches IT."
+  )
+
+  list(
+    subject = paste0(
+      verdict[["it"]], ": accessi REDCap, ", month[["it"]], " / ",
+      verdict[["en"]], ": REDCap access, ", month[["en"]]
+    ),
+    body = paste(c(it, "", "---", "", en), collapse = "\n"),
+    forma = if (count == 0L) "in_ordine" else "da_guardare",
+    n = count
+  )
+}
+
+
+#' Compose the monthly mail to IT
+#'
+#' One mail, and only when there is something in it: the rows with no
+#' referent to send them to, the people the report cannot judge, the rows the
+#' log does not date. It has the referents' form to review, and its number
+#' counts the rows and people listed. A section with nothing in it is not
+#' announced.
+#'
+#' @param it The `it` part of what `report_assemble()` answered.
+#' @inheritParams report_message
+#'
+#' @return A list with `subject`, `body`, `forma` and `n`.
+#'
+#' @keywords internal
+report_it_message <- function(it, period) {
+  stopifnot(is.list(it), is.list(period))
+
+  month <- report_month_words(period[["mese"]])
+  read <- report_read_words(period)
+
+  value <- function(rows, name) {
+    found <- rows[[name]]
+    if (is.null(found)) {
+      return(rep("", nrow(rows)))
+    }
+    found <- trimws(as.character(found))
+    found[is.na(found)] <- ""
+    found
+  }
+  row_words <- function(rows) {
+    head <- paste0(
+      trimws(paste(value(rows, "first_name"), value(rows, "last_name"))),
+      ", ", value(rows, "username"), ": ", value(rows, "server")
+    )
+    list(
+      it = paste0(
+        "   - Richiesta ", value(rows, "record_id"), ": ", head, ", progetto ",
+        value(rows, "project_id"), "."
+      ),
+      en = paste0(
+        "   - Request ", value(rows, "record_id"), ": ", head, ", project ",
+        value(rows, "project_id"), "."
+      )
+    )
+  }
+
+  sections <- list()
+
+  orphans <- it[["senza_referente"]]
+  if (!is.null(orphans) && nrow(orphans) > 0L) {
+    creator <- value(orphans, "creator")
+    reason <- value(orphans, "motivo")
+    because <- list(
+      it = ifelse(
+        reason == "non_stabilito",
+        "Il registro degli eventi non dice chi l'ha creata.",
+        paste0("Chi l'ha creata, ", creator, ", ", ifelse(
+          reason == "disabilitato", "ha l'account disabilitato su Entra.",
+          ifelse(
+            reason == "non_trovato", "non risulta su Entra.",
+            "ha un account il cui stato non si legge su Entra."
+          )
+        ))
+      ),
+      en = ifelse(
+        reason == "non_stabilito",
+        "The event log does not say who created it.",
+        paste0("Its creator, ", creator, ", ", ifelse(
+          reason == "disabilitato", "has a disabled account on Entra.",
+          ifelse(
+            reason == "non_trovato", "is not on Entra.",
+            "has an account whose state cannot be read on Entra."
+          )
+        ))
+      )
+    )
+    words <- row_words(orphans)
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(orphans),
+      it = c(
+        paste0(
+          "Richieste senza un referente a cui mandare il rapporto (",
+          nrow(orphans), ")"
+        ),
+        paste(words[["it"]], because[["it"]])
+      ),
+      en = c(
+        paste0(
+          "Requests with no referent to send the report to (",
+          nrow(orphans), ")"
+        ),
+        paste(words[["en"]], because[["en"]])
+      )
+    )
+  }
+
+  people <- it[["non_giudicabili"]] %||% list()
+  if (length(people) > 0L) {
+    said <- list(
+      disabilitato = c(
+        it = "account disabilitato su Entra", en = "account disabled on Entra"
+      ),
+      non_trovato = c(
+        it = "account non trovato su Entra", en = "account not found on Entra"
+      ),
+      senza_creazione = c(
+        it = "data di creazione dell'account assente su Entra",
+        en = "no creation date on Entra"
+      ),
+      non_giudicabile = c(
+        it = "stato dell'account o data della chiave non leggibili su Entra",
+        en = "account state or key date not readable on Entra"
+      )
+    )
+    lines <- lapply(people, function(person) {
+      reason <- said[[person[["motivo"]]]] %||% said[["non_giudicabile"]]
+      projects <- report_projects_words(person[["progetti"]])
+      who <- paste0("   - ", person[["nome"]], ", ", person[["upn"]], ": ")
+      c(
+        it = paste0(
+          who, reason[["it"]], ". Referente: ", person[["referente"]], "; ",
+          projects[["it"]], "."
+        ),
+        en = paste0(
+          who, reason[["en"]], ". Referent: ", person[["referente"]], "; ",
+          projects[["en"]], "."
+        )
+      )
+    })
+    sections[[length(sections) + 1L]] <- list(
+      n = length(people),
+      it = c(
+        paste0(
+          "Persone che il rapporto non sa giudicare (", length(people), ")"
+        ),
+        vapply(lines, `[[`, "", "it")
+      ),
+      en = c(
+        paste0("People the report cannot judge (", length(people), ")"),
+        vapply(lines, `[[`, "", "en")
+      )
+    )
+  }
+
+  undated <- it[["senza_data"]]
+  if (!is.null(undated) && nrow(undated) > 0L) {
+    creator <- value(undated, "creator")
+    words <- row_words(undated)
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(undated),
+      it = c(
+        paste0(
+          "Richieste senza data di attivazione nel registro degli eventi (",
+          nrow(undated), ")"
+        ),
+        paste0(
+          "   Risultano eseguite, ma il registro degli eventi non porta la ",
+          "scrittura del sigillo da parte del canale."
+        ),
+        paste0(
+          words[["it"]], " Referente: ",
+          ifelse(nzchar(creator), creator, "non stabilito"), "."
+        )
+      ),
+      en = c(
+        paste0(
+          "Requests with no date of activation in the event log (",
+          nrow(undated), ")"
+        ),
+        paste0(
+          "   They are on record as applied, but the event log carries no ",
+          "seal written by the channel."
+        ),
+        paste0(
+          words[["en"]], " Referent: ",
+          ifelse(nzchar(creator), creator, "not established"), "."
+        )
+      )
+    )
+  }
+
+  count <- sum(vapply(sections, `[[`, 0L, "n"))
+  numbered <- function(lang) {
+    unlist(lapply(seq_along(sections), function(i) {
+      lines <- sections[[i]][[lang]]
+      c(paste0(i, ". ", lines[[1L]]), lines[-1L], "")
+    }))
+  }
+
+  it_body <- c(
+    paste(count, "DA GUARDARE"),
+    "",
+    paste0(
+      "Rapporto mensile per IT: le richieste di accesso a REDCap che il ",
+      "rapporto ai referenti non copre. Mese: ", month[["it"]], "."
+    ),
+    "",
+    numbered("it"),
+    read[["it"]]
+  )
+  en_body <- c(
+    paste(count, "TO REVIEW"),
+    "",
+    paste0(
+      "Monthly report for IT: the REDCap access requests the report to the ",
+      "referents does not cover. Month: ", month[["en"]], "."
+    ),
+    "",
+    numbered("en"),
+    read[["en"]]
+  )
+
+  list(
+    subject = paste0(
+      count, " da guardare: rapporto REDCap per IT, ", month[["it"]], " / ",
+      count, " to review: REDCap report for IT, ", month[["en"]]
+    ),
+    body = paste(c(it_body, "", "---", "", en_body), collapse = "\n"),
+    forma = "da_guardare",
+    n = count
+  )
+}

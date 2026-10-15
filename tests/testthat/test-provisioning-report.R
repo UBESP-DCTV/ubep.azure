@@ -733,3 +733,271 @@ test_that("a referent with only old, quiet requests still has a report", {
   expect_equal(nrow(mio[["attivati"]]), 0L)
   expect_length(mio[["senza_primo_accesso"]], 0L)
 })
+
+
+# --- the mails ---------------------------------------------------------------
+
+# A referent's report as report_assemble() hands it over, built by hand so
+# each test names the item it is about.
+attivati_di <- function(...) {
+  righe <- registro_di(...)
+  righe[["attivata_il"]] <- "2026-10-08 23:03"
+  righe[["nel_mese"]] <- "attivata"
+  righe
+}
+
+# `progetti` is set apart from the rest: modifyList() walks into a data frame
+# as into any list, and would merge the frames column by column.
+persona <- function(..., progetti = data.frame(
+  server = "edc10", project_id = "9301", stringsAsFactors = FALSE
+)) {
+  chi <- utils::modifyList(
+    list(
+      nome = "Carla Inventata", upn = "carla.inventata@ubep.unipd.it",
+      attivata_il = "2026-09-12", giorni = 50L, mesi = 1L,
+      segnalata = character()
+    ),
+    list(...)
+  )
+  chi[["progetti"]] <- progetti
+  chi
+}
+
+rapporto_di <- function(attivati = attivati_di(richiesta())[0, ],
+                        persone = list()) {
+  list(
+    referente = referente, attivati = attivati, senza_primo_accesso = persone
+  )
+}
+
+parti <- function(messaggio) {
+  testo <- strsplit(messaggio[["body"]], "\n", fixed = TRUE)[[1L]]
+  taglio <- which(testo == "---")
+  list(it = testo[seq_len(taglio - 1L)], en = testo[-seq_len(taglio)])
+}
+
+
+test_that("an all-clear report says so in the first word of the subject", {
+  # eval
+  messaggio <- report_message(
+    rapporto_di(attivati_di(
+      richiesta(record_id = "41", dag_name = "torino"),
+      richiesta(record_id = "42", identity = "existing",
+                username = "bruno.fittizio@ubep.unipd.it",
+                first_name = "Bruno", last_name = "Fittizio",
+                project_id = "9302", role_name = "data_entry",
+                expiration = "2027-06-30")
+    )),
+    novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(messaggio[["forma"]], "in_ordine")
+  expect_equal(messaggio[["n"]], 0L)
+  expect_equal(
+    messaggio[["subject"]],
+    paste0(
+      "Tutto in ordine: accessi REDCap, ottobre 2026 / ",
+      "All clear: REDCap access, October 2026"
+    )
+  )
+  # A mail of plain text, so the verdict is said again on the first line.
+  expect_equal(testo[["it"]][[1L]], "TUTTO IN ORDINE")
+  expect_equal(testo[["en"]][[2L]], "ALL CLEAR")
+  expect_true(
+    "Persone senza primo accesso dopo 30 giorni: nessuna." %in% testo[["it"]]
+  )
+  # Phase 1 does not look at the year without access, and an all-clear that
+  # covered it would say something false.
+  expect_true(
+    "Persone senza accessi da piu' di un anno: non ancora controllato." %in%
+      testo[["it"]]
+  )
+  expect_true(
+    "People with no access in more than a year: not checked yet." %in%
+      testo[["en"]]
+  )
+  expect_true(
+    "Accessi attivati nel mese (2), per informazione:" %in% testo[["it"]]
+  )
+  expect_true(paste0(
+    "- Carla Inventata, carla.inventata@ubep.unipd.it: edc10, progetto 9301, ",
+    "ruolo user, DAG torino, senza scadenza. Account nuovo."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "- Bruno Fittizio, bruno.fittizio@ubep.unipd.it: edc10, progetto 9302, ",
+    "ruolo data_entry, scadenza 2027-06-30. Account gia' esistente."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "- Bruno Fittizio, bruno.fittizio@ubep.unipd.it: edc10, project 9302, ",
+    "role data_entry, last day 2027-06-30. Existing account."
+  ) %in% testo[["en"]])
+  expect_true(paste0(
+    "Situazione letta il 2026-11-01 alle 07:30 (ora italiana). ",
+    "Prossimo rapporto: 1 dicembre 2026."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "State read on 2026-11-01 at 07:30 (Italian time). ",
+    "Next report: 1 December 2026."
+  ) %in% testo[["en"]])
+})
+
+
+test_that("a modified request is said to be one, and a quiet month is said", {
+  # eval
+  modificata <- attivati_di(richiesta(record_id = "41"))
+  modificata[["nel_mese"]] <- "modificata"
+  con_modifica <- parti(report_message(rapporto_di(modificata), novembre()))
+  vuoto <- parti(report_message(rapporto_di(), novembre()))
+
+  # test
+  expect_true(paste0(
+    "- Carla Inventata, carla.inventata@ubep.unipd.it: edc10, progetto 9301, ",
+    "ruolo user, senza scadenza. Richiesta modificata e rieseguita nel mese."
+  ) %in% con_modifica[["it"]])
+  expect_true("Accessi attivati nel mese: nessuno." %in% vuoto[["it"]])
+  expect_true("Access granted this month: none." %in% vuoto[["en"]])
+})
+
+
+test_that("a report to review counts the people, and puts them first", {
+  # eval
+  messaggio <- report_message(
+    rapporto_di(
+      attivati_di(richiesta(record_id = "45")),
+      list(
+        persona(),
+        persona(
+          nome = "Dario Ipotetico", upn = "dario.ipotetico@ubep.unipd.it",
+          progetti = data.frame(
+            server = c("edc10", "edc10", "edc12"),
+            project_id = c("9301", "9302", "9303"), stringsAsFactors = FALSE
+          ),
+          attivata_il = "2026-08-03", giorni = 90L, mesi = 3L,
+          segnalata = c("2026-09-01", "2026-10-01")
+        )
+      )
+    ),
+    novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(messaggio[["forma"]], "da_guardare")
+  expect_equal(messaggio[["n"]], 2L)
+  expect_equal(
+    messaggio[["subject"]],
+    paste0(
+      "2 da guardare: accessi REDCap, ottobre 2026 / ",
+      "2 to review: REDCap access, October 2026"
+    )
+  )
+  expect_equal(testo[["it"]][[1L]], "2 DA GUARDARE")
+  expect_equal(testo[["en"]][[2L]], "2 TO REVIEW")
+
+  # The anomalies first, the information after.
+  prima <- which(testo[["it"]] == "1. Senza primo accesso dopo 30 giorni (2)")
+  dopo <- which(startsWith(testo[["it"]], "Accessi attivati nel mese"))
+  expect_length(prima, 1L)
+  expect_lt(prima, dopo)
+  expect_true(
+    "2. Senza accessi da piu' di un anno: non ancora controllato." %in%
+      testo[["it"]]
+  )
+
+  expect_true(paste0(
+    "   - Carla Inventata, carla.inventata@ubep.unipd.it: attivata il ",
+    "2026-09-12, 50 giorni fa; senza primo accesso da 1 mese."
+  ) %in% testo[["it"]])
+  expect_true(
+    "     edc10, progetto 9301. Prima segnalazione." %in% testo[["it"]]
+  )
+  expect_true(paste0(
+    "   - Dario Ipotetico, dario.ipotetico@ubep.unipd.it: attivata il ",
+    "2026-08-03, 90 giorni fa; senza primo accesso da 3 mesi."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "     edc10, progetti 9301 e 9302; edc12, progetto 9303. ",
+    "Segnalata anche il 2026-09-01 e il 2026-10-01."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "     edc10, projects 9301 and 9302; edc12, project 9303. ",
+    "Also reported on 2026-09-01 and 2026-10-01."
+  ) %in% testo[["en"]])
+  expect_true(any(startsWith(testo[["it"]], "   Che cosa fare: chiedi")))
+  expect_true(any(startsWith(testo[["en"]], "   What to do: ask")))
+})
+
+
+test_that("the mails carry no long dash and no character outside ASCII", {
+  # eval
+  messaggi <- list(
+    report_message(rapporto_di(attivati_di(richiesta())), novembre()),
+    report_message(rapporto_di(persone = list(persona())), novembre())
+  )
+
+  # test
+  for (messaggio in messaggi) {
+    testo <- paste(messaggio[["subject"]], messaggio[["body"]])
+    expect_false(grepl("—", testo, fixed = TRUE))
+    expect_true(all(utf8ToInt(testo) < 128L))
+  }
+})
+
+
+test_that("the mail to IT says what has no referent, by section", {
+  # eval
+  senza_referente <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "42")
+  )
+  senza_referente[["creator"]] <- c("", "bruno.fittizio@ubep.unipd.it")
+  senza_referente[["motivo"]] <- c("non_stabilito", "disabilitato")
+  per_it <- list(
+    senza_referente = senza_referente,
+    non_giudicabili = list(c(
+      persona(nome = "Elena Supposta", upn = "elena.supposta@ubep.unipd.it"),
+      list(referente = referente, motivo = "disabilitato")
+    )),
+    senza_data = senza_referente[0, ]
+  )
+
+  messaggio <- report_it_message(per_it, novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(messaggio[["n"]], 3L)
+  expect_equal(messaggio[["forma"]], "da_guardare")
+  expect_equal(
+    messaggio[["subject"]],
+    paste0(
+      "3 da guardare: rapporto REDCap per IT, ottobre 2026 / ",
+      "3 to review: REDCap report for IT, October 2026"
+    )
+  )
+  expect_equal(testo[["it"]][[1L]], "3 DA GUARDARE")
+  expect_true(
+    "1. Richieste senza un referente a cui mandare il rapporto (2)" %in%
+      testo[["it"]]
+  )
+  expect_true(paste0(
+    "   - Richiesta 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+    "edc10, progetto 9301. Il registro degli eventi non dice chi l'ha creata."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Richiesta 42: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+    "edc10, progetto 9301. Chi l'ha creata, bruno.fittizio@ubep.unipd.it, ",
+    "ha l'account disabilitato su Entra."
+  ) %in% testo[["it"]])
+  expect_true(
+    "2. Persone che il rapporto non sa giudicare (1)" %in% testo[["it"]]
+  )
+  expect_true(paste0(
+    "   - Elena Supposta, elena.supposta@ubep.unipd.it: account disabilitato ",
+    "su Entra. Referente: ", referente, "; edc10, progetto 9301."
+  ) %in% testo[["it"]])
+  # An empty section is not announced.
+  expect_false(any(startsWith(testo[["it"]], "3.")))
+  expect_true(all(utf8ToInt(messaggio[["body"]]) < 128L))
+})
