@@ -459,11 +459,18 @@ report_rows <- function(register, creators, executions, period) {
 #' @param previous The entries of the earlier months' ledgers, as
 #'   `report_ledger_previous()` reads them.
 #'
+#' A referent whose people went to IT unjudged is told how many, in the
+#' report itself: the principle of the all-clear, which must not cover an item
+#' nobody measured. `non_giudicati` counts them, a person once: the people of
+#' that referent the report could not judge, and those of the rows the log
+#' does not date.
+#'
 #' @return A list with `referenti`, one report per referent named after them,
-#'   each a list of `referente`, `attivati` (rows) and `senza_primo_accesso`
-#'   (people); `it`, `NULL` when there is nothing for IT, otherwise a list of
-#'   `senza_referente` (rows, with `motivo`), `non_giudicabili` (people, with
-#'   `referente` and `motivo`) and `senza_data` (rows); and `senza_creatore`,
+#'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
+#'   (people) and `non_giudicati` (a count); `it`, `NULL` when there is
+#'   nothing for IT, otherwise a list of `senza_referente` (rows, with
+#'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`) and
+#'   `senza_data` (rows); and `senza_creatore`,
 #'   how many rows have no referent to go to.
 #'
 #' @keywords internal
@@ -578,6 +585,17 @@ report_assemble <- function(rows, directory, period, previous = list()) {
     referenti[[who]] <- list(
       referente = who, attivati = attivati, senza_primo_accesso = people
     )
+  }
+
+  for (who in names(referenti)) {
+    mine <- Filter(
+      function(person) identical(person[["referente"]], who), non_giudicabili
+    )
+    unjudged <- c(
+      tolower(vapply(mine, `[[`, "", "upn")),
+      tolower(username[undated & creator == who])
+    )
+    referenti[[who]][["non_giudicati"]] <- length(unique(unjudged))
   }
 
   senza_referente <- rows[orphan, , drop = FALSE]
@@ -742,11 +760,12 @@ report_activated_lines <- function(rows) {
 #' The lines of the people with no first sign-in, in both languages
 #'
 #' @param people The `senza_primo_accesso` of a referent's report.
+#' @param unjudged How many of the referent's people went to IT unjudged.
 #'
 #' @return A list of two character vectors, `it` and `en`.
 #'
 #' @keywords internal
-report_people_lines <- function(people) {
+report_people_lines <- function(people, unjudged = 0L) {
   grace <- report_grace_days()
 
   each <- lapply(people, function(person) {
@@ -801,6 +820,9 @@ report_people_lines <- function(people) {
         "entrate con l'account UBEP."
       ),
       unlist(lapply(each, `[[`, "it")),
+      if (unjudged > 0L) {
+        paste0("   Persone non giudicabili, segnalate a IT: ", unjudged, ".")
+      },
       paste0(
         "   Che cosa fare: chiedi alla persona se ha ricevuto il benvenuto e ",
         "la chiave che le hai mandato. Se la chiave e' persa, scrivi a IT: ",
@@ -817,6 +839,11 @@ report_people_lines <- function(people) {
         "signed in with the UBEP account yet."
       ),
       unlist(lapply(each, `[[`, "en")),
+      if (unjudged > 0L) {
+        paste0(
+          "   People that could not be judged, reported to IT: ", unjudged, "."
+        )
+      },
       paste0(
         "   What to do: ask the person whether they received the welcome and ",
         "the key you sent them. If the key is lost, write to IT: they reset ",
@@ -859,7 +886,10 @@ report_read_words <- function(period) {
 #'
 #' The year without access is not measured in phase 1, and the mail says so
 #' in both forms: an all-clear that covered an item nobody looked at would
-#' say something false.
+#' say something false. For the same reason the people of the referent that
+#' went to IT unjudged are counted in a line of their own, which changes
+#' neither the verdict nor the number in the subject: those say what was
+#' measured.
 #'
 #' Italian above and English below, as every mail of the channel, since the
 #' address says nothing about which one its reader reads.
@@ -876,6 +906,7 @@ report_message <- function(report, period) {
 
   people <- report[["senza_primo_accesso"]] %||% list()
   count <- length(people)
+  unjudged <- as.integer(report[["non_giudicati"]] %||% 0L)
   month <- report_month_words(period[["mese"]])
   following <- report_day_words(period[["prossimo"]])
   grace <- report_grace_days()
@@ -889,10 +920,18 @@ report_message <- function(report, period) {
         paste0(
           "Persone senza primo accesso dopo ", grace, " giorni: nessuna."
         ),
+        if (unjudged > 0L) {
+          paste0("Persone non giudicabili, segnalate a IT: ", unjudged, ".")
+        },
         "Persone senza accessi da piu' di un anno: non ancora controllato."
       ),
       en = c(
         paste0("People with no first sign-in after ", grace, " days: none."),
+        if (unjudged > 0L) {
+          paste0(
+            "People that could not be judged, reported to IT: ", unjudged, "."
+          )
+        },
         "People with no access in more than a year: not checked yet."
       )
     )
@@ -900,7 +939,7 @@ report_message <- function(report, period) {
     verdict <- c(
       it = paste(count, "da guardare"), en = paste(count, "to review")
     )
-    listed <- report_people_lines(people)
+    listed <- report_people_lines(people, unjudged)
     items <- list(
       it = c(
         listed[["it"]], "",

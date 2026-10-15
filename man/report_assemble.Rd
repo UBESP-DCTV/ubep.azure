@@ -14,14 +14,21 @@ report_assemble(rows, directory, period, previous = list())
 \item{period}{What \code{report_month()} answered.}
 
 \item{previous}{The entries of the earlier months' ledgers, as
-\code{report_ledger_previous()} reads them.}
+\code{report_ledger_previous()} reads them.
+
+A referent whose people went to IT unjudged is told how many, in the
+report itself: the principle of the all-clear, which must not cover an item
+nobody measured. \code{non_giudicati} counts them, a person once: the people of
+that referent the report could not judge, and those of the rows the log
+does not date.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
-each a list of \code{referente}, \code{attivati} (rows) and \code{senza_primo_accesso}
-(people); \code{it}, \code{NULL} when there is nothing for IT, otherwise a list of
-\code{senza_referente} (rows, with \code{motivo}), \code{non_giudicabili} (people, with
-\code{referente} and \code{motivo}) and \code{senza_data} (rows); and \code{senza_creatore},
+each a list of \code{referente}, \code{attivati} (rows), \code{senza_primo_accesso}
+(people) and \code{non_giudicati} (a count); \code{it}, \code{NULL} when there is
+nothing for IT, otherwise a list of \code{senza_referente} (rows, with
+\code{motivo}), \code{non_giudicabili} (people, with \code{referente} and \code{motivo}) and
+\code{senza_data} (rows); and \code{senza_creatore},
 how many rows have no referent to go to.
 }
 \description{

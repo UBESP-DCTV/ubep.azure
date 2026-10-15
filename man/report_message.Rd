@@ -27,7 +27,10 @@ the anomalies come first and the information after.
 \details{
 The year without access is not measured in phase 1, and the mail says so
 in both forms: an all-clear that covered an item nobody looked at would
-say something false.
+say something false. For the same reason the people of the referent that
+went to IT unjudged are counted in a line of their own, which changes
+neither the verdict nor the number in the subject: those say what was
+measured.
 
 Italian above and English below, as every mail of the channel, since the
 address says nothing about which one its reader reads.

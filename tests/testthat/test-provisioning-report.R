@@ -1560,3 +1560,56 @@ test_that("an ambiguous log is told to IT as such, not as a missing seal", {
   expect_match(it[["body"]], "piu' di un account", fixed = TRUE)
   expect_match(it[["body"]], "more than one account", fixed = TRUE)
 })
+
+
+test_that("a referent is told how many of theirs went to IT unjudged", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41",
+              username = "elena.supposta@ubep.unipd.it",
+              first_name = "Elena", last_name = "Supposta"),
+    richiesta(record_id = "42", username = "dario.ipotetico@ubep.unipd.it"),
+    richiesta(record_id = "43", username = "franco.presunto@ubep.unipd.it")
+  )
+  righe <- report_rows(
+    registro, rep(referente, 3L),
+    list("2026-08-03 23:03", "2026-08-03 23:03", character()), novembre()
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "elena.supposta@ubep.unipd.it",
+          accountEnabled = FALSE)
+  )
+
+  rapporto <- report_assemble(righe, rubrica, novembre())
+  messaggio <- report_message(rapporto[["referenti"]][[referente]], novembre())
+  testo <- parti(messaggio)
+
+  # test
+  # Elena's account is disabled and Franco's row has no date: neither was
+  # judged, and an all-clear that kept quiet about them would say too much.
+  # The verdict and the number in the subject stay what was measured.
+  expect_equal(rapporto[["referenti"]][[referente]][["non_giudicati"]], 2L)
+  expect_match(messaggio[["subject"]], "^Tutto in ordine")
+  expect_true(
+    "Persone non giudicabili, segnalate a IT: 2." %in% testo[["it"]]
+  )
+  expect_true(
+    "People that could not be judged, reported to IT: 2." %in% testo[["en"]]
+  )
+})
+
+
+test_that("a person not judged is counted in a report to review too", {
+  # eval
+  messaggio <- report_message(
+    c(rapporto_di(persone = list(persona())), list(non_giudicati = 1L)),
+    novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_match(messaggio[["subject"]], "^1 da guardare")
+  expect_true(
+    "   Persone non giudicabili, segnalate a IT: 1." %in% testo[["it"]]
+  )
+})
