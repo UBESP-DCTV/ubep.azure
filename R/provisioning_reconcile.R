@@ -1042,6 +1042,30 @@ provisioning_reconcile <- function(register_url,
   refused_creations <- Filter(function(a) !isTRUE(a[["ok"]]), creations)
   born <- Filter(function(a) isTRUE(a[["ok"]]), creations)
 
+  # Idempotent, and silent too, which is the part that cannot stay. A creation
+  # whose answer was lost may have made the account: its key was drawn in this
+  # process and dies with it, the next sweep finds the account, the row turns
+  # `created` and then `applied`, and a person holds rights on an account whose
+  # key nobody knows -- with `credenziali_perse` at zero and no alarm. So it is
+  # counted here as what it may be, a key and a welcome lost: the key's alarm
+  # is the one that sends IT to reset it and write to the person, and the
+  # welcome is part of what IT then writes.
+  #
+  # Counted in this round, and not in the next one when the account shows up,
+  # although the next one would be exact where this can be wrong: when the
+  # request never reached Graph, the alarm fires for an account that does not
+  # exist, and the next round creates it with its key. The exact count needs a
+  # memory, the row's previous detail, and the next round may not find it: a
+  # failed sweep rewrites every row's detail, and a row whose message did not
+  # leave is not written at all -- failures that come together with a lost
+  # answer more often than apart. Between an alarm IT closes by finding no
+  # account on Entra and an account with rights that nobody hears of, this is
+  # the side that tells somebody. The row carries the creation code, which is
+  # where IT finds the person.
+  unanswered <- Filter(
+    function(a) isTRUE(a[["unconfirmed"]]), refused_creations
+  )
+
   created_outcomes <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(refused_creations, function(answer) {
@@ -1102,6 +1126,18 @@ provisioning_reconcile <- function(register_url,
   )
   import <- register_import(
     register_url, register_token, posta[["recapitate"]]
+  )
+
+  # Beside what the post counted, because neither message of an unanswered
+  # creation had anything to be composed from. The code is the creation's own:
+  # it says why both are missing, where `POSTA_` would send whoever reads the
+  # record to look at the mail service.
+  for (lost in c("credenziali_perse", "benvenuti_persi")) {
+    posta[["contatori"]][[lost]] <-
+      posta[["contatori"]][[lost]] + length(unanswered)
+  }
+  posta[["errori"]] <- c(
+    posta[["errori"]], unlist(lapply(unanswered, function(a) a[["errors"]]))
   )
 
   # The seals, written last and through a door that takes nothing else.

@@ -741,3 +741,32 @@ test_that("a 201 that is not JSON is not a creation anybody can act on", {
   expect_equal(answer[["errors"]], "TRASPORTO_CREAZIONE_RISPOSTA_INATTESA")
   expect_null(answer[["credential"]])
 })
+
+
+test_that("a creation whose answer was lost says it cannot tell", {
+  # eval
+  persa <- crea(function(req) stop("Operation timed out"))
+  illeggibile <- crea(function(req) {
+    httr2::response(status_code = 504L, body = charToRaw("<html>504</html>"))
+  })
+  rifiutata <- crea(function(req) {
+    risposta(403L, '{"error":{"code":"Authorization_RequestDenied"}}')
+  })
+  rimandata <- crea(function(req) {
+    risposta(429L, '{"error":{"code":"activityLimitReached"}}')
+  })
+  riuscita <- crea(function(req) risposta(201L, "{}"))
+
+  # test
+  # No answer, or one that is not Graph's, does not say whether the account
+  # was born: the POST may have landed and the answer been lost on the way
+  # back. Graph's own refusal and its throttle do say it, and a 201 says it
+  # the other way. Only the first two leave a key that may belong to an
+  # account, and the round has to know which those are without reading the
+  # transport codes.
+  expect_true(persa[["unconfirmed"]])
+  expect_true(illeggibile[["unconfirmed"]])
+  expect_false(rifiutata[["unconfirmed"]])
+  expect_false(rimandata[["unconfirmed"]])
+  expect_false(riuscita[["unconfirmed"]])
+})

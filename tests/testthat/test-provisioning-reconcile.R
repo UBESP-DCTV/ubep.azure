@@ -1458,6 +1458,57 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
 })
 
 
+test_that("a creation whose answer was lost counts as a lost key and welcome", {
+  # eval
+  persa <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) stop("Operation timed out"),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  record <- round_record(persa, scrittura = TRUE, posta = TRUE)
+  rifiutata <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_vuota(),
+    function(req) {
+      httr2::response(
+        status_code = 403L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw('{"error":{"code":"Authorization_RequestDenied"}}')
+      )
+    },
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # The POST went out and nothing came back. If Graph made the account, its
+  # key was drawn in this process and dies with it: next round the sweep finds
+  # the account, the row becomes `created` and then `applied`, and a person
+  # holds rights on an account whose key nobody knows, with no alarm. So the
+  # round counts it now as a key and a welcome lost -- the alarm on the lost
+  # key is the one that sends IT to reset it -- and names the creation code
+  # among its errors and on the row, which is where IT finds the person.
+  expect_length(creazioni(), 1L)
+  expect_equal(persa[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    persa[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE"
+  )
+  expect_identical(record[["credenziali_perse"]], 1L)
+  expect_identical(record[["benvenuti_persi"]], 1L)
+  expect_identical(record[["credenziali_recapitate"]], 0L)
+  expect_true("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE" %in% record[["errori"]])
+  expect_equal(nrow(persa[["credenziali"]]), 0L)
+  # Graph's own refusal says nobody was born, and there is no key to lose.
+  expect_identical(rifiutata[["posta"]][["credenziali_perse"]], 0L)
+  expect_identical(rifiutata[["posta"]][["benvenuti_persi"]], 0L)
+})
+
+
 test_that("a person is not created for a request whose last day has passed", {
   # eval
   oggetti <- character()
