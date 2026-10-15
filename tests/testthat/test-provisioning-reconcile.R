@@ -2464,7 +2464,7 @@ test_that("l'approvazione di chi l'ha creata sblocca una richiesta non ancora es
 })
 
 
-test_that("un log illeggibile tiene anche una richiesta non ancora eseguita", {
+test_that("un log illeggibile non lascia eseguire una richiesta non ancora eseguita", { # nolint: line_length_linter.
   # eval
   esito <- giro(
     registro_doppio(
@@ -2477,15 +2477,20 @@ test_that("un log illeggibile tiene anche una richiesta non ancora eseguita", {
 
   # test
   # Whether somebody else changed the request is the log's to say, and the
-  # log did not answer: the row waits, and the reason reaches the round's
+  # log did not answer: the row waits, under a code that says the failure is
+  # ours and not a change to approve, and the reason reaches the round's
   # record, where IT reads it.
-  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
   expect_length(scritture(), 0L)
   expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
 })
 
 
-test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
+test_that("un registro degli eventi illeggibile non lascia valere l'approvazione", { # nolint: line_length_linter.
   # eval
   approvato <- request_seal(riga_come_registro(record_id = "1"))
   esito <- giro(
@@ -2506,7 +2511,7 @@ test_that("un registro degli eventi illeggibile lascia la riga trattenuta", {
   # other than whoever made the change, and that is the whole condition. "I
   # could not ask who did this" is not "somebody else approved it" -- between
   # the two ways of being wrong, this is the one that does not grant.
-  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
   expect_length(scritture(), 0L)
 })
 
@@ -2636,7 +2641,7 @@ test_that("il sigillo della riga trattenuta e' quello che la riga avra' dopo il 
 })
 
 
-test_that("senza il creatore la riga trattenuta si annuncia a requested_by", {
+test_that("senza il creatore la riga cambiata non chiede un'approvazione", {
   # eval
   posta <- posta_raccolta()
   esito <- giro(
@@ -2651,10 +2656,38 @@ test_that("senza il creatore la riga trattenuta si annuncia a requested_by", {
 
   # test
   # The creator could not be read this round, and nobody can approve until it
-  # is; the referent the row names still hears that the row is held.
-  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
-  destinatari <- vapply(posta[["mandate"]](), `[[`, "", "to")
-  expect_equal(destinatari, anna)
+  # is. A held message would ask the reader for a seal that approves nothing
+  # and claim to reach the creator when it does not: the row takes the code
+  # the gate gives a row with no author, and the message says it is ours.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), anna)
+  expect_no_match(mandate[[1L]][["body"]], "approved_seal", fixed = TRUE)
+})
+
+
+test_that("la mail di un log illeggibile non chiede di incollare un sigillo", {
+  # eval
+  posta <- posta_raccolta()
+  giro(
+    registro_doppio(
+      record_json(list(record_id = "1", applied_seal = "000000000000")),
+      eventi = '{"error":"You do not have Logging rights"}'
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, "TRASPORTO_AUTORE_NON_LEGGIBILE", fixed = TRUE)
+  expect_no_match(corpo, "approved_seal", fixed = TRUE)
+  expect_no_match(corpo, "Modificata da", fixed = TRUE)
 })
 
 
@@ -2670,11 +2703,10 @@ test_that("un log illeggibile arriva fino al record del giro", {
   )
 
   # test
-  # The row is held, and a held row says nothing about why: to the referent
-  # it is the same row as one nobody has approved yet. What failed is ours --
-  # the round could not read the log -- and it has to reach whoever reads the
-  # round's record, under a `TRASPORTO_` code, or the row waits in silence.
-  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  # The row says what failed only in general, `TRASPORTO_AUTORE_NON_LEGGIBILE`.
+  # Why the log could not be read is the register's answer, and it has to
+  # reach whoever reads the round's record, or the row waits in silence.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
   expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
   expect_true(
     "TRASPORTO_REGISTRO_RIFIUTATO" %in%

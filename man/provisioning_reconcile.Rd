@@ -115,6 +115,10 @@ distinction step 6 already makes between a permission that does not grant
 and one that could not be read. "I could not establish who filed this" is
 our failure and not the referent's, and the code that carries it is a
 \code{TRASPORTO_} one so the row comes back next round and the mail comes to us.
+The same holds for a changed row whose own log could not be read, or whose
+creator the log does not name: it takes \code{TRASPORTO_AUTORE_NON_LEGGIBILE}
+and not \code{held}, because a held message asks for an approval that nobody
+could give, from a creator nobody could name.
 
 \strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
 the design — and the reason is latency: resolving and acting have the same

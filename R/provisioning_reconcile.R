@@ -50,6 +50,10 @@
 #' and one that could not be read. "I could not establish who filed this" is
 #' our failure and not the referent's, and the code that carries it is a
 #' `TRASPORTO_` one so the row comes back next round and the mail comes to us.
+#' The same holds for a changed row whose own log could not be read, or whose
+#' creator the log does not name: it takes `TRASPORTO_AUTORE_NON_LEGGIBILE`
+#' and not `held`, because a held message asks for an approval that nobody
+#' could give, from a creator nobody could name.
 #'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
@@ -444,10 +448,18 @@ provisioning_reconcile <- function(register_url,
   awaits[checked] <- seal_needs_approval(
     register[checked, , drop = FALSE], events, creators[checked]
   )
-  awaits <- awaits | unread
   cleared <- awaits & seal_approved(register, events, creators, approvers)
-  held <- awaits & !cleared
-  standing <- (admitted | awaiting) & !held
+
+  # A changed row whose log could not be read, or whose creator the log does
+  # not name, is neither approved nor held: there is no change anybody could
+  # approve, nor a creator to ask. It stops on the code the gate gives a row
+  # with no author, so it comes back next round and the message says the
+  # failure is ours, instead of asking the referent for a seal that approves
+  # nothing.
+  blind <- (checked & unread) | (tampered & !nzchar(creators))
+
+  held <- awaits & !cleared & !blind
+  standing <- (admitted | awaiting) & !held & !blind
 
   # The register as this round will have left it, and not as it read it. The
   # round resolves `username` and writes it back in this same pass, so sealing
@@ -488,6 +500,13 @@ provisioning_reconcile <- function(register_url,
           record_ids[[i]], "held",
           detail = paste0("SIGILLO_DIVERSO:", seal_after[[i]]),
           at = at
+        ))
+      }
+      if (blind[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]],
+          round_outcome_kind("TRASPORTO_AUTORE_NON_LEGGIBILE", dry_run),
+          detail = "TRASPORTO_AUTORE_NON_LEGGIBILE", at = at
         ))
       }
 
