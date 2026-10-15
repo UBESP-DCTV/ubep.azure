@@ -130,10 +130,10 @@
   usernames whose approval counts on any row, under the same three
   conditions as the creator's; the runner reads them from
   `UBEP_APPROVATORI_IT`, comma separated, on the machine and never from this
-  repository. Without the variable only the creator approves. IT's approval
-  also covers, below the execution it led to, the change it approved, as the
-  creator's does; and the list is compared without regard to case, so a
-  capital letter typed on the machine does not void it. The scope gate still
+  repository. Without the variable only the creator approves. An approval
+  by IT also covers, below the execution it led to, the change it approved,
+  as the creator's does; and the list is compared without regard to case, so
+  a capital letter typed on the machine does not void it. The scope gate still
   asks the creator's rights, so no approval carries the row of a creator who
   no longer manages the project.
 

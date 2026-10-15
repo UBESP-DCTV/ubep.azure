@@ -509,7 +509,7 @@ log_value <- function(events, field) {
 #' The creator, or one of the IT accounts. The creator is compared as REDCap
 #' logs it, which is the same source on both sides. The IT list is typed by
 #' hand on the machine, so it is compared without regard to case: a capital
-#' letter must not void IT's approvals in silence. A blank name approves
+#' letter must not void an approval by IT in silence. A blank name approves
 #' nothing, whatever the list holds.
 #'
 #' @param authors Usernames, as the log carries them.
