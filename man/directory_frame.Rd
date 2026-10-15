@@ -15,7 +15,7 @@ A data frame with one row per account and the columns
 }
 \description{
 Every column keeps the type the wire gives it, which is not the same as
-guessing one. Eight of the nine fields arrive as strings and stay character,
+guessing one. Ten of the twelve fields arrive as strings and stay character,
 with a field the record does not carry becoming \code{""} rather than \code{NA} — the
 absence is what it means, and 1.170 accounts of the tenant have no
 \code{officeLocation}. \code{accountEnabled} is a JSON boolean and stays logical:

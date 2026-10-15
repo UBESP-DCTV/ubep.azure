@@ -30,5 +30,14 @@ on a field the sweep never asked for. They were missing from the plan's
 select, which was written before that confirmation was traced through; the
 historical flow populates both, through \code{-GivenName} and \code{-Surname} in
 \code{ps1_creators.R}.
+
+\code{lastPasswordChangeDateTime} is here for the monthly report and not for the
+resolution, which never reads it. Graph sets it when the key is created and
+moves it when the key changes, and an account the round creates must change
+its key at first sign-in: beside \code{createdDateTime} it says whether anybody
+has signed in yet. It asks for no permission \code{User.Read.All} does not
+already give, and like \code{createdDateTime} and \code{accountEnabled} Graph returns
+it only when \verb{$select} names it. One list for both readers rather than a
+second sweep, because the sweep is the same eight pages either way.
 }
 \keyword{internal}

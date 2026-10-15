@@ -14,6 +14,7 @@ graph_user <- function(...) {
       officeLocation = "mario.rossi@example.org",
       jobTitle = NULL,
       createdDateTime = "2026-01-01T00:00:00Z",
+      lastPasswordChangeDateTime = "2026-01-01T00:00:00Z",
       accountEnabled = TRUE,
       userType = "Member"
     ),
@@ -60,7 +61,7 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
   expect_equal(answer[["errors"]], character())
   expect_equal(nrow(answer[["users"]]), 2L)
 
-  # The eleven fields are the sweep's contract with the resolution that
+  # The twelve fields are the sweep's contract with the resolution that
   # consumes it: `User.ReadBasic.All` would have been the smaller permission
   # and does not carry four of them, so the select list is also the reason the
   # wider one is asked for. A column dropped here reads downstream as a person
@@ -70,12 +71,17 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
   # whose name diverges from the declared one, and it cannot refuse on a field
   # the sweep never asked for. The historical flow populates both, through
   # `-GivenName` and `-Surname` in `ps1_creators.R`.
+  #
+  # `lastPasswordChangeDateTime` is the monthly report's and not the
+  # resolution's: beside `createdDateTime` it tells an account nobody has
+  # signed in to yet, and like every field here Graph leaves it out unless
+  # `$select` names it.
   expect_equal(
     names(answer[["users"]]),
     c(
       "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
-      "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
-      "userType"
+      "officeLocation", "jobTitle", "createdDateTime",
+      "lastPasswordChangeDateTime", "accountEnabled", "userType"
     )
   )
   expect_equal(
@@ -118,9 +124,33 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
     paste0(
       "https://graph.example.org/v1.0/users?$select=id,userPrincipalName,",
       "givenName,surname,mail,otherMails,officeLocation,jobTitle,",
-      "createdDateTime,accountEnabled,userType&$top=999"
+      "createdDateTime,lastPasswordChangeDateTime,accountEnabled,userType",
+      "&$top=999"
     ),
     fixed = TRUE
+  )
+})
+
+
+test_that("the date of the last key travels as Graph wrote it, or as empty", {
+  # eval
+  frame <- directory_frame(list(
+    graph_user(lastPasswordChangeDateTime = "2026-10-08T09:12:33Z"),
+    graph_user(
+      id = "00000000-0000-0000-0000-000000000002",
+      userPrincipalName = "anna.bianchi@ubep.unipd.it",
+      lastPasswordChangeDateTime = NULL
+    )
+  ))
+
+  # test
+  # A string and not a parsed time: the frame keeps the type the wire gives,
+  # and the one reader that compares it with `createdDateTime` parses both
+  # the same way. An account that does not carry it is `""`, which that reader
+  # treats as a date it cannot judge rather than as a key never changed.
+  expect_type(frame[["lastPasswordChangeDateTime"]], "character")
+  expect_equal(
+    frame[["lastPasswordChangeDateTime"]], c("2026-10-08T09:12:33Z", "")
   )
 })
 
@@ -311,8 +341,8 @@ test_that("an empty directory is an answer and not a failure", {
     names(answer[["users"]]),
     c(
       "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
-      "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
-      "userType"
+      "officeLocation", "jobTitle", "createdDateTime",
+      "lastPasswordChangeDateTime", "accountEnabled", "userType"
     )
   )
 })

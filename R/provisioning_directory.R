@@ -19,6 +19,15 @@
 #' historical flow populates both, through `-GivenName` and `-Surname` in
 #' `ps1_creators.R`.
 #'
+#' `lastPasswordChangeDateTime` is here for the monthly report and not for the
+#' resolution, which never reads it. Graph sets it when the key is created and
+#' moves it when the key changes, and an account the round creates must change
+#' its key at first sign-in: beside `createdDateTime` it says whether anybody
+#' has signed in yet. It asks for no permission `User.Read.All` does not
+#' already give, and like `createdDateTime` and `accountEnabled` Graph returns
+#' it only when `$select` names it. One list for both readers rather than a
+#' second sweep, because the sweep is the same eight pages either way.
+#'
 #' @return A character vector of Graph field names, in the order the frame's
 #'   columns take.
 #'
@@ -26,8 +35,8 @@
 directory_fields <- function() {
   c(
     "id", "userPrincipalName", "givenName", "surname", "mail", "otherMails",
-    "officeLocation", "jobTitle", "createdDateTime", "accountEnabled",
-    "userType"
+    "officeLocation", "jobTitle", "createdDateTime",
+    "lastPasswordChangeDateTime", "accountEnabled", "userType"
   )
 }
 
@@ -89,7 +98,7 @@ directory_credential <- function(length = 24L) {
 #' Turn parsed Graph user records into a frame of one row per account
 #'
 #' Every column keeps the type the wire gives it, which is not the same as
-#' guessing one. Eight of the nine fields arrive as strings and stay character,
+#' guessing one. Ten of the twelve fields arrive as strings and stay character,
 #' with a field the record does not carry becoming `""` rather than `NA` — the
 #' absence is what it means, and 1.170 accounts of the tenant have no
 #' `officeLocation`. `accountEnabled` is a JSON boolean and stays logical:
