@@ -1098,8 +1098,16 @@ mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
   niente;
 - le persone il cui account non si sa giudicare: disabilitato, assente, senza
   data di creazione;
-- le righe applicate di cui il log non porta la scrittura del sigillo da parte
-  del canale, quindi senza data di attivazione.
+- le righe applicate di cui il log non dice da quando: perché non porta la
+  scrittura del sigillo da parte del canale, oppure perché i campi del canale
+  li scrivono due account e non si sa quale abbia eseguito la riga. La mail
+  distingue i due casi, che mandano a cercare cose diverse.
+
+Il referente a cui appartengono persone mandate a IT senza giudizio lo legge
+nella sua mail, in una riga di conteggio («Persone non giudicabili, segnalate
+a IT: N»). Non cambia il verdetto né il numero nell'oggetto, che dicono ciò che
+si è misurato; ma un «tutto in ordine» che tacesse quelle persone coprirebbe
+una voce non misurata.
 
 ### La data di attivazione
 
@@ -1142,9 +1150,20 @@ Che cosa non vede, ed è dichiarato:
 - un **account che esisteva da prima** ha le date diverse da anni: il segnale
   dice «è entrata con l'account UBEP», non «è entrata su REDCap».
 
+**I 30 giorni partono dalla persona, non dalla riga.** Contano dal più tardo
+fra il primo sigillo del canale dopo l'ultima scrittura di `username` nella
+vita attuale della riga (`report_person_since()`) e la nascita dell'account su
+Entra, in ora italiana. Uno `username` corretto con una modifica, o un account
+ricreato, altrimenti erediterebbero i mesi di un'altra persona. La voce A resta
+datata dalla riga: la richiesta è quella attivata allora.
+
 La voce dice da quanti mesi di trenta giorni la persona risulta senza primo
 accesso, e in quali rapporti precedenti dello stesso referente è già comparsa:
-si rilegge dal registro degli invii dei mesi prima.
+si rilegge dal registro degli invii dei mesi prima. Se il file di uno di quei
+mesi non si legge, per le persone che poteva contenere la mail non dice né
+«prima segnalazione» né «segnalata anche», e il record porta
+`RAPPORTO_STORICO_ILLEGGIBILE`: quei file servono a quella frase e a niente
+altro, quindi non fermano l'invio.
 
 ### Ogni giorno, non una volta al mese
 
@@ -1160,13 +1179,26 @@ persone nominava senza primo accesso. Non è una copia dello stato che il canale
 rilegge: nel file non c'è niente del registro né di Entra, solo la traccia di
 un evento che altrimenti non ne lascia. Si scrive **dopo** l'invio riuscito,
 come il giro scrive nel registro dopo aver mandato: il prezzo accettato è un
-doppione, mai una perdita. Un file che non si legge non vale per vuoto: il
-rapporto non manda niente e lo dice con `RAPPORTO_INVII_ILLEGGIBILI`.
+doppione, mai una perdita. Un file del mese coperto che non si legge non vale
+per vuoto: il rapporto non manda niente e lo dice con
+`RAPPORTO_INVII_ILLEGGIBILI`.
 
 **Un giorno in cui qualcosa non si è letto non manda niente**: registro,
-creazioni, anagrafica, il log di una riga attiva, i registri degli invii. Un
-rapporto composto su mezza lettura sarebbe sbagliato per qualcuno, e il giorno
-dopo si riprova.
+creazioni, anagrafica, il log di una riga attiva, il registro degli invii del
+mese coperto. Un rapporto composto su mezza lettura sarebbe sbagliato per
+qualcuno, e il giorno dopo si riprova. Quel giorno non sa nemmeno chi è
+dovuto, quindi **giudica il mese sui dovuti dell'ultima lettura completa**, che
+ogni lettura completa tiene accanto al registro degli invii
+(`AAAA-MM.dovuti.json`, i soli nomi che il registro degli invii già porta).
+Così una lettura mancata il 15 non fa sembrare in ritardo un mese consegnato
+il primo; senza nessuna lettura completa del mese, il mese non si dice in
+ritardo, e a parlare è l'allarme sull'assenza.
+
+**Il mese prima non si recupera, ma non si perde in silenzio.** Il primo del
+mese il rapporto passa al mese appena finito, e un rapporto di quello prima
+ancora non partito non parte più: descriverebbe un mese di due indietro. Ogni
+esecuzione confronta il registro degli invii del mese prima con i suoi dovuti,
+e finché ne manca uno il record porta `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
 
 ### Le variabili, e il mese forzato
 
@@ -1189,9 +1221,13 @@ può restare acceso per sbaglio nel file d'ambiente che le tre lavorazioni
 condividono. Serve all'esecuzione a mano del collaudo, per mostrare un mese che
 di norma non è ancora finito. Tre regole lo accompagnano:
 
-- **un'esecuzione col mese forzato, dirottata o con la posta spenta non scrive
-  nel registro degli invii**: scritto, un collaudo a fine ottobre farebbe
-  risultare mandato ottobre, e il primo novembre non partirebbe niente;
+- **né un'esecuzione col mese forzato né una dirottata scrivono nel registro
+  degli invii vero**: scritto, un collaudo a fine ottobre farebbe risultare
+  mandato ottobre, e il primo novembre non partirebbe niente. Un'esecuzione
+  dirottata sul mese dell'orologio tiene un registro suo,
+  `AAAA-MM.collaudo.json`, così anche il timer di un collaudo manda una volta
+  e non ogni giorno; una col mese forzato non scrive niente; con la posta
+  spenta non c'è niente da scrivere;
 - con la posta accesa, il mese forzato **vuole il dirottamento**: senza, i
   rapporti di un mese non finito andrebbero ai referenti veri, e la
   lavorazione si ferma prima di leggere qualunque cosa;
@@ -1208,14 +1244,16 @@ leggere un allarme:
 
 - `referenti` conta i rapporti del mese, quello a IT compreso: quelli dovuti
   oggi e quelli che il registro degli invii dice partiti nei giorni prima;
-- `mese_completo` è vero quando `gia_mandati + mandati` fa `referenti`, ed è
-  falso ogni volta che il rapporto non ha potuto leggere tutto ciò che serve
-  per sapere chi è dovuto: un mese che nessuno ha potuto contare non è
-  completo;
+- `mese_completo` è vero quando `gia_mandati + mandati` fa `referenti`, sui
+  dovuti della lettura di oggi o, in un giorno che non legge, dell'ultima
+  lettura completa;
 - `in_ritardo` si calcola nel pacchetto e non nella query, così lo copre un
   test: dal giorno 2 del mese, con il mese non completo.
 
-`istanze_non_lette` e `voci_senza_accessi` sono zero in fase 1.
+`istanze_non_lette` e `voci_senza_accessi` sono zero in fase 1. I codici in
+`errori` propri del rapporto cominciano per `RAPPORTO_`: il registro degli
+invii o i dovuti non letti o non scritti, un registro di un mese vecchio
+illeggibile, il mese prima rimasto incompleto.
 
 Tre regole, con la forma di quelle del canale e i nomi nel foglio dei
 parametri:
@@ -1231,7 +1269,9 @@ parametri:
   rapporto non è partito. Prima cosa, `posta`: con la posta spenta è
   l'atteso. Poi `falliti` ed `errori`, e sullo standard error della
   lavorazione la tabella dei rapporti, uno per riga con destinatario, forma ed
-  esito. Si richiude da sé quando l'ultimo è partito.
+  esito. Si richiude da sé quando l'ultimo è partito, e anche il primo del
+  mese dopo, quando il rapporto passa al mese nuovo: da lì il mese rimasto
+  indietro lo dice `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`.
 
 ### La forma del rilascio
 
