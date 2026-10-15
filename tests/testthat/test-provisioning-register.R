@@ -907,6 +907,95 @@ test_that("una richiesta mai eseguita aspetta solo se qualcun altro l'ha cambiat
 })
 
 
+test_that("una revoca di chi gestisce il progetto non chiede approvazione", {
+  # eval, test
+  # Decided on 2026-10-15: taking an access away grants nothing, and whoever
+  # holds User Rights on the project could have done it by hand.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  expect_false(change_needs_approval(
+    bruno, creatrice, revocation = TRUE, managers = bruno
+  ))
+  expect_false(change_needs_approval(
+    c(creatrice, bruno), creatrice, revocation = TRUE, managers = bruno
+  ))
+  # Every hand other than the creator's has to manage the project.
+  expect_true(change_needs_approval(
+    c(bruno, "cinzia.rossi@ubep.unipd.it"), creatrice,
+    revocation = TRUE, managers = bruno
+  ))
+  # Managing the project frees a revocation, and nothing else.
+  expect_true(change_needs_approval(bruno, creatrice, managers = bruno))
+  expect_true(change_needs_approval(bruno, creatrice, revocation = TRUE))
+  # What the log cannot say stays unknown, revocation or not.
+  expect_true(change_needs_approval(
+    NA_character_, creatrice, revocation = TRUE, managers = bruno
+  ))
+  expect_true(change_needs_approval(
+    bruno, "", revocation = TRUE, managers = bruno
+  ))
+})
+
+
+test_that("la revoca e' solo quella che chi non ha creato la riga ha scritto", {
+  # eval
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  solo_stato <- eventi_finti(
+    list(username = bruno, details = "request_status = 'revoked'"),
+    applicata
+  )
+  anche_ruolo <- eventi_finti(
+    list(
+      username = bruno,
+      details = "request_status = 'revoked', role_name = 'read only'"
+    ),
+    applicata
+  )
+  riattivata <- eventi_finti(
+    list(username = bruno, details = "request_status = 'active'"),
+    applicata
+  )
+  # The creator's own edits are the creator's to make, and do not count here.
+  con_creatrice <- eventi_finti(
+    list(username = bruno, details = "request_status = 'revoked'"),
+    list(username = creatrice, details = "role_name = 'read only'"),
+    applicata
+  )
+  # Below the newest execution, and covered by the creator's approval of what
+  # it carried out: not part of this change.
+  prima <- eventi_finti(
+    list(username = bruno, details = "request_status = 'revoked'"),
+    applicata,
+    list(username = creatrice, details = "approved_seal = '000000000000'"),
+    list(username = bruno, details = "role_name = 'read only'")
+  )
+  # The same change with no approval above it was never carried out: an edit
+  # made while a round ran, which waits for the creator as before.
+  scoperta <- eventi_finti(
+    list(username = bruno, details = "request_status = 'revoked'"),
+    applicata,
+    list(username = bruno, details = "role_name = 'read only'")
+  )
+
+  # test
+  expect_true(log_revocation_only(solo_stato, "1", creatrice))
+  expect_false(log_revocation_only(anche_ruolo, "1", creatrice))
+  expect_false(log_revocation_only(riattivata, "1", creatrice))
+  expect_true(log_revocation_only(con_creatrice, "1", creatrice))
+  expect_true(log_revocation_only(prima, "1", creatrice))
+  expect_false(log_revocation_only(scoperta, "1", creatrice))
+  # Nobody but the creator wrote anything: there is no revocation by somebody
+  # else to free.
+  expect_false(log_revocation_only(
+    eventi_finti(
+      list(username = creatrice, details = "request_status = 'revoked'"),
+      applicata
+    ),
+    "1", creatrice
+  ))
+  expect_false(log_revocation_only(solo_stato, "1", ""))
+})
+
+
 test_that("l'approvazione di IT vale come quella di chi ha creato la riga", {
   # eval
   it <- "it.redcap@ubep.unipd.it"

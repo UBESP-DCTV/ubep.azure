@@ -4,7 +4,13 @@
 \alias{change_needs_approval}
 \title{Whether a change to a request waits for an approval}
 \usage{
-change_needs_approval(authors, creator, sealed = TRUE)
+change_needs_approval(
+  authors,
+  creator,
+  sealed = TRUE,
+  revocation = FALSE,
+  managers = character()
+)
 }
 \arguments{
 \item{authors}{Who has a hand in the version the round would carry out,
@@ -14,6 +20,12 @@ as \code{log_pending_authors()} answers.}
 
 \item{sealed}{Whether the row carries the seal of an execution, whose
 mismatch is what says it changed.}
+
+\item{revocation}{Whether the change is a revocation and nothing else: the
+row asks for \code{revoked} and \code{log_revocation_only()} holds.}
+
+\item{managers}{Who holds User Rights with Full Access on the project the
+row names, as the instance reported it this round.}
 }
 \value{
 \code{TRUE} when the change has to wait for the creator's approval.
@@ -41,10 +53,20 @@ the seal has already moved, so the row did change and nobody is on record
 for it: it waits. On a row never applied there is no such evidence, and a
 log that names nobody says nobody changed it.
 
-A revocation, \code{request_status} moving to \code{revoked}, follows the same rule
-for now. Whether a referent who manages the project may withdraw somebody
-else's request without its creator is still open; if it is allowed, this
-is where it goes, and it will need the change's fields and the editor's
-rights on the project, which this function does not receive today.
+\strong{A revocation is the one exception}, decided on 2026-10-15: somebody
+else's withdrawal of the request does not wait when everybody other than
+the creator who has a hand in it holds User Rights with Full Access on the
+project. Taking an access away grants nothing, and whoever manages the
+users of a project could have removed that person by hand -- the rule the
+scope gate enforces, "nobody does through the channel what they could not
+do by hand", holds as it is. What counts as a revocation is narrow on
+purpose, \code{log_revocation_only()}: the row now asks for \code{revoked}, and what
+the others wrote is that and nothing else. A withdrawal that also moves the
+role, the person or the project is a change like any other.
+
+The rights come from the instance, and the round has them only once it has
+asked it. So the round asks this question twice for a revocation: before
+talking to the instance, with no managers, which holds it provisionally;
+and at the gate, with the managers the instance reported, which decides.
 }
 \keyword{internal}

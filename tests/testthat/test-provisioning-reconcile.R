@@ -2122,22 +2122,171 @@ test_that("chi ha creato la riga e la cambia dopo un altro non fa sua la modific
 })
 
 
-test_that("la revoca della richiesta di un altro segue la stessa regola", {
-  # eval
-  revocata <- riga_cambiata(
-    role_name = "data entry", request_status = "revoked"
+# The revokes the round sent for real, and the usernames the state read asked
+# about: the scope gate can judge only the rights the instance was asked for.
+revoche <- function() {
+  Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, scritture())
+}
+
+
+chiesti_allo_stato <- function() {
+  unique(unlist(lapply(interrogazioni(), function(req) {
+    data <- req[["body"]][["data"]]
+    if (!identical(data[["operation"]], "state")) {
+      return(character())
+    }
+    vapply(data[["requests"]] %||% list(), function(p) {
+      as.character(p[["username"]])
+    }, character(1))
+  })))
+}
+
+
+# A row Anna filed, applied, and now revoked; the instance holds the person.
+revocata <- function(...) {
+  riga_cambiata(role_name = "data entry", request_status = "revoked", ...)
+}
+
+
+con_mario <- function(...) {
+  c(
+    list(...),
+    list(list(
+      username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+      user_rights = 0L
+    ))
   )
+}
+
+
+test_that("chi gestisce il progetto revoca la richiesta di un altro senza approvazione", { # nolint: line_length_linter.
+  # eval
   esito <- giro_cambiata(
     list(cambio(bruno, "request_status = 'revoked'")),
-    riga = revocata
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    ))
   )
 
   # test
-  # For now. Whether a referent who manages the project may withdraw somebody
-  # else's request without its creator is still to be decided, and the
-  # decision has one place to go: `change_needs_approval()`.
+  # Decided on 2026-10-15: taking an access away grants nothing, and Bruno
+  # could have removed Mario from the project by hand. The double keeps the
+  # row it was asked to remove, so the read-back does not confirm the revoke;
+  # what this pins is that it was sent, and that Bruno's rights were asked.
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_length(revoche(), 1L)
+  expect_true(bruno %in% chiesti_allo_stato())
+})
+
+
+test_that("chi non gestisce il progetto non revoca la richiesta di un altro", {
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 0L)
+    ))
+  )
+
+  # test
+  # Without User Rights on the project the exception does not apply, and the
+  # revocation is a change like any other: it waits for Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", sigillo_cambiata(
+      role_name = "data entry", request_status = "revoked"
+    ))
+  )
+  expect_length(scritture(), 0L)
+  # Held at the gate, the row keeps its seal and its state says it moved.
+  expect_equal(as.character(sigilli_scritti()[["seal_state"]]), "modified")
+})
+
+
+test_that("una revoca che cambia anche il ruolo aspetta chi ha creato la riga", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(
+      bruno, "request_status = 'revoked', role_name = 'data entry'"
+    )),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    ))
+  )
+
+  # test
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
   expect_length(scritture(), 0L)
+})
+
+
+test_that("la revoca libera non chiede i diritti di chi ha creato la riga", {
+  # eval
+  # Anna no longer manages the project; Bruno does, and revokes.
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(user_rights = 0L), list(username = bruno, user_rights = 1L)
+    ))
+  )
+
+  # test
+  # The revocation stands on Bruno's authority, which is the one the gate
+  # asks: Anna had no hand in it.
+  expect_false(
+    as.character(esito[["esiti"]][["outcome_detail"]]) ==
+      "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 1L)
+})
+
+
+test_that("diritti illeggibili di chi revoca tengono la riga in coda", {
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = NULL)
+    ))
+  )
+
+  # test
+  # A permission nobody could read is ours to fix, as on the ordinary gate.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_PERMESSO_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("chi gestisce il progetto revoca una richiesta di un altro non ancora eseguita", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", request_status = "revoked"
+      )),
+      storia = list(cambio(bruno, "request_status = 'revoked'"))
+    ),
+    do.call(istanza_doppia, con_mario(
+      list(), list(username = bruno, user_rights = 1L)
+    )),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_false(as.character(esito[["esiti"]][["outcome"]]) == "held")
+  expect_length(revoche(), 1L)
 })
 
 

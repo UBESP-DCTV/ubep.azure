@@ -638,25 +638,43 @@ log_pending_authors <- function(events, record, creator,
 #' for it: it waits. On a row never applied there is no such evidence, and a
 #' log that names nobody says nobody changed it.
 #'
-#' A revocation, `request_status` moving to `revoked`, follows the same rule
-#' for now. Whether a referent who manages the project may withdraw somebody
-#' else's request without its creator is still open; if it is allowed, this
-#' is where it goes, and it will need the change's fields and the editor's
-#' rights on the project, which this function does not receive today.
+#' **A revocation is the one exception**, decided on 2026-10-15: somebody
+#' else's withdrawal of the request does not wait when everybody other than
+#' the creator who has a hand in it holds User Rights with Full Access on the
+#' project. Taking an access away grants nothing, and whoever manages the
+#' users of a project could have removed that person by hand -- the rule the
+#' scope gate enforces, "nobody does through the channel what they could not
+#' do by hand", holds as it is. What counts as a revocation is narrow on
+#' purpose, `log_revocation_only()`: the row now asks for `revoked`, and what
+#' the others wrote is that and nothing else. A withdrawal that also moves the
+#' role, the person or the project is a change like any other.
+#'
+#' The rights come from the instance, and the round has them only once it has
+#' asked it. So the round asks this question twice for a revocation: before
+#' talking to the instance, with no managers, which holds it provisionally;
+#' and at the gate, with the managers the instance reported, which decides.
 #'
 #' @param authors Who has a hand in the version the round would carry out,
 #'   as `log_pending_authors()` answers.
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param sealed Whether the row carries the seal of an execution, whose
 #'   mismatch is what says it changed.
+#' @param revocation Whether the change is a revocation and nothing else: the
+#'   row asks for `revoked` and `log_revocation_only()` holds.
+#' @param managers Who holds User Rights with Full Access on the project the
+#'   row names, as the instance reported it this round.
 #'
 #' @return `TRUE` when the change has to wait for the creator's approval.
 #'
 #' @keywords internal
-change_needs_approval <- function(authors, creator, sealed = TRUE) {
+change_needs_approval <- function(authors, creator, sealed = TRUE,
+                                  revocation = FALSE,
+                                  managers = character()) {
   stopifnot(
     is.character(authors), is.character(creator), length(creator) == 1L,
-    is.logical(sealed), length(sealed) == 1L, !is.na(sealed)
+    is.logical(sealed), length(sealed) == 1L, !is.na(sealed),
+    is.logical(revocation), length(revocation) == 1L, !is.na(revocation),
+    is.character(managers)
   )
 
   creator <- trimws(creator)
@@ -669,7 +687,73 @@ change_needs_approval <- function(authors, creator, sealed = TRUE) {
   if (length(authors) == 0L) {
     return(sealed)
   }
-  any(authors != creator)
+  others <- setdiff(trimws(authors), creator)
+  if (length(others) == 0L) {
+    return(FALSE)
+  }
+  !(revocation && all(others %in% trimws(managers)))
+}
+
+
+#' Whether what somebody other than the creator wrote is a revocation alone
+#'
+#' The half of the revocation exception that the log answers, for
+#' `change_needs_approval()`. Since the round's last execution, every write to
+#' an intent field by an account that is neither the creator nor the channel
+#' wrote `request_status = 'revoked'` and no other intent field; and there is
+#' at least one such write, or there is no withdrawal by somebody else to
+#' free.
+#'
+#' A change below the newest execution that the execution did not cover,
+#' `log_uncovered_authors()`, makes the answer `FALSE`. That stretch is the
+#' rare case of an edit made while a round ran, and reading it for its fields
+#' as well would buy nothing but code: the row waits for the creator, as it
+#' would have before the exception existed.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#'
+#' @return `TRUE` when the others wrote a revocation and nothing else.
+#'
+#' @keywords internal
+log_revocation_only <- function(events, record, creator,
+                                fields = register_intent_fields()) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.character(fields)
+  )
+
+  creator <- trimws(creator)
+  if (is.na(creator) || !nzchar(creator)) {
+    return(FALSE)
+  }
+  uncovered <- log_uncovered_authors(events, record, creator, fields)
+  if (anyNA(uncovered) || length(uncovered) > 0L) {
+    return(FALSE)
+  }
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record)
+  if (length(channel) > 1L) {
+    return(FALSE)
+  }
+  executed <- which(log_wrote(mine, "applied_seal"))
+  if (length(executed) > 0L) {
+    mine <- mine[seq_len(executed[[1L]] - 1L), , drop = FALSE]
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  others <- log_wrote(mine, fields) & !authors %in% channel &
+    authors != creator
+  if (!any(others)) {
+    return(FALSE)
+  }
+
+  theirs <- mine[others, , drop = FALSE]
+  all(log_value(theirs, "request_status") == "revoked") &&
+    !any(log_wrote(theirs, setdiff(fields, "request_status")))
 }
 
 

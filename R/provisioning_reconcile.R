@@ -42,8 +42,10 @@
 #' log, whole, and without the round's own writes; the rule is
 #' `change_needs_approval()`. The log is asked once per row that needs it: a
 #' row whose seal moved, and a row not applied yet that the round could act
-#' on. The IT accounts in `approvers` approve as the creator does, decided on
-#' 2026-10-15.
+#' on. Two widenings, both decided on 2026-10-15. A revocation and nothing
+#' else, made by somebody who manages the project, does not wait: it is
+#' judged at the gate, step 6, because the rights come from the instance. And
+#' the IT accounts in `approvers` approve as the creator does.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
@@ -458,7 +460,25 @@ provisioning_reconcile <- function(register_url,
   # nothing.
   blind <- (checked & unread) | (tampered & !nzchar(creators))
 
-  held <- awaits & !cleared & !blind
+  # A revocation and nothing else, by somebody other than the creator, is
+  # free when they manage the project, and only the instance can say whether
+  # they do. So it is not held here: it stands provisionally and the gate
+  # decides, asking the rights of everybody with a hand in it.
+  intent <- register_intent_fields()
+  revoked_now <- trimws(as.character(register[["request_status"]])) %in%
+    "revoked"
+  withdrawal <- awaits & !cleared & !blind & revoked_now
+  withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
+    log_revocation_only(events, record_ids[[i]], creators[[i]], intent)
+  }, logical(1))
+  withdrawal_authors <- lapply(seq_along(record_ids), function(i) {
+    if (!withdrawal[[i]]) {
+      return(character())
+    }
+    log_pending_authors(events, record_ids[[i]], creators[[i]], intent)
+  })
+
+  held <- awaits & !cleared & !blind & !withdrawal
   standing <- (admitted | awaiting) & !held & !blind
 
   # The register as this round will have left it, and not as it read it. The
@@ -479,6 +499,14 @@ provisioning_reconcile <- function(register_url,
   register_after[["username"]] <- resolved_names
   seal_after <- request_seal(register_after)
 
+  held_outcome <- function(i) {
+    outcome_payload(
+      record_ids[[i]], "held",
+      detail = paste0("SIGILLO_DIVERSO:", seal_after[[i]]),
+      at = at
+    )
+  }
+
   stopped <- do.call(rbind, c(
     list(empty_outcomes),
     lapply(which(!standing), function(i) {
@@ -496,11 +524,7 @@ provisioning_reconcile <- function(register_url,
       # It is also where a referent who lost the message finds it, on the row
       # itself.
       if (held[[i]]) {
-        return(outcome_payload(
-          record_ids[[i]], "held",
-          detail = paste0("SIGILLO_DIVERSO:", seal_after[[i]]),
-          at = at
-        ))
+        return(held_outcome(i))
       }
       if (blind[[i]]) {
         return(outcome_payload(
@@ -552,6 +576,26 @@ provisioning_reconcile <- function(register_url,
   # 4. the pure layer
   plan <- register_to_desired(resolved)
   asks <- scope_pairs(resolved)
+
+  # The rights a provisional withdrawal is judged on are those of whoever had a
+  # hand in it, and the instance answers only for the pairs it is asked about.
+  extra <- lapply(which(withdrawal & standing), function(i) {
+    who <- withdrawal_authors[[i]]
+    who <- who[!is.na(who) & nzchar(who)]
+    server <- trimws(as.character(register[["server"]][[i]]))
+    project <- trimws(as.character(register[["project_id"]][[i]]))
+    data.frame(
+      server = rep(server, length(who)),
+      project_id = rep(project, length(who)),
+      username = who,
+      stringsAsFactors = FALSE
+    )
+  })
+  asks <- do.call(rbind, c(list(asks), extra))
+  asks <- asks[
+    !duplicated(scope_key(asks$server, asks$project_id, asks$username)), ,
+    drop = FALSE
+  ]
 
   # A project_id the register accepted but that is not a number is a data
   # error, and it has to be named here. `validate_request()` catches the ones
@@ -696,10 +740,31 @@ provisioning_reconcile <- function(register_url,
       return(answer)
     }
 
-    refused <- scope_errors(rows, round_rights(server, state))
+    rights <- round_rights(server, state)
+    provisional <- as.character(rows[["record_id"]]) %in%
+      record_ids[withdrawal]
+    refused <- scope_errors(rows[!provisional, , drop = FALSE], rights)
     refused <- refused[names(refused) %in% ids]
+
+    # A provisional withdrawal is judged on the rights of whoever had a hand
+    # in it, and not on the creator's alone: one that stands goes on as any
+    # other row, one that does not stand waits for the creator after all.
+    waits <- character()
+    for (id in intersect(ids, record_ids[withdrawal])) {
+      i <- match(id, record_ids)
+      verdict <- scope_withdrawal(
+        rows[as.character(rows[["record_id"]]) == id, , drop = FALSE],
+        withdrawal_authors[[i]], creators[[i]], nzchar(sealed[[i]]), rights
+      )
+      if (identical(verdict, "held")) {
+        waits <- c(waits, id)
+      } else if (nzchar(verdict)) {
+        refused[[id]] <- verdict
+      }
+    }
+
     in_scope <- function(e) {
-      !as.character(e[["record_id"]]) %in% names(refused)
+      !as.character(e[["record_id"]]) %in% c(names(refused), waits)
     }
     wanted <- Filter(in_scope, wanted)
     revoked <- Filter(in_scope, revoked)
@@ -863,7 +928,9 @@ provisioning_reconcile <- function(register_url,
       # when the instance answered: the early returns above carry no such key,
       # and their silence is what keeps a creation from happening on a question
       # nobody got to ask.
-      in_scope = setdiff(ids, names(refused)),
+      in_scope = setdiff(ids, c(names(refused), waits)),
+      # The withdrawals the gate sent back to wait for their creator.
+      trattenute = waits,
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -893,6 +960,16 @@ provisioning_reconcile <- function(register_url,
   # are on, and the one place it could have been forgotten: a creation is not a
   # write on an instance, so nothing else in the round would have stopped it.
   in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
+
+  # The withdrawals the gate did not free are held as if they had been held
+  # before the instance was asked: same outcome, same seal state, same message.
+  sent_back <- unlist(lapply(per_instance, function(a) a[["trattenute"]]))
+  late <- record_ids %in% sent_back
+  held <- held | late
+  late_held <- do.call(
+    rbind, c(list(empty_outcomes), lapply(which(late), held_outcome))
+  )
+
   creations <- if (dry_run) {
     list()
   } else {
@@ -938,7 +1015,7 @@ provisioning_reconcile <- function(register_url,
   waiting <- outcome_rows(record_ids[awaiting], "pending")
 
   outcomes <- do.call(rbind, c(
-    list(stopped, form_errors),
+    list(stopped, late_held, form_errors),
     lapply(per_instance, function(answer) answer[["esiti"]]),
     list(created_outcomes, waiting)
   ))
@@ -957,7 +1034,6 @@ provisioning_reconcile <- function(register_url,
   # log named, which is where a held row's message goes: it asks its reader
   # to approve, and the creator is the only one whose approval counts. With
   # it, who changed the row, which is what the creator has to judge.
-  intent <- register_intent_fields()
   edited_by <- vapply(seq_along(record_ids), function(i) {
     if (!checked[[i]]) {
       return("")

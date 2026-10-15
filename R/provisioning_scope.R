@@ -206,3 +206,71 @@ scope_errors <- function(register, rights) {
 
   out
 }
+
+
+#' Judge at the gate a revocation somebody other than its creator made
+#'
+#' The second half of the exception `change_needs_approval()` makes for a
+#' revocation, the half only an instance can answer. The round holds the row
+#' provisionally until it knows who manages the project, and this is where it
+#' finds out.
+#'
+#' The question is the gate's own, asked of different people. A revocation
+#' stands on the authority of whoever had a hand in it, so each of them is
+#' asked "could you have done this by hand", which for a removal is "do you
+#' hold User Rights on this project". The creator is asked only when the
+#' creator is one of them: a creator who no longer manages the project does
+#' not stop a manager from removing somebody, since the manager could have
+#' done it in REDCap anyway.
+#'
+#' Three answers. A permission that could not be read is ours, as on the
+#' ordinary gate, and keeps the row queued. A creator who had a hand in it and
+#' does not manage the project is refused as the creator's own change would
+#' be. Anybody else who does not manage it puts the row back under the common
+#' rule: it waits for the creator.
+#'
+#' @param row The row, one line of the register as the gate reads it.
+#' @param authors Who has a hand in the change, as `log_pending_authors()`
+#'   answers.
+#' @param creator Who created the row.
+#' @param sealed Whether the row carries the seal of an execution.
+#' @param rights The rights the instance reported, as `round_rights()` builds
+#'   them.
+#'
+#' @return `""` when the revocation stands; `"held"` when it waits for the
+#'   creator; otherwise the refusal code, as `scope_errors()` gives it.
+#'
+#' @keywords internal
+scope_withdrawal <- function(row, authors, creator, sealed, rights) {
+  stopifnot(
+    is.data.frame(row), nrow(row) == 1L, is.character(authors),
+    is.character(creator), length(creator) == 1L, is.data.frame(rights)
+  )
+
+  creator <- trimws(creator)
+  subjects <- unique(trimws(authors))
+  if (anyNA(subjects) || !all(nzchar(subjects)) || length(subjects) == 0L) {
+    return("held")
+  }
+
+  asked <- data.frame(
+    record_id = subjects,
+    server = rep(as.character(row[["server"]]), length(subjects)),
+    project_id = rep(as.character(row[["project_id"]]), length(subjects)),
+    requested_by = subjects,
+    stringsAsFactors = FALSE
+  )
+  refused <- scope_errors(asked, rights)
+  if ("TRASPORTO_PERMESSO_NON_LEGGIBILE" %in% unlist(refused)) {
+    return("TRASPORTO_PERMESSO_NON_LEGGIBILE")
+  }
+  if (creator %in% names(refused)) {
+    return("DATO_AMBITO_NON_AUTORIZZATO")
+  }
+
+  managers <- setdiff(subjects, names(refused))
+  waits <- change_needs_approval(
+    authors, creator, sealed = sealed, revocation = TRUE, managers = managers
+  )
+  if (waits) "held" else ""
+}
