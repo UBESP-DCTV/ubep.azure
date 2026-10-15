@@ -8,7 +8,8 @@ log_uncovered_authors(
   events,
   record,
   creator,
-  fields = register_intent_fields()
+  fields = register_intent_fields(),
+  approvers = character()
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ log_uncovered_authors(
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 
 \item{fields}{The intent fields.}
+
+\item{approvers}{The IT accounts whose approval counts on any row.}
 }
 \value{
 A character vector of usernames, newest first and each once;
@@ -45,6 +48,14 @@ part of the change the round is being asked to carry out.
 One stretch is enough. An uncovered change makes the next round hold the
 row, and a held row writes no seal: the stretch does not move until the
 creator approves, and that approval covers the version holding the change.
+
+Two kinds of leave besides the creator's, both from 2026-10-15. An approval
+by one of the IT accounts covers as the creator's does, since it is what
+carried the change out. And a revocation alone, \code{request_status = 'revoked'} and no other intent field, is never uncovered: it grants
+nothing, so whether or not the execution above it carried it out, nothing
+in it can reach anybody through the creator's next edit. Counted, it would
+make the creator approve the reactivation of their own request after a
+manager's free revocation.
 
 Unknown, \code{NA_character_}, when the creator is not known, when two accounts
 write the channel's fields, or when an uncovered change has a blank author:

@@ -4,7 +4,13 @@
 \alias{log_pending_authors}
 \title{Who has a hand in the version the round is asked to carry out}
 \usage{
-log_pending_authors(events, record, creator, fields = register_intent_fields())
+log_pending_authors(
+  events,
+  record,
+  creator,
+  fields = register_intent_fields(),
+  approvers = character()
+)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -14,6 +20,8 @@ log_pending_authors(events, record, creator, fields = register_intent_fields())
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 
 \item{fields}{The intent fields.}
+
+\item{approvers}{The IT accounts whose approval counts on any row.}
 }
 \value{
 A character vector of usernames, each once; \code{NA_character_} when

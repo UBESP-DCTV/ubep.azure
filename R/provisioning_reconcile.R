@@ -469,7 +469,7 @@ provisioning_reconcile <- function(register_url,
   # only what the round had read, and `log_pending_authors()` finds it there.
   awaits <- checked
   awaits[checked] <- seal_needs_approval(
-    register[checked, , drop = FALSE], events, creators[checked]
+    register[checked, , drop = FALSE], events, creators[checked], approvers
   )
   cleared <- awaits & seal_approved(register, events, creators, approvers)
 
@@ -490,13 +490,17 @@ provisioning_reconcile <- function(register_url,
     "revoked"
   withdrawal <- awaits & !cleared & !blind & revoked_now
   withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
-    log_revocation_only(events, record_ids[[i]], creators[[i]], intent)
+    log_revocation_only(
+      events, record_ids[[i]], creators[[i]], intent, approvers
+    )
   }, logical(1))
   withdrawal_authors <- lapply(seq_along(record_ids), function(i) {
     if (!withdrawal[[i]]) {
       return(character())
     }
-    log_pending_authors(events, record_ids[[i]], creators[[i]], intent)
+    log_pending_authors(
+      events, record_ids[[i]], creators[[i]], intent, approvers
+    )
   })
 
   held <- awaits & !cleared & !blind & !withdrawal
@@ -1211,7 +1215,7 @@ provisioning_reconcile <- function(register_url,
       return("")
     }
     authors <- log_pending_authors(
-      events, record_ids[[i]], creators[[i]], intent
+      events, record_ids[[i]], creators[[i]], intent, approvers
     )
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))

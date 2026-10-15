@@ -4,7 +4,7 @@
 \alias{seal_needs_approval}
 \title{Whether each changed row waits for an approval}
 \usage{
-seal_needs_approval(register, events, creators)
+seal_needs_approval(register, events, creators, approvers = character())
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
@@ -14,6 +14,9 @@ returns it.}
 
 \item{creators}{Who created each row, as \code{log_creators()} answers, in the
 order of \code{register}.}
+
+\item{approvers}{The IT accounts whose approval counts on any row: it
+decides what an earlier execution covered.}
 }
 \value{
 A logical vector, one answer per row. It answers about every row

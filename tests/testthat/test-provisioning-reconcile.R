@@ -2642,6 +2642,60 @@ test_that("senza l'elenco di IT nessun altro approva", {
 })
 
 
+test_that("un'esecuzione approvata da IT copre la modifica che ha eseguito", {
+  # eval
+  # Newest first: Bruno changed the role, IT approved, the round carried it
+  # out under seal 111111111111; then Anna, the creator, changed the
+  # expiration.
+  it <- "it.redcap@ubep.unipd.it"
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "expiration = '2027-01-31'"),
+      esecuzione("111111111111"),
+      approvazione(it, "111111111111"),
+      cambio(bruno)
+    ),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    ),
+    approvers = it
+  )
+
+  # test
+  # IT's approval covered Bruno's change as the creator's would have: what
+  # remains is Anna's own edit, which needs nobody.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("una revoca libera gia' eseguita non fa aspettare chi riattiva", {
+  # eval
+  # Bruno revoked, the round carried it out under the seal of the revoked
+  # row; then Anna, the creator, set the request back to active.
+  revocata_eseguita <- sigillo_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "request_status = 'active'"),
+      esecuzione(revocata_eseguita),
+      cambio(bruno, "request_status = 'revoked'")
+    ),
+    riga = riga_cambiata(
+      role_name = "data entry", request_status = "active",
+      applied_seal = revocata_eseguita
+    )
+  )
+
+  # test
+  # A revocation alone grants nothing, so it does not stay "uncovered" below
+  # the execution that carried it out: the change is Anna's alone.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+})
+
+
+
 test_that("chi ha creato la riga revoca la propria richiesta subito", {
   # eval
   revocata <- riga_cambiata(

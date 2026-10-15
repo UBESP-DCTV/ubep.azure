@@ -504,6 +504,29 @@ log_value <- function(events, field) {
 }
 
 
+#' Whether each of these authors may approve a row
+#'
+#' The creator, or one of the IT accounts. The creator is compared as REDCap
+#' logs it, which is the same source on both sides. The IT list is typed by
+#' hand on the machine, so it is compared without regard to case: a capital
+#' letter must not void IT's approvals in silence. A blank name approves
+#' nothing, whatever the list holds.
+#'
+#' @param authors Usernames, as the log carries them.
+#' @param creator Who created the row.
+#' @param approvers The IT accounts whose approval counts on any row.
+#'
+#' @return A logical vector, one answer per author.
+#'
+#' @keywords internal
+log_approver <- function(authors, creator, approvers = character()) {
+  authors <- trimws(as.character(authors))
+  it <- tolower(setdiff(trimws(approvers), ""))
+  nzchar(authors) &
+    (authors == trimws(creator) | tolower(authors) %in% it)
+}
+
+
 #' Who changed a row before its last execution without the creator's leave
 #'
 #' `log_change_authors()` drops what stands below the round's newest seal as
@@ -525,6 +548,15 @@ log_value <- function(events, field) {
 #' row, and a held row writes no seal: the stretch does not move until the
 #' creator approves, and that approval covers the version holding the change.
 #'
+#' Two kinds of leave besides the creator's, both from 2026-10-15. An approval
+#' by one of the IT accounts covers as the creator's does, since it is what
+#' carried the change out. And a revocation alone, `request_status =
+#' 'revoked'` and no other intent field, is never uncovered: it grants
+#' nothing, so whether or not the execution above it carried it out, nothing
+#' in it can reach anybody through the creator's next edit. Counted, it would
+#' make the creator approve the reactivation of their own request after a
+#' manager's free revocation.
+#'
 #' Unknown, `NA_character_`, when the creator is not known, when two accounts
 #' write the channel's fields, or when an uncovered change has a blank author:
 #' the caller holds the row on all three.
@@ -533,6 +565,7 @@ log_value <- function(events, field) {
 #' @param record The record id to look at.
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
+#' @param approvers The IT accounts whose approval counts on any row.
 #'
 #' @return A character vector of usernames, newest first and each once;
 #'   `character()` when the stretch holds no uncovered change or the log holds
@@ -540,10 +573,11 @@ log_value <- function(events, field) {
 #'
 #' @keywords internal
 log_uncovered_authors <- function(events, record, creator,
-                                  fields = register_intent_fields()) {
+                                  fields = register_intent_fields(),
+                                  approvers = character()) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
-    is.character(fields)
+    is.character(fields), is.character(approvers)
   )
 
   mine <- log_of_record(events, record)
@@ -568,11 +602,15 @@ log_uncovered_authors <- function(events, record, creator,
   sealed <- log_value(mine[executed[[1L]], , drop = FALSE], "applied_seal")
 
   authors <- trimws(as.character(stretch[["username"]]))
+  withdrawal <- log_value(stretch, "request_status") == "revoked" &
+    !log_wrote(stretch, setdiff(fields, "request_status"))
   foreign <- which(
-    log_wrote(stretch, fields) & !authors %in% channel & authors != creator
+    log_wrote(stretch, fields) & !authors %in% channel & authors != creator &
+      !withdrawal
   )
   leave <- which(
-    log_wrote(stretch, "approved_seal") & authors == creator &
+    log_wrote(stretch, "approved_seal") &
+      log_approver(authors, creator, approvers) &
       log_value(stretch, "approved_seal") == sealed & nzchar(sealed)
   )
   # Covered is below an approval; what stands above the newest one is not.
@@ -598,16 +636,18 @@ log_uncovered_authors <- function(events, record, creator,
 #' @param record The record id to look at.
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
+#' @param approvers The IT accounts whose approval counts on any row.
 #'
 #' @return A character vector of usernames, each once; `NA_character_` when
 #'   either half cannot say.
 #'
 #' @keywords internal
 log_pending_authors <- function(events, record, creator,
-                                fields = register_intent_fields()) {
+                                fields = register_intent_fields(),
+                                approvers = character()) {
   authors <- c(
     log_change_authors(events, record, fields),
-    log_uncovered_authors(events, record, creator, fields)
+    log_uncovered_authors(events, record, creator, fields, approvers)
   )
   if (anyNA(authors)) {
     return(NA_character_)
@@ -715,21 +755,26 @@ change_needs_approval <- function(authors, creator, sealed = TRUE,
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #'
+#' @param approvers The IT accounts whose approval counts on any row.
+#'
 #' @return `TRUE` when the others wrote a revocation and nothing else.
 #'
 #' @keywords internal
 log_revocation_only <- function(events, record, creator,
-                                fields = register_intent_fields()) {
+                                fields = register_intent_fields(),
+                                approvers = character()) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
-    is.character(fields)
+    is.character(fields), is.character(approvers)
   )
 
   creator <- trimws(creator)
   if (is.na(creator) || !nzchar(creator)) {
     return(FALSE)
   }
-  uncovered <- log_uncovered_authors(events, record, creator, fields)
+  uncovered <- log_uncovered_authors(
+    events, record, creator, fields, approvers
+  )
   if (anyNA(uncovered) || length(uncovered) > 0L) {
     return(FALSE)
   }
@@ -768,15 +813,19 @@ log_revocation_only <- function(events, record, creator,
 #'   returns it.
 #' @param creators Who created each row, as `log_creators()` answers, in the
 #'   order of `register`.
+#' @param approvers The IT accounts whose approval counts on any row: it
+#'   decides what an earlier execution covered.
 #'
 #' @return A logical vector, one answer per row. It answers about every row
 #'   it is handed, so the caller restricts it to the rows that changed.
 #'
 #' @keywords internal
-seal_needs_approval <- function(register, events, creators) {
+seal_needs_approval <- function(register, events, creators,
+                                approvers = character()) {
   stopifnot(
     is.data.frame(register), is.data.frame(events),
-    is.character(creators), length(creators) == nrow(register)
+    is.character(creators), length(creators) == nrow(register),
+    is.character(approvers)
   )
 
   ids <- as.character(register[["record_id"]])
@@ -785,7 +834,7 @@ seal_needs_approval <- function(register, events, creators) {
   intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
     change_needs_approval(
-      log_pending_authors(events, ids[[i]], creators[[i]], intent),
+      log_pending_authors(events, ids[[i]], creators[[i]], intent, approvers),
       creators[[i]],
       sealed = nzchar(sealed[[i]])
     )
@@ -916,11 +965,8 @@ log_approval_stands <- function(events, record, creator,
 
   authors <- trimws(as.character(mine[["username"]]))
   approvals <- which(log_wrote(mine, "approved_seal"))
-  # A blank name is nobody, whatever the list holds: dropping it keeps an
-  # empty entry in `approvers` from approving a write logged with no author.
-  allowed <- setdiff(c(trimws(creator), trimws(approvers)), "")
   if (length(approvals) == 0L ||
-        !authors[[approvals[[1L]]]] %in% allowed) {
+        !log_approver(authors[[approvals[[1L]]]], creator, approvers)) {
     return(FALSE)
   }
   newest <- approvals[[1L]]

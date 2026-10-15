@@ -4,7 +4,13 @@
 \alias{log_revocation_only}
 \title{Whether what somebody other than the creator wrote is a revocation alone}
 \usage{
-log_revocation_only(events, record, creator, fields = register_intent_fields())
+log_revocation_only(
+  events,
+  record,
+  creator,
+  fields = register_intent_fields(),
+  approvers = character()
+)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -14,6 +20,8 @@ log_revocation_only(events, record, creator, fields = register_intent_fields())
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 
 \item{fields}{The intent fields.}
+
+\item{approvers}{The IT accounts whose approval counts on any row.}
 }
 \value{
 \code{TRUE} when the others wrote a revocation and nothing else.

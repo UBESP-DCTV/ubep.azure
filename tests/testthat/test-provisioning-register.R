@@ -1029,6 +1029,27 @@ test_that("l'approvazione di IT vale come quella di chi ha creato la riga", {
 })
 
 
+test_that("l'elenco di IT non dipende dalle maiuscole", {
+  # eval
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  eventi <- eventi_finti(
+    list(username = "it.redcap@ubep.unipd.it", details = "approved_seal = 'a'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    )
+  )
+
+  # test
+  # The list is typed by hand on the machine; REDCap logs the username as it
+  # stores it. A capital letter must not make IT's approval silently void.
+  expect_true(seal_approved(
+    riga, eventi, creatrice, approvers = "IT.Redcap@ubep.unipd.it"
+  ))
+})
+
+
 test_that("il canale e' chi ha scritto i campi che scrive solo lui", {
   # eval
   # Newest first. The channel's username rewrite carries `username` alone,
