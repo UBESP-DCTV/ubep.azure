@@ -14,7 +14,8 @@
 #'    errors;
 #' 5. per instance, read the state **once** for the grantees and the requesters
 #'    together;
-#' 6. ask the scope gate about the instances that answered, and only those;
+#' 6. ask the scope gate about the instances that answered, and only those,
+#'    and rehearse there the grant of a person still to be created;
 #' 7. diff against the real rows somebody asked about;
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
@@ -66,6 +67,16 @@
 #' either. An instance that did not answer has neither allowed nor refused, and
 #' the row waits, under the instance's transport code as a pair on that
 #' instance does.
+#'
+#' **The person is validated as the pair they will become, before being
+#' made.** Step 4 hands the row to `register_to_desired()` under the name the
+#' round would create, for the same data errors and the same rule on repeated
+#' pairs a resolved row meets, and keeps only the errors. And once the scope
+#' gate has let the row through, the instance rehearses the grant as a dry
+#' run, which is the only way to learn whether the role and the group exist in
+#' the project. A row that fails either takes its own code and nobody is born;
+#' otherwise the account, its welcome and its key would precede a refusal that
+#' arrives one round later and that no new round can take back.
 #'
 #' **The row it creates stays `absent` for this pass** and becomes `created` at
 #' the next one, which is decision 4 working as written rather than a delay
@@ -537,6 +548,29 @@ provisioning_reconcile <- function(register_url,
   plan <- register_to_desired(resolved)
   asks <- scope_pairs(resolved)
 
+  # The person still to be created, judged as the pair they will become. Such
+  # a row carries no username, so `register_to_desired()` passes over it, and
+  # until now nothing else validated it: the account was born, the welcome and
+  # the key left, and a past expiration or a second row for the same pair
+  # surfaced one round later, on a person who now existed for a request that
+  # could never be served. Handed the name the round is about to create, the
+  # same function gives the same answers -- `validate_request()` and the rule
+  # that the oldest row of a repeated pair keeps it -- and nothing of what it
+  # builds enters the plan: these rows stay out of the desired state until the
+  # person exists, and only their errors and their entries travel on, the
+  # entries for the rehearsal on the instance below.
+  #
+  # Among themselves only. A name `absent` was found free in the tenant, so it
+  # cannot be the username of a row that resolved to an account.
+  arriving <- identity_normalize(resolved[["identity"]]) == "absent"
+  arrivals <- resolved[arriving, , drop = FALSE]
+  arrivals[["username"]] <- vapply(
+    resolutions[standing][arriving],
+    function(answer) as.character(answer[["composed"]] %||% ""),
+    character(1)
+  )
+  arrivals <- register_to_desired(arrivals)
+
   # A project_id the register accepted but that is not a number is a data
   # error, and it has to be named here. `validate_request()` catches the ones
   # that will not coerce; this catches the ones that coerce to something else,
@@ -553,6 +587,11 @@ provisioning_reconcile <- function(register_url,
     (is.na(numbers) | !grepl("^[0-9]+$", trimmed_ids))
 
   row_errors <- plan[["errors"]]
+  for (id in names(arrivals[["errors"]])) {
+    if (is.null(row_errors[[id]])) {
+      row_errors[[id]] <- arrivals[["errors"]][[id]]
+    }
+  }
   for (id in as.character(resolved[["record_id"]])[malformed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "DATO_PROGETTO_INESISTENTE"
@@ -589,7 +628,7 @@ provisioning_reconcile <- function(register_url,
     ))
   }
 
-  entries <- c(plan[["desired"]], plan[["revoked"]])
+  entries <- c(plan[["desired"]], plan[["revoked"]], arrivals[["desired"]])
   servers <- sort(unique(c(
     vapply(entries, function(e) as.character(e[["server"]]), character(1)),
     asks[["server"]]
@@ -699,6 +738,76 @@ provisioning_reconcile <- function(register_url,
     }
     wanted <- Filter(in_scope, wanted)
     revoked <- Filter(in_scope, revoked)
+
+    # The rehearsal of a person still to be created. Whether the role and the
+    # group a request names exist in its project is the instance's to say, and
+    # only a write makes it say so: `Applier::resolveNames()` runs on every
+    # plan, simulated or not, and refuses a name the project does not have. So
+    # the grant the person will get once they exist is rehearsed now, as a dry
+    # run and under the name the round is about to create, and only a row the
+    # rehearsal let through may be born. Without it the account was made, its
+    # welcome and its key left, and the refusal came one round later on the
+    # first real grant: a person who exists for a request that cannot be
+    # served.
+    #
+    # A dry run whatever the round is doing, and in a simulated round too: it
+    # writes nothing, and a simulation that could not refuse what the real
+    # round refuses could not warn. Batched by project like everything else
+    # the round sends, for the reason `round_batches()` gives.
+    #
+    # Not answered is not allowed. A batch the instance did not answer keeps
+    # its rows from being born under the code of the call that failed, and so
+    # does a row the answer does not mention, which simply waits.
+    to_create <- Filter(in_scope, Filter(served, mine(arrivals[["desired"]])))
+    rehearsals <- lapply(round_batches(to_create), function(batch) {
+      answer <- module_apply(
+        hosts[[server]], secrets[[server]],
+        requests = batch[["requests"]], dry_run = TRUE
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        return(list(
+          fit = character(),
+          esiti = outcome_rows(
+            batch[["record_ids"]], "transport_error",
+            detail = answer[["errors"]]
+          )
+        ))
+      }
+      # A list, for the reason `by_pair` below is one: a miss falls through.
+      by_pair <- as.list(batch[["record_ids"]])
+      names(by_pair) <- vapply(batch[["requests"]], function(r) {
+        paste(r[["username"]], r[["project_id"]], sep = "\r")
+      }, character(1))
+      fit <- character()
+      esiti <- list(empty_outcomes)
+      for (entry in answer[["payload"]][["results"]] %||% list()) {
+        id <- by_pair[[paste(
+          as.character(entry[["username"]]), as.integer(entry[["project_id"]]),
+          sep = "\r"
+        )]] %||% NA_character_
+        if (is.na(id)) {
+          next
+        }
+        codes <- vapply(
+          entry[["errors"]] %||% list(),
+          function(error) as.character(error[["code"]]),
+          character(1)
+        )
+        if (length(codes) == 0L) {
+          fit <- c(fit, id)
+          next
+        }
+        esiti[[length(esiti) + 1L]] <- outcome_payload(
+          id, round_outcome_kind(codes, dry_run),
+          detail = paste(codes, collapse = ","), at = at
+        )
+      }
+      list(fit = fit, esiti = do.call(rbind, esiti))
+    })
+    unready <- setdiff(
+      vapply(to_create, function(e) as.character(e[["record_id"]]), ""),
+      unlist(lapply(rehearsals, function(r) r[["fit"]]))
+    )
 
     results <- state[["payload"]][["results"]] %||% list()
 
@@ -858,8 +967,9 @@ provisioning_reconcile <- function(register_url,
       # The rows this instance was asked about and did not refuse. Only present
       # when the instance answered: the early returns above carry no such key,
       # and their silence is what keeps a creation from happening on a question
-      # nobody got to ask.
-      in_scope = setdiff(ids, names(refused)),
+      # nobody got to ask. A person the rehearsal did not let through is not
+      # among them, for the same reason.
+      in_scope = setdiff(setdiff(ids, names(refused)), unready),
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -873,6 +983,7 @@ provisioning_reconcile <- function(register_url,
             id, round_outcome_kind(code, dry_run), detail = code, at = at
           )
         }),
+        lapply(rehearsals, function(r) r[["esiti"]]),
         list(settled, written)
       ))
     )

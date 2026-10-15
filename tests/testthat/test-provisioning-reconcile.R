@@ -1458,6 +1458,176 @@ test_that("a creation that failed leaves the row absent, with the reason on it",
 })
 
 
+test_that("a person is not created for a request whose last day has passed", {
+  # eval
+  oggetti <- character()
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "1999-01-01"))),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      oggetti <<- c(oggetti, subject) # nolint: assignment_linter.
+      list(ok = TRUE, errors = character())
+    }
+  )
+
+  # test
+  # A row whose person does not exist yet is not a pair, so it never went
+  # through `validate_request()`: the account was born, the welcome and the
+  # key left, and the error appeared one round later, on a person who now
+  # exists for a request that could never be served. The code is the one the
+  # validation gives, so it proves the row was validated before the creation
+  # and not stopped somewhere else.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_false(any(grepl("Il tuo account UBEP", oggetti, fixed = TRUE)))
+})
+
+
+test_that("a person asked for twice on one project is created once", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"), list(record_id = "2")
+    )),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  esiti <- esito[["esiti"]]
+
+  # test
+  # The pair the two rows will make once the person exists is one pair, and
+  # the register already has a rule for that: the oldest row keeps it and the
+  # others are duplicates. Applied only after the creation, it let both rows
+  # try to make the same account in the same round.
+  expect_length(creazioni(), 1L)
+  expect_equal(esito[["credenziali"]][["record_id"]], "1")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_COPPIA_DUPLICATA"
+  )
+})
+
+
+# An instance that knows only some roles and refuses the others the way the
+# module does. `Applier::resolveNames()` runs on a simulation too, so a dry-run
+# apply already names a role the project does not have.
+istanza_con_ruoli <- function(ruoli, ...) {
+  base <- istanza_doppia(...)
+  function(data) {
+    body <- base(data)
+    if (!identical(data[["operation"]], "apply")) {
+      return(body)
+    }
+    parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+    parsed[["results"]] <- lapply(parsed[["results"]], function(entry) {
+      ruolo <- entry[["after"]][["role_name"]]
+      if (!is.null(ruolo) && !ruolo %in% ruoli) {
+        entry[["outcome"]] <- "errore"
+        entry[["errors"]] <- list(list(
+          code = "DATO_RUOLO_INESISTENTE",
+          message = "role is not defined in this project"
+        ))
+      }
+      entry
+    })
+    as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null"))
+  }
+}
+
+
+test_that("a person is not created for a role the project does not have", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  prove <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+  controllo <- giro(
+    registro_doppio(record_json(list())),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Whether the role exists is the instance's to say, and only a write tells
+  # it -- so the round rehearses the grant the person will get, as a dry run,
+  # under the name it is about to create, before the person exists. The code
+  # can only have come from that rehearsal, and the control shows the same
+  # instance letting a role it knows through to the creation.
+  expect_length(prove, 1L)
+  expect_true(prove[[1]][["body"]][["data"]][["dry_run"]])
+  expect_equal(
+    prove[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+  expect_equal(nrow(esito[["credenziali"]]), 0L)
+  expect_equal(nrow(controllo[["credenziali"]]), 1L)
+  expect_equal(controllo[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("a simulated round already says the role does not exist", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(role_name = "ruolo che non c'e'"))),
+    istanza_con_ruoli("data entry", list()),
+    directory_vuota()
+  )
+
+  # test
+  # The simulation is where the referents read what the round would do, and a
+  # rehearsal that cannot refuse what the performance refuses cannot warn.
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+})
+
+
+test_that("a rehearsal the instance does not answer makes nobody exist", {
+  # eval
+  # The instance answers the state read and then stops answering.
+  a_meta <- function(data) {
+    if (identical(data[["operation"]], "apply")) {
+      stop("Could not resolve host")
+    }
+    istanza_doppia(list())(data)
+  }
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    a_meta,
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Not validated is not valid: the row waits, under the code of the call
+  # that did not come back, and the next round rehearses again.
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+})
+
+
 test_that("the credential leaves by one road and is on none of the others", {
   # eval
   esito <- giro(
