@@ -782,17 +782,16 @@ parti <- function(messaggio) {
 
 test_that("an all-clear report says so in the first word of the subject", {
   # eval
-  messaggio <- report_message(
-    rapporto_di(attivati_di(
-      richiesta(record_id = "41", dag_name = "torino"),
-      richiesta(record_id = "42", identity = "existing",
-                username = "bruno.fittizio@ubep.unipd.it",
-                first_name = "Bruno", last_name = "Fittizio",
-                project_id = "9302", role_name = "data_entry",
-                expiration = "2027-06-30")
-    )),
-    novembre()
+  attivati <- attivati_di(
+    richiesta(record_id = "41", dag_name = "torino"),
+    richiesta(record_id = "42",
+              username = "bruno.fittizio@ubep.unipd.it",
+              first_name = "Bruno", last_name = "Fittizio",
+              project_id = "9302", role_name = "data_entry",
+              expiration = "2027-06-30")
   )
+  attivati[["account"]] <- c("nuovo", "esistente")
+  messaggio <- report_message(rapporto_di(attivati), novembre())
   testo <- parti(messaggio)
 
   # test
@@ -1964,4 +1963,149 @@ test_that("a ledger that cannot be written after a send costs a duplicate", {
   expect_equal(record[["falliti"]], 1L)
   expect_false(record[["mese_completo"]])
   expect_true("RAPPORTO_INVII_NON_SCRITTI" %in% record[["errori"]])
+})
+
+
+# --- whether the account was new ----------------------------------------------
+
+test_that("a row's creation is read from the creation log, newest first", {
+  # eval
+  creazioni <- rbind(
+    evento("2026-10-08 10:00", referente, "", record = "41",
+           action = "Create record 41"),
+    evento("2026-09-20 11:00", referente, "", record = "42",
+           action = "Create record (import) 42"),
+    evento("2026-08-15 10:00", "collaudo.prova@ubep.unipd.it", "",
+           record = "41", action = "Create record 41")
+  )
+
+  # test
+  # Record 41 has two lives; the one standing now was made on 8 October, by
+  # the event `log_creators()` names its creator from.
+  expect_equal(
+    report_born(creazioni, c("41", "42", "43")),
+    c("2026-10-08 10:00", "2026-09-20 11:00", "")
+  )
+})
+
+
+test_that("an account is new when Entra made it after the row", {
+  # eval
+  # Measured in production on 2026-10-16: the round writes `created` once,
+  # on the round after the creation, and `existing` from the next one on. An
+  # account the channel made on 8 October carried `existing` a week later.
+  registro <- registro_di(
+    richiesta(record_id = "41", identity = "existing",
+              username = "dario.nuovo@ubep.unipd.it",
+              first_name = "Dario", last_name = "Nuovo"),
+    richiesta(record_id = "42", identity = "existing", project_id = "9302",
+              username = "bruno.fittizio@ubep.unipd.it",
+              first_name = "Bruno", last_name = "Fittizio"),
+    # An account Entra holds with no creation date, and a row whose creation
+    # the log does not hold: neither sentence.
+    richiesta(record_id = "43", identity = "created", project_id = "9303",
+              username = "franco.presunto@ubep.unipd.it",
+              first_name = "Franco", last_name = "Presunto"),
+    richiesta(record_id = "44", identity = "created", project_id = "9304")
+  )
+  righe <- report_rows(
+    registro, rep(referente, 4L), rep(list("2026-10-08 23:03"), 4L),
+    novembre(),
+    born = c("2026-10-08 10:00", "2026-10-08 10:00", "2026-10-08 10:00", "")
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "dario.nuovo@ubep.unipd.it",
+          createdDateTime = "2026-10-08T16:05:00Z",
+          lastPasswordChangeDateTime = "2026-10-08T16:05:00Z"),
+    conto(userPrincipalName = "franco.presunto@ubep.unipd.it",
+          createdDateTime = NULL)
+  )
+
+  rapporto <- report_assemble(righe, rubrica, novembre())
+  testo <- parti(
+    report_message(rapporto[["referenti"]][[referente]], novembre())
+  )
+
+  # test
+  expect_equal(
+    rapporto[["referenti"]][[referente]][["attivati"]][["account"]],
+    c("nuovo", "esistente", "", "")
+  )
+  expect_true(paste0(
+    "- Dario Nuovo, dario.nuovo@ubep.unipd.it: edc10, progetto 9301, ",
+    "ruolo user, senza scadenza. Account nuovo."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "- Bruno Fittizio, bruno.fittizio@ubep.unipd.it: edc10, progetto 9302, ",
+    "ruolo user, senza scadenza. Account gia' esistente."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "- Franco Presunto, franco.presunto@ubep.unipd.it: edc10, progetto 9303, ",
+    "ruolo user, senza scadenza."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "- Dario Nuovo, dario.nuovo@ubep.unipd.it: edc10, project 9301, ",
+    "role user, no end date. New account."
+  ) %in% testo[["en"]])
+})
+
+
+test_that("the two births are compared to the minute, in Italian time", {
+  # eval
+  # The log stamps in Rome to the minute, Graph in UTC to the second. The row
+  # was made at 10:00 in Rome, which is 08:00 UTC in October.
+  registro <- registro_di(
+    richiesta(record_id = "41", username = "dario.nuovo@ubep.unipd.it"),
+    richiesta(record_id = "42", username = "bruno.fittizio@ubep.unipd.it")
+  )
+  righe <- report_rows(
+    registro, rep(referente, 2L), rep(list("2026-10-08 23:03"), 2L),
+    novembre(), born = rep("2026-10-08 10:00", 2L)
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "dario.nuovo@ubep.unipd.it",
+          createdDateTime = "2026-10-08T08:00:30Z"),
+    conto(userPrincipalName = "bruno.fittizio@ubep.unipd.it",
+          createdDateTime = "2026-10-08T07:59:59Z")
+  )
+  # The fixture's Bruno is replaced by this one.
+  rubrica <- rubrica[!duplicated(rubrica[["userPrincipalName"]],
+                                 fromLast = TRUE), ]
+
+  rapporto <- report_assemble(righe, rubrica, novembre())
+
+  # test
+  # Same minute is not before; the minute before is.
+  expect_equal(
+    rapporto[["referenti"]][[referente]][["attivati"]][["account"]],
+    c("nuovo", "esistente")
+  )
+})
+
+
+test_that("a run tells a new account from the creation log and Entra", {
+  # eval
+  # Dario's row was made on 8 October and says `existing`, as the register
+  # does a round after the creation; Entra made his account that evening.
+  dati <- scenario()
+  dati[["registro"]][["identity"]] <- "existing"
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "dario.ipotetico@ubep.unipd.it",
+          createdDateTime = "2026-10-08T16:05:00Z",
+          lastPasswordChangeDateTime = "2026-10-10T08:00:00Z")
+  )
+  # This Dario replaces the fixture's.
+  rubrica <- rubrica[!duplicated(rubrica[["userPrincipalName"]],
+                                 fromLast = TRUE), ]
+  doppie(dati, rubrica = rubrica)
+  posta <- posta_finta()
+
+  esegui(withr::local_tempdir(), posta)
+
+  # test
+  anna <- posta[["inviate"]][["mail"]][[1L]][["body"]]
+  expect_match(anna, paste0(
+    "- Dario Ipotetico, dario.ipotetico@ubep.unipd.it: edc10, progetto 9302, ",
+    "ruolo user, senza scadenza. Account nuovo."
+  ), fixed = TRUE)
 })

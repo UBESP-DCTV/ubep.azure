@@ -13,6 +13,8 @@ report_activated_lines(rows)
 A list of two character vectors, \code{it} and \code{en}.
 }
 \description{
-The lines of the accesses activated in the month, in both languages
+A new request says whether its account was new, from the \code{account} column
+\code{report_assemble()} computes on the date Entra made the account; a
+modified one says it was modified.
 }
 \keyword{internal}

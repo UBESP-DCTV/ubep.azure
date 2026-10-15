@@ -45,7 +45,10 @@ two referents is in both reports, each with their own rows.
 Three items, of which phase 1 fills two:
 \itemize{
 \item \strong{activated in the month}, one line per request, new or modified. It is
-information, and does not count among the things to look at;
+information, and does not count among the things to look at. A new one
+says whether its account was new: \code{account} is \code{nuovo} when Entra made
+the account no earlier than the minute the row was made (\code{creata_il}),
+\code{esistente} when earlier, \code{""} when either date is missing;
 \item \strong{no first sign-in}, one item per person, with every project of theirs:
 the requests of that person activated at least \code{report_grace_days()}
 before the reading and not expired, when Entra says nobody has entered the

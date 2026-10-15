@@ -255,6 +255,44 @@ report_person_since <- function(events, record) {
 }
 
 
+#' When the row that stands now was made, from the creation log
+#'
+#' The same event `log_creators()` names the creator from: the creations
+#' asked of REDCap with `logtype = "record_add"`, newest first, so that a
+#' record id used twice answers with the life standing now.
+#'
+#' @param events The creation events, as `register_log()` returns them when
+#'   asked with `logtype = "record_add"`.
+#' @param records The record ids to answer about.
+#'
+#' @return A character vector as long as `records`, holding the stamp in the
+#'   instance's civil time, `"%Y-%m-%d %H:%M"`, or `""` where no creation
+#'   names that row or its stamp does not read as one.
+#'
+#' @keywords internal
+report_born <- function(events, records) {
+  stopifnot(is.data.frame(events))
+
+  made <- trimws(as.character(events[["record"]]))
+  said <- trimws(as.character(events[["action"]]))
+  stamps <- trimws(as.character(events[["timestamp"]]))
+  opened <- startsWith(said, "Create record")
+
+  vapply(as.character(records), function(record) {
+    hit <- which(made == record & opened)
+    if (length(hit) == 0L) {
+      return("")
+    }
+    stamp <- substr(stamps[[hit[[1L]]]], 1L, 16L)
+    if (grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$", stamp)) {
+      stamp
+    } else {
+      ""
+    }
+  }, character(1), USE.NAMES = FALSE)
+}
+
+
 #' Read a time as Microsoft Graph writes it
 #'
 #' @param value A string such as `"2026-10-08T09:12:33Z"`, or `""`.
@@ -417,19 +455,23 @@ report_expired <- function(expiration, today) {
 #' @param period What `report_month()` answered.
 #' @param since One element per row, what `report_person_since()` answered,
 #'   or `NULL` to date the person by the row's first execution.
+#' @param born When each row was made, as `report_born()` answers, in the
+#'   register's order; `NULL` when unknown.
 #'
 #' @return The kept rows of `register`, with `creator`, `attivata_il`,
-#'   `nel_mese`, `senza_data`, `data_motivo` and `persona_dal` added.
+#'   `nel_mese`, `senza_data`, `data_motivo`, `persona_dal` and `creata_il`
+#'   added.
 #'
 #' @keywords internal
 report_rows <- function(register, creators, executions, period,
-                        since = NULL) {
+                        since = NULL, born = NULL) {
   stopifnot(
     is.data.frame(register),
     is.character(creators), length(creators) == nrow(register),
     is.list(executions), length(executions) == nrow(register),
     is.list(period),
-    is.null(since) || (is.list(since) && length(since) == nrow(register))
+    is.null(since) || (is.list(since) && length(since) == nrow(register)),
+    is.null(born) || (is.character(born) && length(born) == nrow(register))
   )
 
   field <- function(name) {
@@ -488,6 +530,9 @@ report_rows <- function(register, creators, executions, period,
     }, character(1))
   }
   rows[["persona_dal"]] <- person[keep]
+  made <- if (is.null(born)) rep("", nrow(register)) else trimws(born)
+  made[is.na(made)] <- ""
+  rows[["creata_il"]] <- made[keep]
   rownames(rows) <- NULL
   rows
 }
@@ -503,7 +548,10 @@ report_rows <- function(register, creators, executions, period,
 #' Three items, of which phase 1 fills two:
 #'
 #' - **activated in the month**, one line per request, new or modified. It is
-#'   information, and does not count among the things to look at;
+#'   information, and does not count among the things to look at. A new one
+#'   says whether its account was new: `account` is `nuovo` when Entra made
+#'   the account no earlier than the minute the row was made (`creata_il`),
+#'   `esistente` when earlier, `""` when either date is missing;
 #' - **no first sign-in**, one item per person, with every project of theirs:
 #'   the requests of that person activated at least `report_grace_days()`
 #'   before the reading and not expired, when Entra says nobody has entered the
@@ -589,7 +637,7 @@ report_assemble <- function(rows, directory, period, previous = list(),
   } else {
     text("persona_dal")
   }
-  born <- vapply(username, function(upn) {
+  account_born <- vapply(username, function(upn) {
     account <- report_account(directory, upn)
     if (is.na(account[["riga"]])) {
       return("")
@@ -602,7 +650,20 @@ report_assemble <- function(rows, directory, period, previous = list(),
     }
     format(moment, "%Y-%m-%d %H:%M", tz = "Europe/Rome")
   }, character(1), USE.NAMES = FALSE)
-  start <- ifelse(nzchar(since), pmax(since, born), "")
+  start <- ifelse(nzchar(since), pmax(since, account_born), "")
+
+  # Whether the account was new for this request: Entra made it no earlier
+  # than the minute the row was made. Not `identity`, which the round turns
+  # from `created` to `existing` one round after the creation (measured in
+  # production on 2026-10-16), so it would call every account the channel
+  # made an old one. Both stamps in Italian time, to the minute, since that
+  # is what the log carries; either missing, nothing is said.
+  made <- text("creata_il")
+  account <- ifelse(
+    nzchar(account_born) & nzchar(made),
+    ifelse(account_born >= made, "nuovo", "esistente"),
+    ""
+  )
 
   days <- rep(NA_integer_, nrow(rows))
   dated <- nzchar(start)
@@ -653,6 +714,7 @@ report_assemble <- function(rows, directory, period, previous = list(),
     mine <- own & creator == who
 
     attivati <- rows[mine & nzchar(text("nel_mese")), , drop = FALSE]
+    attivati[["account"]] <- account[mine & nzchar(text("nel_mese"))]
     attivati <- attivati[
       order(attivati[["attivata_il"]], attivati[["record_id"]]), ,
       drop = FALSE
@@ -783,6 +845,10 @@ report_projects_words <- function(projects) {
 
 #' The lines of the accesses activated in the month, in both languages
 #'
+#' A new request says whether its account was new, from the `account` column
+#' `report_assemble()` computes on the date Entra made the account; a
+#' modified one says it was modified.
+#'
 #' @param rows The `attivati` of a referent's report.
 #'
 #' @return A list of two character vectors, `it` and `en`.
@@ -811,7 +877,7 @@ report_activated_lines <- function(rows) {
   dag <- value("dag_name")
   expiration <- value("expiration")
   modified <- value("nel_mese") == "modificata"
-  identity <- value("identity")
+  account <- value("account")
 
   line <- function(project, role, group, until, none, tail) {
     paste0(
@@ -825,13 +891,13 @@ report_activated_lines <- function(rows) {
 
   tail_it <- ifelse(
     modified, "Richiesta modificata e rieseguita nel mese.",
-    ifelse(identity == "created", "Account nuovo.",
-           ifelse(identity == "existing", "Account gia' esistente.", ""))
+    ifelse(account == "nuovo", "Account nuovo.",
+           ifelse(account == "esistente", "Account gia' esistente.", ""))
   )
   tail_en <- ifelse(
     modified, "Request modified and applied again this month.",
-    ifelse(identity == "created", "New account.",
-           ifelse(identity == "existing", "Existing account.", ""))
+    ifelse(account == "nuovo", "New account.",
+           ifelse(account == "esistente", "Existing account.", ""))
   )
 
   list(
@@ -1838,6 +1904,7 @@ provisioning_report <- function(register_url,
       value
     }
     creators <- log_creators(creations[["log"]], ids)
+    born <- report_born(creations[["log"]], ids)
 
     # One call per active row, and no window: the first execution can be
     # months old. Today that is one call; past five hundred rows it is worth
@@ -1857,7 +1924,9 @@ provisioning_report <- function(register_url,
       }
     }
 
-    rows <- report_rows(register, creators, executions, period, since)
+    rows <- report_rows(
+      register, creators, executions, period, since, born
+    )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
       previous[["illeggibili"]]
