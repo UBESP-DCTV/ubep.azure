@@ -137,6 +137,30 @@
   back next round, and the message says the failure is ours. The register's
   own code still goes into `errori`.
 
+* **A person is validated before their account is created.** The row is
+  checked under the name the round would create, so a past expiration gives
+  `DATO_SCADENZA_NON_VALIDA` and a second row for the same pair gives
+  `DATO_COPPIA_DUPLICATA` on the younger one; and the instance rehearses the
+  grant as a dry run, which tells whether the role and the group exist. A row
+  that fails takes its `DATO_` code and nobody is born. Until now the account
+  was made, the welcome and the key left, and the error came one round later.
+
+* **A person to create on an instance that does not answer** now waits as a
+  transport error under the instance's code, as a pair does, instead of
+  staying `pending` with no code and no limit.
+
+* **With writing on and the post off, the round creates nobody**: the key has
+  no road out. The row waits, and the round's errors carry
+  `TRASPORTO_CREAZIONE_SENZA_POSTA` whenever somebody would have been
+  created.
+
+* **A creation whose answer was lost counts as a lost key and a lost
+  welcome**, in the same round, so the alarm on the lost key fires: the
+  account may have been born with a key that died with the process, and the
+  next round would have found it and applied it with nobody holding the key.
+  The cost is an alarm for an account never made, when the request did not
+  reach Graph.
+
 * **Release.** An install and not an import: the two field notes of
   `seal_state` and `approved_seal` say who approves now, and the dictionary
   comparison does not read notes, so the live register keeps the old ones
