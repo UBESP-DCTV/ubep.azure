@@ -13,7 +13,7 @@ to keep aligned. The cost accepted in exchange is a duplicate, never a loss."></
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,8 @@ to keep aligned. The cost accepted in exchange is a duplicate, never a loss.</p>
 <span>  redirect_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  copy_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reply_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  identified <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  identified <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  hosts <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -110,6 +111,13 @@ mailer closure is what carries it to the transport.</p></dd>
 read, on purpose; this is how the message names what the round has just
 established rather than what the referent typed.</p></dd>
 
+
+<dt id="arg-hosts">hosts<a class="anchor" aria-label="anchor" href="#arg-hosts"></a></dt>
+<dd><p>Named character vector, instance name to host, as
+<code><a href="provisioning_reconcile.html">provisioning_reconcile()</a></code> receives it from the inventory. Only the
+welcome message reads it, to say where the row's instance opens; a row
+whose instance it does not name gets a welcome without that address.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -117,10 +125,15 @@ established rather than what the referent typed.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The credential message is the asymmetry. The account is already born, the
-round does not create it twice, and the managed identity cannot repair it.
-So its failure is not a retry: it is a person's job, and it goes out under
-its own code so an alarm can tell the two apart.</p>
+    <p>The two messages a creation sends are the asymmetry. The account is already
+born, the round does not create it twice, and the managed identity cannot
+repair it, so neither the welcome nor the key has a next round. Their
+failure is not a retry: it is a person's job, and each goes out under its
+own code, <code>POSTA_BENVENUTO_PERSO</code> and <code>POSTA_CREDENZIALE_PERSA</code>, so an alarm
+can tell them apart from a message that will simply be retried. They are
+counted apart from the outcome messages for the same reason, and a welcome
+that did not leave holds no row back: holding it would not send the welcome
+again, it would only keep the outcome out of the register.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

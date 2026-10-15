@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,13 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.18.0" id="ubepazure-0180">ubep.azure 0.18.0<a class="anchor" aria-label="anchor" href="#ubepazure-0180"></a></h2>
+<ul><li><p><strong>The welcome message says where REDCap opens.</strong> It carried the user name and the steps of the first sign-in, and not the instance: on the first real request of the pilot the link had to be added by hand. It now names the address of the row’s instance, and says that access to the project normally follows within four hours, which is the cadence of the round. The address is not composed from <code>server</code> and is not written in this repository: the round already receives the inventory’s map from instance to host, and now passes it on to the post. A row whose instance the map does not name gets the welcome without those two lines, since a missing address is no reason to lose the message. The message with the key still carries no context: no instance, no project, no role, nobody in copy.</p></li>
+<li><p><strong>A welcome that did not leave is now counted.</strong> <code><a href="../reference/mail_round.html">mail_round()</a></code> discarded what the send of the welcome returned, so a lost welcome reached neither the telemetry nor an alarm. The round record gains <code>benvenuti_recapitati</code> and <code>benvenuti_persi</code>, beside the two counters of the key and not added to <code>posta_fallite</code>, and a failed send, a missing address included, adds <code>POSTA_BENVENUTO_PERSO</code> to the errors. Like the key, the welcome is not retried: the account is already born and the round does not create it twice. Nor does a lost welcome hold its row back, which would keep the outcome out of the register without sending the welcome again.</p></li>
+<li><p><strong>The message with the key says how to hand it over.</strong> Another channel if there is one, otherwise a new message with the key alone, written by the referent to the address they know from their own correspondence rather than the one copied from the request, and never a forward. If the two addresses differ the referent stops and replies, since the welcome went to the one in the request, and leaves the key out of the reply: a mail client quotes the body by default, and the reply goes to the round’s reply address, where a key not yet used would stay readable.</p></li>
+<li><p><strong>The collection rule has to learn the two columns before this release lands</strong>, because the ingestion API drops in silence a column the rule does not know. Then the package; last, once a record has brought the two columns with a value, the new alarm on lost welcomes and the rule on incomplete records, which names the columns it requires and must gain these two. No dictionary change and no change to what the runner calls, so the runner copy under <code>/opt</code> stays as it is.</p></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.17.0" id="ubepazure-0170">ubep.azure 0.17.0<a class="anchor" aria-label="anchor" href="#ubepazure-0170"></a></h2>
 <ul><li>

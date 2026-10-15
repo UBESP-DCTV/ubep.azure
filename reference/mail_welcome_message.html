@@ -17,7 +17,7 @@ message says so, and names them."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,7 @@ message says so, and names them.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_welcome_message</span><span class="op">(</span><span class="va">row</span>, <span class="va">upn</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_welcome_message</span><span class="op">(</span><span class="va">row</span>, <span class="va">upn</span>, url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,10 +71,26 @@ message says so, and names them.</p>
 <dt id="arg-upn">upn<a class="anchor" aria-label="anchor" href="#arg-upn"></a></dt>
 <dd><p>The account's user principal name, as created.</p></dd>
 
+
+<dt id="arg-url">url<a class="anchor" aria-label="anchor" href="#arg-url"></a></dt>
+<dd><p>The address the row's instance opens at, from
+<code><a href="mail_instance_url.html">mail_instance_url()</a></code>; <code>NULL</code>, <code>NA</code> or empty leaves it out.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with <code>subject</code> and <code>body</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>It does name the instance, as the address REDCap opens at, and that is the
+same decision read from the other side. A message without a secret can carry
+the context, and of the two messages a creation sends this is the one that
+can: the message with the key carries none of it, because context is what
+makes a key spendable. It also says that access to the project normally
+follows within four hours, which is the cadence of the round. Without an
+address the message still leaves, without those two lines: a missing address
+is no reason to lose it.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

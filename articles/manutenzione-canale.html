@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -663,7 +663,8 @@ nessuno;</li>
 più istanze non si sono lasciate leggere; un’istanza non è in stato
 collaudato; la superficie di un’istanza è cambiata; le liste di
 indirizzi sono cambiate o divergono; gli esiti sono stati calcolati e
-non scritti; una notifica non è stata recapitata.</li>
+non scritti; una notifica non è stata recapitata; un’utenza è nata e il
+benvenuto non è arrivato alla persona.</li>
 </ul>
 <p>I nomi esatti, le gravità e le finestre stanno nel foglio dei
 parametri.</p>
@@ -844,6 +845,20 @@ Allora i gesti sono <strong>due</strong>, e la lavorazione in
 e un pacchetto nuovo con la lavorazione vecchia muore su
 <code>argument "posta" is missing</code> — cioè il giro non ritorna, non
 lascia record, e l’allarme sull’assenza suona a gravità 1.</p>
+<p>La 0.18.0 risponde <strong>no</strong> a tutte e due: nessun
+dizionario da importare, e la lavorazione chiama il pacchetto come
+prima, perché passa già al giro la mappa delle istanze da cui il
+benvenuto prende l’indirizzo. La copia in <code>/opt</code> resta com’è.
+Ma il record del giro guadagna due colonne,
+<code>benvenuti_recapitati</code> e <code>benvenuti_persi</code>, quindi
+l’ordine è quello della sezione sopra: <strong>prima</strong> le due
+colonne nella tabella del canale e nella sua regola di raccolta,
+<strong>poi</strong> il pacchetto, <strong>per ultime</strong>, dopo
+aver visto arrivare un record che le porta con un valore, la regola
+d’allarme nuova sul benvenuto perso e quella sul record incompleto, che
+elenca le colonne per nome e deve guadagnare anche queste due.
+Aggiornata prima del pacchetto, la seconda scatterebbe su ogni record
+sano.</p>
 </div>
 <div class="section level3">
 <h3 id="la-regola-ritirata-è-disattivata-non-cancellata">La regola ritirata è disattivata, non cancellata<a class="anchor" aria-label="anchor" href="#la-regola-ritirata-%C3%A8-disattivata-non-cancellata"></a>
@@ -907,6 +922,18 @@ accettata. L’impronta è un digest di una manciata di indirizzi: lo
 spazio dei candidati è minuscolo, e ricostruire il contenuto per
 enumerazione costa meno che andare a leggere la configurazione. È un
 rilevatore di cambiamento, non un segreto.</p>
+<p><strong>Benvenuto perso (gravità 2).</strong> Un’utenza è nata e il
+messaggio che la annuncia alla persona non è partito:
+<code>benvenuti_persi</code> è maggiore di zero, e fra gli errori del
+giro c’è <code>POSTA_BENVENUTO_PERSO</code>. Non si ripara da sé: il
+giro non crea due volte la stessa utenza, quindi non ha un’altra
+occasione di mandarlo. E il messaggio con la chiave dice al referente
+che il nome utente è già arrivato in un messaggio a parte, quindi la
+persona riceverebbe la sola chiave: il nome utente, l’indirizzo
+dell’istanza e i passi del primo accesso glieli manda IT, a mano. Per
+sapere perché non è partito, guardare la riga nel registro: un
+<code>contact_email</code> vuoto spiega il caso da solo; altrimenti il
+journal della lavorazione riporta la risposta del servizio di posta.</p>
 <p><strong>Prima di inseguire un allarme isolato.</strong> L’ingestione
 ha consistenza eventuale: per qualche decina di secondi due query
 identiche possono vedere «ultimo record» diversi. Una regola che valuta

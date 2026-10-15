@@ -30,6 +30,16 @@ A list with `subject` and `body`.
 
 ## Details
 
+What it asks of the referent is the rule decided for handing the key
+over: another channel if there is one, otherwise a new message with the
+key alone, never a forward of this one, and to the address the referent
+knows from their own correspondence rather than the one copied from the
+request. The welcome went to the address in the request, so a referent
+who finds the two different is asked to stop and reply instead of
+sending. The same sentence asks them to leave the key out of the reply:
+a mail client quotes this body by default, and the reply goes to the
+round's reply address, where a key not yet used would stay readable.
+
 This message has no second chance, and that is what separates it from
 every other one the round sends. The account is already born and the
 round does not create it twice, so a send that fails leaves an account
