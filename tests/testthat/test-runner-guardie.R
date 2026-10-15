@@ -382,3 +382,110 @@ test_that("the creation path does not take over the carriers it replaces", {
     )
   )
 })
+
+
+# Everything the package writes with: on an instance, in the register, in
+# the tenant. The monthly report reaches none of them.
+scritture <- function() {
+  c(
+    percorsi_di_scrittura(), "register_import", "register_identity_import",
+    "register_seal_import", "register_field_import", "directory_create_user"
+  )
+}
+
+
+# The functions of `env` that `start` reaches, itself included, following
+# every name of a function of `env` that a body mentions. Coarse on purpose,
+# like the guards above: a name mentioned and never called is followed all
+# the same, and a false red costs a minute.
+raggiunte <- function(start, env = asNamespace("ubep.azure")) {
+  functions <- Filter(
+    function(name) is.function(get(name, envir = env)),
+    ls(env, all.names = TRUE)
+  )
+  seen <- character()
+  queue <- start
+  while (length(queue) > 0L) {
+    name <- queue[[1L]]
+    queue <- queue[-1L]
+    if (name %in% seen) {
+      next
+    }
+    seen <- c(seen, name)
+    text <- paste(deparse(body(get(name, envir = env))), collapse = " ")
+    called <- functions[vapply(
+      functions, function(f) grepl(f, text, fixed = TRUE), logical(1)
+    )]
+    queue <- c(queue, setdiff(called, seen))
+  }
+  seen
+}
+
+
+test_that("the monthly report reads and sends mail, and nothing else", {
+  # eval
+  # Decided with the design on 2026-10-15: the report does not write in the
+  # register and does not touch Entra, and that is what lets it run outside
+  # the channel's path. Read on the installed bodies, so this bites under
+  # `R CMD check` too.
+  reached <- raggiunte("provisioning_report")
+
+  # test
+  # An assertion that walked nothing is not a passing one: the readings and
+  # the post have to be in what it reached.
+  expect_true(all(
+    c("register_records", "register_log", "directory_users",
+      "report_deliver", "report_ledger_add") %in% reached
+  ))
+  expect_equal(
+    intersect(reached, scritture()), character(),
+    info = paste(
+      "The monthly report reads the register, its log and the tenant, and",
+      "sends mail. A write reached from it, however indirectly, makes it a",
+      "second channel that nobody gates and nobody watches as one. If you are",
+      "deliberately adding a write, it belongs in the round, not here."
+    )
+  )
+})
+
+
+test_that("the reach of the report guard follows calls through helpers", {
+  # eval
+  finto <- new.env()
+  finto[["module_apply"]] <- function() NULL
+  finto[["aiuto"]] <- function() module_apply()
+  finto[["rapporto"]] <- function() lapply(1:2, aiuto)
+  finto[["innocuo"]] <- function() NULL
+
+  # test
+  # Passed by name to lapply(), with no parenthesis after it: the shape a
+  # search for calls alone would miss.
+  expect_setequal(
+    raggiunte("rapporto", finto), c("rapporto", "aiuto", "module_apply")
+  )
+})
+
+
+test_that("the report's runner names no write and not the round", {
+  # Same limit as the runner guards above: `dev/` is not in the built
+  # package, so this bites in the source tree rather than in CI.
+  script <- testthat::test_path("..", "..", "dev", "runner-rapporto.R")
+  skip_if_not(file.exists(script), "dev/ is not in the built package")
+  lines <- readLines(script, warn = FALSE)
+
+  forbidden <- c(scritture(), "provisioning_reconcile")
+  found <- forbidden[vapply(
+    forbidden,
+    function(symbol) any(grepl(symbol, lines, fixed = TRUE)),
+    logical(1)
+  )]
+
+  expect_equal(
+    found, character(),
+    info = paste(
+      "The report's job reads and sends mail. A write, or a round started",
+      "from it, would run on the report's timer with none of the round's",
+      "gates in front of it."
+    )
+  )
+})
