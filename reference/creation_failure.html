@@ -13,7 +13,7 @@ account that may not exist."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,7 @@ account that may not exist.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">creation_failure</span><span class="op">(</span><span class="va">code</span>, payload <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">creation_failure</span><span class="op">(</span><span class="va">code</span>, payload <span class="op">=</span> <span class="cn">NULL</span>, unconfirmed <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -65,19 +65,30 @@ account that may not exist.</p>
 <dt id="arg-payload">payload<a class="anchor" aria-label="anchor" href="#arg-payload"></a></dt>
 <dd><p>Anything worth keeping for a diagnosis, or <code>NULL</code>.</p></dd>
 
+
+<dt id="arg-unconfirmed">unconfirmed<a class="anchor" aria-label="anchor" href="#arg-unconfirmed"></a></dt>
+<dd><p>Whether the account may have been born all the same.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>ok</code>, <code>errors</code>, <code>payload</code>, <code>credential</code> and <code>upn</code>.</p>
+    <p>A list with <code>ok</code>, <code>errors</code>, <code>payload</code>, <code>credential</code>, <code>upn</code> and
+<code>unconfirmed</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>A creation that failed after Graph accepted it — a timeout on the way back —
 leaves an account whose credential this round has just discarded. It is the
-honest cost of not keeping one: the next round finds the account by its
-surname and contact address and writes <code>created</code>, and whoever needs to let
-that person in resets it once. Keeping a secret for a creation we cannot
-confirm is worse in the direction that matters.</p>
+cost of not keeping one: the next round finds the account by its surname
+and contact address and writes <code>created</code>, and somebody has to reset the
+credential once. Keeping a secret for a creation we cannot confirm is worse
+in the direction that matters.</p>
+<p>What must not happen is that nobody learns of it, and <code>unconfirmed</code> is what
+prevents it. It is <code>TRUE</code> on the failures that do not say whether the
+account was born – no answer at all, or one that is not Graph's – and
+<code>FALSE</code> on the ones that do, a refusal or a throttle carrying Graph's own
+code. The round counts an unconfirmed creation as a key lost, so the alarm
+that sends IT to reset a key fires on it.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

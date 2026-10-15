@@ -15,7 +15,7 @@ authenticated, which is not a value anybody can type."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@ import writes into that field whatever it is handed. The log says who was
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_log</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, since <span class="op">=</span> <span class="cn">NULL</span>, logtype <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_log</span><span class="op">(</span><span class="va">url</span>, <span class="va">token</span>, since <span class="op">=</span> <span class="cn">NULL</span>, logtype <span class="op">=</span> <span class="cn">NULL</span>, record <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -87,6 +87,13 @@ reads <code>Create record 7</code> from the form and <code>Create record (import
 from an import, and a reader matching that string would have to keep up
 with REDCap's wording for ever.</p></dd>
 
+
+<dt id="arg-record">record<a class="anchor" aria-label="anchor" href="#arg-record"></a></dt>
+<dd><p>One record id, or <code>NULL</code> for every record. With it REDCap
+answers with that row's events alone, its whole history unless <code>since</code>
+narrows it: the answer then grows with what happened to one row and not
+with the traffic of the whole register.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -103,7 +110,10 @@ shifted by two hours in summer and <strong>one in winter</strong> — a discrepa
 is not a constant and that would come and go with the change of hour.</p>
 <p>Callers therefore convert, and they are expected to convert generously: the
 window is cheap to widen and the filtering that matters is done on the rows,
-not on the boundary.</p>
+not on the boundary. The round itself asks no window at all: the creations
+are asked whole, and row protection asks for one row and all of its
+history, since who changed a row since it was applied does not stop
+mattering after a day.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

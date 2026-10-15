@@ -43,7 +43,9 @@ directory_create_user(token, base_url, request, upn)
 A list with `ok`, `errors`, `payload`, `upn`, and `credential` — the one
 the account was born with, present only on success. It leaves by the
 return value and by no other road: not the register, not the telemetry
-record, not standard output.
+record, not standard output. `unconfirmed` is `TRUE` on a failure that
+does not say whether the account was born, see
+[`creation_failure()`](https://ubesp-dctv.github.io/ubep.azure/reference/creation_failure.md).
 
 ## Details
 

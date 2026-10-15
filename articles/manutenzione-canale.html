@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -505,17 +505,152 @@ si rifiuta.</p>
 </h3>
 <p>REDCap non ha una proprietà per riga: i diritti sono per strumento, e
 la sola cosa che partiziona le righe sono i gruppi di accesso, che qui
-non ci sono per scelta — nasconderebbero le righe altrui e renderebbero
-i doppioni incomprensibili. Chiunque abbia il registro può quindi
+non ci sono per scelta: nasconderebbero le righe altrui e renderebbero i
+doppioni incomprensibili. Chiunque abbia il registro può quindi
 modificare la riga di un altro.</p>
 <p>Il giro scrive accanto a ogni riga applicata il
 <strong>sigillo</strong> di ciò che ha applicato: dodici caratteri sui
 campi di intento, e su nessun altro. Un sigillo che al giro dopo non
-corrisponde significa «modificata dopo l’applicazione»: la riga prende
-l’esito <code>held</code>, si ferma dove si ferma una revocata — prima
-che il piano si formi, quindi <strong>nessuna istanza viene
-interrogata</strong> — e la notizia va a <code>requested_by</code>.</p>
-<p>Tre cose da sapere quando si tocca questo meccanismo:</p>
+corrisponde significa «modificata dopo l’applicazione».</p>
+<p><strong>Chi può cambiare una riga, e chi la sblocca.</strong> Una
+richiesta è di chi l’ha creata, e la regola, decisa il 2026-10-14, segue
+da lì:</p>
+<ul>
+<li>se la modifica l’ha fatta <strong>solo il creatore</strong>, il giro
+la esegue come qualunque altra riga e la risigilla, senza chiedere
+niente a nessuno;</li>
+<li>se nella modifica ha messo mano <strong>qualcun altro</strong>, la
+riga prende l’esito <code>held</code> e si ferma dove si ferma una
+revocata, prima che il piano si formi, quindi <strong>nessuna istanza
+viene interrogata</strong>. Resta ferma finché il creatore non incolla
+il sigillo corrente in <code>approved_seal</code>; l’approvazione di
+chiunque altro, compreso chi ha fatto la modifica, non vale. Una
+modifica successiva del creatore non sblocca la riga: non dice che ha
+visto quella dell’altro, e l’approvazione è l’atto che lo dice.</li>
+</ul>
+<p><strong>Anche prima dell’esecuzione.</strong> Una riga che il giro
+non ha ancora applicato, appena depositata o rimasta in coda per un
+errore di trasporto o un dato da correggere, non ha un sigillo da
+confrontare, ma è del suo creatore lo stesso: cambiata da un altro, il
+giro la eseguirebbe con i diritti del creatore, che sono quelli che il
+cancello giudica, senza chiedergli niente. Per questo il giro legge il
+log anche di ogni riga non ancora applicata su cui potrebbe agire (il
+cancello dell’identità l’ha lasciata passare, o aspetta di essere
+creata, e il creatore è noto), e la regola è la stessa. Cambia una cosa
+sola: su una riga sigillata è il sigillo a dire che la riga è cambiata,
+quindi un log che non nomina nessuno la ferma; su una riga mai applicata
+un log che non nomina nessuno dice che nessuno l’ha cambiata. Il costo è
+una chiamata per ogni riga in coda, a ogni giro in cui resta in coda.
+Riportare i campi ai valori di prima non sblocca una riga mai applicata,
+perché la modifica dell’altro resta nel log: arriva il sigillo della
+versione ripristinata, e il creatore lo incolla.</p>
+<p>Il creatore è quello del registro delle creazioni
+(<code><a href="../reference/log_creators.html">log_creators()</a></code>, con <code>logtype = "record_add"</code>),
+non <code>requested_by</code>: è la stessa utenza che il cancello
+dell’ambito giudica a ogni giro. Per questo chi approva non ha bisogno
+di un controllo dei diritti suo: l’unico referente che può approvare è
+anche l’unico i cui diritti sul progetto il giro controlla comunque.</p>
+<p><strong>IT approva come il creatore</strong>, deciso il 2026-10-15.
+Le utenze elencate in <code>UBEP_APPROVATORI_IT</code> sulla macchina
+(nomi utente REDCap separati da virgole) stanno dove sta il creatore,
+alle stesse tre condizioni. Serve alla richiesta il cui creatore ha
+lasciato UBEP: non resta ferma per sempre, e non bisogna cancellare la
+riga e perdere chi l’aveva depositata. L’elenco non sta nel repository,
+che è pubblico; senza la variabile approva solo il creatore. Si
+confronta senza badare alle maiuscole, perché è scritto a mano sulla
+macchina, e un’approvazione di IT copre anche, sotto l’esecuzione che ha
+prodotto, la modifica che ha approvato, come quella del creatore. Un
+limite da sapere: il cancello dell’ambito continua a chiedere i diritti
+del creatore, quindi nessuna approvazione, nemmeno di IT, fa passare la
+riga di un creatore che non gestisce più il progetto.</p>
+<p>La regola sta in un punto solo, <code><a href="../reference/change_needs_approval.html">change_needs_approval()</a></code>,
+e ha <strong>una sola eccezione: la revoca</strong>, decisa il
+2026-10-15. La revoca della richiesta di un altro non aspetta il
+creatore quando chiunque altro vi abbia messo mano ha <em>User
+Rights</em> con <em>Full Access</em> sul progetto: togliere un accesso
+non concede niente, e chi gestisce gli utenti del progetto potrebbe
+farlo a mano, che è la stessa regola del cancello. «Revoca» vuol dire
+poco, di proposito (<code><a href="../reference/log_revocation_only.html">log_revocation_only()</a></code>): la riga ora
+chiede <code>revoked</code>, e ciò che gli altri hanno scritto è quello
+e nient’altro. Una revoca che sposta anche il ruolo, la persona o il
+progetto è una modifica come le altre. E vale solo per una riga con una
+persona a cui togliere l’accesso: una riga revocata la cui persona il
+tenant non ha più si chiude prima di interrogare le istanze, nessuno ne
+leggerebbe i diritti, e aspetta il creatore come prima.</p>
+<p>I diritti li dice l’istanza, e il giro li ha solo dopo averla
+interrogata. Quindi una revoca di un altro non si ferma prima del piano
+come le altre righe trattenute: resta in sospeso fino al cancello, che
+chiede i diritti di tutti quelli che l’hanno toccata
+(<code><a href="../reference/scope_withdrawal.html">scope_withdrawal()</a></code>). Se li hanno, la revoca va avanti e i
+diritti del creatore non contano, a meno che non abbia messo mano anche
+lui; se a uno manca, la riga torna alla regola comune e prende
+<code>held</code>, con lo stesso messaggio; se un permesso non si legge,
+prende <code>TRASPORTO_PERMESSO_NON_LEGGIBILE</code> come sul cancello
+ordinario.</p>
+<p><strong>Chi ha cambiato la riga.</strong> Il giro legge il registro
+degli eventi della sola riga, tutta la sua storia, con una chiamata per
+riga cambiata o non ancora applicata: nessuna nella notte ordinaria.
+Contano gli autori dei campi di intento dopo l’ultima scrittura di
+<code>applied_seal</code>, che è il segno dell’ultima esecuzione; ciò
+che viene prima era già stato eseguito. Se quella scrittura non è più
+nel log conta tutta la storia, che può solo far chiedere un’approvazione
+più spesso.</p>
+<p>«Già eseguito» vale per ciò che il giro ha letto, e il giro scrive il
+sigillo per ultimo: una modifica fatta mentre il giro interroga il
+tenant e le istanze finisce sotto il sigillo senza essere stata
+eseguita, e passerebbe per del creatore alla sua prossima modifica. Per
+questo il giro rilegge anche il tratto fra l’ultima esecuzione e quella
+prima (<code><a href="../reference/log_uncovered_authors.html">log_uncovered_authors()</a></code>): una modifica di un altro
+che sta lì conta, a meno che sopra di lei, nello stesso tratto, ci sia
+l’approvazione del creatore con il sigillo che quell’esecuzione ha
+scritto. Basta un tratto: una modifica scoperta ferma la riga, una riga
+ferma non scrive sigilli, e il confine non si sposta finché il creatore
+non approva. Copre anche l’approvazione di IT, e una revoca sola non è
+mai scoperta: non concede niente, e contata farebbe approvare al
+creatore la riattivazione della propria richiesta dopo una revoca libera
+di chi gestisce il progetto.</p>
+<p>Il campo dell’approvazione e lo stato del sigillo si vedono nel
+modulo quando la riga porta un sigillo <strong>o</strong> ha l’esito
+<code>held</code>. Una riga mai eseguita può essere trattenuta, e non ha
+sigillo: mostrato solo accanto a un sigillo, il campo dove incollare
+l’approvazione sarebbe nascosto proprio lì.</p>
+<p>Le scritture del canale non contano. Il giro riscrive lo
+<code>username</code> che risolve prima di leggere il log, e
+<code>username</code> è un campo di intento: contata, quella scrittura
+farebbe del canale l’autore di ogni modifica, e di chiunque altro il suo
+approvatore. Il canale si riconosce senza configurazione come l’utenza
+che ha scritto i campi che scrive solo lui (esito, identità, sigillo), e
+si riconosce <strong>per utenza e non per evento</strong>: REDCap
+registra solo i campi che un import ha cambiato, quindi la riscrittura
+dello <code>username</code> arriva da sola, senza niente nell’evento che
+dica chi l’ha fatta.</p>
+<p><strong>Quando il registro degli eventi non basta.</strong> Un autore
+che il log non stabilisce lascia la riga ferma: «non ho potuto stabilire
+chi è stato» non è «è stato il creatore». Vale quando due utenze diverse
+risultano aver scritto i campi del canale, o quando una modifica di
+intento non ha autore: la riga prende <code>held</code>, e il creatore
+può approvarla.</p>
+<p>Diverso è il caso in cui il log <strong>non si legge</strong>, o il
+creatore non è nominato: lì non c’è un creatore a cui chiedere né
+un’approvazione che si possa verificare. La riga non prende
+<code>held</code> ma <code>TRASPORTO_AUTORE_NON_LEGGIBILE</code>, lo
+stesso codice che il cancello dà a una riga senza autore: torna in coda
+da sola al giro dopo, non si esegue, e il messaggio dice che il guasto è
+nostro invece di chiedere un sigillo che non approverebbe niente. Fino
+alla 0.18.0 prendeva <code>held</code>, con «Modificata da: non
+stabilito» e la mail a <code>requested_by</code>. Il codice del registro
+(per esempio <code>TRASPORTO_REGISTRO_RIFIUTATO</code>) va negli
+<code>errori</code> del record del giro: la riga dice che cosa non si è
+potuto stabilire, il record perché.</p>
+<p><strong>Il messaggio.</strong> Va al creatore, non a
+<code>requested_by</code>. Nomina chi ha cambiato la riga e porta il
+sigillo da incollare, e dice che può approvare chi l’ha creata oppure
+IT. Lo stesso sigillo sta nel dettaglio dell’esito,
+<code>SIGILLO_DIVERSO:&lt;sigillo&gt;</code>, ed è questo che porta il
+sigillo nuovo al creatore quando la riga cambia ancora mentre è ferma:
+il dettaglio cambia con lei, l’esito risulta cambiato e il messaggio
+riparte.</p>
+<p>Quattro cose da sapere quando si tocca questo meccanismo:</p>
 <ul>
 <li>
 <strong>il sigillo copre ciò che è stato chiesto, non ciò che è
@@ -528,28 +663,92 @@ lasciare</strong>, non su quella che ha letto. Il giro risolve
 <code>username</code> e lo riscrive nella stessa passata, e
 <code>username</code> sta dentro al sigillo perché cambiarlo cambia a
 chi si dà l’accesso. Sigillare la riga come letta sarebbe lo stesso
-difetto di sopra, per mano del giro invece che dell’esito;</li>
+difetto di sopra, per mano del giro invece che dell’esito. Per la stessa
+ragione il sigillo che il messaggio chiede di incollare è quello della
+riga con lo <code>username</code> risolto: è su quella riga che il
+creatore lo incolla;</li>
 <li>
 <strong>il campo di approvazione sta fuori dal sigillo pur non
 essendo <code>@READONLY</code>.</strong> Porta il sigillo che approva,
 quindi scriverlo non può spostare ciò che confronta. È il primo campo
 per cui «scritto dal canale» e «fuori dal sigillo» smettono di essere lo
-stesso insieme, ed è per questo che sono due liste.</li>
+stesso insieme, ed è per questo che sono due liste;</li>
+<li>
+<strong>un campo di intento aggiunto al dizionario sposta tutti i
+sigilli insieme.</strong> I campi di intento si derivano dal dizionario
+impacchettato, e un campo in più entra nel sigillo di ogni riga: al
+primo giro dopo il rilascio ogni riga applicata risulta cambiata,
+nessuna ha un autore dopo l’ultima esecuzione, e tutte aspettano il
+proprio creatore, con una chiamata al log per ciascuna a ogni giro.</li>
 </ul>
-<p>L’approvazione vale a due condizioni: porta il sigillo di
-<strong>quella</strong> versione della riga, e viene da <strong>qualcun
-altro</strong>. La seconda si verifica leggendo il registro degli eventi
+<p>L’approvazione vale a tre condizioni: porta il sigillo di
+<strong>quella</strong> versione della riga, viene da <strong>chi l’ha
+creata</strong> o da IT, ed è <strong>più recente di ciò che
+approva</strong>, cioè sta sopra l’ultima esecuzione e sopra ogni
+modifica di altri (<code><a href="../reference/log_approval_stands.html">log_approval_stands()</a></code>). La terza serve
+perché <code>approved_seal</code> non si azzera mai: senza,
+un’approvazione già eseguita tornerebbe a valere ogni volta che la riga
+riprende quel contenuto, e varrebbe un sigillo incollato prima della
+modifica, che si può calcolare in anticipo perché è un hash pubblico dei
+campi di intento. Le ultime due si verificano sul registro degli eventi
 di REDCap, che dice chi era <strong>autenticato</strong> e non che cosa
-qualcuno ha scritto in un campo — la stessa ragione per cui
+qualcuno ha scritto in un campo: la stessa ragione per cui
 <code>requested_by</code> non basta da solo il giorno in cui si concede
-il Data Import Tool. Un registro degli eventi illeggibile lascia la riga
-ferma: «non ho potuto chiedere chi è stato» non è «l’ha approvata un
-altro».</p>
-<p>La finestra del log si chiede <strong>nell’ora dell’istanza</strong>,
-non in UTC: REDCap timbra col proprio orologio, e il giro delle 21:03
-UTC compare alle 23:03. Lo scarto non è una costante, perché cambia con
-l’ora legale — per questo la finestra è larga un giorno e la conversione
-è una comodità, non un cardine.</p>
+il Data Import Tool.</p>
+<p>Il log della riga si chiede <strong>senza finestra di tempo</strong>.
+Fino alla 0.18.0 si chiedevano le ultime 24 ore di tutto il registro:
+una modifica più vecchia restava fuori e l’approvazione dentro, la
+modifica risultava senza autore e l’approvazione di chi l’aveva fatta
+passava per quella di un altro.</p>
+<p>Senza finestra, il log porta anche le <strong>vite precedenti
+dell’id</strong>. REDCap riusa gli id dei record cancellati, e dallo
+svuotamento del registro del 2026-09-01 le richieste nuove riprendono,
+una dopo l’altra, gli id dei collaudi. Il giro legge solo la vita
+attuale della riga, dall’ultima creazione in poi
+(<code><a href="../reference/log_current_life.html">log_current_life()</a></code>, attraverso
+<code><a href="../reference/log_of_record.html">log_of_record()</a></code>, quindi per ogni domanda che fa al log): la
+modifica di un altro al collaudo non ferma la richiesta che ne ha preso
+l’id. Taglia solo la creazione, che resta nella vita attuale; la
+cancellazione no, perché la sua dicitura non è misurata e un evento che
+le somigliasse dentro la vita attuale ne toglierebbe le modifiche, nella
+direzione che concede. Un log senza creazione si legge intero, come
+prima.</p>
+</div>
+<div class="section level3">
+<h3 id="una-persona-da-creare">Una persona da creare<a class="anchor" aria-label="anchor" href="#una-persona-da-creare"></a>
+</h3>
+<p>Una riga il cui verdetto è <code>absent</code> è l’unica che il giro
+chiude creando, e creare è l’unico atto che un giro dopo non disfa:
+l’utenza esiste. Dalla 0.19.0 tre controlli stanno prima della nascita,
+e non dopo.</p>
+<ul>
+<li>
+<strong>Validata prima di nascere.</strong> La riga si giudica come
+la coppia che diventerà, con il nome che il giro sta per creare: una
+scadenza passata dà <code>DATO_SCADENZA_NON_VALIDA</code>, una seconda
+riga per la stessa coppia dà <code>DATO_COPPIA_DUPLICATA</code> sulla
+più giovane. Poi l’istanza prova l’assegnazione in simulazione, che
+risolve ruolo e gruppo senza scrivere: un ruolo o un gruppo inesistenti
+danno <code>DATO_RUOLO_INESISTENTE</code> o
+<code>DATO_DAG_INESISTENTE</code>. La riga che non passa prende il suo
+codice e l’utenza non nasce. Fino alla 0.18.0 nasceva, partivano
+benvenuto e chiave, e l’errore arrivava al giro dopo, su una persona che
+ormai esisteva. La prova costa una chiamata in più per istanza e
+progetto con persone da creare, anche nei giri simulati.</li>
+<li>
+<strong>Su un’istanza che non risponde aspetta con un
+codice.</strong> La riga prende <code>transport_error</code> con il
+codice dell’istanza, come una coppia, invece di restare
+<code>pending</code> senza limite e senza codice; torna in coda a ogni
+giro.</li>
+<li>
+<strong>Con la posta spenta non nasce.</strong> La chiave esce per
+una strada sola, la posta. Con <code>UBEP_SCRITTURA=1</code> e
+<code>UBEP_POSTA</code> spenta il giro non crea nessuno: la riga resta
+in attesa, e nei giri in cui qualcuno sarebbe nato gli
+<code>errori</code> portano
+<code>TRASPORTO_CREAZIONE_SENZA_POSTA</code>.</li>
+</ul>
 </div>
 <div class="section level3">
 <h3 id="verificare-che-il-progetto-sia-ancora-quello-che-il-canale-si-aspetta">Verificare che il progetto sia ancora quello che il canale si
@@ -859,6 +1058,21 @@ d’allarme nuova sul benvenuto perso e quella sul record incompleto, che
 elenca le colonne per nome e deve guadagnare anche queste due.
 Aggiornata prima del pacchetto, la seconda scatterebbe su ogni record
 sano.</p>
+<p>La 0.19.0 risponde <strong>no</strong> a tutte e due e non porta
+colonne nuove nel record del giro: il pacchetto nuovo gira anche con la
+lavorazione vecchia, perché <code>approvers</code> ha un valore
+predefinito. Cambiano però due cose fuori dal pacchetto. La lavorazione
+nuova passa <code>approvers</code>, e serve per l’approvazione di IT: la
+copia in <code>/opt</code> va sostituita dopo aver scritto
+<code>UBEP_APPROVATORI_IT</code> nell’ambiente dell’unità. E cambiano la
+logica di visualizzazione e le note di <code>seal_state</code> e
+<code>approved_seal</code> nel dizionario: il confronto non legge né
+l’una né le altre, quindi l’import del dizionario sul registro può
+venire prima o dopo l’installazione senza che il registro vivo derivi,
+ma finché non arriva una riga trattenuta mai eseguita non ha il campo
+dove incollare l’approvazione. Al primo giro dopo l’installazione ogni
+riga trattenuta cambia dettaglio, che ora porta il sigillo, e il suo
+creatore riceve un messaggio.</p>
 </div>
 <div class="section level3">
 <h3 id="la-regola-ritirata-è-disattivata-non-cancellata">La regola ritirata è disattivata, non cancellata<a class="anchor" aria-label="anchor" href="#la-regola-ritirata-%C3%A8-disattivata-non-cancellata"></a>
@@ -934,6 +1148,29 @@ dell’istanza e i passi del primo accesso glieli manda IT, a mano. Per
 sapere perché non è partito, guardare la riga nel registro: un
 <code>contact_email</code> vuoto spiega il caso da solo; altrimenti il
 journal della lavorazione riporta la risposta del servizio di posta.</p>
+<p><strong>Credenziale persa (gravità 1).</strong> Un’utenza è nata e la
+sua chiave non è arrivata a nessuno: <code>credenziali_perse</code> è
+maggiore di zero. Dalla 0.19.0 conta anche la creazione di cui si è
+persa la risposta (<code>TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE</code>, o
+una risposta che non è di Graph): l’utenza può essere nata con una
+chiave morta con il processo, e il giro dopo la troverebbe e la
+porterebbe ad <code>applied</code> senza che nessuno abbia la chiave. Si
+conta nello stesso giro, e conta anche come benvenuto perso; il codice
+sta negli errori del giro e sulla riga. Cercare su Entra l’utenza della
+riga che porta il codice:</p>
+<ul>
+<li>se c’è, la procedura è una sola: reimpostare la chiave su Entra,
+mandarla da sola al referente, e scrivere alla persona nome utente,
+indirizzo dell’istanza e istruzioni;</li>
+<li>se non c’è, non serve fare niente: la richiesta non era arrivata a
+Graph, il giro dopo crea l’utenza con chiave e benvenuto, e il record
+conta <code>credenziali_recapitate</code>. Guardarlo prima di
+reimpostare.</li>
+</ul>
+<p>Il prezzo del conteggio immediato è un allarme per un’utenza mai
+nata. Contare al giro dopo sarebbe esatto, ma servirebbe il dettaglio
+precedente della riga come memoria, e quella memoria si perde proprio
+nei guasti che arrivano insieme a una risposta persa.</p>
 <p><strong>Prima di inseguire un allarme isolato.</strong> L’ingestione
 ha consistenza eventuale: per qualche decina di secondi due query
 identiche possono vedere «ultimo record» diversi. Una regola che valuta

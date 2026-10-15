@@ -64,10 +64,12 @@ mail_round(
 
 - identified:
 
-  The identity this round settled, as a frame with `record_id` and the
-  fields it settled. `register` is the register as read, on purpose;
-  this is how the message names what the round has just established
-  rather than what the referent typed.
+  What this round settled about each row, as a frame with `record_id`
+  and the fields it settled: the identity; `creator`, who the creation
+  log says made the row; `edited_by`, who changed a held row since it
+  was applied, as the row's log says. `register` is the register as
+  read, on purpose; this is how the message names what the round has
+  just established rather than what the referent typed.
 
 - hosts:
 

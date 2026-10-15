@@ -8,7 +8,7 @@ account that may not exist.
 ## Usage
 
 ``` r
-creation_failure(code, payload = NULL)
+creation_failure(code, payload = NULL, unconfirmed = FALSE)
 ```
 
 ## Arguments
@@ -21,15 +21,27 @@ creation_failure(code, payload = NULL)
 
   Anything worth keeping for a diagnosis, or `NULL`.
 
+- unconfirmed:
+
+  Whether the account may have been born all the same.
+
 ## Value
 
-A list with `ok`, `errors`, `payload`, `credential` and `upn`.
+A list with `ok`, `errors`, `payload`, `credential`, `upn` and
+`unconfirmed`.
 
 ## Details
 
 A creation that failed after Graph accepted it — a timeout on the way
 back — leaves an account whose credential this round has just discarded.
-It is the honest cost of not keeping one: the next round finds the
-account by its surname and contact address and writes `created`, and
-whoever needs to let that person in resets it once. Keeping a secret for
-a creation we cannot confirm is worse in the direction that matters.
+It is the cost of not keeping one: the next round finds the account by
+its surname and contact address and writes `created`, and somebody has
+to reset the credential once. Keeping a secret for a creation we cannot
+confirm is worse in the direction that matters.
+
+What must not happen is that nobody learns of it, and `unconfirmed` is
+what prevents it. It is `TRUE` on the failures that do not say whether
+the account was born – no answer at all, or one that is not Graph's –
+and `FALSE` on the ones that do, a refusal or a throttle carrying
+Graph's own code. The round counts an unconfirmed creation as a key
+lost, so the alarm that sends IT to reset a key fires on it.
