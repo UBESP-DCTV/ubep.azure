@@ -550,6 +550,30 @@ chiedevano le ultime 24 ore di tutto il registro: una modifica più vecchia
 restava fuori e l'approvazione dentro, la modifica risultava senza autore e
 l'approvazione di chi l'aveva fatta passava per quella di un altro.
 
+### Una persona da creare
+
+Una riga il cui verdetto è `absent` è l'unica che il giro chiude creando, e
+creare è l'unico atto che un giro dopo non disfa: l'utenza esiste. Dalla 0.19.0
+tre controlli stanno prima della nascita, e non dopo.
+
+- **Validata prima di nascere.** La riga si giudica come la coppia che
+  diventerà, con il nome che il giro sta per creare: una scadenza passata dà
+  `DATO_SCADENZA_NON_VALIDA`, una seconda riga per la stessa coppia dà
+  `DATO_COPPIA_DUPLICATA` sulla più giovane. Poi l'istanza prova l'assegnazione
+  in simulazione, che risolve ruolo e gruppo senza scrivere: un ruolo o un
+  gruppo inesistenti danno `DATO_RUOLO_INESISTENTE` o `DATO_DAG_INESISTENTE`.
+  La riga che non passa prende il suo codice e l'utenza non nasce. Fino alla
+  0.18.0 nasceva, partivano benvenuto e chiave, e l'errore arrivava al giro
+  dopo, su una persona che ormai esisteva. La prova costa una chiamata in più
+  per istanza e progetto con persone da creare, anche nei giri simulati.
+- **Su un'istanza che non risponde aspetta con un codice.** La riga prende
+  `transport_error` con il codice dell'istanza, come una coppia, invece di
+  restare `pending` senza limite e senza codice; torna in coda a ogni giro.
+- **Con la posta spenta non nasce.** La chiave esce per una strada sola, la
+  posta. Con `UBEP_SCRITTURA=1` e `UBEP_POSTA` spenta il giro non crea nessuno:
+  la riga resta in attesa, e nei giri in cui qualcuno sarebbe nato gli `errori`
+  portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+
 ### Verificare che il progetto sia ancora quello che il canale si aspetta
 
 `compare_dictionary()` rilegge il dizionario dal progetto vivo e lo confronta
@@ -856,6 +880,28 @@ chiave: il nome utente, l'indirizzo dell'istanza e i passi del primo accesso
 glieli manda IT, a mano. Per sapere perché non è partito, guardare la riga nel
 registro: un `contact_email` vuoto spiega il caso da solo; altrimenti il journal
 della lavorazione riporta la risposta del servizio di posta.
+
+**Credenziale persa (gravità 1).** Un'utenza è nata e la sua chiave non è
+arrivata a nessuno: `credenziali_perse` è maggiore di zero. Dalla 0.19.0 conta
+anche la creazione di cui si è persa la risposta
+(`TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`, o una risposta che non è di Graph):
+l'utenza può essere nata con una chiave morta con il processo, e il giro dopo
+la troverebbe e la porterebbe ad `applied` senza che nessuno abbia la chiave.
+Si conta nello stesso giro, e conta anche come benvenuto perso; il codice sta
+negli errori del giro e sulla riga. Cercare su Entra l'utenza della riga che
+porta il codice:
+
+- se c'è, la procedura è una sola: reimpostare la chiave su Entra,
+  mandarla da sola al referente, e scrivere alla persona nome utente,
+  indirizzo dell'istanza e istruzioni;
+- se non c'è, non serve fare niente: la richiesta non era arrivata a Graph, il
+  giro dopo crea l'utenza con chiave e benvenuto, e il record conta
+  `credenziali_recapitate`. Guardarlo prima di reimpostare.
+
+Il prezzo del conteggio immediato è un allarme per un'utenza mai nata. Contare
+al giro dopo sarebbe esatto, ma servirebbe il dettaglio precedente della riga
+come memoria, e quella memoria si perde proprio nei guasti che arrivano
+insieme a una risposta persa.
 
 **Prima di inseguire un allarme isolato.** L'ingestione ha consistenza
 eventuale: per qualche decina di secondi due query identiche possono vedere
