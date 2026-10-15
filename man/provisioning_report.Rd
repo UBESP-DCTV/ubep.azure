@@ -72,7 +72,7 @@ nothing is due, and the alarm on absence is the one that speaks.
 On the 1st the run moves on to the month just ended, and a report of the
 month before that still not sent is not sent any more: it would describe a
 month two behind. It is not dropped in silence either. Every run of the
-real month compares the month before's ledger with what its last whole
+real month compares the ledger of the month before with what its last whole
 reading found due, and while a report is missing the record carries
 \code{RAPPORTO_MESE_PRECEDENTE_INCOMPLETO}.
 

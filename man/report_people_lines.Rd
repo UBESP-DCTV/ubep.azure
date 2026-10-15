@@ -4,12 +4,13 @@
 \alias{report_people_lines}
 \title{The lines of the people with no first sign-in, in both languages}
 \usage{
-report_people_lines(people, unjudged = 0L)
+report_people_lines(people, to_it = 0L)
 }
 \arguments{
 \item{people}{The \code{senza_primo_accesso} of a referent's report.}
 
-\item{unjudged}{How many of the referent's people went to IT unjudged.}
+\item{to_it}{How many of the referent's people went to IT without being
+judged.}
 }
 \value{
 A list of two character vectors, \code{it} and \code{en}.

@@ -24,13 +24,7 @@ report_assemble(
 
 \item{unread}{The earlier months whose ledger did not read. A person who
 could have been in one of their reports gets \code{storia_nota} false, and
-the mail says nothing about earlier reports rather than something false.
-
-A referent whose people went to IT unjudged is told how many, in the
-report itself: the principle of the all-clear, which must not cover an item
-nobody measured. \code{non_giudicati} counts them, a person once: the people of
-that referent the report could not judge, and those of the rows the log
-does not date.}
+the mail says nothing about earlier reports rather than something false.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
@@ -72,5 +66,11 @@ creator the log does not name, or whose creator Entra holds disabled, or
 does not hold, or cannot say; a person whose account is disabled, missing,
 without a creation date or that cannot otherwise be judged; a row the log
 does not date. A disabled creator receives nothing.
+
+A referent whose people went to IT without being judged is told how
+many, in the report itself: the principle of the all-clear, which must not
+cover an item nobody measured. \code{non_giudicati} counts them, a person once:
+the people of that referent the report could not judge, and those of the
+rows the log does not date.
 }
 \keyword{internal}

@@ -524,6 +524,12 @@ report_rows <- function(register, creators, executions, period,
 #' without a creation date or that cannot otherwise be judged; a row the log
 #' does not date. A disabled creator receives nothing.
 #'
+#' A referent whose people went to IT without being judged is told how
+#' many, in the report itself: the principle of the all-clear, which must not
+#' cover an item nobody measured. `non_giudicati` counts them, a person once:
+#' the people of that referent the report could not judge, and those of the
+#' rows the log does not date.
+#'
 #' @param rows What `report_rows()` answered.
 #' @param directory A directory frame, as `directory_users()` returns it.
 #' @param period What `report_month()` answered.
@@ -532,12 +538,6 @@ report_rows <- function(register, creators, executions, period,
 #' @param unread The earlier months whose ledger did not read. A person who
 #'   could have been in one of their reports gets `storia_nota` false, and
 #'   the mail says nothing about earlier reports rather than something false.
-#'
-#' A referent whose people went to IT unjudged is told how many, in the
-#' report itself: the principle of the all-clear, which must not cover an item
-#' nobody measured. `non_giudicati` counts them, a person once: the people of
-#' that referent the report could not judge, and those of the rows the log
-#' does not date.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
 #'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
@@ -868,12 +868,13 @@ report_activated_lines <- function(rows) {
 #' The lines of the people with no first sign-in, in both languages
 #'
 #' @param people The `senza_primo_accesso` of a referent's report.
-#' @param unjudged How many of the referent's people went to IT unjudged.
+#' @param to_it How many of the referent's people went to IT without being
+#'   judged.
 #'
 #' @return A list of two character vectors, `it` and `en`.
 #'
 #' @keywords internal
-report_people_lines <- function(people, unjudged = 0L) {
+report_people_lines <- function(people, to_it = 0L) {
   grace <- report_grace_days()
 
   each <- lapply(people, function(person) {
@@ -935,8 +936,8 @@ report_people_lines <- function(people, unjudged = 0L) {
         "entrate con l'account UBEP."
       ),
       unlist(lapply(each, `[[`, "it")),
-      if (unjudged > 0L) {
-        paste0("   Persone non giudicabili, segnalate a IT: ", unjudged, ".")
+      if (to_it > 0L) {
+        paste0("   Persone non giudicabili, segnalate a IT: ", to_it, ".")
       },
       paste0(
         "   Che cosa fare: chiedi alla persona se ha ricevuto il benvenuto e ",
@@ -954,9 +955,9 @@ report_people_lines <- function(people, unjudged = 0L) {
         "signed in with the UBEP account yet."
       ),
       unlist(lapply(each, `[[`, "en")),
-      if (unjudged > 0L) {
+      if (to_it > 0L) {
         paste0(
-          "   People that could not be judged, reported to IT: ", unjudged, "."
+          "   People that could not be judged, reported to IT: ", to_it, "."
         )
       },
       paste0(
@@ -1002,9 +1003,9 @@ report_read_words <- function(period) {
 #' The year without access is not measured in phase 1, and the mail says so
 #' in both forms: an all-clear that covered an item nobody looked at would
 #' say something false. For the same reason the people of the referent that
-#' went to IT unjudged are counted in a line of their own, which changes
-#' neither the verdict nor the number in the subject: those say what was
-#' measured.
+#' went to IT without being judged are counted in a line of their own, which
+#' changes neither the verdict nor the number in the subject: those say what
+#' was measured.
 #'
 #' Italian above and English below, as every mail of the channel, since the
 #' address says nothing about which one its reader reads.
@@ -1722,7 +1723,7 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' On the 1st the run moves on to the month just ended, and a report of the
 #' month before that still not sent is not sent any more: it would describe a
 #' month two behind. It is not dropped in silence either. Every run of the
-#' real month compares the month before's ledger with what its last whole
+#' real month compares the ledger of the month before with what its last whole
 #' reading found due, and while a report is missing the record carries
 #' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
 #'
