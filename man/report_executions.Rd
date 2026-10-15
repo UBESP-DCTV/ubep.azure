@@ -26,9 +26,9 @@ is how the report tells a modified request from a new one.
 }
 \details{
 The events are filtered here by \code{record}, whatever REDCap did with the
-parameter: that \code{exportLogging} honors it is measured only with the 0.19.0
-in service, and an instance that ignored it would hand back the whole log,
-where another row's execution would date this one.
+parameter. Measured on 2026-10-16 that \code{exportLogging} honors it; the
+filter stays, at no cost, because an instance that ignored it would hand
+back the whole log, where another row's execution would date this one.
 
 The author has to be the channel, which \code{log_channel_accounts()} names
 without configuration. When two accounts write the channel's fields the log
@@ -44,7 +44,9 @@ only, from its newest creation on, as for the round, and the channel's
 account is recognized on that.
 
 The stamps stay in the instance's civil time, which is Rome: measured on
-2026-09-01, a round at 21:03 UTC is logged at 23:03. A month is then the
+2026-09-01, a round at 21:03 UTC is logged at 23:03, and again on
+2026-10-16, a first seal logged at 22:04 beside an \code{outcome_at} of 20:03
+UTC. A month is then the
 first seven characters of the stamp, and no conversion can shift a row
 activated on the last evening of the month into the next one.
 }

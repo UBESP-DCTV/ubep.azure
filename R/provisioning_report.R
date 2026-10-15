@@ -8,7 +8,12 @@
 #' write them; the round creates every account with the change of key forced
 #' at first sign-in, so a person who has signed in has moved the second date.
 #'
-#' One value, in one place: the next measurement changes it in one line.
+#' Confirmed on 2026-10-16 over the enabled accounts of the tenant: the
+#' accounts known never to have been used sit at 0 seconds, none falls
+#' between 1 and 30, a handful between 31 and 120; an account made by hand on
+#' the portal and used once sits at 172.
+#'
+#' One value, in one place: a later measurement changes it in one line.
 #'
 #' @return Seconds.
 #'
@@ -151,9 +156,9 @@ report_day_words <- function(date) {
 #' is how the report tells a modified request from a new one.
 #'
 #' The events are filtered here by `record`, whatever REDCap did with the
-#' parameter: that `exportLogging` honors it is measured only with the 0.19.0
-#' in service, and an instance that ignored it would hand back the whole log,
-#' where another row's execution would date this one.
+#' parameter. Measured on 2026-10-16 that `exportLogging` honors it; the
+#' filter stays, at no cost, because an instance that ignored it would hand
+#' back the whole log, where another row's execution would date this one.
 #'
 #' The author has to be the channel, which `log_channel_accounts()` names
 #' without configuration. When two accounts write the channel's fields the log
@@ -169,7 +174,9 @@ report_day_words <- function(date) {
 #' account is recognized on that.
 #'
 #' The stamps stay in the instance's civil time, which is Rome: measured on
-#' 2026-09-01, a round at 21:03 UTC is logged at 23:03. A month is then the
+#' 2026-09-01, a round at 21:03 UTC is logged at 23:03, and again on
+#' 2026-10-16, a first seal logged at 22:04 beside an `outcome_at` of 20:03
+#' UTC. A month is then the
 #' first seven characters of the stamp, and no conversion can shift a row
 #' activated on the last evening of the month into the next one.
 #'

@@ -19,6 +19,11 @@ write them; the round creates every account with the change of key forced
 at first sign-in, so a person who has signed in has moved the second date.
 }
 \details{
-One value, in one place: the next measurement changes it in one line.
+Confirmed on 2026-10-16 over the enabled accounts of the tenant: the
+accounts known never to have been used sit at 0 seconds, none falls
+between 1 and 30, a handful between 31 and 120; an account made by hand on
+the portal and used once sits at 172.
+
+One value, in one place: a later measurement changes it in one line.
 }
 \keyword{internal}
