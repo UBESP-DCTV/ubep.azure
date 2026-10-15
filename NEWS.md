@@ -26,16 +26,24 @@
   is within 60 seconds of its `createdDateTime` (`report_tolerance()`, one
   constant) has never been entered, since the round creates accounts with the
   change of key forced at first sign-in. A key reset by IT hides the person,
-  and phase 2 removes that. The item names the earlier reports of the same
-  referent that named the person, and how many months it has been.
+  and phase 2 removes that. The 30 days run from the person and not from the
+  row: from the later of the channel's first execution after the newest
+  write of `username`, and the birth of the account on Entra
+  (`report_person_since()`), so a username corrected by a modification, or an
+  account made again, does not inherit somebody else's months. The item names
+  the earlier reports of the same referent that named the person, and how
+  many months it has been.
 
   Two forms, told apart by the first word of the subject: `Tutto in ordine`,
   or `N da guardare` with N the people listed. Italian above, English below,
   IT in copy at the address of `UBEP_POSTA_COPIA`. What has no referent to go
   to (a creator the log does not name, or whose account is disabled or
   missing; a person whose account cannot be judged; a row the log does not
-  date) goes in one mail to IT, at the same address, only when there is
-  something in it.
+  date, told apart as having no seal by the channel or seals by two
+  accounts) goes in one mail to IT, at the same address, only when there is
+  something in it. A referent whose people went to IT without being judged
+  is told how many in a line of its own, which changes neither the verdict
+  nor the number in the subject.
 
 * **The report is a job of its own, run every day.** `dev/runner-rapporto.R`,
   beside the round's and the observer's. A log alert looks back two days at
@@ -44,23 +52,40 @@
   not had it yet. A ledger in the unit's state directory, one file per month,
   says which reports left and which people they named; it is written after a
   send, so a failed write costs a duplicate and never a loss. A day on which
-  anything could not be read sends nothing.
+  anything could not be read sends nothing, and judges the month on the
+  reports the last whole reading found due, kept beside the ledger; with
+  none on record the month is not called late. Only the covered month's
+  ledger stops the post: an earlier one that does not read costs its people
+  the sentence on earlier reports, and the record
+  `RAPPORTO_STORICO_ILLEGGIBILE`. A report of the month before still unsent
+  on the 1st is not sent any more, and the record carries
+  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` while it is missing.
 
   The post is off by default (`UBEP_RAPPORTO_POSTA`), and
   `UBEP_RAPPORTO_POSTA_A` redirects it for a field test; they are not the
   round's two, so a redirect for the report leaves the round's outcomes
   alone. `--mese AAAA-MM` forces the month for a run by hand; it is an
-  argument so that it cannot be left on in the environment the jobs share. A
-  run with the post off, redirected or with a forced month writes no ledger:
-  a field test at the end of October would otherwise make October read as
-  sent, and nothing would leave on the 1st of November. With the post on, a
-  forced month requires the redirect.
+  argument so that it cannot be left on in the environment the jobs share.
+  Neither a redirected run nor one with a forced month writes the real
+  ledger: a field test at the end of October would otherwise make October
+  read as sent, and nothing would leave on the 1st of November. A redirected
+  run keeps a ledger of its own, so the timer of a field test does not send
+  everything again every day; a run with a forced month writes nothing, and
+  with the post on it requires the redirect.
 
   The record goes to its own table, through `UBEP_DCR_RAPPORTO` and
   `UBEP_STREAM_RAPPORTO`, with the columns of the design
-  (`report_record()`). `in_ritardo` is computed here and not in the query, so
-  a test covers it: from the second day of the month, with the month's
-  reports not all sent, or not all countable.
+  (`report_record()`). `mese_completo` is the design's `gia_mandati +
+  mandati == referenti`, and `in_ritardo` is computed here and not in the
+  query, so a test covers it: from the second day of the month, with the
+  month not complete.
+
+* **The register's door refuses a write that was not declared.**
+  `register_call()` is the door every reading of the register goes through,
+  and a call with `action = "import"` wrote through it all the same, unseen
+  by a guard looking for the writers by name. It now refuses `import`,
+  `delete` and `rename` unless the caller passes `writes = TRUE`, which only
+  `register_field_import()` does. The round writes as before.
 
 * **The sweep asks for `lastPasswordChangeDateTime` too.** One more field in
   `directory_fields()`, which builds the select and names the columns, so the
