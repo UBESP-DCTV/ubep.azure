@@ -307,3 +307,277 @@ report_first_access <- function(directory, upn,
   apart <- abs(as.numeric(difftime(changed, created, units = "secs")))
   if (apart <= tolerance) "mai_entrata" else "entrata"
 }
+
+
+#' Whether an access is past its last day, on a given date
+#'
+#' REDCap refuses the pair when `expiration` is today or earlier, so the day
+#' written is already over.
+#'
+#' @param expiration The register's `expiration`, `"%Y-%m-%d"` or empty.
+#' @param today The date to judge on.
+#'
+#' @return A logical vector; an empty or unreadable date is not expired.
+#'
+#' @keywords internal
+report_expired <- function(expiration, today) {
+  date <- suppressWarnings(
+    as.Date(trimws(as.character(expiration)), format = "%Y-%m-%d")
+  )
+  !is.na(date) & date <= today
+}
+
+
+#' The rows a month's report speaks about, with their creator and their date
+#'
+#' A row counts while it is an access: `request_status` is `active` and
+#' `outcome` is `applied`. The filter is on the request and not on the
+#' outcome alone, because a revocation the round carried out closes with
+#' `applied` too; and any other outcome is not an access, and has had its own
+#' mail already.
+#'
+#' Of those, a row activated after the month covered waits for the next
+#' report, and every other one is kept. `nel_mese` says what the month did to
+#' it: `attivata` when its first execution falls in the month, `modificata`
+#' when it was executed again in the month after a change, `""` otherwise.
+#'
+#' A row whose log was read and carries no execution by the channel is kept
+#' with `senza_data`: it is applied and the log does not say since when, which
+#' is a question for IT. A row whose log could not be read is left out, since
+#' it cannot be judged on a reading that did not happen; the caller sends
+#' nothing on such a day.
+#'
+#' @param register The register as read.
+#' @param creators Who created each row, as `log_creators()` answers, in the
+#'   register's order.
+#' @param executions One element per row, in the register's order: what
+#'   `report_executions()` answered, or `NULL` where the log was not read.
+#' @param period What `report_month()` answered.
+#'
+#' @return The kept rows of `register`, with `creator`, `attivata_il`,
+#'   `nel_mese` and `senza_data` added.
+#'
+#' @keywords internal
+report_rows <- function(register, creators, executions, period) {
+  stopifnot(
+    is.data.frame(register),
+    is.character(creators), length(creators) == nrow(register),
+    is.list(executions), length(executions) == nrow(register),
+    is.list(period)
+  )
+
+  field <- function(name) {
+    value <- register[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(register)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  month <- period[["mese"]]
+  unread <- vapply(executions, is.null, logical(1))
+  dated <- vapply(executions, function(stamps) {
+    !is.null(stamps) && length(stamps) > 0L && !anyNA(stamps)
+  }, logical(1))
+  stamps <- lapply(seq_along(executions), function(i) {
+    if (dated[[i]]) sort(executions[[i]]) else character()
+  })
+  first <- vapply(stamps, function(s) if (length(s)) s[[1L]] else "", "")
+  again <- vapply(stamps, function(s) {
+    length(s) > 1L && any(substr(s[-1L], 1L, 7L) == month)
+  }, logical(1))
+
+  scope <- field("request_status") == "active" & field("outcome") == "applied"
+  keep <- scope & !unread & (!dated | substr(first, 1L, 7L) <= month)
+
+  news <- ifelse(
+    dated & substr(first, 1L, 7L) == month, "attivata",
+    ifelse(again, "modificata", "")
+  )
+  creators <- trimws(creators)
+  creators[is.na(creators)] <- ""
+
+  rows <- register[keep, , drop = FALSE]
+  rows[["creator"]] <- creators[keep]
+  rows[["attivata_il"]] <- first[keep]
+  rows[["nel_mese"]] <- news[keep]
+  rows[["senza_data"]] <- !dated[keep]
+  rownames(rows) <- NULL
+  rows
+}
+
+
+#' Put each row in the report it belongs to
+#'
+#' A row belongs to **whoever created it**, as the creation log says, and not
+#' to `requested_by`, which an import writes as it likes. The report goes to
+#' the same person the round asks to approve a change. A person asked for by
+#' two referents is in both reports, each with their own rows.
+#'
+#' Three items, of which phase 1 fills two:
+#'
+#' - **activated in the month**, one line per request, new or modified. It is
+#'   information, and does not count among the things to look at;
+#' - **no first sign-in**, one item per person, with every project of theirs:
+#'   the requests of that person activated at least `report_grace_days()`
+#'   before the reading and not expired, when Entra says nobody has entered the
+#'   account (`report_first_access()`). The item carries the oldest of those
+#'   activations, how many days and months of thirty days ago it was, and the
+#'   dates of the earlier reports of the same referent that named the person;
+#' - **no access for more than a year** is phase 2, and the mail says it was
+#'   not checked.
+#'
+#' What has no referent to go to goes to IT, and to nobody else: a row whose
+#' creator the log does not name, or whose creator Entra holds disabled, or
+#' does not hold, or cannot say; a person whose account is disabled, missing,
+#' without a creation date or otherwise not judgeable; a row the log does not
+#' date. A disabled creator receives nothing.
+#'
+#' @param rows What `report_rows()` answered.
+#' @param directory A directory frame, as `directory_users()` returns it.
+#' @param period What `report_month()` answered.
+#' @param previous The entries of the earlier months' ledgers, as
+#'   `report_ledger_previous()` reads them.
+#'
+#' @return A list with `referenti`, one report per referent named after them,
+#'   each a list of `referente`, `attivati` (rows) and `senza_primo_accesso`
+#'   (people); `it`, `NULL` when there is nothing for IT, otherwise a list of
+#'   `senza_referente` (rows, with `motivo`), `non_giudicabili` (people, with
+#'   `referente` and `motivo`) and `senza_data` (rows); and `senza_creatore`,
+#'   how many rows have no referent to go to.
+#'
+#' @keywords internal
+report_assemble <- function(rows, directory, period, previous = list()) {
+  stopifnot(
+    is.data.frame(rows), is.data.frame(directory), is.list(period),
+    is.list(previous)
+  )
+
+  text <- function(name) {
+    value <- rows[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(rows)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  today <- period[["oggi"]]
+  creator <- text("creator")
+  activated <- text("attivata_il")
+  username <- text("username")
+  undated <- as.logical(rows[["senza_data"]] %||% logical(nrow(rows)))
+
+  state <- vapply(creator, function(who) {
+    if (!nzchar(who)) {
+      return("non_stabilito")
+    }
+    report_account(directory, who)[["stato"]]
+  }, character(1), USE.NAMES = FALSE)
+  orphan <- !undated & state != "attivo"
+  own <- !undated & state == "attivo"
+
+  days <- rep(NA_integer_, nrow(rows))
+  days[!undated] <- as.integer(
+    today - as.Date(substr(activated[!undated], 1L, 10L))
+  )
+  judged <- own & !report_expired(text("expiration"), today) &
+    !is.na(days) & days >= report_grace_days()
+
+  projects <- function(at) {
+    found <- unique(data.frame(
+      server = text("server")[at], project_id = text("project_id")[at],
+      stringsAsFactors = FALSE
+    ))
+    number <- suppressWarnings(as.numeric(found[["project_id"]]))
+    found <- found[
+      order(found[["server"]], number, found[["project_id"]]), ,
+      drop = FALSE
+    ]
+    rownames(found) <- NULL
+    found
+  }
+
+  reported <- function(who, key) {
+    dates <- unlist(lapply(previous, function(entry) {
+      same <- identical(
+        tolower(trimws(as.character(entry[["destinatario"]] %||% ""))),
+        tolower(who)
+      )
+      named <- key %in% tolower(trimws(as.character(
+        entry[["senza_primo_accesso"]] %||% character()
+      )))
+      if (same && named) substr(as.character(entry[["at"]]), 1L, 10L)
+    }))
+    sort(unique(as.character(dates)))
+  }
+
+  referenti <- list()
+  non_giudicabili <- list()
+
+  for (who in unique(creator[own])) {
+    mine <- own & creator == who
+
+    attivati <- rows[mine & nzchar(text("nel_mese")), , drop = FALSE]
+    attivati <- attivati[
+      order(attivati[["attivata_il"]], attivati[["record_id"]]), ,
+      drop = FALSE
+    ]
+    rownames(attivati) <- NULL
+
+    people <- list()
+    candidates <- which(mine & judged)
+    keys <- tolower(username[candidates])
+    for (key in unique(keys)) {
+      at <- candidates[keys == key]
+      at <- at[order(activated[at])]
+      oldest <- at[[1L]]
+      person <- list(
+        nome = trimws(paste(
+          text("first_name")[[oldest]], text("last_name")[[oldest]]
+        )),
+        upn = username[[oldest]],
+        progetti = projects(at)
+      )
+      verdict <- report_first_access(directory, username[[oldest]])
+      if (identical(verdict, "mai_entrata")) {
+        people[[length(people) + 1L]] <- c(person, list(
+          attivata_il = substr(activated[[oldest]], 1L, 10L),
+          giorni = days[[oldest]],
+          mesi = days[[oldest]] %/% 30L,
+          segnalata = reported(who, key)
+        ))
+      } else if (!identical(verdict, "entrata")) {
+        non_giudicabili[[length(non_giudicabili) + 1L]] <- c(person, list(
+          referente = who, motivo = verdict
+        ))
+      }
+    }
+
+    referenti[[who]] <- list(
+      referente = who, attivati = attivati, senza_primo_accesso = people
+    )
+  }
+
+  senza_referente <- rows[orphan, , drop = FALSE]
+  senza_referente[["motivo"]] <- state[orphan]
+  rownames(senza_referente) <- NULL
+  senza_data <- rows[undated, , drop = FALSE]
+  rownames(senza_data) <- NULL
+
+  for_it <- nrow(senza_referente) + length(non_giudicabili) + nrow(senza_data)
+  it <- if (for_it > 0L) {
+    list(
+      senza_referente = senza_referente,
+      non_giudicabili = non_giudicabili,
+      senza_data = senza_data
+    )
+  }
+
+  list(
+    referenti = referenti, it = it, senza_creatore = nrow(senza_referente)
+  )
+}
