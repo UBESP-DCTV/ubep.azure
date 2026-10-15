@@ -397,8 +397,10 @@ scritture <- function() {
 # The functions of `env` that `start` reaches, itself included, following
 # every name of a function of `env` that a body mentions. Coarse on purpose,
 # like the guards above: a name mentioned and never called is followed all
-# the same, and a false red costs a minute.
-raggiunte <- function(start, env = asNamespace("ubep.azure")) {
+# the same, and a false red costs a minute. A name in `fino_a` is reached and
+# not followed.
+raggiunte <- function(start, env = asNamespace("ubep.azure"),
+                      fino_a = character()) {
   functions <- Filter(
     function(name) is.function(get(name, envir = env)),
     ls(env, all.names = TRUE)
@@ -412,6 +414,9 @@ raggiunte <- function(start, env = asNamespace("ubep.azure")) {
       next
     }
     seen <- c(seen, name)
+    if (name %in% fino_a) {
+      next
+    }
     text <- paste(deparse(body(get(name, envir = env))), collapse = " ")
     called <- functions[vapply(
       functions, function(f) grepl(f, text, fixed = TRUE), logical(1)
@@ -419,6 +424,59 @@ raggiunte <- function(start, env = asNamespace("ubep.azure")) {
     queue <- c(queue, setdiff(called, seen))
   }
   seen
+}
+
+
+# The three doors through which the monthly report reaches the outside. The
+# guard does not follow them: it checks them on their own, and forbids every
+# other way out.
+lettori_del_rapporto <- function() {
+  c("register_records", "register_log", "directory_users")
+}
+
+
+# What breaks the rule that the report reads and sends mail. A list of write
+# functions alone is not enough: `register_call()` is the door every reading
+# of the register goes through, and with `action = "import"` it writes. So
+# the report may reach the outside only through its three readers, and is
+# refused `register_call()` and any request of its own; the readers are
+# checked to ask for nothing that writes.
+violazioni_rapporto <- function(env = asNamespace("ubep.azure")) {
+  lettori <- lettori_del_rapporto()
+  reached <- raggiunte("provisioning_report", env, fino_a = lettori)
+  body_of <- function(name) {
+    paste(deparse(body(get(name, envir = env))), collapse = " ")
+  }
+
+  own <- setdiff(reached, lettori)
+  requests <- own[vapply(
+    own, function(name) grepl("httr2::", body_of(name), fixed = TRUE),
+    logical(1)
+  )]
+  writing_readers <- lettori[vapply(
+    lettori,
+    function(name) grepl('"(import|delete|rename)"', body_of(name)),
+    logical(1)
+  )]
+
+  unique(c(
+    intersect(reached, c(scritture(), "register_call")),
+    requests, writing_readers
+  ))
+}
+
+
+# A copy of the namespace with one function's body led by `prima`.
+namespace_con <- function(nome, prima) {
+  ns <- asNamespace("ubep.azure")
+  copia <- new.env()
+  for (n in ls(ns, all.names = TRUE)) {
+    assign(n, get(n, envir = ns), envir = copia)
+  }
+  mutata <- get(nome, envir = ns)
+  body(mutata) <- call("{", prima, body(mutata))
+  assign(nome, mutata, envir = copia)
+  copia
 }
 
 
@@ -438,7 +496,7 @@ test_that("the monthly report reads and sends mail, and nothing else", {
       "report_deliver", "report_ledger_add") %in% reached
   ))
   expect_equal(
-    intersect(reached, scritture()), character(),
+    violazioni_rapporto(), character(),
     info = paste(
       "The monthly report reads the register, its log and the tenant, and",
       "sends mail. A write reached from it, however indirectly, makes it a",
@@ -446,6 +504,47 @@ test_that("the monthly report reads and sends mail, and nothing else", {
       "deliberately adding a write, it belongs in the round, not here."
     )
   )
+})
+
+
+test_that("the report guard sees a write through the door of the readings", {
+  # eval
+  # Found by an adversarial review on 2026-10-15: one line writing a field
+  # through `register_call()`, which every reading uses, passed a guard that
+  # looked for write functions by name.
+  per_la_porta <- namespace_con(
+    "provisioning_report",
+    quote(register_call(register_url, register_token, list(
+      content = "record", action = "import", data = "[]"
+    )))
+  )
+  per_nome <- namespace_con(
+    "provisioning_report",
+    quote(register_import(register_url, register_token, data.frame()))
+  )
+  # A request of its own, three helpers down.
+  per_conto_suo <- namespace_con(
+    "report_join", quote(httr2::req_perform(httr2::request("https://x")))
+  )
+  # A reader that started writing.
+  lettore <- namespace_con(
+    "register_log",
+    quote(register_call(
+      url, token, list(content = "record", action = "delete")
+    ))
+  )
+
+  # test
+  # The mutation is in the body, not in a comment.
+  expect_match(
+    paste(deparse(body(get("provisioning_report", envir = per_la_porta))),
+          collapse = " "),
+    'action = "import"', fixed = TRUE
+  )
+  expect_true("register_call" %in% violazioni_rapporto(per_la_porta))
+  expect_true("register_import" %in% violazioni_rapporto(per_nome))
+  expect_true("report_join" %in% violazioni_rapporto(per_conto_suo))
+  expect_true("register_log" %in% violazioni_rapporto(lettore))
 })
 
 
