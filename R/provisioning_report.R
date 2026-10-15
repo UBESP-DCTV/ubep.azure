@@ -20,8 +20,8 @@ report_tolerance <- function() {
 
 #' How many days after its activation a request is asked for a first sign-in
 #'
-#' Thirty, counted on the calendar in Rome: a request activated on the 2nd is
-#' in the report of the 1st of the month after. Every person has between 30
+#' Thirty, counted on the calendar in Rome: a request activated on the second
+#' day of a month is in the report of the first day of the month after. Every person has between 30
 #' and 61 days before their first mention.
 #'
 #' @return Days.
@@ -269,7 +269,7 @@ report_account <- function(directory, upn) {
 #' Whether a person has signed in to Entra, from the two dates of their key
 #'
 #' Phase 1 of the report reads Entra and nothing else, with the permission the
-#' round already holds. `lastPasswordChangeDateTime` is, in Learn's words,
+#' round already holds. `lastPasswordChangeDateTime` is, in the words of Learn,
 #' "the time when this Microsoft Entra user last changed their password or
 #' when their password was created", and the round creates every account with
 #' `forceChangePasswordNextSignIn`: an account whose key is as old as the
@@ -431,17 +431,18 @@ report_rows <- function(register, creators, executions, period) {
 #' - **no first sign-in**, one item per person, with every project of theirs:
 #'   the requests of that person activated at least `report_grace_days()`
 #'   before the reading and not expired, when Entra says nobody has entered the
-#'   account (`report_first_access()`). The item carries the oldest of those
-#'   activations, how many days and months of thirty days ago it was, and the
-#'   dates of the earlier reports of the same referent that named the person;
+#'   account (`report_first_access()`). The item carries the earliest date of
+#'   activation among them, how many days and months of thirty days ago it
+#'   was, and the dates of the earlier reports of the same referent that named
+#'   the person;
 #' - **no access for more than a year** is phase 2, and the mail says it was
 #'   not checked.
 #'
 #' What has no referent to go to goes to IT, and to nobody else: a row whose
 #' creator the log does not name, or whose creator Entra holds disabled, or
 #' does not hold, or cannot say; a person whose account is disabled, missing,
-#' without a creation date or otherwise not judgeable; a row the log does not
-#' date. A disabled creator receives nothing.
+#' without a creation date or that cannot otherwise be judged; a row the log
+#' does not date. A disabled creator receives nothing.
 #'
 #' @param rows What `report_rows()` answered.
 #' @param directory A directory frame, as `directory_users()` returns it.
@@ -1431,8 +1432,8 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' @param mailer `function(to, cc, subject, body)` returning `ok` and
 #'   `errors`, or `NULL` for no post.
 #' @param redirect_to One address replacing every recipient, or `NULL`.
-#' @param copy_to IT's address: in copy on the referents' reports, and the
-#'   recipient of the report to IT.
+#' @param copy_to The address of IT: in copy on the referents' reports, and
+#'   the recipient of the report to IT.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due, for whoever reads a single run.
@@ -1633,7 +1634,7 @@ provisioning_report <- function(register_url,
 
 #' Whether the month's reports are late
 #'
-#' From the 2nd of the month on, with the month not complete. Computed here
+#' From the second day of the month on, with the month not complete. Computed here
 #' and not in the query of the alarm, so that a test covers it. A forced run
 #' speaks about another month and cannot say the real one is late: it says
 #' false, and the next run of the timer says the truth.

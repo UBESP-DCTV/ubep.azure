@@ -37,8 +37,8 @@ gives, for a run by hand; \code{NULL} otherwise.}
 
 \item{redirect_to}{One address replacing every recipient, or \code{NULL}.}
 
-\item{copy_to}{IT's address: in copy on the referents' reports, and the
-recipient of the report to IT.}
+\item{copy_to}{The address of IT: in copy on the referents' reports, and
+the recipient of the report to IT.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus

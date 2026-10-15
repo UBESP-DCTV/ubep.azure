@@ -22,7 +22,7 @@ accounts created before June 2018) and \code{non_giudicabile}.
 }
 \description{
 Phase 1 of the report reads Entra and nothing else, with the permission the
-round already holds. \code{lastPasswordChangeDateTime} is, in Learn's words,
+round already holds. \code{lastPasswordChangeDateTime} is, in the words of Learn,
 "the time when this Microsoft Entra user last changed their password or
 when their password was created", and the round creates every account with
 \code{forceChangePasswordNextSignIn}: an account whose key is as old as the

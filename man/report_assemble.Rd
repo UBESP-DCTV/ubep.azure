@@ -38,9 +38,10 @@ information, and does not count among the things to look at;
 \item \strong{no first sign-in}, one item per person, with every project of theirs:
 the requests of that person activated at least \code{report_grace_days()}
 before the reading and not expired, when Entra says nobody has entered the
-account (\code{report_first_access()}). The item carries the oldest of those
-activations, how many days and months of thirty days ago it was, and the
-dates of the earlier reports of the same referent that named the person;
+account (\code{report_first_access()}). The item carries the earliest date of
+activation among them, how many days and months of thirty days ago it
+was, and the dates of the earlier reports of the same referent that named
+the person;
 \item \strong{no access for more than a year} is phase 2, and the mail says it was
 not checked.
 }
@@ -48,7 +49,7 @@ not checked.
 What has no referent to go to goes to IT, and to nobody else: a row whose
 creator the log does not name, or whose creator Entra holds disabled, or
 does not hold, or cannot say; a person whose account is disabled, missing,
-without a creation date or otherwise not judgeable; a row the log does not
-date. A disabled creator receives nothing.
+without a creation date or that cannot otherwise be judged; a row the log
+does not date. A disabled creator receives nothing.
 }
 \keyword{internal}
