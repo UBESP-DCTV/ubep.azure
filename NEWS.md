@@ -1,3 +1,87 @@
+# ubep.azure 0.20.0
+
+* **A monthly report to each referent, phase 1.** Decided on 2026-10-15.
+  Once a month every referent receives what is new or unexpected about the
+  requests they created, and not the list of all their accounts: the accesses
+  activated in the month, for information, and the people who have not
+  signed in a first time 30 days or more after their access was activated.
+  The third item, people with no access in more than a year, needs the
+  module and comes with phase 2; until then the mail says it was not
+  checked, since an all-clear that covered it would say something false.
+  `provisioning_report()` runs it, and **it reads and sends mail, and nothing
+  else**: it does not write in the register and does not touch Entra, and a
+  guard follows every function it reaches to keep it so.
+
+  A request belongs to whoever created it, as the creation log says, the
+  same person the round asks to approve a change; a person asked for by two
+  referents is in both reports, each with their own rows. Only active and
+  applied rows count. The date of activation is the channel's first write of
+  the seal in the row's log, not `outcome_at`, which moves at every outcome;
+  a row executed again after a change is listed as modified. The log is
+  filtered by record here too, whatever REDCap does with the parameter, and
+  it is in Italian time, as the month is cut.
+
+  Whether a person has signed in is read from Entra with the permission the
+  round already holds: an enabled account whose `lastPasswordChangeDateTime`
+  is within 60 seconds of its `createdDateTime` (`report_tolerance()`, one
+  constant) has never been entered, since the round creates accounts with the
+  change of key forced at first sign-in. A key reset by IT hides the person,
+  and phase 2 removes that. The item names the earlier reports of the same
+  referent that named the person, and how many months it has been.
+
+  Two forms, told apart by the first word of the subject: `Tutto in ordine`,
+  or `N da guardare` with N the people listed. Italian above, English below,
+  IT in copy at the address of `UBEP_POSTA_COPIA`. What has no referent to go
+  to (a creator the log does not name, or whose account is disabled or
+  missing; a person whose account cannot be judged; a row the log does not
+  date) goes in one mail to IT, at the same address, only when there is
+  something in it.
+
+* **The report is a job of its own, run every day.** `dev/runner-rapporto.R`,
+  beside the round's and the observer's. A log alert looks back two days at
+  most, so the job runs daily: it reads, computes and leaves a record every
+  day, and from the 1st it sends the previous month's report to whoever has
+  not had it yet. A ledger in the unit's state directory, one file per month,
+  says which reports left and which people they named; it is written after a
+  send, so a failed write costs a duplicate and never a loss. A day on which
+  anything could not be read sends nothing.
+
+  The post is off by default (`UBEP_RAPPORTO_POSTA`), and
+  `UBEP_RAPPORTO_POSTA_A` redirects it for a field test; they are not the
+  round's two, so a redirect for the report leaves the round's outcomes
+  alone. `--mese AAAA-MM` forces the month for a run by hand; it is an
+  argument so that it cannot be left on in the environment the jobs share. A
+  run with the post off, redirected or with a forced month writes no ledger:
+  a field test at the end of October would otherwise make October read as
+  sent, and nothing would leave on the 1st of November. With the post on, a
+  forced month requires the redirect.
+
+  The record goes to its own table, through `UBEP_DCR_RAPPORTO` and
+  `UBEP_STREAM_RAPPORTO`, with the columns of the design
+  (`report_record()`). `in_ritardo` is computed here and not in the query, so
+  a test covers it: from the second day of the month, with the month's
+  reports not all sent, or not all countable.
+
+* **The sweep asks for `lastPasswordChangeDateTime` too.** One more field in
+  `directory_fields()`, which builds the select and names the columns, so the
+  round's sweep carries it as well. The resolution does not read it, and it
+  asks for no permission beyond `User.Read.All`.
+
+* **A record id used twice.** The register reuses ids after a deletion, and a
+  row's log then holds an earlier row's history. `log_current_life()` keeps
+  the events above the newest creation or deletion, and the report dates a
+  row on those alone. The creator was already the one of the row that stands
+  now: `log_creators()` takes the newest creation. The round's readers of a
+  row's log do not use it yet.
+
+* **Shape of the release.** No dictionary to import, and the round and the
+  observer are called as before, so their jobs stay as they are. What is new
+  is outside the package and goes in this order: the table and its
+  collection rule, before anything emits; the four variables; the package,
+  and the new job in `/opt`; its unit and daily timer; a run by hand with a
+  forced month and the post redirected; the three alarms, after the first
+  record. The post is switched on last.
+
 # ubep.azure 0.19.0
 
 * **A change to a request waits for whoever created it, and only for them.**
