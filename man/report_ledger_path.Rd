@@ -4,17 +4,21 @@
 \alias{report_ledger_path}
 \title{Where a month's ledger of sent reports lives}
 \usage{
-report_ledger_path(dir, month)
+report_ledger_path(dir, month, collaudo = FALSE)
 }
 \arguments{
 \item{dir}{The job's state directory.}
 
 \item{month}{The month covered, \code{"AAAA-MM"}.}
+
+\item{collaudo}{Whether the ledger is a redirected run's.}
 }
 \value{
 A path.
 }
 \description{
-Where a month's ledger of sent reports lives
+A redirected run keeps a ledger of its own, beside the real one: a field
+test is then as idempotent as the real thing, and does not send everything
+again every day, without making the real month read as sent.
 }
 \keyword{internal}

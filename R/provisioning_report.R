@@ -1353,14 +1353,19 @@ report_it_key <- function() {
 
 #' Where a month's ledger of sent reports lives
 #'
+#' A redirected run keeps a ledger of its own, beside the real one: a field
+#' test is then as idempotent as the real thing, and does not send everything
+#' again every day, without making the real month read as sent.
+#'
 #' @param dir The job's state directory.
 #' @param month The month covered, `"AAAA-MM"`.
+#' @param collaudo Whether the ledger is a redirected run's.
 #'
 #' @return A path.
 #'
 #' @keywords internal
-report_ledger_path <- function(dir, month) {
-  file.path(dir, paste0(month, ".json"))
+report_ledger_path <- function(dir, month, collaudo = FALSE) {
+  file.path(dir, paste0(month, if (isTRUE(collaudo)) ".collaudo", ".json"))
 }
 
 
@@ -1380,18 +1385,19 @@ report_ledger_path <- function(dir, month) {
 #'
 #' @param dir The job's state directory.
 #' @param month The month covered, `"AAAA-MM"`.
+#' @param collaudo Whether to read a redirected run's ledger.
 #'
 #' @return A list with `ok`, `errors` and `invii`, one list per report sent:
 #'   `destinatario`, `at` and `senza_primo_accesso`.
 #'
 #' @keywords internal
-report_ledger_read <- function(dir, month) {
+report_ledger_read <- function(dir, month, collaudo = FALSE) {
   stopifnot(
     is.character(dir), length(dir) == 1L, nzchar(dir),
     is.character(month), length(month) == 1L
   )
 
-  path <- report_ledger_path(dir, month)
+  path <- report_ledger_path(dir, month, collaudo)
   if (!file.exists(path)) {
     return(list(ok = TRUE, errors = character(), invii = list()))
   }
@@ -1577,7 +1583,7 @@ report_due_write <- function(dir, month, due, at) {
 #'   when it was written and as it was otherwise.
 #'
 #' @keywords internal
-report_ledger_add <- function(dir, month, ledger, entry) {
+report_ledger_add <- function(dir, month, ledger, entry, collaudo = FALSE) {
   stopifnot(is.list(ledger), is.list(entry))
 
   invii <- c(ledger[["invii"]], list(list(
@@ -1601,7 +1607,7 @@ report_ledger_add <- function(dir, month, ledger, entry) {
     auto_unbox = TRUE, pretty = TRUE
   )
 
-  if (!report_write_json(report_ledger_path(dir, month), json)) {
+  if (!report_write_json(report_ledger_path(dir, month, collaudo), json)) {
     return(list(
       ok = FALSE, errors = "RAPPORTO_INVII_NON_SCRITTI", ledger = ledger
     ))
@@ -1670,12 +1676,14 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' beside the ledger (`report_due_read()`); with none on record it says
 #' nothing is due, and the alarm on absence is the one that speaks.
 #'
-#' **The ledger is written only by a real run**: the post on, nobody
+#' **The real ledger is written only by a real run**: the post on, nobody
 #' redirected, the month the clock gives. A run with the post off sends
-#' nothing to record. A redirected run, or one with a forced month, is a
-#' field test: recorded, it would make the real month read as sent, and a
-#' test at the end of October would leave nothing to leave on the 1st of
-#' November.
+#' nothing to record. A redirected run is a field test: recorded in the real
+#' ledger, it would make the real month read as sent, and a test at the end
+#' of October would leave nothing to leave on the 1st of November. So it keeps
+#' a ledger of its own, and is idempotent as the real run is: the timer of a
+#' field test does not send everything again every day. A run with a forced
+#' month writes nothing at all.
 #'
 #' The report to IT goes to `copy_to`, the address IT is in copy at on every
 #' outcome, under the name `report_it_key()`; the referents' reports go to the
@@ -1720,7 +1728,9 @@ provisioning_report <- function(register_url,
   period <- report_month(now, month)
   errors <- character()
 
-  ledger <- report_ledger_read(ledger_dir, period[["mese"]])
+  # A redirected run on the real month reads and writes a ledger of its own.
+  test_run <- !is.null(redirect_to) && !isTRUE(period[["forzato"]])
+  ledger <- report_ledger_read(ledger_dir, period[["mese"]], test_run)
   previous <- report_ledger_previous(ledger_dir, period[["mese"]])
   errors <- c(errors, ledger[["errors"]], previous[["errors"]])
 
@@ -1812,8 +1822,7 @@ provisioning_report <- function(register_url,
   pending <- setdiff(due, already)
 
   complete <- read_whole && isTRUE(ledger[["ok"]]) && isTRUE(previous[["ok"]])
-  keeps_ledger <- !is.null(mailer) && is.null(redirect_to) &&
-    !isTRUE(period[["forzato"]])
+  keeps_ledger <- !is.null(mailer) && !isTRUE(period[["forzato"]])
 
   sent <- character()
   failed <- character()
@@ -1854,7 +1863,8 @@ provisioning_report <- function(register_url,
           list(
             destinatario = who, at = period[["letto"]],
             senza_primo_accesso = named
-          )
+          ),
+          collaudo = test_run
         )
         # A ledger that cannot be written would make every later report of
         # this run a duplicate tomorrow: the run stops sending, and what it

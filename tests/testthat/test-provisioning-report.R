@@ -1310,7 +1310,7 @@ test_that("with the post off the run computes and writes no ledger of sends", {
 })
 
 
-test_that("a redirected run sends to the test address and keeps no ledger", {
+test_that("a redirected run sends to the test address, with its own ledger", {
   # eval
   doppie()
   cartella <- withr::local_tempdir()
@@ -1329,8 +1329,10 @@ test_that("a redirected run sends to the test address and keeps no ledger", {
   expect_null(mail[[1L]][["cc"]])
   expect_match(mail[[1L]][["body"]], "^\\[PROVA\\]")
   expect_match(mail[[1L]][["body"]], referente, fixed = TRUE)
-  # Recorded, the real month would read as sent. What is due is kept.
-  expect_equal(list.files(cartella), "2026-10.dovuti.json")
+  # Recorded in the real ledger, the real month would read as sent.
+  expect_setequal(
+    list.files(cartella), c("2026-10.collaudo.json", "2026-10.dovuti.json")
+  )
   expect_true(record[["posta_dirottata"]])
 })
 
@@ -1761,4 +1763,28 @@ test_that("a reading that fails on the 15th does not make a sent month late", {
   # The design's own rule, on what the last whole reading found due.
   expect_true(quindici[["mese_completo"]])
   expect_false(quindici[["in_ritardo"]])
+})
+
+
+test_that("a redirected run on the real month does not send again each day", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  esegui(cartella, posta_finta(), redirect_to = "collaudo@example.org")
+  secondo <- posta_finta()
+
+  record <- report_record(
+    esegui(cartella, secondo, ora = "2026-11-02 06:30",
+           redirect_to = "collaudo@example.org"),
+    posta = TRUE
+  )
+  vero <- posta_finta()
+  esegui(cartella, vero, ora = "2026-11-02 06:30")
+
+  # test
+  expect_length(secondo[["inviate"]][["mail"]], 0L)
+  expect_false(record[["giorno_di_invio"]])
+  expect_equal(record[["gia_mandati"]], 2L)
+  # The real ledger never saw the field test: the real run sends everything.
+  expect_length(vero[["inviate"]][["mail"]], 2L)
 })

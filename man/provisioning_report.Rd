@@ -67,12 +67,14 @@ judges the month on the reports the last whole reading found due, kept
 beside the ledger (\code{report_due_read()}); with none on record it says
 nothing is due, and the alarm on absence is the one that speaks.
 
-\strong{The ledger is written only by a real run}: the post on, nobody
+\strong{The real ledger is written only by a real run}: the post on, nobody
 redirected, the month the clock gives. A run with the post off sends
-nothing to record. A redirected run, or one with a forced month, is a
-field test: recorded, it would make the real month read as sent, and a
-test at the end of October would leave nothing to leave on the 1st of
-November.
+nothing to record. A redirected run is a field test: recorded in the real
+ledger, it would make the real month read as sent, and a test at the end
+of October would leave nothing to leave on the 1st of November. So it keeps
+a ledger of its own, and is idempotent as the real run is: the timer of a
+field test does not send everything again every day. A run with a forced
+month writes nothing at all.
 
 The report to IT goes to \code{copy_to}, the address IT is in copy at on every
 outcome, under the name \code{report_it_key()}; the referents' reports go to the

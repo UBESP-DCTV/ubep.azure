@@ -4,12 +4,14 @@
 \alias{report_ledger_read}
 \title{Read a month's ledger of sent reports}
 \usage{
-report_ledger_read(dir, month)
+report_ledger_read(dir, month, collaudo = FALSE)
 }
 \arguments{
 \item{dir}{The job's state directory.}
 
 \item{month}{The month covered, \code{"AAAA-MM"}.}
+
+\item{collaudo}{Whether to read a redirected run's ledger.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{invii}, one list per report sent:

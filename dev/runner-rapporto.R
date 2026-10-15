@@ -39,6 +39,8 @@
 # fermerebbe ogni invio vero in silenzio. Un'esecuzione col mese forzato non
 # scrive nel registro degli invii, e con la posta accesa vuole il
 # dirottamento: e' un collaudo, e il mese che mostra di norma non e' finito.
+# Un'esecuzione dirottata sul mese dell'orologio tiene invece un registro
+# degli invii suo, accanto a quello vero: anche il collaudo manda una volta.
 
 suppressMessages(library(ubep.azure))
 

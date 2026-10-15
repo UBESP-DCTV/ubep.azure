@@ -4,7 +4,7 @@
 \alias{report_ledger_add}
 \title{Add one sent report to a month's ledger}
 \usage{
-report_ledger_add(dir, month, ledger, entry)
+report_ledger_add(dir, month, ledger, entry, collaudo = FALSE)
 }
 \arguments{
 \item{dir}{The job's state directory.}
@@ -14,6 +14,8 @@ report_ledger_add(dir, month, ledger, entry)
 \item{ledger}{The ledger as read, from \code{report_ledger_read()}.}
 
 \item{entry}{A list of \code{destinatario}, \code{at} and \code{senza_primo_accesso}.}
+
+\item{collaudo}{Whether to read a redirected run's ledger.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{ledger}, the ledger with the entry
