@@ -230,8 +230,8 @@ report_executions <- function(events, record) {
 report_person_since <- function(events, record) {
   stopifnot(is.data.frame(events))
 
-  mine <- log_current_life(log_of_record(events, record))
-  channel <- log_channel_accounts(mine, record)
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record)
   if (length(channel) > 1L) {
     return(NA_character_)
   }
