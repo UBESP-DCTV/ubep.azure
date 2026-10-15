@@ -1876,3 +1876,92 @@ test_that("a month sent whole raises nothing the month after", {
   # test
   expect_equal(primo[["errori"]], character())
 })
+
+
+test_that("the month is cut in Rome across both changes of the hour", {
+  dove <- function(ora) report_month(as.POSIXct(ora, tz = "UTC"))
+
+  expect_equal(dove("2027-03-31 21:59")[["mese"]], "2027-02")
+  expect_equal(dove("2027-03-31 22:00")[["mese"]], "2027-03")
+  expect_equal(dove("2026-10-31 22:59")[["mese"]], "2026-09")
+  expect_equal(dove("2026-10-31 23:00")[["mese"]], "2026-10")
+  expect_equal(dove("2026-11-01 23:00")[["giorno"]], 2L)
+  expect_equal(dove("2026-12-01 06:30")[["letto"]], "2026-12-01 07:30")
+  expect_equal(dove("2026-08-01 06:30")[["letto"]], "2026-08-01 08:30")
+})
+
+
+test_that("Graph times with fractions read, and the tolerance spans them", {
+  rubrica <- directory_frame(list(conto(
+    createdDateTime = "2026-09-12T08:00:00.9Z",
+    lastPasswordChangeDateTime = "2026-09-12T08:01:00Z"
+  )))
+
+  expect_false(is.na(report_graph_time("2026-10-08T09:12:33.1234567Z")))
+  expect_equal(
+    report_first_access(rubrica, "carla.inventata@ubep.unipd.it"),
+    "mai_entrata"
+  )
+})
+
+
+test_that("the record serializes with the types of its table", {
+  # eval
+  doppie()
+  record <- report_record(
+    esegui(withr::local_tempdir(), posta_finta()), posta = TRUE
+  )
+  record[["errori"]] <- "TRASPORTO_POSTA_RIFIUTATA"
+  json <- run_record_json(record)
+  letto <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+
+  tipo <- function(value) {
+    if (is.list(value)) {
+      "dynamic"
+    } else if (is.logical(value)) {
+      "bool"
+    } else if (is.character(value)) {
+      "string"
+    } else if (is.integer(value)) {
+      "int"
+    } else {
+      class(value)[[1L]]
+    }
+  }
+
+  # test
+  expect_equal(vapply(letto, tipo, ""), c(
+    at = "string", mese = "string", giorno_di_invio = "bool",
+    registro_letto = "bool", directory_letta = "bool",
+    istanze_non_lette = "int", posta = "bool", posta_dirottata = "bool",
+    referenti = "int", mandati = "int", gia_mandati = "int", falliti = "int",
+    in_ordine = "int", da_guardare = "int", voci_attivati = "int",
+    voci_senza_primo_accesso = "int", voci_senza_accessi = "int",
+    senza_creatore = "int", mese_completo = "bool", in_ritardo = "bool",
+    errori = "dynamic"
+  ))
+  expect_false(grepl("\\.[0-9]", json))
+})
+
+
+test_that("a ledger that cannot be written after a send costs a duplicate", {
+  # eval
+  doppie()
+  testthat::local_mocked_bindings(
+    report_ledger_add = function(dir, month, ledger, entry, ...) {
+      list(ok = FALSE, errors = "RAPPORTO_INVII_NON_SCRITTI", ledger = ledger)
+    }
+  )
+  posta <- posta_finta()
+
+  record <- report_record(esegui(withr::local_tempdir(), posta), posta = TRUE)
+
+  # test
+  # The first report left; the run stops sending, and the second counts as
+  # not sent.
+  expect_length(posta[["inviate"]][["mail"]], 1L)
+  expect_equal(record[["mandati"]], 1L)
+  expect_equal(record[["falliti"]], 1L)
+  expect_false(record[["mese_completo"]])
+  expect_true("RAPPORTO_INVII_NON_SCRITTI" %in% record[["errori"]])
+})
