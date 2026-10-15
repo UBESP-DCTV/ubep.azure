@@ -11,7 +11,7 @@ Days.
 }
 \description{
 Thirty, counted on the calendar in Rome: a request activated on the second
-day of a month is in the report of the first day of the month after. Every person has between 30
-and 61 days before their first mention.
+day of a month is in the report of the first day of the month after. Every
+person has between 30 and 61 days before their first mention.
 }
 \keyword{internal}
