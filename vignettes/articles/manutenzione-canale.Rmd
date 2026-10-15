@@ -424,15 +424,37 @@ creatore lo incolla.
 Il creatore è quello del registro delle creazioni (`log_creators()`, con
 `logtype = "record_add"`), non `requested_by`: è la stessa utenza che il
 cancello dell'ambito giudica a ogni giro. Per questo chi approva non ha
-bisogno di un controllo dei diritti suo: l'unico che può approvare è anche
-l'unico i cui diritti sul progetto il giro controlla comunque.
+bisogno di un controllo dei diritti suo: l'unico referente che può approvare è
+anche l'unico i cui diritti sul progetto il giro controlla comunque.
 
-La regola sta in un punto solo, `change_needs_approval()`. La revoca
-(`request_status` che passa a `revoked`) per ora la segue come ogni altra
-modifica. Se si deciderà che un referente con i diritti sul progetto può
-ritirare la richiesta di un altro senza il creatore, è lì che va, e a quella
-funzione serviranno i campi cambiati e i diritti di chi ha cambiato, che oggi
-non riceve.
+**IT approva come il creatore**, deciso il 2026-10-15. Le utenze elencate in
+`UBEP_APPROVATORI_IT` sulla macchina (nomi utente REDCap separati da virgole)
+stanno dove sta il creatore, alle stesse tre condizioni. Serve alla richiesta
+il cui creatore ha lasciato UBEP: non resta ferma per sempre, e non bisogna
+cancellare la riga e perdere chi l'aveva depositata. L'elenco non sta nel
+repository, che è pubblico; senza la variabile approva solo il creatore. Un
+limite da sapere: il cancello dell'ambito continua a chiedere i diritti del
+creatore, quindi nessuna approvazione, nemmeno di IT, fa passare la riga di un
+creatore che non gestisce più il progetto.
+
+La regola sta in un punto solo, `change_needs_approval()`, e ha **una sola
+eccezione: la revoca**, decisa il 2026-10-15. La revoca della richiesta di un
+altro non aspetta il creatore quando chiunque altro vi abbia messo mano ha
+*User Rights* con *Full Access* sul progetto: togliere un accesso non concede
+niente, e chi gestisce gli utenti del progetto potrebbe farlo a mano, che è la
+stessa regola del cancello. «Revoca» vuol dire poco, di proposito
+(`log_revocation_only()`): la riga ora chiede `revoked`, e ciò che gli altri
+hanno scritto è quello e nient'altro. Una revoca che sposta anche il ruolo, la
+persona o il progetto è una modifica come le altre.
+
+I diritti li dice l'istanza, e il giro li ha solo dopo averla interrogata.
+Quindi una revoca di un altro non si ferma prima del piano come le altre righe
+trattenute: resta in sospeso fino al cancello, che chiede i diritti di tutti
+quelli che l'hanno toccata (`scope_withdrawal()`). Se li hanno, la revoca va
+avanti e i diritti del creatore non contano, a meno che non abbia messo mano
+anche lui; se a uno manca, la riga torna alla regola comune e prende `held`,
+con lo stesso messaggio; se un permesso non si legge, prende
+`TRASPORTO_PERMESSO_NON_LEGGIBILE` come sul cancello ordinario.
 
 **Chi ha cambiato la riga.** Il giro legge il registro degli eventi della sola
 riga, tutta la sua storia, con una chiamata per riga cambiata o non ancora
@@ -462,18 +484,26 @@ sigillo), e si riconosce **per utenza e non per evento**: REDCap registra solo
 i campi che un import ha cambiato, quindi la riscrittura dello `username`
 arriva da sola, senza niente nell'evento che dica chi l'ha fatta.
 
-**Quando il registro degli eventi non basta.** Un autore o un creatore che il
-log non stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato»
-non è «è stato il creatore». Vale anche quando due utenze diverse risultano
-aver scritto i campi del canale, o quando una modifica di intento non ha
-autore. Un log che non si legge porta in più il suo codice `TRASPORTO_` negli
-`errori` del record del giro: la riga ferma non dice perché lo è, il record
-sì.
+**Quando il registro degli eventi non basta.** Un autore che il log non
+stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è
+«è stato il creatore». Vale quando due utenze diverse risultano aver scritto i
+campi del canale, o quando una modifica di intento non ha autore: la riga
+prende `held`, e il creatore può approvarla.
 
-**Il messaggio.** Va al creatore, non a `requested_by`; solo se il creatore
-non si legge va a `requested_by`, e la riga resta ferma finché il log delle
-creazioni non risponde. Nomina chi ha cambiato la riga e porta il sigillo da
-incollare. Lo stesso sigillo sta nel dettaglio dell'esito,
+Diverso è il caso in cui il log **non si legge**, o il creatore non è
+nominato: lì non c'è un creatore a cui chiedere né un'approvazione che si
+possa verificare. La riga non prende `held` ma
+`TRASPORTO_AUTORE_NON_LEGGIBILE`, lo stesso codice che il cancello dà a una
+riga senza autore: torna in coda da sola al giro dopo, non si esegue, e il
+messaggio dice che il guasto è nostro invece di chiedere un sigillo che non
+approverebbe niente. Fino alla 0.18.0 prendeva `held`, con «Modificata da: non
+stabilito» e la mail a `requested_by`. Il codice del registro (per esempio
+`TRASPORTO_REGISTRO_RIFIUTATO`) va negli `errori` del record del giro: la riga
+dice che cosa non si è potuto stabilire, il record perché.
+
+**Il messaggio.** Va al creatore, non a `requested_by`. Nomina chi ha cambiato
+la riga e porta il sigillo da incollare, e dice che può approvare chi l'ha
+creata oppure IT. Lo stesso sigillo sta nel dettaglio dell'esito,
 `SIGILLO_DIVERSO:<sigillo>`, ed è questo che porta il sigillo nuovo al
 creatore quando la riga cambia ancora mentre è ferma: il dettaglio cambia con
 lei, l'esito risulta cambiato e il messaggio riparte.
@@ -504,7 +534,7 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   per ciascuna a ogni giro.
 
 L'approvazione vale a tre condizioni: porta il sigillo di **quella** versione
-della riga, viene da **chi l'ha creata**, ed è **più recente di ciò che
+della riga, viene da **chi l'ha creata** o da IT, ed è **più recente di ciò che
 approva**, cioè sta sopra l'ultima esecuzione e sopra ogni modifica di altri
 (`log_approval_stands()`). La terza serve perché `approved_seal` non si azzera
 mai: senza, un'approvazione già eseguita tornerebbe a valere ogni volta che la
