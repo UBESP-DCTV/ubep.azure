@@ -432,7 +432,10 @@ anche l'unico i cui diritti sul progetto il giro controlla comunque.
 stanno dove sta il creatore, alle stesse tre condizioni. Serve alla richiesta
 il cui creatore ha lasciato UBEP: non resta ferma per sempre, e non bisogna
 cancellare la riga e perdere chi l'aveva depositata. L'elenco non sta nel
-repository, che è pubblico; senza la variabile approva solo il creatore. Un
+repository, che è pubblico; senza la variabile approva solo il creatore. Si
+confronta senza badare alle maiuscole, perché è scritto a mano sulla macchina,
+e un'approvazione di IT copre anche, sotto l'esecuzione che ha prodotto, la
+modifica che ha approvato, come quella del creatore. Un
 limite da sapere: il cancello dell'ambito continua a chiedere i diritti del
 creatore, quindi nessuna approvazione, nemmeno di IT, fa passare la riga di un
 creatore che non gestisce più il progetto.
@@ -445,7 +448,10 @@ niente, e chi gestisce gli utenti del progetto potrebbe farlo a mano, che è la
 stessa regola del cancello. «Revoca» vuol dire poco, di proposito
 (`log_revocation_only()`): la riga ora chiede `revoked`, e ciò che gli altri
 hanno scritto è quello e nient'altro. Una revoca che sposta anche il ruolo, la
-persona o il progetto è una modifica come le altre.
+persona o il progetto è una modifica come le altre. E vale solo per una riga
+con una persona a cui togliere l'accesso: una riga revocata la cui persona il
+tenant non ha più si chiude prima di interrogare le istanze, nessuno ne
+leggerebbe i diritti, e aspetta il creatore come prima.
 
 I diritti li dice l'istanza, e il giro li ha solo dopo averla interrogata.
 Quindi una revoca di un altro non si ferma prima del piano come le altre righe
@@ -473,7 +479,15 @@ modifica di un altro che sta lì conta, a meno che sopra di lei, nello stesso
 tratto, ci sia l'approvazione del creatore con il sigillo che quell'esecuzione
 ha scritto. Basta un tratto: una modifica scoperta ferma la riga, una riga
 ferma non scrive sigilli, e il confine non si sposta finché il creatore non
-approva.
+approva. Copre anche l'approvazione di IT, e una revoca sola non è mai
+scoperta: non concede niente, e contata farebbe approvare al creatore la
+riattivazione della propria richiesta dopo una revoca libera di chi gestisce
+il progetto.
+
+Il campo dell'approvazione e lo stato del sigillo si vedono nel modulo quando
+la riga porta un sigillo **o** ha l'esito `held`. Una riga mai eseguita può
+essere trattenuta, e non ha sigillo: mostrato solo accanto a un sigillo, il
+campo dove incollare l'approvazione sarebbe nascosto proprio lì.
 
 Le scritture del canale non contano. Il giro riscrive lo `username` che
 risolve prima di leggere il log, e `username` è un campo di intento: contata,
@@ -806,11 +820,18 @@ incompleto, che elenca le colonne per nome e deve guadagnare anche queste due.
 Aggiornata prima del pacchetto, la seconda scatterebbe su ogni record sano.
 
 La 0.19.0 risponde **no** a tutte e due e non porta colonne nuove nel record
-del giro: si installa il pacchetto e basta. Cambiano le note di `seal_state` e
-`approved_seal` nel dizionario, ma il confronto non legge le note, quindi il
-registro vivo non deriva; le note nuove arrivano quando il dizionario si
-reimporta. Al primo giro dopo l'installazione ogni riga trattenuta cambia
-dettaglio, che ora porta il sigillo, e il suo creatore riceve un messaggio.
+del giro: il pacchetto nuovo gira anche con la lavorazione vecchia, perché
+`approvers` ha un valore predefinito. Cambiano però due cose fuori dal
+pacchetto. La lavorazione nuova passa `approvers`, e serve per l'approvazione
+di IT: la copia in `/opt` va sostituita dopo aver scritto `UBEP_APPROVATORI_IT`
+nell'ambiente dell'unità. E cambiano la logica di
+visualizzazione e le note di `seal_state` e `approved_seal` nel dizionario: il
+confronto non legge né l'una né le altre, quindi l'import del dizionario sul
+registro può venire prima o dopo l'installazione senza che il registro vivo
+derivi, ma finché non arriva una riga trattenuta mai eseguita non ha il campo
+dove incollare l'approvazione. Al primo giro dopo l'installazione ogni riga
+trattenuta cambia dettaglio, che ora porta il sigillo, e il suo creatore
+riceve un messaggio.
 
 ### La regola ritirata è disattivata, non cancellata
 
