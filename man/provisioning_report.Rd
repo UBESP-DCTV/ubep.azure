@@ -60,7 +60,9 @@ month is complete. The ledger of what left (\code{report_ledger_read()}) is what
 tells them apart.
 
 A day on which anything it needs could not be read sends nothing: the
-register, the creations, the directory, any active row's log, the ledgers.
+register, the creations, the directory, any active row's log, the month's
+ledger. An earlier month's ledger that does not read stops nothing: the
+people it could hold are told without their earlier reports.
 A report composed on half a reading would be wrong for somebody, and the
 next day tries again. Such a day also does not know who is due, so it
 judges the month on the reports the last whole reading found due, kept

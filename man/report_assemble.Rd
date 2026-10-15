@@ -4,7 +4,13 @@
 \alias{report_assemble}
 \title{Put each row in the report it belongs to}
 \usage{
-report_assemble(rows, directory, period, previous = list())
+report_assemble(
+  rows,
+  directory,
+  period,
+  previous = list(),
+  unread = character()
+)
 }
 \arguments{
 \item{rows}{What \code{report_rows()} answered.}
@@ -14,7 +20,11 @@ report_assemble(rows, directory, period, previous = list())
 \item{period}{What \code{report_month()} answered.}
 
 \item{previous}{The entries of the earlier months' ledgers, as
-\code{report_ledger_previous()} reads them.
+\code{report_ledger_previous()} reads them.}
+
+\item{unread}{The earlier months whose ledger did not read. A person who
+could have been in one of their reports gets \code{storia_nota} false, and
+the mail says nothing about earlier reports rather than something false.
 
 A referent whose people went to IT unjudged is told how many, in the
 report itself: the principle of the all-clear, which must not cover an item

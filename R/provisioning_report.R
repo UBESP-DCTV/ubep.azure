@@ -529,6 +529,9 @@ report_rows <- function(register, creators, executions, period,
 #' @param period What `report_month()` answered.
 #' @param previous The entries of the earlier months' ledgers, as
 #'   `report_ledger_previous()` reads them.
+#' @param unread The earlier months whose ledger did not read. A person who
+#'   could have been in one of their reports gets `storia_nota` false, and
+#'   the mail says nothing about earlier reports rather than something false.
 #'
 #' A referent whose people went to IT unjudged is told how many, in the
 #' report itself: the principle of the all-clear, which must not cover an item
@@ -545,10 +548,11 @@ report_rows <- function(register, creators, executions, period,
 #'   how many rows have no referent to go to.
 #'
 #' @keywords internal
-report_assemble <- function(rows, directory, period, previous = list()) {
+report_assemble <- function(rows, directory, period, previous = list(),
+                            unread = character()) {
   stopifnot(
     is.data.frame(rows), is.data.frame(directory), is.list(period),
-    is.list(previous)
+    is.list(previous), is.character(unread)
   )
 
   text <- function(name) {
@@ -634,6 +638,14 @@ report_assemble <- function(rows, directory, period, previous = list()) {
     sort(unique(as.character(dates)))
   }
 
+  # A month's reports leave during the month after, so a person dated before
+  # the first day of the month after that could be in them.
+  unknown_until <- if (length(unread) > 0L) {
+    max(as.Date(paste0(
+      vapply(unread, report_shift_month, "", by = 2L), "-01"
+    )))
+  }
+
   referenti <- list()
   non_giudicabili <- list()
 
@@ -667,7 +679,9 @@ report_assemble <- function(rows, directory, period, previous = list()) {
           attivata_il = substr(start[[oldest]], 1L, 10L),
           giorni = days[[oldest]],
           mesi = days[[oldest]] %/% 30L,
-          segnalata = reported(who, key)
+          segnalata = reported(who, key),
+          storia_nota = is.null(unknown_until) ||
+            as.Date(substr(start[[oldest]], 1L, 10L)) >= unknown_until
         ))
       } else if (!identical(verdict, "entrata")) {
         non_giudicabili[[length(non_giudicabili) + 1L]] <- c(person, list(
@@ -866,6 +880,9 @@ report_people_lines <- function(people, unjudged = 0L) {
     projects <- report_projects_words(person[["progetti"]])
     months <- as.integer(person[["mesi"]])
     earlier <- as.character(person[["segnalata"]] %||% character())
+    # A ledger that did not read may hold this person: neither "first" nor
+    # "also on" can be said.
+    known <- !isFALSE(person[["storia_nota"]])
     who <- paste0("   - ", person[["nome"]], ", ", person[["upn"]], ": ")
     list(
       it = c(
@@ -875,12 +892,14 @@ report_people_lines <- function(people, unjudged = 0L) {
           if (months == 1L) " mese." else " mesi."
         ),
         paste0(
-          "     ", projects[["it"]], ". ",
-          if (length(earlier) == 0L) {
-            "Prima segnalazione."
+          "     ", projects[["it"]], ".",
+          if (!known) {
+            ""
+          } else if (length(earlier) == 0L) {
+            " Prima segnalazione."
           } else {
             paste0(
-              "Segnalata anche ", report_join(paste("il", earlier), "e"), "."
+              " Segnalata anche ", report_join(paste("il", earlier), "e"), "."
             )
           }
         )
@@ -892,11 +911,13 @@ report_people_lines <- function(people, unjudged = 0L) {
           if (months == 1L) " month." else " months."
         ),
         paste0(
-          "     ", projects[["en"]], ". ",
-          if (length(earlier) == 0L) {
-            "First report."
+          "     ", projects[["en"]], ".",
+          if (!known) {
+            ""
+          } else if (length(earlier) == 0L) {
+            " First report."
           } else {
-            paste0("Also reported on ", report_join(earlier, "and"), ".")
+            paste0(" Also reported on ", report_join(earlier, "and"), ".")
           }
         )
       )
@@ -1434,17 +1455,26 @@ report_ledger_read <- function(dir, month, collaudo = FALSE) {
 
 #' Read the ledgers of the months before this one
 #'
+#' They serve one sentence, the earlier reports that named a person, and a
+#' broken one must not stop every month after it. An unreadable month is
+#' named in `illeggibili`, under `RAPPORTO_STORICO_ILLEGGIBILE`, and the
+#' readable ones are read all the same.
+#'
 #' @inheritParams report_ledger_read
 #'
-#' @return A list with `ok`, `errors` and `invii`, the entries of every
-#'   earlier month together, oldest month first.
+#' @return A list with `ok`, false when a month did not read; `errors`;
+#'   `invii`, the entries of every readable earlier month together, oldest
+#'   month first; and `illeggibili`, the months that did not read.
 #'
 #' @keywords internal
 report_ledger_previous <- function(dir, month) {
   stopifnot(is.character(dir), length(dir) == 1L, nzchar(dir))
 
   if (!dir.exists(dir)) {
-    return(list(ok = TRUE, errors = character(), invii = list()))
+    return(list(
+      ok = TRUE, errors = character(), invii = list(),
+      illeggibili = character()
+    ))
   }
 
   months <- sub(
@@ -1453,12 +1483,14 @@ report_ledger_previous <- function(dir, month) {
   )
   earlier <- sort(months[months < month])
   readings <- lapply(earlier, function(m) report_ledger_read(dir, m))
+  read <- vapply(readings, `[[`, TRUE, "ok")
 
   list(
-    ok = all(vapply(readings, `[[`, TRUE, "ok")),
-    errors = unique(as.character(unlist(lapply(readings, `[[`, "errors")))),
+    ok = all(read),
+    errors = if (all(read)) character() else "RAPPORTO_STORICO_ILLEGGIBILE",
     invii = unlist(lapply(readings, `[[`, "invii"), recursive = FALSE) %||%
-      list()
+      list(),
+    illeggibili = earlier[!read]
   )
 }
 
@@ -1669,7 +1701,9 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' tells them apart.
 #'
 #' A day on which anything it needs could not be read sends nothing: the
-#' register, the creations, the directory, any active row's log, the ledgers.
+#' register, the creations, the directory, any active row's log, the month's
+#' ledger. An earlier month's ledger that does not read stops nothing: the
+#' people it could hold are told without their earlier reports.
 #' A report composed on half a reading would be wrong for somebody, and the
 #' next day tries again. Such a day also does not know who is due, so it
 #' judges the month on the reports the last whole reading found due, kept
@@ -1792,7 +1826,8 @@ provisioning_report <- function(register_url,
 
     rows <- report_rows(register, creators, executions, period, since)
     assembled <- report_assemble(
-      rows, sweep[["users"]], period, previous[["invii"]]
+      rows, sweep[["users"]], period, previous[["invii"]],
+      previous[["illeggibili"]]
     )
   }
 
@@ -1821,7 +1856,9 @@ provisioning_report <- function(register_url,
   already <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
   pending <- setdiff(due, already)
 
-  complete <- read_whole && isTRUE(ledger[["ok"]]) && isTRUE(previous[["ok"]])
+  # Only the covered month's ledger stops the post: without it a report could
+  # leave twice. The earlier ones serve "reported before" and nothing else.
+  complete <- read_whole && isTRUE(ledger[["ok"]])
   keeps_ledger <- !is.null(mailer) && !isTRUE(period[["forzato"]])
 
   sent <- character()

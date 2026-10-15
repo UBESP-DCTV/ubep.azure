@@ -1094,6 +1094,28 @@ test_that("earlier months are read back, later ones and other files are not", {
 })
 
 
+test_that("a broken earlier month is named, and the others are read", {
+  # eval
+  cartella <- withr::local_tempdir()
+  report_ledger_add(
+    cartella, "2026-09", report_ledger_read(cartella, "2026-09"),
+    list(destinatario = referente, at = "2026-10-01 07:30",
+         senza_primo_accesso = character())
+  )
+  writeLines("{ rotto", file.path(cartella, "2026-08.json"))
+
+  precedenti <- report_ledger_previous(cartella, "2026-10")
+
+  # test
+  expect_false(precedenti[["ok"]])
+  expect_equal(precedenti[["errors"]], "RAPPORTO_STORICO_ILLEGGIBILE")
+  expect_equal(precedenti[["illeggibili"]], "2026-08")
+  expect_equal(
+    vapply(precedenti[["invii"]], `[[`, "", "at"), "2026-10-01 07:30"
+  )
+})
+
+
 # --- one run ----------------------------------------------------------------
 
 # The month of these tests: Anna created two requests, one for Carla in
@@ -1787,4 +1809,32 @@ test_that("a redirected run on the real month does not send again each day", {
   expect_equal(record[["gia_mandati"]], 2L)
   # The real ledger never saw the field test: the real run sends everything.
   expect_length(vero[["inviate"]][["mail"]], 2L)
+})
+
+
+test_that("a broken ledger of an old month blocks no later one", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  writeLines("{ rotto", file.path(cartella, "2026-08.json"))
+  posta <- posta_finta()
+
+  record <- report_record(esegui(cartella, posta), posta = TRUE)
+  dicembre <- report_record(
+    esegui(cartella, posta_finta(), ora = "2026-12-01 06:30"), posta = TRUE
+  )
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  expect_length(mail, 2L)
+  expect_true("RAPPORTO_STORICO_ILLEGGIBILE" %in% record[["errori"]])
+  # Carla was activated in August and could have been in the report nobody
+  # can read: her mail says neither that it is the first time nor when else.
+  expect_match(
+    mail[[1L]][["body"]], "     edc10, progetto 9301.\n", fixed = TRUE
+  )
+  expect_false(grepl("Prima segnalazione", mail[[1L]][["body"]]))
+  expect_equal(
+    dicembre[["mandati"]] + dicembre[["gia_mandati"]], dicembre[["referenti"]]
+  )
 })
