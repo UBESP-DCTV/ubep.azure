@@ -1127,11 +1127,10 @@ Tre cose da sapere quando si legge il codice:
   italiana: si confronta la stringa, senza conversioni che possano spostare
   di mese una riga attivata l'ultima sera;
 - **il registro riusa i `record_id`**: un id cancellato e ricreato porta nel
-  log anche la storia della riga di prima. `log_current_life()` tiene solo
-  gli eventi sopra l'ultima creazione, o l'ultima cancellazione, e il
-  rapporto data la riga su quelli. Il creatore era già quello della riga di
-  oggi, perché `log_creators()` prende la creazione più recente. Le letture
-  del log che fa il giro non usano ancora questo taglio.
+  log anche la storia della riga di prima. Il rapporto legge il log da
+  `log_of_record()`, che ne tiene la sola vita attuale, dall'ultima creazione
+  in poi, come per il giro (§4); il creatore è quello della riga di oggi,
+  perché `log_creators()` prende la creazione più recente.
 
 ### Il primo accesso, da Entra
 

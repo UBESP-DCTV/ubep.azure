@@ -19,7 +19,8 @@
   the seal in the row's log, not `outcome_at`, which moves at every outcome;
   a row executed again after a change is listed as modified. The log is
   filtered by record here too, whatever REDCap does with the parameter, and
-  it is in Italian time, as the month is cut.
+  read from the row's newest creation on, as the round reads it, since the
+  register reuses ids; it is in Italian time, as the month is cut.
 
   Whether a person has signed in is read from Entra with the permission the
   round already holds: an enabled account whose `lastPasswordChangeDateTime`
@@ -91,13 +92,6 @@
   `directory_fields()`, which builds the select and names the columns, so the
   round's sweep carries it as well. The resolution does not read it, and it
   asks for no permission beyond `User.Read.All`.
-
-* **A record id used twice.** The register reuses ids after a deletion, and a
-  row's log then holds an earlier row's history. `log_current_life()` keeps
-  the events above the newest creation or deletion, and the report dates a
-  row on those alone. The creator was already the one of the row that stands
-  now: `log_creators()` takes the newest creation. The round's readers of a
-  row's log do not use it yet.
 
 * **Shape of the release.** No dictionary to import, and the round and the
   observer are called as before, so their jobs stay as they are. What is new
