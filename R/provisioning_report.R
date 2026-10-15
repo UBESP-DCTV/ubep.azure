@@ -1169,3 +1169,553 @@ report_it_message <- function(it, period) {
     n = count
   )
 }
+
+
+#' The name the report to IT goes under in the ledger
+#'
+#' Parentheses are not allowed in a REDCap username, so no referent can ever
+#' be recorded under the same name.
+#'
+#' @return One string.
+#'
+#' @keywords internal
+report_it_key <- function() {
+  "(IT)"
+}
+
+
+#' Where a month's ledger of sent reports lives
+#'
+#' @param dir The job's state directory.
+#' @param month The month covered, `"AAAA-MM"`.
+#'
+#' @return A path.
+#'
+#' @keywords internal
+report_ledger_path <- function(dir, month) {
+  file.path(dir, paste0(month, ".json"))
+}
+
+
+#' Read a month's ledger of sent reports
+#'
+#' The ledger is the trace of an event that otherwise leaves none: for each
+#' report of the month, when it left and which people it named as having no
+#' first sign-in. It is what keeps a report from leaving twice when the daily
+#' run tries again, and what the next months read to say a person was
+#' reported before. It is not a copy of the state the channel re-reads, which
+#' decision 4 of the channel forbids: nothing of the register or of Entra is
+#' kept in it.
+#'
+#' A file that does not read is not read as empty. Read as empty, it would
+#' send every report of the month a second time; read as an error, the run
+#' sends nothing and says why.
+#'
+#' @param dir The job's state directory.
+#' @param month The month covered, `"AAAA-MM"`.
+#'
+#' @return A list with `ok`, `errors` and `invii`, one list per report sent:
+#'   `destinatario`, `at` and `senza_primo_accesso`.
+#'
+#' @keywords internal
+report_ledger_read <- function(dir, month) {
+  stopifnot(
+    is.character(dir), length(dir) == 1L, nzchar(dir),
+    is.character(month), length(month) == 1L
+  )
+
+  path <- report_ledger_path(dir, month)
+  if (!file.exists(path)) {
+    return(list(ok = TRUE, errors = character(), invii = list()))
+  }
+
+  unreadable <- list(
+    ok = FALSE, errors = "RAPPORTO_INVII_ILLEGGIBILI", invii = list()
+  )
+  parsed <- tryCatch(
+    jsonlite::fromJSON(path, simplifyVector = FALSE),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+  if (!is.list(parsed) || is.null(names(parsed)) ||
+        !identical(parsed[["mese"]], month) ||
+        !is.list(parsed[["invii"]]) ||
+        !all(vapply(parsed[["invii"]], is.list, logical(1)))) {
+    return(unreadable)
+  }
+
+  invii <- lapply(parsed[["invii"]], function(entry) {
+    list(
+      destinatario = scalar_as_character(entry[["destinatario"]]),
+      at = scalar_as_character(entry[["at"]]),
+      senza_primo_accesso = as.character(unlist(entry[["senza_primo_accesso"]]))
+    )
+  })
+  if (!all(nzchar(vapply(invii, `[[`, "", "destinatario")))) {
+    return(unreadable)
+  }
+
+  list(ok = TRUE, errors = character(), invii = invii)
+}
+
+
+#' Read the ledgers of the months before this one
+#'
+#' @inheritParams report_ledger_read
+#'
+#' @return A list with `ok`, `errors` and `invii`, the entries of every
+#'   earlier month together, oldest month first.
+#'
+#' @keywords internal
+report_ledger_previous <- function(dir, month) {
+  stopifnot(is.character(dir), length(dir) == 1L, nzchar(dir))
+
+  if (!dir.exists(dir)) {
+    return(list(ok = TRUE, errors = character(), invii = list()))
+  }
+
+  months <- sub(
+    "[.]json$", "",
+    list.files(dir, pattern = "^[0-9]{4}-[0-9]{2}[.]json$")
+  )
+  earlier <- sort(months[months < month])
+  readings <- lapply(earlier, function(m) report_ledger_read(dir, m))
+
+  list(
+    ok = all(vapply(readings, `[[`, TRUE, "ok")),
+    errors = unique(as.character(unlist(lapply(readings, `[[`, "errors")))),
+    invii = unlist(lapply(readings, `[[`, "invii"), recursive = FALSE) %||%
+      list()
+  )
+}
+
+
+#' Add one sent report to a month's ledger
+#'
+#' Written after the send and never before, as the channel writes into the
+#' register only after the message left: the price accepted is a report sent
+#' twice when the write fails, never one that is lost. The file is written
+#' beside its final name and moved over it, so a run killed halfway leaves the
+#' old ledger or the new one, and not half of either.
+#'
+#' @inheritParams report_ledger_read
+#' @param ledger The ledger as read, from `report_ledger_read()`.
+#' @param entry A list of `destinatario`, `at` and `senza_primo_accesso`.
+#'
+#' @return A list with `ok`, `errors` and `ledger`, the ledger with the entry
+#'   when it was written and as it was otherwise.
+#'
+#' @keywords internal
+report_ledger_add <- function(dir, month, ledger, entry) {
+  stopifnot(is.list(ledger), is.list(entry))
+
+  invii <- c(ledger[["invii"]], list(list(
+    destinatario = as.character(entry[["destinatario"]]),
+    at = as.character(entry[["at"]]),
+    senza_primo_accesso = as.character(entry[["senza_primo_accesso"]])
+  )))
+
+  # `I()` keeps a list of one address an array, and a list of none `[]`: the
+  # reader takes both back as they were.
+  json <- jsonlite::toJSON(
+    list(
+      mese = month,
+      invii = lapply(invii, function(e) {
+        list(
+          destinatario = e[["destinatario"]], at = e[["at"]],
+          senza_primo_accesso = I(e[["senza_primo_accesso"]])
+        )
+      })
+    ),
+    auto_unbox = TRUE, pretty = TRUE
+  )
+
+  temporary <- tempfile("invii-", tmpdir = dir, fileext = ".tmp")
+  written <- tryCatch(
+    {
+      dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+      writeLines(json, temporary, useBytes = TRUE)
+      file.rename(temporary, report_ledger_path(dir, month))
+    },
+    error = function(e) FALSE,
+    warning = function(w) FALSE
+  )
+
+  if (!isTRUE(written)) {
+    unlink(temporary)
+    return(list(
+      ok = FALSE, errors = "RAPPORTO_INVII_NON_SCRITTI", ledger = ledger
+    ))
+  }
+
+  list(
+    ok = TRUE, errors = character(),
+    ledger = list(ok = TRUE, errors = character(), invii = invii)
+  )
+}
+
+
+#' Hand one report to the mailer, redirected when asked
+#'
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
+#' @param to,cc Who the report is for, and who in copy.
+#' @param message What `report_message()` or `report_it_message()` composed.
+#' @param redirect_to One address replacing every recipient, or `NULL`.
+#'
+#' @return A list with `ok` and `errors`.
+#'
+#' @keywords internal
+report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
+  if (is.null(to) || length(to) != 1L || is.na(to) || !nzchar(to)) {
+    return(list(ok = FALSE, errors = "POSTA_SENZA_DESTINATARIO"))
+  }
+
+  body <- message[["body"]]
+  if (!is.null(redirect_to)) {
+    body <- mail_redirect_note(body, to, cc)
+    to <- redirect_to
+    cc <- NULL
+  }
+
+  # A mailer that throws is a post that did not answer, and the run goes on
+  # to leave its record rather than dying without one.
+  tryCatch(
+    mailer(to = to, cc = cc, subject = message[["subject"]], body = body),
+    error = function(e) {
+      list(ok = FALSE, errors = "TRASPORTO_POSTA_NON_RAGGIUNGIBILE")
+    }
+  )
+}
+
+
+#' Run the monthly report once
+#'
+#' **It reads and sends mail, and nothing else.** It does not write in the
+#' register and does not touch Entra: the register is read with the channel's
+#' token, the creations and each active row's log with the same calls the
+#' round makes, the tenant with the round's sweep. That is what lets it run
+#' outside the channel's path, as a job of its own.
+#'
+#' The job runs every day, because an alarm on logs looks back two days at
+#' most and a monthly job cannot be watched by the absence of a record. Every
+#' day it reads, computes and leaves a record; from the 1st on it sends the
+#' previous month's report to whoever has not received it yet, until the
+#' month is complete. The ledger of what left (`report_ledger_read()`) is what
+#' tells them apart.
+#'
+#' A day on which anything it needs could not be read sends nothing: the
+#' register, the creations, the directory, any active row's log, the ledgers.
+#' A report composed on half a reading would be wrong for somebody, and the
+#' next day tries again.
+#'
+#' **The ledger is written only by a real run**: the post on, nobody
+#' redirected, the month the clock gives. A run with the post off sends
+#' nothing to record. A redirected run, or one with a forced month, is a
+#' field test: recorded, it would make the real month read as sent, and a
+#' test at the end of October would leave nothing to leave on the 1st of
+#' November.
+#'
+#' The report to IT goes to `copy_to`, the address IT is in copy at on every
+#' outcome, under the name `report_it_key()`; the referents' reports go to the
+#' creator's account, with `copy_to` in copy.
+#'
+#' @param register_url,register_token The register's host and API token.
+#' @param graph_token,graph_url The Microsoft Graph access token and endpoint.
+#'   Neither has a default, as in the round: an empty one is a directory that
+#'   could not be read, and the record says so.
+#' @param ledger_dir The job's state directory, where the ledgers live.
+#' @param now When the run reads. The month, the day and the hour the mail
+#'   says it read at all come from here.
+#' @param month A month `"AAAA-MM"` to cover instead of the one the clock
+#'   gives, for a run by hand; `NULL` otherwise.
+#' @param mailer `function(to, cc, subject, body)` returning `ok` and
+#'   `errors`, or `NULL` for no post.
+#' @param redirect_to One address replacing every recipient, or `NULL`.
+#' @param copy_to IT's address: in copy on the referents' reports, and the
+#'   recipient of the report to IT.
+#'
+#' @return A list that `report_record()` turns into the record, plus
+#'   `rapporti`, one row per report due, for whoever reads a single run.
+#'
+#' @keywords internal
+provisioning_report <- function(register_url,
+                                register_token,
+                                graph_token,
+                                graph_url,
+                                ledger_dir,
+                                now = Sys.time(),
+                                month = NULL,
+                                mailer = NULL,
+                                redirect_to = NULL,
+                                copy_to = NULL) {
+  stopifnot(
+    is.character(graph_token), length(graph_token) == 1L,
+    is.character(graph_url), length(graph_url) == 1L,
+    is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
+    is.null(mailer) || is.function(mailer)
+  )
+
+  period <- report_month(now, month)
+  errors <- character()
+
+  ledger <- report_ledger_read(ledger_dir, period[["mese"]])
+  previous <- report_ledger_previous(ledger_dir, period[["mese"]])
+  errors <- c(errors, ledger[["errors"]], previous[["errors"]])
+
+  # The register and its creations, asked as the round asks them: the
+  # creations in one call and with no window, since a record is created once.
+  reading <- register_records(register_url, register_token)
+  creations <- NULL
+  if (isTRUE(reading[["ok"]])) {
+    creations <- register_log(
+      register_url, register_token, logtype = "record_add"
+    )
+  }
+  errors <- c(errors, reading[["errors"]], creations[["errors"]])
+  register_read <- isTRUE(reading[["ok"]]) && isTRUE(creations[["ok"]])
+
+  sweep <- if (nzchar(graph_url) && nzchar(graph_token)) {
+    directory_users(graph_token, graph_url)
+  } else {
+    list(
+      ok = FALSE, errors = "TRASPORTO_DIRECTORY_SENZA_ENDPOINT", users = NULL
+    )
+  }
+  directory_read <- isTRUE(sweep[["ok"]])
+  if (!directory_read) {
+    errors <- c(errors, sweep[["errors"]])
+  }
+
+  assembled <- list(referenti = list(), it = NULL, senza_creatore = 0L)
+  logs_read <- TRUE
+
+  if (register_read && directory_read) {
+    register <- reading[["records"]]
+    ids <- as.character(register[["record_id"]] %||% character())
+    field <- function(name) {
+      value <- register[[name]] %||% rep("", nrow(register))
+      value <- trimws(as.character(value))
+      value[is.na(value)] <- ""
+      value
+    }
+    creators <- log_creators(creations[["log"]], ids)
+
+    # One call per active row, and no window: the first execution can be
+    # months old. Today that is one call; past five hundred rows it is worth
+    # looking at again.
+    executions <- rep(list(NULL), nrow(register))
+    active <- field("request_status") == "active" &
+      field("outcome") == "applied"
+    for (i in which(active)) {
+      answer <- register_log(register_url, register_token, record = ids[[i]])
+      if (isTRUE(answer[["ok"]])) {
+        executions[i] <- list(report_executions(answer[["log"]], ids[[i]]))
+      } else {
+        logs_read <- FALSE
+        errors <- c(errors, answer[["errors"]])
+      }
+    }
+
+    rows <- report_rows(register, creators, executions, period)
+    assembled <- report_assemble(
+      rows, sweep[["users"]], period, previous[["invii"]]
+    )
+  }
+
+  reports <- lapply(assembled[["referenti"]], report_message, period = period)
+  if (!is.null(assembled[["it"]])) {
+    reports[[report_it_key()]] <- report_it_message(assembled[["it"]], period)
+  }
+  due <- names(reports) %||% character()
+  already <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
+  pending <- setdiff(due, already)
+
+  complete <- register_read && directory_read && logs_read &&
+    isTRUE(ledger[["ok"]]) && isTRUE(previous[["ok"]])
+  keeps_ledger <- !is.null(mailer) && is.null(redirect_to) &&
+    !isTRUE(period[["forzato"]])
+
+  sent <- character()
+  failed <- character()
+
+  if (!is.null(mailer) && length(pending) > 0L && !complete) {
+    failed <- pending
+  }
+
+  if (!is.null(mailer) && complete) {
+    for (k in seq_along(pending)) {
+      who <- pending[[k]]
+      for_it <- identical(who, report_it_key())
+      answer <- report_deliver(
+        mailer,
+        to = if (for_it) copy_to else who,
+        cc = if (for_it) NULL else copy_to,
+        message = reports[[who]],
+        redirect_to = redirect_to
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        failed <- c(failed, who)
+        errors <- c(errors, answer[["errors"]])
+        next
+      }
+      sent <- c(sent, who)
+
+      if (keeps_ledger) {
+        named <- if (for_it) {
+          character()
+        } else {
+          vapply(
+            assembled[["referenti"]][[who]][["senza_primo_accesso"]],
+            `[[`, "", "upn"
+          )
+        }
+        written <- report_ledger_add(
+          ledger_dir, period[["mese"]], ledger,
+          list(
+            destinatario = who, at = period[["letto"]],
+            senza_primo_accesso = named
+          )
+        )
+        # A ledger that cannot be written would make every later report of
+        # this run a duplicate tomorrow: the run stops sending, and what it
+        # did not try counts as not sent.
+        if (!isTRUE(written[["ok"]])) {
+          errors <- c(errors, written[["errors"]])
+          failed <- c(failed, pending[-seq_len(k)])
+          break
+        }
+        ledger <- written[["ledger"]]
+      }
+    }
+  }
+
+  forms <- vapply(reports, `[[`, "", "forma", USE.NAMES = FALSE)
+  counts <- vapply(reports, `[[`, 0L, "n", USE.NAMES = FALSE)
+
+  list(
+    at = format(now, "%Y-%m-%d %H:%M", tz = "UTC"),
+    mese = period[["mese"]],
+    forzato = isTRUE(period[["forzato"]]),
+    giorno = period[["giorno"]],
+    registro_letto = register_read,
+    directory_letta = directory_read,
+    letture_complete = complete,
+    posta_dirottata = !is.null(redirect_to),
+    dovuti = due,
+    gia = already,
+    pendenti = pending,
+    mandati = sent,
+    falliti = failed,
+    forme = forms,
+    voci_attivati = sum(vapply(
+      assembled[["referenti"]], function(r) nrow(r[["attivati"]]), 0L
+    )),
+    voci_senza_primo_accesso = sum(vapply(
+      assembled[["referenti"]],
+      function(r) length(r[["senza_primo_accesso"]]), 0L
+    )),
+    senza_creatore = as.integer(assembled[["senza_creatore"]]),
+    rapporti = data.frame(
+      destinatario = due,
+      forma = forms,
+      voci = counts,
+      esito = ifelse(
+        due %in% sent, "mandato",
+        ifelse(due %in% already, "gia_mandato",
+               ifelse(due %in% failed, "fallito", "non_mandato"))
+      ),
+      stringsAsFactors = FALSE
+    ),
+    errori = unique(errors)
+  )
+}
+
+
+#' Whether the month's reports are late
+#'
+#' From the 2nd of the month on, with the month not complete. Computed here
+#' and not in the query of the alarm, so that a test covers it. A forced run
+#' speaks about another month and cannot say the real one is late: it says
+#' false, and the next run of the timer says the truth.
+#'
+#' @param giorno The day of the month the run is in, in Rome.
+#' @param completo Whether every report of the month has left.
+#' @param forzato Whether the month was forced.
+#'
+#' @return One logical.
+#'
+#' @keywords internal
+report_late <- function(giorno, completo, forzato) {
+  !isTRUE(forzato) && giorno >= 2L && !isTRUE(completo)
+}
+
+
+#' Build the record the monthly report leaves behind
+#'
+#' The columns are those of its own table, `UbepRapporto_CL`, and only those:
+#' the job has a table of its own rather than a discriminating column in the
+#' round's or the observer's, whose rules read the last record without asking
+#' who wrote it. Every column is present on every run, zeroed when there is
+#' nothing to count, because the rule on the incomplete record counts them.
+#'
+#' `referenti` counts the reports of the month, the one to IT included: those
+#' due today and those the ledger says left on earlier days. `mese_completo`
+#' is the design's `gia_mandati + mandati == referenti`, and false whenever the
+#' run could not read everything it needs to say who is due: a month nobody
+#' could count is not a complete one. `in_ritardo` is `report_late()`.
+#'
+#' Phase 1 asks no instance and does not measure the year without access, so
+#' `istanze_non_lette` and `voci_senza_accessi` are zero.
+#'
+#' Names and codes only, and never a person: the record is shipped to a
+#' workspace and kept.
+#'
+#' @param esito What `provisioning_report()` returned.
+#' @param posta Whether the run was allowed to send. No fallback, as in the
+#'   round's record: a caller that forgot it would report the post as off.
+#'
+#' @return A named list, ready for `run_record_json()`.
+#'
+#' @keywords internal
+report_record <- function(esito, posta) {
+  stopifnot(
+    is.list(esito),
+    is.logical(posta), length(posta) == 1L, !is.na(posta)
+  )
+
+  due <- as.character(esito[["dovuti"]] %||% character())
+  already <- as.character(esito[["gia"]] %||% character())
+  sent <- as.character(esito[["mandati"]] %||% character())
+  forms <- as.character(esito[["forme"]] %||% character())
+
+  referenti <- length(union(due, already))
+  completo <- isTRUE(esito[["letture_complete"]]) &&
+    length(already) + length(sent) == referenti
+
+  list(
+    at = as.character(esito[["at"]]),
+    mese = as.character(esito[["mese"]]),
+    giorno_di_invio = length(esito[["pendenti"]]) > 0L,
+    registro_letto = isTRUE(esito[["registro_letto"]]),
+    directory_letta = isTRUE(esito[["directory_letta"]]),
+    istanze_non_lette = 0L,
+    posta = isTRUE(posta),
+    posta_dirottata = isTRUE(esito[["posta_dirottata"]]),
+    referenti = referenti,
+    mandati = length(sent),
+    gia_mandati = length(already),
+    falliti = length(esito[["falliti"]]),
+    in_ordine = sum(forms == "in_ordine"),
+    da_guardare = sum(forms == "da_guardare"),
+    voci_attivati = as.integer(esito[["voci_attivati"]] %||% 0L),
+    voci_senza_primo_accesso =
+      as.integer(esito[["voci_senza_primo_accesso"]] %||% 0L),
+    voci_senza_accessi = 0L,
+    senza_creatore = as.integer(esito[["senza_creatore"]] %||% 0L),
+    mese_completo = completo,
+    in_ritardo = report_late(
+      esito[["giorno"]], completo, esito[["forzato"]]
+    ),
+    errori = as.character(esito[["errori"]] %||% character())
+  )
+}

@@ -940,7 +940,7 @@ test_that("the mails carry no long dash and no character outside ASCII", {
   # test
   for (messaggio in messaggi) {
     testo <- paste(messaggio[["subject"]], messaggio[["body"]])
-    expect_false(grepl("—", testo, fixed = TRUE))
+    expect_false(grepl(intToUtf8(0x2014L), testo, fixed = TRUE))
     expect_true(all(utf8ToInt(testo) < 128L))
   }
 })
@@ -1000,4 +1000,530 @@ test_that("the mail to IT says what has no referent, by section", {
   # An empty section is not announced.
   expect_false(any(startsWith(testo[["it"]], "3.")))
   expect_true(all(utf8ToInt(messaggio[["body"]]) < 128L))
+})
+
+
+# --- the ledger of what was sent ---------------------------------------------
+
+test_that("a month with no ledger yet has sent nothing", {
+  cartella <- withr::local_tempdir()
+
+  letto <- report_ledger_read(cartella, "2026-10")
+
+  expect_true(letto[["ok"]])
+  expect_equal(letto[["invii"]], list())
+})
+
+
+test_that("what is added to the ledger is read back as written", {
+  # eval
+  cartella <- withr::local_tempdir()
+  vuoto <- report_ledger_read(cartella, "2026-10")
+  primo <- report_ledger_add(cartella, "2026-10", vuoto, list(
+    destinatario = referente, at = "2026-11-01 07:30",
+    senza_primo_accesso = "carla.inventata@ubep.unipd.it"
+  ))
+  secondo <- report_ledger_add(cartella, "2026-10", primo[["ledger"]], list(
+    destinatario = report_it_key(), at = "2026-11-01 07:30",
+    senza_primo_accesso = character()
+  ))
+
+  letto <- report_ledger_read(cartella, "2026-10")
+
+  # test
+  expect_true(primo[["ok"]])
+  expect_true(secondo[["ok"]])
+  expect_equal(
+    vapply(letto[["invii"]], `[[`, "", "destinatario"),
+    c(referente, report_it_key())
+  )
+  # A single address stays a list of one, and none stays a list of none.
+  expect_equal(
+    letto[["invii"]][[1L]][["senza_primo_accesso"]],
+    "carla.inventata@ubep.unipd.it"
+  )
+  expect_equal(letto[["invii"]][[2L]][["senza_primo_accesso"]], character())
+  # Nothing left behind by the write.
+  expect_equal(list.files(cartella), "2026-10.json")
+})
+
+
+test_that("a ledger that does not read stops the run from guessing", {
+  # eval
+  cartella <- withr::local_tempdir()
+  writeLines("{ non e' json", file.path(cartella, "2026-10.json"))
+  writeLines('{"mese": "2026-09", "invii": []}',
+             file.path(cartella, "2026-11.json"))
+
+  # test
+  # Read as empty, it would send every report of the month a second time.
+  rotto <- report_ledger_read(cartella, "2026-10")
+  expect_false(rotto[["ok"]])
+  expect_equal(rotto[["errors"]], "RAPPORTO_INVII_ILLEGGIBILI")
+  # A file whose month is not its name's is not trusted either.
+  expect_false(report_ledger_read(cartella, "2026-11")[["ok"]])
+})
+
+
+test_that("earlier months are read back, later ones and other files are not", {
+  # eval
+  cartella <- withr::local_tempdir()
+  for (mese in c("2026-08", "2026-09", "2026-10")) {
+    report_ledger_add(
+      cartella, mese, report_ledger_read(cartella, mese),
+      list(destinatario = referente,
+           at = paste0(report_shift_month(mese, 1L), "-01 07:30"),
+           senza_primo_accesso = character())
+    )
+  }
+  writeLines("appunti", file.path(cartella, "note.txt"))
+
+  precedenti <- report_ledger_previous(cartella, "2026-10")
+
+  # test
+  expect_true(precedenti[["ok"]])
+  expect_equal(
+    vapply(precedenti[["invii"]], `[[`, "", "at"),
+    c("2026-09-01 07:30", "2026-10-01 07:30")
+  )
+  assente <- file.path(cartella, "no")
+  expect_true(report_ledger_previous(assente, "2026-10")[["ok"]])
+})
+
+
+# --- one run ----------------------------------------------------------------
+
+# The month of these tests: Anna created two requests, one for Carla in
+# August, who never signed in, and one for Dario in October; a third row has
+# no creation in the log. Dario signed in.
+scenario <- function() {
+  list(
+    registro = registro_di(
+      richiesta(record_id = "41"),
+      richiesta(record_id = "42", username = "dario.ipotetico@ubep.unipd.it",
+                first_name = "Dario", last_name = "Ipotetico",
+                project_id = "9302"),
+      richiesta(record_id = "43", username = "dario.ipotetico@ubep.unipd.it",
+                first_name = "Dario", last_name = "Ipotetico",
+                project_id = "9303")
+    ),
+    creazioni = rbind(
+      evento("2026-10-08 10:00", referente, "", record = "42",
+             action = "Create record 42"),
+      evento("2026-08-03 10:00", referente, "", record = "41",
+             action = "Create record 41")
+    ),
+    # The whole log, whatever row is asked: what an instance that ignored
+    # `record` would answer.
+    eventi = rbind(
+      evento("2026-10-08 23:03", canale, "applied_seal = 'bbbbbbbbbbbb'",
+             record = "42"),
+      evento("2026-10-01 23:03", canale, "applied_seal = 'cccccccccccc'",
+             record = "43"),
+      evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'",
+             record = "41")
+    )
+  )
+}
+
+# Doubles for the three readings. `letto` and `log_letto` say whether the
+# register and a row's log answer; `chiamate` counts the questions asked.
+doppie <- function(dati = scenario(), letto = TRUE, log_letto = TRUE,
+                   rubrica = rubrica_mensile(), env = parent.frame()) {
+  chiamate <- new.env()
+  chiamate[["righe"]] <- character()
+  guasto <- list(
+    ok = FALSE, errors = "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE",
+    payload = NULL
+  )
+  testthat::local_mocked_bindings(
+    register_records = function(url, token) {
+      if (!letto) {
+        return(c(guasto, list(records = NULL)))
+      }
+      list(
+        ok = TRUE, errors = character(), payload = NULL,
+        records = dati[["registro"]]
+      )
+    },
+    register_log = function(url, token, since = NULL, logtype = NULL,
+                            record = NULL) {
+      if (!is.null(logtype)) {
+        return(list(
+          ok = TRUE, errors = character(), payload = NULL,
+          log = dati[["creazioni"]]
+        ))
+      }
+      chiamate[["righe"]] <- c(chiamate[["righe"]], record)
+      if (!log_letto) {
+        return(c(guasto, list(log = NULL)))
+      }
+      list(
+        ok = TRUE, errors = character(), payload = NULL,
+        log = dati[["eventi"]]
+      )
+    },
+    directory_users = function(token, base_url) {
+      list(ok = TRUE, errors = character(), payload = list(), users = rubrica)
+    },
+    .env = env
+  )
+  chiamate
+}
+
+posta_finta <- function(rifiuta = character()) {
+  inviate <- new.env()
+  inviate[["mail"]] <- list()
+  list(
+    inviate = inviate,
+    mailer = function(to, cc, subject, body) {
+      inviate[["mail"]][[length(inviate[["mail"]]) + 1L]] <- list(
+        to = to, cc = cc, subject = subject, body = body
+      )
+      if (to %in% rifiuta) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    }
+  )
+}
+
+it_prova <- "it-prova@example.org"
+
+esegui <- function(cartella, posta = NULL, ora = "2026-11-01 06:30", ...) {
+  provisioning_report(
+    register_url = "registro.example.org", register_token = "gettone",
+    graph_token = "gettone", graph_url = "graph.example.org/v1.0",
+    ledger_dir = cartella, now = as.POSIXct(ora, tz = "UTC"),
+    mailer = posta[["mailer"]], copy_to = it_prova, ...
+  )
+}
+
+
+test_that("the first run sends to the referent and to IT, and keeps track", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta)
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  expect_equal(vapply(mail, `[[`, "", "to"), c(referente, it_prova))
+  # IT in copy on the referent's report, and nobody in copy on its own.
+  expect_equal(mail[[1L]][["cc"]], it_prova)
+  expect_null(mail[[2L]][["cc"]])
+  expect_match(mail[[1L]][["subject"]], "^1 da guardare: accessi REDCap")
+  expect_match(mail[[2L]][["subject"]], "^1 da guardare: rapporto REDCap")
+
+  invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
+  expect_equal(
+    vapply(invii, `[[`, "", "destinatario"), c(referente, report_it_key())
+  )
+  expect_equal(
+    invii[[1L]][["senza_primo_accesso"]], "carla.inventata@ubep.unipd.it"
+  )
+  expect_equal(invii[[1L]][["at"]], "2026-11-01 07:30")
+
+  expect_equal(record[["mese"]], "2026-10")
+  expect_true(record[["giorno_di_invio"]])
+  expect_equal(record[["referenti"]], 2L)
+  expect_equal(record[["mandati"]], 2L)
+  expect_equal(record[["gia_mandati"]], 0L)
+  expect_equal(record[["falliti"]], 0L)
+  expect_equal(record[["in_ordine"]], 0L)
+  expect_equal(record[["da_guardare"]], 2L)
+  expect_equal(record[["voci_attivati"]], 1L)
+  expect_equal(record[["voci_senza_primo_accesso"]], 1L)
+  expect_equal(record[["senza_creatore"]], 1L)
+  expect_true(record[["mese_completo"]])
+  expect_false(record[["in_ritardo"]])
+  expect_equal(record[["errori"]], character())
+})
+
+
+test_that("the report asks the log of each active row once, and reads it", {
+  # eval
+  chiamate <- doppie()
+  cartella <- withr::local_tempdir()
+
+  esito <- esegui(cartella)
+
+  # test
+  expect_equal(chiamate[["righe"]], c("41", "42", "43"))
+  # The double hands back the whole log on every question, and the report
+  # still dated each row by its own events: Dario's October row is news,
+  # Carla's August one is not.
+  expect_equal(esito[["voci_attivati"]], 1L)
+})
+
+
+test_that("the next day sends nothing, and the month stays complete", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  esegui(cartella, posta_finta())
+  posta <- posta_finta()
+
+  record <- report_record(
+    esegui(cartella, posta, ora = "2026-11-02 06:30"), posta = TRUE
+  )
+
+  # test
+  expect_length(posta[["inviate"]][["mail"]], 0L)
+  expect_false(record[["giorno_di_invio"]])
+  expect_equal(record[["gia_mandati"]], 2L)
+  expect_equal(record[["mandati"]], 0L)
+  expect_true(record[["mese_completo"]])
+  expect_false(record[["in_ritardo"]])
+})
+
+
+test_that("with the post off the run computes and writes no ledger", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+
+  primo <- report_record(esegui(cartella), posta = FALSE)
+  secondo <- report_record(
+    esegui(cartella, ora = "2026-11-02 06:30"), posta = FALSE
+  )
+
+  # test
+  expect_equal(list.files(cartella), character())
+  expect_false(primo[["posta"]])
+  expect_true(primo[["giorno_di_invio"]])
+  expect_equal(primo[["mandati"]], 0L)
+  expect_equal(primo[["falliti"]], 0L)
+  expect_false(primo[["mese_completo"]])
+  # Nothing went out, and from the 2nd that is a month late.
+  expect_false(primo[["in_ritardo"]])
+  expect_true(secondo[["in_ritardo"]])
+})
+
+
+test_that("a redirected run sends to the test address and keeps no ledger", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  record <- report_record(
+    esegui(cartella, posta, redirect_to = "collaudo@example.org"),
+    posta = TRUE
+  )
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  expect_equal(
+    vapply(mail, `[[`, "", "to"), rep("collaudo@example.org", 2L)
+  )
+  expect_null(mail[[1L]][["cc"]])
+  expect_match(mail[[1L]][["body"]], "^\\[PROVA\\]")
+  expect_match(mail[[1L]][["body"]], referente, fixed = TRUE)
+  # Recorded, the real month would read as sent.
+  expect_equal(list.files(cartella), character())
+  expect_true(record[["posta_dirottata"]])
+})
+
+
+test_that("a run with a forced month leaves the real month to be sent", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  collaudo <- posta_finta()
+
+  # A field test at the end of October, forcing October, with the post on
+  # and not even redirected.
+  forzato <- report_record(
+    esegui(cartella, collaudo, ora = "2026-10-20 08:00", month = "2026-10"),
+    posta = TRUE
+  )
+  posta <- posta_finta()
+  vero <- report_record(esegui(cartella, posta), posta = TRUE)
+
+  # test
+  expect_length(collaudo[["inviate"]][["mail"]], 2L)
+  expect_equal(forzato[["mese"]], "2026-10")
+  # A forced run speaks about another month, so it cannot say the real one is
+  # late; the next run of the timer says the truth.
+  expect_false(forzato[["in_ritardo"]])
+  # On the 1st of November October's reports leave as if nothing had run.
+  expect_length(posta[["inviate"]][["mail"]], 2L)
+  expect_equal(vero[["gia_mandati"]], 0L)
+  expect_equal(vero[["mandati"]], 2L)
+  expect_equal(list.files(cartella), "2026-10.json")
+})
+
+
+test_that("a refused mail is retried the day after, and only that one", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  primo <- report_record(
+    esegui(cartella, posta_finta(rifiuta = referente)), posta = TRUE
+  )
+  posta <- posta_finta()
+  secondo <- report_record(
+    esegui(cartella, posta, ora = "2026-11-02 06:30"), posta = TRUE
+  )
+
+  # test
+  expect_equal(primo[["mandati"]], 1L)
+  expect_equal(primo[["falliti"]], 1L)
+  expect_equal(primo[["errori"]], "TRASPORTO_POSTA_RIFIUTATA")
+  expect_false(primo[["mese_completo"]])
+  expect_equal(vapply(posta[["inviate"]][["mail"]], `[[`, "", "to"), referente)
+  expect_equal(secondo[["gia_mandati"]], 1L)
+  expect_true(secondo[["mese_completo"]])
+})
+
+
+test_that("an unreadable register sends nothing, and the month is not done", {
+  # eval
+  doppie(letto = FALSE)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  record <- report_record(
+    esegui(cartella, posta, ora = "2026-11-02 06:30"), posta = TRUE
+  )
+
+  # test
+  expect_length(posta[["inviate"]][["mail"]], 0L)
+  expect_false(record[["registro_letto"]])
+  expect_true(record[["directory_letta"]])
+  expect_equal(record[["errori"]], "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE")
+  # A month nobody could count is not a complete one.
+  expect_false(record[["mese_completo"]])
+  expect_true(record[["in_ritardo"]])
+})
+
+
+test_that("no endpoint for Graph is a directory not read, said as such", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+
+  esito <- provisioning_report(
+    register_url = "registro.example.org", register_token = "gettone",
+    graph_token = "", graph_url = "", ledger_dir = cartella,
+    now = as.POSIXct("2026-11-01 06:30", tz = "UTC")
+  )
+  record <- report_record(esito, posta = FALSE)
+
+  # test
+  expect_false(record[["directory_letta"]])
+  expect_equal(record[["errori"]], "TRASPORTO_DIRECTORY_SENZA_ENDPOINT")
+})
+
+
+test_that("a row's log that does not answer holds the day's reports", {
+  # eval
+  doppie(log_letto = FALSE)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  record <- report_record(esegui(cartella, posta), posta = TRUE)
+
+  # test
+  expect_length(posta[["inviate"]][["mail"]], 0L)
+  expect_equal(record[["errori"]], "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE")
+  expect_false(record[["mese_completo"]])
+})
+
+
+test_that("a ledger that does not read sends nothing and is left as it is", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  writeLines("{ rotto", file.path(cartella, "2026-10.json"))
+  posta <- posta_finta()
+
+  record <- report_record(esegui(cartella, posta), posta = TRUE)
+
+  # test
+  expect_length(posta[["inviate"]][["mail"]], 0L)
+  expect_equal(readLines(file.path(cartella, "2026-10.json")), "{ rotto")
+  expect_true("RAPPORTO_INVII_ILLEGGIBILI" %in% record[["errori"]])
+  expect_false(record[["mese_completo"]])
+})
+
+
+test_that("a reused record id is reported to its creator of today", {
+  # eval
+  # Record 41 was a field test in July, deleted and made again by Anna in
+  # August. Its July execution must neither date the request nor make the
+  # field-test account a referent.
+  dati <- scenario()
+  dati[["registro"]] <- dati[["registro"]][1L, ]
+  dati[["creazioni"]] <- rbind(
+    evento("2026-08-03 10:00", referente, "", record = "41",
+           action = "Create record 41"),
+    evento("2026-07-01 10:00", "collaudo.prova@ubep.unipd.it", "",
+           record = "41", action = "Create record 41")
+  )
+  dati[["eventi"]] <- rbind(
+    evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'"),
+    evento("2026-08-03 10:00", referente, "", action = "Create record 41"),
+    evento("2026-07-20 12:00", "amministratore.prova@ubep.unipd.it", "",
+           action = "Delete record 41"),
+    evento("2026-07-01 23:03", canale, "applied_seal = 'eeeeeeeeeeee'"),
+    evento("2026-07-01 10:00", "collaudo.prova@ubep.unipd.it", "",
+           action = "Create record 41")
+  )
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esegui(cartella, posta)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  expect_equal(vapply(mail, `[[`, "", "to"), referente)
+  expect_match(
+    mail[[1L]][["body"]], "attivata il 2026-08-03, 90 giorni fa", fixed = TRUE
+  )
+})
+
+
+# --- the record -------------------------------------------------------------
+
+test_that("the record carries exactly the columns of its table, in order", {
+  # eval
+  doppie()
+  record <- report_record(esegui(withr::local_tempdir()), posta = FALSE)
+
+  # test
+  # The rule on the incomplete record names these columns, and the
+  # collection rule drops in silence any it does not know.
+  expect_equal(names(record), c(
+    "at", "mese", "giorno_di_invio", "registro_letto", "directory_letta",
+    "istanze_non_lette", "posta", "posta_dirottata", "referenti", "mandati",
+    "gia_mandati", "falliti", "in_ordine", "da_guardare", "voci_attivati",
+    "voci_senza_primo_accesso", "voci_senza_accessi", "senza_creatore",
+    "mese_completo", "in_ritardo", "errori"
+  ))
+  expect_equal(record[["at"]], "2026-11-01 06:30")
+  # Phase 1 reads no instance and does not measure the third item.
+  expect_equal(record[["istanze_non_lette"]], 0L)
+  expect_equal(record[["voci_senza_accessi"]], 0L)
+  # `errori` stays an array with one code, as in the round's record.
+  record[["errori"]] <- "TRASPORTO_POSTA_RIFIUTATA"
+  expect_match(
+    run_record_json(record), '"errori":["TRASPORTO_POSTA_RIFIUTATA"]',
+    fixed = TRUE
+  )
+})
+
+
+test_that("late means from the 2nd on, with the month not complete", {
+  expect_false(report_late(1L, completo = FALSE, forzato = FALSE))
+  expect_true(report_late(2L, completo = FALSE, forzato = FALSE))
+  expect_true(report_late(28L, completo = FALSE, forzato = FALSE))
+  expect_false(report_late(2L, completo = TRUE, forzato = FALSE))
+  expect_false(report_late(2L, completo = FALSE, forzato = TRUE))
 })
