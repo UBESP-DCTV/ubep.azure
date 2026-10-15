@@ -1173,11 +1173,16 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   # round could actually have acted on, every register row for the server
   # collected TRASPORTO_NON_RAGGIUNGIBILE regardless of never having been
   # asked for.
+  #
+  # The second row is a namesake of the first with another contact address,
+  # so the gate stops it as `ambiguous`. It used to be a person the tenant does
+  # not hold, which the gate does not stop: that row waits for a creation, and
+  # since 0.19.0 it takes the instance's code like a pair does.
   esito <- giro(
     registro_doppio(record_json(
       list(record_id = "1"),
-      list(record_id = "2", first_name = "Giulia", last_name = "Verdi",
-           contact_email = "giulia.verdi@example.org", project_id = "9004")
+      list(record_id = "2", contact_email = "altro.rossi@example.org",
+           project_id = "9004")
     )),
     istanza_muta()
   )
@@ -1187,7 +1192,11 @@ test_that("a stopped row takes no transport error from its neighbour's instance"
   expect_equal(
     esiti[["outcome"]][esiti[["record_id"]] == "1"], "transport_error"
   )
-  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "pending")
+  expect_equal(esiti[["outcome"]][esiti[["record_id"]] == "2"], "data_error")
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_RECAPITO_NON_IDENTIFICA"
+  )
 })
 
 
@@ -1379,9 +1388,43 @@ test_that("nobody is created while the instance that would say so is silent", {
   # An instance that did not answer has not said "yes" and has not said "no".
   # Fail closed: the row waits, and the next round asks again. Creating on an
   # unanswered question would make the gate a thing that holds only while the
-  # network does.
+  # network does. It waits as a transport error, the next test says why.
   expect_length(creazioni(), 0L)
-  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+})
+
+
+test_that("a person to create on a silent instance waits with the instance's code", { # nolint: line_length_linter.
+  # eval
+  muta <- giro(
+    registro_doppio(record_json(list())),
+    istanza_muta(),
+    directory_vuota()
+  )
+  senza_modulo <- giro(
+    registro_doppio(record_json(list(server = "edc07"))),
+    istanza_doppia(list()),
+    directory_vuota()
+  )
+
+  # test
+  # The row is `absent`, so it is not a pair and never enters the plan; it
+  # reaches the instance only for the scope question. Left `pending`, it
+  # waited without limit and without a word: the referent had the first
+  # message and nothing after it, and nothing told us an instance was silent
+  # for that row. It now waits the way a pair on the same instance waits, as a
+  # transport error under the instance's own code, which comes back to the
+  # queue every round and reaches us.
+  expect_equal(identita_scritte()[["identity"]], "absent")
+  expect_equal(muta[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    muta[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+  expect_equal(senza_modulo[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    senza_modulo[["esiti"]][["outcome_detail"]],
+    "TRASPORTO_ISTANZA_SENZA_MODULO"
+  )
 })
 
 

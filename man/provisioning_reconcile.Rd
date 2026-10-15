@@ -138,7 +138,8 @@ to grant a right to — so it never enters the desired state; but it does
 travel as far as the scope question, because whoever could not have granted
 that project by hand must not be able to make the person to grant it to
 either. An instance that did not answer has neither allowed nor refused, and
-the row waits.
+the row waits, under the instance's transport code as a pair on that
+instance does.
 
 \strong{The row it creates stays \code{absent} for this pass} and becomes \code{created} at
 the next one, which is decision 4 working as written rather than a delay

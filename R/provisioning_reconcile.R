@@ -64,7 +64,8 @@
 #' travel as far as the scope question, because whoever could not have granted
 #' that project by hand must not be able to make the person to grant it to
 #' either. An instance that did not answer has neither allowed nor refused, and
-#' the row waits.
+#' the row waits, under the instance's transport code as a pair on that
+#' instance does.
 #'
 #' **The row it creates stays `absent` for this pass** and becomes `created` at
 #' the next one, which is decision 4 working as written rather than a delay
@@ -631,13 +632,25 @@ provisioning_reconcile <- function(register_url,
     # instance would collect a transport error on a row the round never
     # touched, contradicting the early-feedback promise the scope-refusal path
     # below still keeps for exactly those rows.
+    #
+    # A row waiting for its person to be created is one the round could have
+    # acted on too, although it is not a pair: it comes this far for the scope
+    # question, and a creation hangs on the answer. Left out, a silent instance
+    # kept it `pending` without limit and without a code -- the referent had
+    # the first message and nothing after it, and nothing reached us -- while
+    # a pair on the same instance came back with the instance's code. It
+    # waits the same way now.
+    newcomers <- as.character(rows[["record_id"]])[
+      identity_normalize(rows[["identity"]]) == "absent"
+    ]
     asked_for <- unique(c(
       vapply(
         wanted, function(e) as.character(e[["record_id"]]), character(1)
       ),
       vapply(
         revoked, function(e) as.character(e[["record_id"]]), character(1)
-      )
+      ),
+      newcomers
     ))
 
     unreachable <- function(code) {
