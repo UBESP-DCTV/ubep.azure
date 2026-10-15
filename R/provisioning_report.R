@@ -160,6 +160,14 @@ report_day_words <- function(date) {
 #' cannot say which of them executed the row, and the answer is unknown rather
 #' than a guess.
 #'
+#' Only the row that stands now is read. The register reuses record ids: one
+#' made for a field test, deleted on 2026-09-01 with the rest and made again
+#' as a real request, has both lives in its log, and the old one's seal would
+#' date the new request months before it existed, and make its first
+#' execution read as a change. `log_of_record()` keeps the row's current life
+#' only, from its newest creation on, as for the round, and the channel's
+#' account is recognized on that.
+#'
 #' The stamps stay in the instance's civil time, which is Rome: measured on
 #' 2026-09-01, a round at 21:03 UTC is logged at 23:03. A month is then the
 #' first seven characters of the stamp, and no conversion can shift a row

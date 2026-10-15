@@ -153,6 +153,86 @@ test_that("a log with no seal by the channel has no activation", {
 })
 
 
+test_that("a record id used before keeps its earlier life out of the date", {
+  # eval
+  # The register reuses ids: one was created for a field test, deleted with
+  # the rest on 2026-09-01, and created again as the first real request.
+  # Asked by `record`, REDCap answers with both lives, newest first.
+  vecchia_e_nuova <- rbind(
+    evento("2026-10-12 06:03", canale, "applied_seal = 'bbbbbbbbbbbb'"),
+    evento("2026-10-08 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'"),
+    evento("2026-10-08 10:00", "anna.esempio@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41"),
+    evento("2026-09-01 12:00", "amministratore.prova@ubep.unipd.it",
+           "record_id = '41'", action = "Delete record 41"),
+    evento("2026-08-15 23:03", canale, "applied_seal = 'eeeeeeeeeeee'"),
+    evento("2026-08-15 10:00", "collaudo.prova@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41")
+  )
+
+  # test
+  # The old life's execution would date the request in August, and the
+  # October one would read as a change: a new request reported as modified.
+  expect_equal(
+    report_executions(vecchia_e_nuova, "41"),
+    c("2026-10-08 23:03", "2026-10-12 06:03")
+  )
+})
+
+
+test_that("a new life not executed yet does not inherit the old one's date", {
+  # eval
+  eventi <- rbind(
+    evento("2026-10-08 10:00", "anna.esempio@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41"),
+    evento("2026-08-15 23:03", canale, "applied_seal = 'eeeeeeeeeeee'"),
+    evento("2026-08-15 10:00", "collaudo.prova@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41")
+  )
+
+  # test
+  expect_equal(report_executions(eventi, "41"), character())
+})
+
+
+test_that("another account that served the old life does not blind the new", {
+  # eval
+  # A field test that ran under a different token wrote the channel's fields
+  # under a second account. Counted on the whole log, the date would be
+  # unknown; the row that stands now was executed by one account only.
+  eventi <- rbind(
+    evento("2026-10-08 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'"),
+    evento("2026-10-08 10:00", "anna.esempio@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41"),
+    evento("2026-08-15 23:03", "svc-collaudo-prova",
+           "applied_seal = 'eeeeeeeeeeee'"),
+    evento("2026-08-15 10:00", "collaudo.prova@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41")
+  )
+
+  # test
+  expect_equal(report_executions(eventi, "41"), "2026-10-08 23:03")
+})
+
+
+test_that("the creator of a reused id is the one of the life standing now", {
+  # eval
+  # What the report sends a row by. `log_creators()` reads the creations
+  # newest first and takes the first, which is the current life; this pins
+  # it from the report's side too, since a report sent to the creator of a
+  # row that no longer exists would describe somebody else's request.
+  creazioni <- rbind(
+    evento("2026-10-08 10:00", "anna.esempio@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41"),
+    evento("2026-08-15 10:00", "collaudo.prova@ubep.unipd.it",
+           "record_id = '41'", action = "Create record 41")
+  )
+
+  # test
+  expect_equal(log_creators(creazioni, "41"), "anna.esempio@ubep.unipd.it")
+})
+
+
 test_that("two accounts writing the channel's fields leave the date unknown", {
   # eval
   # Only the channel writes `applied_seal`; a second account doing it is
