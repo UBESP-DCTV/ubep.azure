@@ -1409,7 +1409,8 @@ report_ledger_path <- function(dir, month, collaudo = FALSE) {
 #' @param collaudo Whether to read a redirected run's ledger.
 #'
 #' @return A list with `ok`, `errors` and `invii`, one list per report sent:
-#'   `destinatario`, `at` and `senza_primo_accesso`.
+#'   `destinatario`, `at` and `senza_primo_accesso`; and `collaudo`, so that
+#'   whoever adds to it writes it back where it was read.
 #'
 #' @keywords internal
 report_ledger_read <- function(dir, month, collaudo = FALSE) {
@@ -1418,13 +1419,17 @@ report_ledger_read <- function(dir, month, collaudo = FALSE) {
     is.character(month), length(month) == 1L
   )
 
+  collaudo <- isTRUE(collaudo)
   path <- report_ledger_path(dir, month, collaudo)
   if (!file.exists(path)) {
-    return(list(ok = TRUE, errors = character(), invii = list()))
+    return(list(
+      ok = TRUE, errors = character(), invii = list(), collaudo = collaudo
+    ))
   }
 
   unreadable <- list(
-    ok = FALSE, errors = "RAPPORTO_INVII_ILLEGGIBILI", invii = list()
+    ok = FALSE, errors = "RAPPORTO_INVII_ILLEGGIBILI", invii = list(),
+    collaudo = collaudo
   )
   parsed <- tryCatch(
     jsonlite::fromJSON(path, simplifyVector = FALSE),
@@ -1449,7 +1454,7 @@ report_ledger_read <- function(dir, month, collaudo = FALSE) {
     return(unreadable)
   }
 
-  list(ok = TRUE, errors = character(), invii = invii)
+  list(ok = TRUE, errors = character(), invii = invii, collaudo = collaudo)
 }
 
 
@@ -1608,15 +1613,17 @@ report_due_write <- function(dir, month, due, at) {
 #' whole, `report_write_json()`.
 #'
 #' @inheritParams report_ledger_read
-#' @param ledger The ledger as read, from `report_ledger_read()`.
+#' @param ledger The ledger as read, from `report_ledger_read()`, which also
+#'   says whether it is a redirected run's.
 #' @param entry A list of `destinatario`, `at` and `senza_primo_accesso`.
 #'
 #' @return A list with `ok`, `errors` and `ledger`, the ledger with the entry
 #'   when it was written and as it was otherwise.
 #'
 #' @keywords internal
-report_ledger_add <- function(dir, month, ledger, entry, collaudo = FALSE) {
+report_ledger_add <- function(dir, month, ledger, entry) {
   stopifnot(is.list(ledger), is.list(entry))
+  collaudo <- isTRUE(ledger[["collaudo"]])
 
   invii <- c(ledger[["invii"]], list(list(
     destinatario = as.character(entry[["destinatario"]]),
@@ -1647,7 +1654,9 @@ report_ledger_add <- function(dir, month, ledger, entry, collaudo = FALSE) {
 
   list(
     ok = TRUE, errors = character(),
-    ledger = list(ok = TRUE, errors = character(), invii = invii)
+    ledger = list(
+      ok = TRUE, errors = character(), invii = invii, collaudo = collaudo
+    )
   )
 }
 
@@ -1923,8 +1932,7 @@ provisioning_report <- function(register_url,
           list(
             destinatario = who, at = period[["letto"]],
             senza_primo_accesso = named
-          ),
-          collaudo = test_run
+          )
         )
         # A ledger that cannot be written would make every later report of
         # this run a duplicate tomorrow: the run stops sending, and what it

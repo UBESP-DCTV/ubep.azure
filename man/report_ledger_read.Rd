@@ -15,7 +15,8 @@ report_ledger_read(dir, month, collaudo = FALSE)
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{invii}, one list per report sent:
-\code{destinatario}, \code{at} and \code{senza_primo_accesso}.
+\code{destinatario}, \code{at} and \code{senza_primo_accesso}; and \code{collaudo}, so that
+whoever adds to it writes it back where it was read.
 }
 \description{
 The ledger is the trace of an event that otherwise leaves none: for each
