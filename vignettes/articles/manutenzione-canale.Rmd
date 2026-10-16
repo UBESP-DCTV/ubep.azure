@@ -148,6 +148,22 @@ riprova. La coda è il registro stesso — nessun secondo stato, niente da tener
 allineato. Il costo accettato in cambio è che una notifica possa arrivare **due
 volte**, mai che si perda.
 
+**La posta del giro va a chi ha creato la riga.** Il benvenuto va alla
+persona, a `contact_email`. L'esito, qualunque sia, e la chiave di un account
+appena nato vanno al referente, e il referente è il **creatore** che il giro
+legge dal registro delle creazioni (`mail_referent()`), lo stesso che il
+cancello dell'ambito giudica: non `requested_by`. Dal modulo i due coincidono,
+perché `@USERNAME` riempie il campo; il *Data Import Tool* lo scrive com'è nel
+CSV (misurato il 2026-09-02 e di nuovo il 2026-10-16). Fino alla 0.20.0 un
+import con il campo vuoto perdeva la chiave (`POSTA_CREDENZIALE_PERSA`), e uno
+con un altro indirizzo mandava lì chiave ed esiti. Il giro non riscrive
+`requested_by`: il creatore viaggia in memoria, come per il cancello.
+`requested_by` resta il ripiego per una riga senza creatore. La chiave non ci
+arriva, perché una riga il cui creatore il log non nomina si ferma su
+`TRASPORTO_AUTORE_NON_LEGGIBILE` e nessuno nasce; un esito sì, in un giro che
+non ha un creatore da dare: anagrafica non letta, log delle creazioni
+illeggibile o che non nomina la riga, nessuna riga da giudicare.
+
 **La posta è spenta di default**, e la ragione non è intuitiva: con «manda
 prima, scrivi dopo» una posta semplicemente spenta bloccherebbe *ogni* scrittura
 nel registro. Quindi senza la variabile che la accende il giro fa esattamente
