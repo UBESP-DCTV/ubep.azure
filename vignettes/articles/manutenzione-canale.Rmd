@@ -1324,9 +1324,15 @@ colonne prima che qualcuno le emetta):
   disabilitazione a fine collaborazione la fa IT, a mano. Il confine è nominato
   invece di taciuto, perché chi cerca «come si chiude un account» deve trovare
   una risposta, e «fuori dal canale» è una risposta.
-- **Il caricamento in batch delle richieste.** Passa da IT. Un import per
-  identificatore di record permetterebbe a un referente di sovrascrivere le
-  righe di un altro, e la difesa nativa non è ancora in piedi.
+- **Il caricamento in batch delle richieste.** È aperto ai referenti dal
+  2026-10-16, con il *Data Import Tool* sul ruolo `referente`, e non ha qui
+  una procedura sua perché al canale non ne chiede una. Chi importa risulta il
+  creatore delle righe; il giro non si fida dei campi che l'import scrive,
+  ricalcola l'esito e trattiene una riga riscritta da chi non l'ha creata
+  («Una riga cambiata dopo essere stata applicata», §4); la posta va al
+  creatore (§1). Che cosa fare per caricare lo dicono le istruzioni per i
+  referenti. IT non carica richieste per conto dei referenti: il creatore
+  risulterebbe IT.
 - **Quando passare dalla simulazione alla scrittura vera.** Vedi §1: il giro
   del canale simula finché nessuno gli chiede di scrivere per davvero, e il
   confronto fra desiderato e reale è acceso da subito — non è più lui
