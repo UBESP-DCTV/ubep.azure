@@ -23,7 +23,8 @@ It carries no way in, and that is the decision rather than an omission:
 so a secret sent there would let anyone who can file a request have an
 account born in the tenant and its key delivered to an address of their own
 choosing. The referent who asked for the account hands it over instead; this
-message says so, and names them.
+message says so, and names them as \code{mail_referent()} does: the creator the
+log named, who receives the key, and not \code{requested_by}.
 }
 \details{
 It does name the instance, as the address REDCap opens at, and that is the

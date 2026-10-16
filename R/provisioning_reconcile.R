@@ -1210,9 +1210,10 @@ provisioning_reconcile <- function(register_url,
   changed <- round_changed(register, outcomes)
   # The same minutes the identity door wrote, so the message names what the
   # round settled instead of what the referent left blank. And the creator the
-  # log named, which is where a held row's message goes: it asks its reader
-  # to approve, and the creator is the only one whose approval counts. With
-  # it, who changed the row, which is what the creator has to judge.
+  # log named, which is where the outcome and the key go: the referent the
+  # gate judged, and the only one whose approval of a held row counts, where
+  # `requested_by` is what an import wrote. With it, who changed the row,
+  # which is what the creator has to judge.
   edited_by <- vapply(seq_along(record_ids), function(i) {
     if (!checked[[i]]) {
       return("")

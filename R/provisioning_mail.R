@@ -111,9 +111,9 @@ mail_status_words <- function(request_status) {
 #' Compose the message that tells whoever filed a row how it went
 #'
 #' Both languages in one message, Italian above and English below: the channel
-#' does not know which one the recipient reads -- `requested_by` is a UPN and
-#' says nothing about it -- so sending two would double the post without
-#' knowing which of them could be dropped.
+#' does not know which one the recipient reads -- the address it goes to,
+#' `mail_referent()`, is a UPN and says nothing about it -- so sending two
+#' would double the post without knowing which of them could be dropped.
 #'
 #' @param row One register row as a list, carrying the dictionary's fields.
 #'
@@ -307,31 +307,43 @@ mail_outcome_message <- function(row) {
 }
 
 
-#' Who the message about a row's outcome goes to
+#' Who the round's mail to a row's referent goes to
 #'
-#' `requested_by`, except on a held row, whose message asks its reader to
-#' approve a change. Only whoever created the row can, IT aside, and that is
-#' the account REDCap authenticated when the row was made, which the round
-#' reads from the creation log and passes on as `creator`. The two agree on
-#' every row filed from the form; an import is what makes them disagree, and
-#' then the message goes where the approval can come from. The round does not
-#' hold a row whose creator it could not read -- that row takes
-#' `TRASPORTO_AUTORE_NON_LEGGIBILE` -- so the fallback to `requested_by` is
-#' for a caller that hands this a held row without one.
+#' The creator: the account REDCap authenticated when the row was made, which
+#' the round reads from the creation log and passes on as `creator`. It is the
+#' referent the scope gate judged, and the only one whose approval of a change
+#' counts, IT aside. Every message the round sends to whoever asked goes
+#' there: the outcome, whatever it is, and the key of an account just made.
 #'
-#' @param row One register row as a list, with this round's outcome.
+#' Not `requested_by`. On the form `@USERNAME` fills it in and the two agree;
+#' the Data Import Tool writes it as the CSV has it (measured on 2026-09-02
+#' and again on 2026-10-16), and the round does not write it back. Sent to
+#' that field, an import that left it empty lost the key and the outcome, and
+#' one naming another address sent both there, to the person themselves if
+#' the file said so, against the rule that the key stays with the referent.
+#'
+#' `requested_by` remains the fallback for a row without a creator, and no key
+#' reaches it: a row whose creator the log does not name stops at the gate on
+#' `TRASPORTO_AUTORE_NON_LEGGIBILE`, and nobody is made for it. An outcome
+#' can, on a round that has no creator to hand: one whose sweep of the tenant
+#' failed, which asks no log; one whose creation log could not be read, or
+#' does not name the row; one where no row needed judging, which does not ask
+#' the creation log at all.
+#'
+#' @param row One register row as a list, with this round's outcome and the
+#'   `creator` the round read.
 #'
 #' @return One address, possibly empty.
 #'
 #' @keywords internal
-mail_outcome_recipient <- function(row) {
+mail_referent <- function(row) {
   stopifnot(is.list(row))
 
   creator <- mail_said_or(row[["creator"]], "")
-  if (identical(as.character(row[["outcome"]]), "held") && nzchar(creator)) {
+  if (nzchar(creator)) {
     return(creator)
   }
-  row[["requested_by"]]
+  mail_said_or(row[["requested_by"]], "")
 }
 
 
@@ -369,7 +381,8 @@ mail_instance_url <- function(host) {
 #' so a secret sent there would let anyone who can file a request have an
 #' account born in the tenant and its key delivered to an address of their own
 #' choosing. The referent who asked for the account hands it over instead; this
-#' message says so, and names them.
+#' message says so, and names them as `mail_referent()` does: the creator the
+#' log named, who receives the key, and not `requested_by`.
 #'
 #' It does name the instance, as the address REDCap opens at, and that is the
 #' same decision read from the other side. A message without a secret can carry
@@ -394,9 +407,10 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     is.null(url) || length(url) == 1L
   )
 
-  referente <- mail_said_or(
-    row[["requested_by"]], "chi ha compilato la richiesta"
-  )
+  # The person the key goes to, so the creator and not the field an import
+  # writes as it likes: naming another would send the person to wait for
+  # somebody who never receives it.
+  referente <- mail_said_or(mail_referent(row), "chi ha compilato la richiesta")
 
   # Both lines or neither: the four hours are about the instance the address
   # names, and without the address they would be a promise about a place the
@@ -714,6 +728,10 @@ mail_redirect_note <- function(body, to, cc) {
 #' that did not leave holds no row back: holding it would not send the welcome
 #' again, it would only keep the outcome out of the register.
 #'
+#' The welcome goes to `contact_email`, the person. The outcome and the key go
+#' to the referent, `mail_referent()`: the creator `identified` carries, and
+#' `requested_by` only for a row without one.
+#'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
 #'   name.
@@ -728,7 +746,8 @@ mail_redirect_note <- function(body, to, cc) {
 #'   mailer closure is what carries it to the transport.
 #' @param identified What this round settled about each row, as a frame with
 #'   `record_id` and the fields it settled: the identity; `creator`, who the
-#'   creation log says made the row; `edited_by`, who changed a held row since
+#'   creation log says made the row, where the outcome and the key go
+#'   (`mail_referent()`); `edited_by`, who changed a held row since
 #'   it was applied, as the row's log says. `register` is the register as read,
 #'   on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
@@ -846,7 +865,7 @@ mail_round <- function(changed,
       riga[[campo]] <- changed[[campo]][[i]]
     }
     esito <- consegna(
-      mail_outcome_recipient(riga), copy_to, mail_outcome_message(riga)
+      mail_referent(riga), copy_to, mail_outcome_message(riga)
     )
     partite[[i]] <- isTRUE(esito[["ok"]])
     if (!partite[[i]]) errori <- c(errori, esito[["errors"]])
@@ -878,8 +897,10 @@ mail_round <- function(changed,
       conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
       errori <- c(errori, "POSTA_BENVENUTO_PERSO")
     }
+    # To the creator, whose rights let the account be made, and not to the
+    # `requested_by` the row carries: an import writes that one as it likes.
     segreto <- consegna(
-      riga[["requested_by"]], NULL,
+      mail_referent(riga), NULL,
       mail_credential_message(
         riga, upn = nato[["upn"]], credential = nato[["credential"]]
       )

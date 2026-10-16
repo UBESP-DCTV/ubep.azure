@@ -103,6 +103,41 @@ test_that("le istruzioni di primo accesso non portano nessun segreto", {
 })
 
 
+test_that("il benvenuto nomina chi ha creato la riga, non chi la riga nomina", {
+  # eval
+  importata <- mail_welcome_message(
+    riga_di_prova(
+      requested_by = "nominato.da.import@example.org",
+      creator = "creatrice.riga@example.org"
+    ),
+    upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+  senza_creatore <- mail_welcome_message(
+    riga_di_prova(creator = ""), upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+  nessuno <- mail_welcome_message(
+    riga_di_prova(requested_by = "", creator = ""),
+    upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+
+  # test
+  # The welcome tells the person who will hand them the key, and the key goes
+  # to the creator: naming the address the CSV carried would send the person
+  # to wait for somebody who never receives it.
+  expect_match(
+    importata, "te la consegna creatrice.riga@example.org", fixed = TRUE
+  )
+  expect_match(
+    importata, "creatrice.riga@example.org will hand it to you", fixed = TRUE
+  )
+  expect_no_match(importata, "nominato.da.import@example.org", fixed = TRUE)
+  expect_match(senza_creatore, "te la consegna cinzia@ubep.unipd.it",
+               fixed = TRUE)
+  expect_match(nessuno, "te la consegna chi ha compilato la richiesta",
+               fixed = TRUE)
+})
+
+
 test_that("il benvenuto dice da dove si apre REDCap, nelle due lingue", {
   # eval
   detto <- mail_welcome_message(
@@ -623,6 +658,114 @@ test_that("una nascita produce due messaggi, a due destinatari diversi", {
 })
 
 
+# One round that applies row 16 and makes its account, with `requested_by` and
+# the creator the log named set apart. A row filed through the Data Import
+# Tool carries in `requested_by` whatever the CSV had; the creator is the
+# account REDCap authenticated, which `identified` hands to the post. The key
+# is an argument so the fake value keeps coming from `finti`.
+giro_con_creatore <- function(requested_by, creator, chiave) {
+  registro <- registro_di_prova(requested_by = requested_by)
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  changed[["outcome"]] <- "applied"
+  changed[["outcome_detail"]] <- ""
+  posta <- raccoglitore()
+  detto <- mail_round(
+    changed, registro,
+    born = list(list(
+      record_id = "16", upn = "sara@ubep.unipd.it", credential = chiave
+    )),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    identified = data.frame(
+      record_id = "16", username = "sara.collaudozeta@ubep.unipd.it",
+      identity = "existing", creator = creator, edited_by = "",
+      stringsAsFactors = FALSE
+    )
+  )
+  mandate <- posta[["mandate"]]()
+  a <- function(oggetto) {
+    vapply(
+      Filter(function(m) grepl(oggetto, m[["subject"]], fixed = TRUE), mandate),
+      function(m) m[["to"]], character(1)
+    )
+  }
+  list(
+    detto = detto,
+    tutti = vapply(mandate, function(m) m[["to"]], character(1)),
+    esito = a("Richiesta 16"),
+    chiave = a("Accesso al nuovo account"),
+    benvenuto = a("Il tuo account UBEP")
+  )
+}
+
+
+test_that("una riga importata per altri manda esito e chiave al creatore", {
+  # eval
+  visto <- giro_con_creatore(
+    requested_by = "nominato.da.import@example.org",
+    creator = "creatrice.riga@example.org", chiave = finti[["parola"]]
+  )
+
+  # test
+  # The key stays with the referent the gate judged. An import that names
+  # somebody else, the person themselves included, does not move it.
+  expect_equal(visto[["esito"]], "creatrice.riga@example.org")
+  expect_equal(visto[["chiave"]], "creatrice.riga@example.org")
+  expect_equal(visto[["benvenuto"]], "sara.esterna@example.org")
+  expect_false("nominato.da.import@example.org" %in% visto[["tutti"]])
+  expect_equal(visto[["detto"]][["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("una riga importata senza requested_by non perde la chiave", {
+  # eval
+  visto <- giro_con_creatore(
+    requested_by = "", creator = "creatrice.riga@example.org",
+    chiave = finti[["parola"]]
+  )
+
+  # test
+  # Sent to the empty field, the key had no recipient: the account was born
+  # and nobody could get into it, and the outcome stayed out of the register.
+  expect_equal(visto[["esito"]], "creatrice.riga@example.org")
+  expect_equal(visto[["chiave"]], "creatrice.riga@example.org")
+  expect_equal(visto[["detto"]][["contatori"]][["credenziali_recapitate"]], 1L)
+  expect_equal(visto[["detto"]][["contatori"]][["credenziali_perse"]], 0L)
+  expect_false("POSTA_SENZA_DESTINATARIO" %in% visto[["detto"]][["errori"]])
+  expect_false("POSTA_CREDENZIALE_PERSA" %in% visto[["detto"]][["errori"]])
+  expect_equal(nrow(visto[["detto"]][["recapitate"]]), 1L)
+})
+
+
+test_that("una riga del modulo, dove i due coincidono, resta com'era", {
+  # eval
+  visto <- giro_con_creatore(
+    requested_by = "referente.modulo@example.org",
+    creator = "referente.modulo@example.org", chiave = finti[["parola"]]
+  )
+
+  # test
+  expect_equal(visto[["esito"]], "referente.modulo@example.org")
+  expect_equal(visto[["chiave"]], "referente.modulo@example.org")
+  expect_equal(visto[["benvenuto"]], "sara.esterna@example.org")
+})
+
+
+test_that("una riga senza creatore leggibile ripiega su requested_by", {
+  # eval
+  visto <- giro_con_creatore(
+    requested_by = "referente.modulo@example.org", creator = "",
+    chiave = finti[["parola"]]
+  )
+
+  # test
+  # The round does not make an account for a row whose creator it could not
+  # read, so the key does not reach this in a round; a caller that hands the
+  # post such a row gets the field the row carries.
+  expect_equal(visto[["esito"]], "referente.modulo@example.org")
+  expect_equal(visto[["chiave"]], "referente.modulo@example.org")
+})
+
+
 test_that("il benvenuto porta l'indirizzo dell'istanza della sua riga", {
   # eval
   registro <- registro_di_prova()
@@ -1013,31 +1156,37 @@ test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", 
 })
 
 
-test_that("solo la riga trattenuta va al creatore, le altre a requested_by", {
+test_that("ogni esito va al creatore, e a requested_by solo se manca", {
   # eval
   riga <- list(
-    record_id = "42", requested_by = "carla.neri@ubep.unipd.it",
-    creator = "anna.bianchi@ubep.unipd.it"
+    record_id = "42", requested_by = "nominato.da.import@example.org",
+    creator = "creatrice.riga@example.org"
   )
 
   # test
-  # The held message asks for an approval, which only the creator can give.
-  # Every other outcome tells whoever the row names, as it always has: moving
-  # them would change where a credential's notice goes on a question nobody
-  # asked here.
+  # `requested_by` is what `@USERNAME` wrote on the form, and what the CSV
+  # carried on an import: the Data Import Tool writes it verbatim. The creator
+  # is the account REDCap authenticated, and it is the one referent the gate
+  # judged, so every outcome goes there and not only the held one.
+  for (esito in outcome_vocabulary()) {
+    expect_equal(
+      mail_referent(c(riga, outcome = esito)), "creatrice.riga@example.org"
+    )
+  }
+  # The fallback, for a row whose creator nobody could read.
   expect_equal(
-    mail_outcome_recipient(c(riga, outcome = "held")),
-    "anna.bianchi@ubep.unipd.it"
+    mail_referent(list(
+      record_id = "42", outcome = "held",
+      requested_by = "nominato.da.import@example.org"
+    )),
+    "nominato.da.import@example.org"
   )
   expect_equal(
-    mail_outcome_recipient(c(riga, outcome = "applied")),
-    "carla.neri@ubep.unipd.it"
+    mail_referent(c(riga[c("record_id", "requested_by")], creator = "")),
+    "nominato.da.import@example.org"
   )
   expect_equal(
-    mail_outcome_recipient(
-      list(record_id = "42", outcome = "held", requested_by = "x@y.it")
-    ),
-    "x@y.it"
+    mail_referent(list(record_id = "42", requested_by = NA, creator = NA)), ""
   )
 })
 

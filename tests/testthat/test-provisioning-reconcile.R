@@ -3430,3 +3430,86 @@ test_that("a row held for an unreadable log makes nobody exist either", {
     esito[["esiti"]][["outcome_detail"]], "TRASPORTO_AUTORE_NON_LEGGIBILE"
   )
 })
+
+
+# A row filed through the Data Import Tool, whose account the round makes. The
+# creation log names Anna, who imported it and whose rights the gate judges;
+# `requested_by` is whatever the CSV carried, which REDCap writes verbatim.
+giro_importato <- function(requested_by) {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(
+      record_json(list(requested_by = requested_by)),
+      creazioni = creazioni_finte(list(username = anna))
+    ),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+  mandate <- posta[["mandate"]]()
+  a <- function(oggetto) {
+    vapply(
+      Filter(function(m) grepl(oggetto, m[["subject"]], fixed = TRUE), mandate),
+      function(m) m[["to"]], character(1)
+    )
+  }
+  list(
+    esito = esito,
+    tutti = vapply(mandate, function(m) m[["to"]], character(1)),
+    chiave = a("Accesso al nuovo account"),
+    richiesta = a("Richiesta 1")
+  )
+}
+
+
+test_that("la chiave di una riga importata va a chi l'ha creata", {
+  # eval
+  visto <- giro_importato("nominato.da.import@example.org")
+
+  # test
+  # The account is born on the creator's authority, the gate having judged
+  # the creator's rights; the key goes back to the same person. An import
+  # naming somebody else, the person themselves included, does not move it.
+  expect_length(creazioni(), 1L)
+  expect_equal(visto[["chiave"]], anna)
+  expect_equal(visto[["richiesta"]], anna)
+  expect_false("nominato.da.import@example.org" %in% visto[["tutti"]])
+  expect_identical(visto[["esito"]][["posta"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("una riga importata senza requested_by non perde la chiave", {
+  # eval
+  visto <- giro_importato("")
+
+  # test
+  # With the empty field as its address, the key left for nobody: an account
+  # born that nobody could get into, `POSTA_CREDENZIALE_PERSA`.
+  expect_length(creazioni(), 1L)
+  expect_equal(visto[["chiave"]], anna)
+  expect_equal(visto[["richiesta"]], anna)
+  expect_identical(visto[["esito"]][["posta"]][["credenziali_recapitate"]], 1L)
+  expect_identical(visto[["esito"]][["posta"]][["credenziali_perse"]], 0L)
+  expect_false("POSTA_CREDENZIALE_PERSA" %in% visto[["esito"]][["errori"]])
+  expect_false("POSTA_SENZA_DESTINATARIO" %in% visto[["esito"]][["errori"]])
+})
+
+
+test_that("il giro non scrive requested_by nel registro", {
+  # eval
+  giro_importato("")
+
+  # test
+  # The channel does not write the fields of a request, and the seal covers
+  # them: the creator travels in memory, to the gate and to the post.
+  scritti <- unlist(lapply(importazioni(), function(req) {
+    sent <- jsonlite::fromJSON(
+      form_field_value(req[["body"]][["data"]][["data"]]),
+      simplifyVector = FALSE
+    )
+    unlist(lapply(sent, names))
+  }))
+  expect_true("outcome" %in% scritti)
+  expect_false("requested_by" %in% scritti)
+})

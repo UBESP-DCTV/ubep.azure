@@ -14,8 +14,8 @@ A list with \code{subject} and \code{body}, both length one.
 }
 \description{
 Both languages in one message, Italian above and English below: the channel
-does not know which one the recipient reads -- \code{requested_by} is a UPN and
-says nothing about it -- so sending two would double the post without
-knowing which of them could be dropped.
+does not know which one the recipient reads -- the address it goes to,
+\code{mail_referent()}, is a UPN and says nothing about it -- so sending two
+would double the post without knowing which of them could be dropped.
 }
 \keyword{internal}
