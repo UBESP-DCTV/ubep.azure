@@ -66,10 +66,12 @@ mail_round(
 
   What this round settled about each row, as a frame with `record_id`
   and the fields it settled: the identity; `creator`, who the creation
-  log says made the row; `edited_by`, who changed a held row since it
-  was applied, as the row's log says. `register` is the register as
-  read, on purpose; this is how the message names what the round has
-  just established rather than what the referent typed.
+  log says made the row, where the outcome and the key go
+  ([`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md));
+  `edited_by`, who changed a held row since it was applied, as the row's
+  log says. `register` is the register as read, on purpose; this is how
+  the message names what the round has just established rather than what
+  the referent typed.
 
 - hosts:
 
@@ -95,3 +97,9 @@ message that will simply be retried. They are counted apart from the
 outcome messages for the same reason, and a welcome that did not leave
 holds no row back: holding it would not send the welcome again, it would
 only keep the outcome out of the register.
+
+The welcome goes to `contact_email`, the person. The outcome and the key
+go to the referent,
+[`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md):
+the creator `identified` carries, and `requested_by` only for a row
+without one.

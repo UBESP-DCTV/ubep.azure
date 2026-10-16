@@ -1,5 +1,34 @@
 # Changelog
 
+## ubep.azure 0.20.1
+
+- **The round’s mail to a referent goes to the row’s creator.** The
+  outcome of every row, and the key of an account the round has just
+  made, went to `requested_by`; only a held row’s message went to the
+  creator the log names. On the form the two agree, because `@USERNAME`
+  fills the field in; the Data Import Tool writes it as the CSV has it,
+  measured on 2026-09-02 and again on 2026-10-16, and the round does not
+  write it back. An import that left the field empty lost the key,
+  `POSTA_CREDENZIALE_PERSA` on an account nobody could get into, and
+  kept the outcome out of the register on `POSTA_SENZA_DESTINATARIO`;
+  one that named another address sent the key and the outcomes there, to
+  the person themselves if the file said so. Both now go to the creator
+  ([`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md)),
+  the referent the gate judged, and the welcome names the creator as the
+  one who hands the key over. The round still writes nothing into the
+  request’s fields: the creator travels in memory, as it does to the
+  gate. The monthly report already went to the creator, and does not
+  change.
+
+  `requested_by` remains the fallback for a row without a creator. No
+  key reaches it, since a row whose creator the log does not name stops
+  on `TRASPORTO_AUTORE_NON_LEGGIBILE` and nobody is made for it. An
+  outcome can, on a round with no creator to hand: the sweep of the
+  tenant failed, the creation log could not be read or does not name the
+  row, or no row needed judging. The 0.16.0 entry kept the notifications
+  on `requested_by` because nobody held the import right; that right is
+  to be opened to the `referente` role, and this comes first.
+
 ## ubep.azure 0.20.0
 
 - **A monthly report to each referent, phase 1.** Decided on 2026-10-15.

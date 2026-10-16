@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,13 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.20.1" id="ubepazure-0201">ubep.azure 0.20.1<a class="anchor" aria-label="anchor" href="#ubepazure-0201"></a></h2>
+<ul><li>
+<p><strong>The round’s mail to a referent goes to the row’s creator.</strong> The outcome of every row, and the key of an account the round has just made, went to <code>requested_by</code>; only a held row’s message went to the creator the log names. On the form the two agree, because <code>@USERNAME</code> fills the field in; the Data Import Tool writes it as the CSV has it, measured on 2026-09-02 and again on 2026-10-16, and the round does not write it back. An import that left the field empty lost the key, <code>POSTA_CREDENZIALE_PERSA</code> on an account nobody could get into, and kept the outcome out of the register on <code>POSTA_SENZA_DESTINATARIO</code>; one that named another address sent the key and the outcomes there, to the person themselves if the file said so. Both now go to the creator (<code><a href="../reference/mail_referent.html">mail_referent()</a></code>), the referent the gate judged, and the welcome names the creator as the one who hands the key over. The round still writes nothing into the request’s fields: the creator travels in memory, as it does to the gate. The monthly report already went to the creator, and does not change.</p>
+<p><code>requested_by</code> remains the fallback for a row without a creator. No key reaches it, since a row whose creator the log does not name stops on <code>TRASPORTO_AUTORE_NON_LEGGIBILE</code> and nobody is made for it. An outcome can, on a round with no creator to hand: the sweep of the tenant failed, the creation log could not be read or does not name the row, or no row needed judging. The 0.16.0 entry kept the notifications on <code>requested_by</code> because nobody held the import right; that right is to be opened to the <code>referente</code> role, and this comes first.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.20.0" id="ubepazure-0200">ubep.azure 0.20.0<a class="anchor" aria-label="anchor" href="#ubepazure-0200"></a></h2>
 <ul><li>

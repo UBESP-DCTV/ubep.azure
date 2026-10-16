@@ -5,7 +5,10 @@ It carries no way in, and that is the decision rather than an omission:
 nobody, so a secret sent there would let anyone who can file a request
 have an account born in the tenant and its key delivered to an address
 of their own choosing. The referent who asked for the account hands it
-over instead; this message says so, and names them.
+over instead; this message says so, and names them as
+[`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md)
+does: the creator the log named, who receives the key, and not
+`requested_by`.
 
 ## Usage
 

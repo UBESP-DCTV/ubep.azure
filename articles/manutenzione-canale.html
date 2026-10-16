@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -209,6 +209,25 @@ registro la porta, e il giro seguente la ritrova cambiata e riprova. La
 coda è il registro stesso — nessun secondo stato, niente da tenere
 allineato. Il costo accettato in cambio è che una notifica possa
 arrivare <strong>due volte</strong>, mai che si perda.</p>
+<p><strong>La posta del giro va a chi ha creato la riga.</strong> Il
+benvenuto va alla persona, a <code>contact_email</code>. L’esito,
+qualunque sia, e la chiave di un account appena nato vanno al referente,
+e il referente è il <strong>creatore</strong> che il giro legge dal
+registro delle creazioni (<code><a href="../reference/mail_referent.html">mail_referent()</a></code>), lo stesso che
+il cancello dell’ambito giudica: non <code>requested_by</code>. Dal
+modulo i due coincidono, perché <code>@USERNAME</code> riempie il campo;
+il <em>Data Import Tool</em> lo scrive com’è nel CSV (misurato il
+2026-09-02 e di nuovo il 2026-10-16). Fino alla 0.20.0 un import con il
+campo vuoto perdeva la chiave (<code>POSTA_CREDENZIALE_PERSA</code>), e
+uno con un altro indirizzo mandava lì chiave ed esiti. Il giro non
+riscrive <code>requested_by</code>: il creatore viaggia in memoria, come
+per il cancello. <code>requested_by</code> resta il ripiego per una riga
+senza creatore. La chiave non ci arriva, perché una riga il cui creatore
+il log non nomina si ferma su
+<code>TRASPORTO_AUTORE_NON_LEGGIBILE</code> e nessuno nasce; un esito
+sì, in un giro che non ha un creatore da dare: anagrafica non letta, log
+delle creazioni illeggibile o che non nomina la riga, nessuna riga da
+giudicare.</p>
 <p><strong>La posta è spenta di default</strong>, e la ragione non è
 intuitiva: con «manda prima, scrivi dopo» una posta semplicemente spenta
 bloccherebbe <em>ogni</em> scrittura nel registro. Quindi senza la
