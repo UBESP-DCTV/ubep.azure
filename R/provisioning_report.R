@@ -436,7 +436,7 @@ report_expired <- function(expiration, today) {
 }
 
 
-#' The rows a month's report speaks about, with their creator and their date
+#' The rows a month's report speaks about, with their owner and their date
 #'
 #' A row counts while it is an access: `request_status` is `active` and
 #' `outcome` is `applied`. The filter is on the request and not on the
@@ -1161,7 +1161,8 @@ report_message <- function(report, period) {
     toupper(verdict[["it"]]),
     "",
     paste0(
-      "Rapporto mensile sulle richieste di accesso a REDCap create da te. ",
+      "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
+      "referente. ",
       "Mese: ", month[["it"]], "."
     ),
     "",
@@ -1177,7 +1178,8 @@ report_message <- function(report, period) {
     toupper(verdict[["en"]]),
     "",
     paste0(
-      "Monthly report on the REDCap access requests you created. ",
+      "Monthly report on the REDCap access requests you are the referent ",
+      "of. ",
       "Month: ", month[["en"]], "."
     ),
     "",
@@ -1251,13 +1253,14 @@ report_it_message <- function(it, period) {
 
   orphans <- it[["senza_referente"]]
   if (!is.null(orphans) && nrow(orphans) > 0L) {
-    creator <- value(orphans, "creator")
+    # The column is still `creator`; what it holds is the row's owner.
+    owner <- value(orphans, "creator")
     reason <- value(orphans, "motivo")
     because <- list(
       it = ifelse(
         reason == "non_stabilito",
-        "Il registro degli eventi non dice chi l'ha creata.",
-        paste0("Chi l'ha creata, ", creator, ", ", ifelse(
+        "Il registro degli eventi non stabilisce a chi appartiene la riga.",
+        paste0("Il referente della riga, ", owner, ", ", ifelse(
           reason == "disabilitato", "ha l'account disabilitato su Entra.",
           ifelse(
             reason == "non_trovato", "non risulta su Entra.",
@@ -1267,8 +1270,8 @@ report_it_message <- function(it, period) {
       ),
       en = ifelse(
         reason == "non_stabilito",
-        "The event log does not say who created it.",
-        paste0("Its creator, ", creator, ", ", ifelse(
+        "The event log does not establish whom the row belongs to.",
+        paste0("The row's referent, ", owner, ", ", ifelse(
           reason == "disabilitato", "has a disabled account on Entra.",
           ifelse(
             reason == "non_trovato", "is not on Entra.",

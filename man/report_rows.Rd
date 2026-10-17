@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_report.R
 \name{report_rows}
 \alias{report_rows}
-\title{The rows a month's report speaks about, with their creator and their date}
+\title{The rows a month's report speaks about, with their owner and their date}
 \usage{
 report_rows(register, creators, executions, period, since = NULL, born = NULL)
 }

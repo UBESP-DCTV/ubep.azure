@@ -807,6 +807,15 @@ test_that("an all-clear report says so in the first word of the subject", {
   # A mail of plain text, so the verdict is said again on the first line.
   expect_equal(testo[["it"]][[1L]], "TUTTO IN ORDINE")
   expect_equal(testo[["en"]][[2L]], "ALL CLEAR")
+  # The rows are the referent's, created or passed to them, not only created.
+  expect_true(paste0(
+    "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
+    "referente. Mese: ottobre 2026."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "Monthly report on the REDCap access requests you are the referent of. ",
+    "Month: October 2026."
+  ) %in% testo[["en"]])
   expect_true(
     "Persone senza primo accesso dopo 30 giorni: nessuna." %in% testo[["it"]]
   )
@@ -985,13 +994,25 @@ test_that("the mail to IT says what has no referent, by section", {
   )
   expect_true(paste0(
     "   - Richiesta 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
-    "edc10, progetto 9301. Il registro degli eventi non dice chi l'ha creata."
+    "edc10, progetto 9301. Il registro degli eventi non stabilisce a chi ",
+    "appartiene la riga."
   ) %in% testo[["it"]])
   expect_true(paste0(
     "   - Richiesta 42: Carla Inventata, carla.inventata@ubep.unipd.it: ",
-    "edc10, progetto 9301. Chi l'ha creata, bruno.fittizio@ubep.unipd.it, ",
+    "edc10, progetto 9301. Il referente della riga, ",
+    "bruno.fittizio@ubep.unipd.it, ",
     "ha l'account disabilitato su Entra."
   ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Request 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+    "edc10, project 9301. The event log does not establish whom the row ",
+    "belongs to."
+  ) %in% testo[["en"]])
+  expect_true(paste0(
+    "   - Request 42: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+    "edc10, project 9301. The row's referent, bruno.fittizio@ubep.unipd.it, ",
+    "has a disabled account on Entra."
+  ) %in% testo[["en"]])
   expect_true(
     "2. Persone che il rapporto non sa giudicare (1)" %in% testo[["it"]]
   )
