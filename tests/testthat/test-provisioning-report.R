@@ -2295,3 +2295,26 @@ test_that("una scrittura dopo la fine del mese non cambia il proprietario", {
     fixed = TRUE
   )
 })
+
+
+test_that("il rapporto di dicembre usa il proprietario di fine dicembre", {
+  # eval
+  con_passaggio <- function(quando) {
+    dati <- scenario()
+    dati[["eventi"]] <- rbind(
+      evento(quando, canale, "owned_by = 'bruno.fittizio@ubep.unipd.it'",
+             record = "41"),
+      dati[["eventi"]]
+    )
+    doppie(dati)
+    posta <- posta_finta()
+    esegui(withr::local_tempdir(), posta, ora = "2027-01-01 06:30",
+           channel_account = canale)
+    vapply(posta[["inviate"]][["mail"]], `[[`, "", "to")
+  }
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+
+  # test
+  expect_true(bruno %in% con_passaggio("2026-12-31 23:59"))
+  expect_false(bruno %in% con_passaggio("2027-01-01 00:00"))
+})
