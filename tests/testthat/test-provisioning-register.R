@@ -2131,6 +2131,87 @@ test_that("l'account del canale non ammette un elenco vuoto o voci vuote", {
   }
 })
 
+# A seal written by another account is not an execution: with the account
+# configured, the last execution is the channel's newest write of the seal.
+sigillo_di <- function(chi, details = "applied_seal = 'ffffffffffff'") {
+  list(username = chi, details = details)
+}
+
+test_that("un sigillo scritto da un altro account non nasconde la sua modifica", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  # Newest first. Bruno writes the role and a seal of his own, in one event
+  # or in two.
+  insieme <- eventi_finti(
+    sigillo_di(
+      bruno, "role_name = 'read only', applied_seal = 'ffffffffffff'"
+    ),
+    applicata
+  )
+  separati <- eventi_finti(
+    sigillo_di(bruno),
+    list(username = bruno, details = "role_name = 'read only'"),
+    applicata
+  )
+  for (eventi in list(insieme, separati)) {
+    expect_equal(
+      log_change_authors(eventi, "1", channel_account = canale), bruno
+    )
+    expect_equal(
+      log_pending_authors(eventi, "1", creatrice, channel_account = canale),
+      bruno
+    )
+    expect_equal(
+      log_uncovered_authors(eventi, "1", creatrice, channel_account = canale),
+      character()
+    )
+  }
+  # Without the account Bruno is a second writer of the channel's fields.
+  expect_true(is.na(log_change_authors(insieme, "1")))
+})
+
+test_that("un sigillo scritto da un altro account non spende un'approvazione", {
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  # Newest first. Bruno changed the role, Anna approved, and Bruno then
+  # wrote a seal: it is no execution, and Anna's approval still stands.
+  eventi <- eventi_finti(
+    sigillo_di(bruno),
+    list(username = creatrice, details = "approved_seal = 'x'"),
+    list(username = bruno, details = "role_name = 'read only'"),
+    applicata
+  )
+  expect_true(
+    log_approval_stands(eventi, "1", creatrice, channel_account = canale)
+  )
+})
+
+test_that("un sigillo scritto da un altro account non toglie il passaggio a chi ha cambiato", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  ok <- list(username = creatrice, details = "approved_seal = 'x'")
+  eventi <- eventi_finti(
+    ok,
+    sigillo_di(
+      bruno, "role_name = 'read only', applied_seal = 'ffffffffffff'"
+    ),
+    applicata
+  )
+  expect_equal(
+    log_next_owner(eventi, "1", creatrice, channel_account = canale), bruno
+  )
+})
+
+test_that("un sigillo scritto da un altro account non nasconde la sua revoca", {
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  eventi <- eventi_finti(
+    sigillo_di(
+      bruno, "request_status = 'revoked', applied_seal = 'ffffffffffff'"
+    ),
+    applicata
+  )
+  expect_true(
+    log_revocation_only(eventi, "1", creatrice, channel_account = canale)
+  )
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.

@@ -37,11 +37,13 @@ say who did.
 \description{
 The people whose writes to an intent field stand between the round's last
 execution of the row and now, newest first. The last execution is the
-newest event that wrote \code{applied_seal}, which only the round writes and
-only when it has applied the row: what came before it was carried out
-already, under somebody's responsibility, and is not the change the round
-is now asked to carry out. Where the row's log no longer holds that event
-the whole history counts, which can only ask for an approval more often.
+newest event that wrote \code{applied_seal}, which the round writes only when
+it has applied the row, and with the channel's account configured only
+an event of the channel counts, \code{log_executions()}: what came before it
+was carried out already, under somebody's responsibility, and is not the
+change the round is now asked to carry out. Where the row's log no longer
+holds that event the whole history counts, which can only ask for an
+approval more often.
 }
 \details{
 Only the writes still in the row count, decided on 2026-10-17 (option (a)

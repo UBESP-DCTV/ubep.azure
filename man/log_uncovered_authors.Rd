@@ -43,8 +43,9 @@ applied. Dropped with the rest, it would pass for the owner's as soon as
 the owner edits the row again.
 }
 \details{
-So the stretch between the newest seal and the one before it (or the start
-of the row's log, its creation when the log holds it) is read again, for
+So the stretch between the newest seal and the one before it, both the
+round's executions as \code{log_executions()} reads them (or the start of the
+row's log, its creation when the log holds it), is read again, for
 changes by anybody other than whoever owned the row in that stretch.
 The round applies such a change only once the owner has approved it, so
 one that the round did carry out has the owner's approval above it in

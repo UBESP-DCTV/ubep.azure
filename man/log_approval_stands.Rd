@@ -41,9 +41,11 @@ say which account is the channel, \code{log_channel_unknown()}.
 }
 \details{
 \itemize{
-\item \strong{No execution above it.} The newest write of \code{applied_seal} is the
+\item \strong{No execution above it.} The newest write of \code{applied_seal}, by the
+channel when its account is configured (\code{log_executions()}), is the
 round's last execution, and an approval below it was the one that
-execution carried out, or one older still. Either way it is spent.
+execution carried out, or one older still. Either way it is spent. A
+seal another account imported executed nothing, and spends nothing.
 \item \strong{No change by anybody else above it.} An intent field written by an
 account that is neither the owner nor the channel, or by a blank
 account, after the approval, is a change the approval cannot have seen:

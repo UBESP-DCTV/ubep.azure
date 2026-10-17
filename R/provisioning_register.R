@@ -515,6 +515,34 @@ log_channel_unknown <- function(channel, channel_account) {
 }
 
 
+#' Which events of a row's log are the round's executions
+#'
+#' The writes of `applied_seal`, which the round makes only when it has
+#' applied the row, newest first as the log holds them. With the channel's
+#' account configured only the channel's writes count (decided on
+#' 2026-10-17): the import right is open to the referents, and a seal one of
+#' them imported, alone or in the same event as a change, would otherwise
+#' stand as the last execution, and the change below it would read as
+#' carried out. Without the account every write counts, as before: a second
+#' account writing the seal makes the channel unknown, `log_channel_unknown()`,
+#' and the callers stop there.
+#'
+#' @param events The row's events, newest first.
+#' @param channel What `log_channel_accounts()` answered for the row.
+#' @param channel_account What it was asked with.
+#'
+#' @return The positions in `events` of the executions, newest first.
+#'
+#' @keywords internal
+log_executions <- function(events, channel, channel_account) {
+  wrote <- log_wrote(events, "applied_seal")
+  if (is.null(channel_account)) {
+    return(which(wrote))
+  }
+  which(wrote & trimws(as.character(events[["username"]])) %in% channel)
+}
+
+
 #' Whether a value can name the channel's accounts
 #'
 #' `NULL`, not configured, or one or more REDCap usernames, none of them
@@ -738,11 +766,13 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #'
 #' The people whose writes to an intent field stand between the round's last
 #' execution of the row and now, newest first. The last execution is the
-#' newest event that wrote `applied_seal`, which only the round writes and
-#' only when it has applied the row: what came before it was carried out
-#' already, under somebody's responsibility, and is not the change the round
-#' is now asked to carry out. Where the row's log no longer holds that event
-#' the whole history counts, which can only ask for an approval more often.
+#' newest event that wrote `applied_seal`, which the round writes only when
+#' it has applied the row, and with the channel's account configured only
+#' an event of the channel counts, `log_executions()`: what came before it
+#' was carried out already, under somebody's responsibility, and is not the
+#' change the round is now asked to carry out. Where the row's log no longer
+#' holds that event the whole history counts, which can only ask for an
+#' approval more often.
 #'
 #' Only the writes still in the row count, decided on 2026-10-17 (option (a)
 #' of three). For each intent field whose current value differs from the one
@@ -828,7 +858,7 @@ log_change_authors <- function(events, record,
   # of the seal happened after the round last applied the row, what stands
   # below it is what the round carried out.
   rows <- seq_len(nrow(mine))
-  executed <- which(log_wrote(mine, "applied_seal"))
+  executed <- log_executions(mine, channel, channel_account)
   sealed <- length(executed) > 0L
   window <- if (sealed) rows < executed[[1L]] else rep(TRUE, nrow(mine))
   below <- if (sealed) rows > executed[[1L]] else rep(FALSE, nrow(mine))
@@ -927,8 +957,9 @@ log_approver <- function(authors, owner, approvers = character()) {
 #' applied. Dropped with the rest, it would pass for the owner's as soon as
 #' the owner edits the row again.
 #'
-#' So the stretch between the newest seal and the one before it (or the start
-#' of the row's log, its creation when the log holds it) is read again, for
+#' So the stretch between the newest seal and the one before it, both the
+#' round's executions as `log_executions()` reads them (or the start of the
+#' row's log, its creation when the log holds it), is read again, for
 #' changes by anybody other than whoever owned the row in that stretch.
 #' The round applies such a change only once the owner has approved it, so
 #' one that the round did carry out has the owner's approval above it in
@@ -1001,7 +1032,7 @@ log_uncovered_authors <- function(events, record, creator,
   if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
-  executed <- which(log_wrote(mine, "applied_seal"))
+  executed <- log_executions(mine, channel, channel_account)
   if (length(executed) == 0L) {
     return(character())
   }
@@ -1239,7 +1270,7 @@ log_revocation_only <- function(events, record, creator,
   if (log_channel_unknown(channel, channel_account)) {
     return(FALSE)
   }
-  executed <- which(log_wrote(mine, "applied_seal"))
+  executed <- log_executions(mine, channel, channel_account)
   if (length(executed) > 0L) {
     mine <- mine[seq_len(executed[[1L]] - 1L), , drop = FALSE]
   }
@@ -1335,7 +1366,10 @@ log_next_owner <- function(events, record, creator,
   # Above the last execution, newest first; when there is none, the whole
   # life.
   mine <- log_of_record(events, record)
-  executed <- which(log_wrote(mine, "applied_seal"))
+  executed <- log_executions(
+    mine, log_channel_accounts(events, record, channel_account),
+    channel_account
+  )
   if (length(executed) > 0L) {
     mine <- mine[seq_len(executed[[1L]] - 1L), , drop = FALSE]
   }
@@ -1499,9 +1533,11 @@ seal_approved <- function(register, events, creators,
 #' blank one, approves nothing, and no approval stands where the log cannot
 #' say which account is the channel, `log_channel_unknown()`.
 #'
-#' - **No execution above it.** The newest write of `applied_seal` is the
+#' - **No execution above it.** The newest write of `applied_seal`, by the
+#'   channel when its account is configured (`log_executions()`), is the
 #'   round's last execution, and an approval below it was the one that
-#'   execution carried out, or one older still. Either way it is spent.
+#'   execution carried out, or one older still. Either way it is spent. A
+#'   seal another account imported executed nothing, and spends nothing.
 #' - **No change by anybody else above it.** An intent field written by an
 #'   account that is neither the owner nor the channel, or by a blank
 #'   account, after the approval, is a change the approval cannot have seen:
@@ -1553,7 +1589,7 @@ log_approval_stands <- function(events, record, creator,
   }
   newest <- approvals[[1L]]
 
-  executed <- which(log_wrote(mine, "applied_seal"))
+  executed <- log_executions(mine, channel, channel_account)
   foreign <- which(
     log_wrote(mine, fields) & !authors %in% channel & authors != owner
   )
