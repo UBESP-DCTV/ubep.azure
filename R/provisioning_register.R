@@ -870,11 +870,21 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' field brought back to the value carried out is no change at all. The value
 #' carried out is the newest write of the field below the seal, by anybody,
 #' the channel included; where the log holds none it is unknown, and the
-#' field counts if it was written above the seal. The current value comes
-#' from the register and not from the log, which cuts a value at its first
-#' apostrophe and would call `D'Angelo` and `D'Amico` equal. For the same
-#' reason a value carried out that holds an apostrophe is unknown too: read
-#' `D`, it would make a later `D` look like no change.
+#' field counts if it was written above the seal. It is unknown as well where
+#' that newest write is one the execution did not cover,
+#' `log_uncovered_writes()` (decided on 2026-10-17): a change made while the
+#' round ran sits below its seal without having been carried out, and read as
+#' the value carried out it would make a third person who brings the field
+#' back to it above the seal no author at all, so the change would be carried
+#' out on the rights of somebody who did not write it. That reading needs
+#' `creator`, from which the owner of the stretch is read; without it the
+#' newest write below the seal is the value carried out.
+#'
+#' The current value comes from the register and not from the log, which
+#' cuts a value at its first apostrophe and would call `D'Angelo` and
+#' `D'Amico` equal. For the same reason a value carried out that holds an
+#' apostrophe is unknown too: read `D`, it would make a later `D` look like no
+#' change.
 #'
 #' On a row never carried out there is no value to compare with, and every
 #' intent field written in its life counts, with its last author, empty or
@@ -922,6 +932,12 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' @param current The row as the round will leave it, a data frame of one
 #'   row holding every field in `fields`, or `NULL` when there is no row in
 #'   hand. Read only on a row the round has carried out.
+#' @param creator Who created the row, as `log_creators()` answers, for
+#'   `log_uncovered_writes()`; or `NULL`, and then every newest write below
+#'   the seal is read as the value carried out. `log_pending_authors()`, the
+#'   one the round asks, passes it.
+#' @param approvers The IT accounts whose approval counts on any row, for
+#'   `log_uncovered_writes()`.
 #'
 #' @return A character vector of usernames, newest first (by the write that
 #'   counts) and each once; `character()` when no intent field changed, or
@@ -931,18 +947,32 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' @keywords internal
 log_change_authors <- function(events, record,
                                fields = register_intent_fields(),
-                               channel_account = NULL, current = NULL) {
+                               channel_account = NULL, current = NULL,
+                               creator = NULL, approvers = character()) {
   stopifnot(
     is.data.frame(events), is.character(fields),
     is.null(current) ||
       (is.data.frame(current) && nrow(current) == 1L &&
-         all(fields %in% names(current)))
+         all(fields %in% names(current))),
+    is.null(creator) || (is.character(creator) && length(creator) == 1L),
+    is.character(approvers)
   )
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
   if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
+  }
+
+  # The writes below the seal that no execution carried out, whose values are
+  # not the ones carried out; all of them unknown when the stretch cannot be
+  # read.
+  open <- if (is.null(creator)) {
+    integer()
+  } else {
+    log_uncovered_writes(
+      events, record, creator, fields, approvers, channel_account
+    )
   }
 
   # Newest first, which is REDCap's order: what stands above the newest write
@@ -971,6 +1001,12 @@ log_change_authors <- function(events, record,
     if (length(done) == 0L) {
       # The value carried out is not in the log: the field counts as it did
       # before the row was compared, if somebody wrote it since.
+      return(any(wrote & window))
+    }
+    if (anyNA(open) || done[[1L]] %in% open) {
+      # Written below the seal by a hand the execution did not cover, the
+      # newest value there is not the one carried out: unknown, and a later
+      # write that brings the field back to it is a change.
       return(any(wrote & window))
     }
     carried <- mine[done[[1L]], , drop = FALSE]
@@ -1082,13 +1118,26 @@ log_approver <- function(authors, owner, approvers = character()) {
 #' newest approval that covers, written while the round that passes the row
 #' ran, after the approval and before the seal. The outgoing owner who writes
 #' there is not the new owner, and nobody else would name the change, since
-#' below the seal `log_change_authors()` reads it as the value carried out.
-#' So a write above that approval counts when its author is not the owner of
-#' then or not the owner of today, `log_owner()` on the whole log.
+#' `log_change_authors()` reads only what stands above the seal. So a write
+#' above that approval counts when its author is not the owner of then or not
+#' the owner of today, `log_owner()` on the whole log.
+#'
+#' **Only the writes still in the row count**, as above the last execution
+#' (decided on 2026-10-17): a write counts for each field it wrote that no
+#' account but the channel's has written since, in the row's current life.
+#' Read whole, an uncovered write by somebody without the rights held the row
+#' for good: the owner who writes the field again brings the row back to the
+#' seal, no round seals it anew, the stretch never moves, and the gate would
+#' ask that somebody's rights at every later change of the owner's, a
+#' revocation included. The value such a write left below the seal is not the
+#' value carried out, `log_change_authors()`, so whoever writes it again
+#' above the seal is the author of that change.
 #'
 #' One stretch is enough. An uncovered change makes the next round hold the
 #' row, and a held row writes no seal: the stretch does not move until the
-#' owner approves, and that approval covers the version holding the change.
+#' owner approves, and that approval covers the version holding the change,
+#' or until somebody writes the field again, which takes the change out of
+#' the row.
 #'
 #' Two kinds of leave besides the owner's, both from 2026-10-15. An approval
 #' by one of the IT accounts covers as the owner's does, since it is what
@@ -1101,10 +1150,10 @@ log_approver <- function(authors, owner, approvers = character()) {
 #'
 #' Unknown, `NA_character_`, when the owner of the stretch is not known, when
 #' the channel is not known, `log_channel_unknown()`, or when an uncovered
-#' change has a blank author: the caller holds the row on all three. With the
-#' channel's account configured, another account's write of a field of the
-#' channel is ignored, and its write of an intent field is a change like any
-#' other.
+#' change still in the row has a blank author: the caller holds the row on
+#' all three. With the channel's account configured, another account's write
+#' of a field of the channel is ignored, and its write of an intent field is
+#' a change like any other.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -1130,21 +1179,81 @@ log_uncovered_authors <- function(events, record, creator,
     is.character(fields), is.character(approvers)
   )
 
+  open <- log_uncovered_writes(
+    events, record, creator, fields, approvers, channel_account
+  )
+  if (anyNA(open)) {
+    return(NA_character_)
+  }
+
+  # Only the writes still in the row count, as above the last execution: for
+  # each field it wrote, a write counts while no account but the channel's
+  # has written that field since, in the row's current life.
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  authors <- trimws(as.character(mine[["username"]]))
+  authors[is.na(authors)] <- ""
+  hand <- !authors %in% channel
+  kept <- vapply(open, function(k) {
+    newer <- seq_len(k - 1L)
+    any(vapply(fields, function(field) {
+      wrote <- log_wrote(mine, field)
+      wrote[[k]] && !any(wrote[newer] & hand[newer])
+    }, logical(1)))
+  }, logical(1))
+  open <- open[kept]
+  if (any(!nzchar(authors[open]))) {
+    return(NA_character_)
+  }
+
+  unique(authors[open])
+}
+
+
+#' The writes below a row's newest execution that no approval covered
+#'
+#' The stretch `log_uncovered_authors()` reads, between the round's newest
+#' execution and the one before it (or the start of the row's current life),
+#' and in it the writes of an intent field by anybody other than whoever
+#' owned the row in that stretch, or, above the newest approval that covers,
+#' by the owner of then who is not the owner of today; a revocation alone is
+#' never one of them. Each write is answered whole, whether or not somebody
+#' wrote its fields again since: `log_uncovered_authors()` keeps the ones
+#' still in the row, and `log_change_authors()` reads as unknown a value
+#' carried out that one of them wrote.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
+#'
+#' @return The positions of those writes in the row's current life, as
+#'   `log_of_record()` returns it, newest first; `integer()` when there are
+#'   none or the log holds no execution; `NA_integer_` when the log cannot
+#'   say, because the channel or the owner of the stretch is not known.
+#'
+#' @keywords internal
+log_uncovered_writes <- function(events, record, creator, fields, approvers,
+                                 channel_account) {
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
   if (log_channel_unknown(channel, channel_account)) {
-    return(NA_character_)
+    return(NA_integer_)
   }
   executed <- log_executions(mine, channel, channel_account)
   if (length(executed) == 0L) {
-    return(character())
+    return(integer())
   }
 
   # Newest first: the stretch is what stands below the newest seal and above
   # the one before it.
   rows <- seq_len(nrow(mine))
   last <- if (length(executed) > 1L) executed[[2L]] else nrow(mine) + 1L
-  stretch <- mine[rows > executed[[1L]] & rows < last, , drop = FALSE]
+  inside <- which(rows > executed[[1L]] & rows < last)
+  stretch <- mine[inside, , drop = FALSE]
   sealed <- log_value(mine[executed[[1L]], , drop = FALSE], "applied_seal")
 
   # The owner of the stretch is read below the seal that opens it, where the
@@ -1153,7 +1262,7 @@ log_uncovered_authors <- function(events, record, creator,
   older <- mine[rows > last, , drop = FALSE]
   owner <- log_owner(older, record, creator, channel_account)
   if (is.na(owner) || !nzchar(owner)) {
-    return(NA_character_)
+    return(NA_integer_)
   }
 
   # Who owns the row now, past the passage the newest seal's round wrote.
@@ -1163,6 +1272,7 @@ log_uncovered_authors <- function(events, record, creator,
   }
 
   authors <- trimws(as.character(stretch[["username"]]))
+  authors[is.na(authors)] <- ""
   withdrawal <- log_value(stretch, "request_status") == "revoked" &
     !log_wrote(stretch, setdiff(fields, "request_status"))
   leave <- which(
@@ -1172,7 +1282,7 @@ log_uncovered_authors <- function(events, record, creator,
   )
   # Above the newest approval stands what the round wrote the seal over: a
   # write there by the owner of then is not the new owner's, and nobody
-  # else names it, since below the seal it reads as the value carried out.
+  # else names it, since `log_change_authors()` reads only above the seal.
   above <- if (length(leave) > 0L) {
     seq_len(nrow(stretch)) < min(leave)
   } else {
@@ -1186,11 +1296,8 @@ log_uncovered_authors <- function(events, record, creator,
   if (length(leave) > 0L) {
     foreign <- foreign[foreign < min(leave)]
   }
-  if (any(!nzchar(authors[foreign]))) {
-    return(NA_character_)
-  }
 
-  unique(authors[foreign])
+  inside[foreign]
 }
 
 
@@ -1223,7 +1330,8 @@ log_pending_authors <- function(events, record, creator,
   authors <- c(
     log_change_authors(
       events, record, fields,
-      channel_account = channel_account, current = current
+      channel_account = channel_account, current = current,
+      creator = creator, approvers = approvers
     ),
     log_uncovered_authors(
       events, record, creator, fields, approvers, channel_account

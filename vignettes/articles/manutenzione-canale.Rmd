@@ -557,7 +557,9 @@ riscrive quel campo, e l'altro smette di esserne l'autore. Va **cambiato il
 valore e poi rimesso**: REDCap non registra una scrittura che non cambia il
 valore, quindi riscrivere lo stesso valore lascerebbe l'altro come autore.
 Senza questa via, una riga toccata per errore da un referente senza diritti e
-mai eseguita resterebbe ferma per sempre, perché non si cancella niente.
+mai eseguita resterebbe ferma per sempre, perché non si cancella niente. Vale
+anche per una scrittura fatta sotto il sigillo mentre un giro girava (più
+sotto, il tratto scoperto).
 
 **Anche prima dell'esecuzione.** Una riga che il giro non ha ancora applicato,
 appena depositata o rimasta in coda per un errore di trasporto o un dato da
@@ -647,11 +649,27 @@ allora che oggi non lo è più: chi cede la riga e scrive mentre il giro la pass
 non è il nuovo proprietario, e nessun altro la nominerebbe. Leggere i valori che
 il canale ha scritto nel tempo è ammesso; ciò che non si fa è ricalcolare a
 posteriori decisioni già prese e registrate (autori, approvazioni, revoche).
+
+**Anche nel tratto contano solo le scritture rimaste nella riga** (deciso il
+2026-10-17, dalla revisione finale): una scrittura scoperta conta per i campi
+di cui è ancora l'ultima scrittura non del canale nella vita attuale della
+riga, e smette di contare quando qualcuno, che non sia il canale, li
+riscrive. Contata per intero, una scrittura di chi non ha diritti fermava la
+riga per sempre: il proprietario che cambia il campo e lo rimette riporta la
+riga al sigillo, il giro la trova intatta e non la risigilla, il tratto non
+si sposta, e a ogni modifica successiva del proprietario, revoca compresa, il
+cancello avrebbe chiesto i diritti di quell'altro. Il valore che una scrittura
+scoperta ha lasciato sotto il sigillo non è quello eseguito, e il giro lo
+tratta come ignoto: chi lo riscrive sopra il sigillo, dopo averlo cambiato, è
+l'autore della modifica, e non passa per chi ha riportato il campo al valore
+eseguito.
+
 Basta un tratto: una modifica scoperta ferma la riga, una riga ferma non scrive
-sigilli, e il confine non si sposta finché il proprietario non approva. Copre
-anche l'approvazione di IT, e una revoca sola non è mai scoperta: non concede
-niente, e contata farebbe approvare al proprietario la riattivazione della
-propria richiesta dopo una revoca libera di chi gestisce il progetto.
+sigilli, e il confine non si sposta finché il proprietario non approva o
+qualcuno non riscrive il campo. Copre anche l'approvazione di IT, e una revoca
+sola non è mai scoperta: non concede niente, e contata farebbe approvare al
+proprietario la riattivazione della propria richiesta dopo una revoca libera
+di chi gestisce il progetto.
 
 Il campo dell'approvazione e lo stato del sigillo si vedono nel modulo quando
 la riga porta un sigillo **o** ha l'esito `held`. Una riga mai eseguita può

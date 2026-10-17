@@ -9,7 +9,9 @@ log_change_authors(
   record,
   fields = register_intent_fields(),
   channel_account = NULL,
-  current = NULL
+  current = NULL,
+  creator = NULL,
+  approvers = character()
 )
 }
 \arguments{
@@ -27,6 +29,14 @@ one or more, or \code{NULL} when they are not configured, for
 \item{current}{The row as the round will leave it, a data frame of one
 row holding every field in \code{fields}, or \code{NULL} when there is no row in
 hand. Read only on a row the round has carried out.}
+
+\item{creator}{Who created the row, as \code{log_creators()} answers, for
+\code{log_uncovered_writes()}; or \code{NULL}, and then every newest write below
+the seal is read as the value carried out. \code{log_pending_authors()}, the
+one the round asks, passes it.}
+
+\item{approvers}{The IT accounts whose approval counts on any row, for
+\code{log_uncovered_writes()}.}
 }
 \value{
 A character vector of usernames, newest first (by the write that
@@ -53,11 +63,21 @@ other than the channel then overwrote is not part of the change, and a
 field brought back to the value carried out is no change at all. The value
 carried out is the newest write of the field below the seal, by anybody,
 the channel included; where the log holds none it is unknown, and the
-field counts if it was written above the seal. The current value comes
-from the register and not from the log, which cuts a value at its first
-apostrophe and would call \verb{D'Angelo} and \verb{D'Amico} equal. For the same
-reason a value carried out that holds an apostrophe is unknown too: read
-\code{D}, it would make a later \code{D} look like no change.
+field counts if it was written above the seal. It is unknown as well where
+that newest write is one the execution did not cover,
+\code{log_uncovered_writes()} (decided on 2026-10-17): a change made while the
+round ran sits below its seal without having been carried out, and read as
+the value carried out it would make a third person who brings the field
+back to it above the seal no author at all, so the change would be carried
+out on the rights of somebody who did not write it. That reading needs
+\code{creator}, from which the owner of the stretch is read; without it the
+newest write below the seal is the value carried out.
+
+The current value comes from the register and not from the log, which
+cuts a value at its first apostrophe and would call \verb{D'Angelo} and
+\verb{D'Amico} equal. For the same reason a value carried out that holds an
+apostrophe is unknown too: read \code{D}, it would make a later \code{D} look like no
+change.
 
 On a row never carried out there is no value to compare with, and every
 intent field written in its life counts, with its last author, empty or

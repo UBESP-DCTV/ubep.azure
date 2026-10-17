@@ -65,13 +65,26 @@ One write is judged with today's owner as well: one that stands above the
 newest approval that covers, written while the round that passes the row
 ran, after the approval and before the seal. The outgoing owner who writes
 there is not the new owner, and nobody else would name the change, since
-below the seal \code{log_change_authors()} reads it as the value carried out.
-So a write above that approval counts when its author is not the owner of
-then or not the owner of today, \code{log_owner()} on the whole log.
+\code{log_change_authors()} reads only what stands above the seal. So a write
+above that approval counts when its author is not the owner of then or not
+the owner of today, \code{log_owner()} on the whole log.
+
+\strong{Only the writes still in the row count}, as above the last execution
+(decided on 2026-10-17): a write counts for each field it wrote that no
+account but the channel's has written since, in the row's current life.
+Read whole, an uncovered write by somebody without the rights held the row
+for good: the owner who writes the field again brings the row back to the
+seal, no round seals it anew, the stretch never moves, and the gate would
+ask that somebody's rights at every later change of the owner's, a
+revocation included. The value such a write left below the seal is not the
+value carried out, \code{log_change_authors()}, so whoever writes it again
+above the seal is the author of that change.
 
 One stretch is enough. An uncovered change makes the next round hold the
 row, and a held row writes no seal: the stretch does not move until the
-owner approves, and that approval covers the version holding the change.
+owner approves, and that approval covers the version holding the change,
+or until somebody writes the field again, which takes the change out of
+the row.
 
 Two kinds of leave besides the owner's, both from 2026-10-15. An approval
 by one of the IT accounts covers as the owner's does, since it is what
@@ -83,9 +96,9 @@ manager's free revocation.
 
 Unknown, \code{NA_character_}, when the owner of the stretch is not known, when
 the channel is not known, \code{log_channel_unknown()}, or when an uncovered
-change has a blank author: the caller holds the row on all three. With the
-channel's account configured, another account's write of a field of the
-channel is ignored, and its write of an intent field is a change like any
-other.
+change still in the row has a blank author: the caller holds the row on
+all three. With the channel's account configured, another account's write
+of a field of the channel is ignored, and its write of an intent field is
+a change like any other.
 }
 \keyword{internal}

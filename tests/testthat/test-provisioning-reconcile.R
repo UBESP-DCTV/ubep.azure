@@ -4713,3 +4713,64 @@ test_that("su un registro nuovo un'utenza mai vista non ferma il giro", {
   expect_false(esito[["fermato"]])
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
 })
+
+
+test_that("una scrittura scoperta che il proprietario riscrive non ferma la sua revoca", { # nolint: line_length_linter.
+  # eval
+  # Anna's row. A round sealed Anna's own change of the role; Cinzia, who
+  # does not manage 9003, wrote the role while it ran, below its seal. Anna
+  # changed the role and put it back, so no round sealed the row again, and
+  # then revoked.
+  eseguita <- sigillo_cambiata()
+  esito <- giro_cambiata(
+    list(
+      cambio(anna, "request_status = 'revoked'"),
+      cambio(anna, "role_name = 'read only'"),
+      cambio(anna, "role_name = 'zz'"),
+      esecuzione(eseguita),
+      cambio(cinzia, "role_name = 'admin'"),
+      cambio(anna, "role_name = 'read only'")
+    ),
+    riga = riga_cambiata(request_status = "revoked", applied_seal = eseguita),
+    istanza = istanza_che_scrive(richiedenti = anna)
+  )
+  chiesti <- chiesti_allo_stato()
+
+  # test
+  # Cinzia's write is no longer in the row. Counted, it would hold the row,
+  # and after Anna's approval the gate would ask Cinzia's rights and refuse
+  # the revocation on every round.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_false(cinzia %in% chiesti)
+})
+
+
+test_that("chi riporta sopra il sigillo il valore di una scrittura scoperta ferma la riga", { # nolint: line_length_linter.
+  # eval
+  # The same stretch; above the seal Bruno moves the role and brings it to
+  # Cinzia's value.
+  eseguita <- sigillo_cambiata()
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    list(
+      cambio(bruno, "role_name = 'admin'"),
+      cambio(bruno, "role_name = 'zz'"),
+      esecuzione(eseguita),
+      cambio(cinzia, "role_name = 'admin'"),
+      cambio(anna, "role_name = 'read only'")
+    ),
+    riga = riga_cambiata(role_name = "admin", applied_seal = eseguita),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Cinzia's value was never carried out, so it is not the value to compare
+  # with: Bruno's write is a change, and the row waits for Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), anna)
+  expect_match(mandate[[1L]][["body"]], paste0("Modificata da: ", bruno),
+               fixed = TRUE)
+})

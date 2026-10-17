@@ -2302,6 +2302,106 @@ test_that("un'esecuzione ha la forma della porta dei sigilli, non un valore che 
   }
 })
 
+# Newest first, below what each test adds on top: the round sealed Anna's own
+# change of the role with 222222222222, and Cinzia wrote the role while that
+# round ran, so below its seal, with no approval above her write.
+scoperta <- function(...) {
+  eventi_finti(
+    ...,
+    eseguita("222222222222"),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    list(username = creatrice, details = "role_name = 'read only'"),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+}
+
+test_that("una scrittura scoperta che il proprietario riscrive non conta piu'", { # nolint: line_length_linter.
+  cinzia <- "cinzia.rossi@ubep.unipd.it"
+  # Anna changes the role and puts it back to the value carried out, so the
+  # row matches the seal again and no round seals it anew; then she revokes.
+  eventi <- scoperta(
+    list(username = creatrice, details = "request_status = 'revoked'"),
+    list(username = creatrice, details = "role_name = 'read only'"),
+    list(username = creatrice, details = "role_name = 'zz'")
+  )
+  revocata <- register_row(role_name = "read only", request_status = "revoked")
+  for (account in list(NULL, canale)) {
+    # While her write is still in the row, Cinzia is uncovered.
+    expect_equal(
+      log_uncovered_authors(
+        scoperta(), "1", creatrice, channel_account = account
+      ),
+      cinzia
+    )
+    # Written over by Anna, it is no longer part of what the round carries
+    # out: read as before, it would stay uncovered for good, and the gate
+    # would ask Cinzia's rights for Anna's own revocation.
+    expect_equal(
+      log_uncovered_authors(eventi, "1", creatrice, channel_account = account),
+      character()
+    )
+    autori <- log_pending_authors(
+      eventi, "1", creatrice, channel_account = account, current = revocata
+    )
+    expect_equal(autori, creatrice)
+    expect_false(change_needs_approval(autori, creatrice))
+  }
+})
+
+test_that("chi riscrive sopra il sigillo il valore di una scrittura scoperta ne e' autore", { # nolint: line_length_linter.
+  davide <- "davide.neri@ubep.unipd.it"
+  riga <- register_row(role_name = "admin")
+  # Above the seal Davide moves the role and brings it to Cinzia's value,
+  # over his own move or over Anna's.
+  for (prima in c(davide, creatrice)) {
+    eventi <- scoperta(
+      list(username = davide, details = "role_name = 'admin'"),
+      list(username = prima, details = "role_name = 'zz'")
+    )
+    for (account in list(NULL, canale)) {
+      # Cinzia's write is no longer the row's, and the value below the seal
+      # is hers, which no execution carried out: it is not the value carried
+      # out, so Davide's write counts.
+      expect_equal(
+        log_uncovered_authors(
+          eventi, "1", creatrice, channel_account = account
+        ),
+        character()
+      )
+      expect_equal(
+        log_pending_authors(
+          eventi, "1", creatrice, channel_account = account, current = riga
+        ),
+        davide
+      )
+    }
+  }
+  # Covered by Anna's approval, Cinzia's value was carried out with her
+  # leave: a field brought back to it names nobody.
+  coperta <- eventi_finti(
+    list(username = davide, details = "role_name = 'admin'"),
+    list(username = davide, details = "role_name = 'zz'"),
+    eseguita("222222222222"),
+    list(username = creatrice, details = "approved_seal = '222222222222'"),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    applicata
+  )
+  expect_equal(
+    log_pending_authors(
+      coperta, "1", creatrice, channel_account = canale, current = riga
+    ),
+    character()
+  )
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.
