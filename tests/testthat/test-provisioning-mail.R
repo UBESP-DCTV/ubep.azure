@@ -1165,7 +1165,7 @@ test_that("un benvenuto perso non si ritenta, e non trattiene nessuna riga", {
 })
 
 
-test_that("un giro che simula o non manda porta i quattro contatori a zero", {
+test_that("un giro che simula o non manda porta i sei contatori a zero", {
   # eval
   registro <- registro_di_prova()
   changed <- registro[, colonne_cambiate, drop = FALSE]
@@ -1173,13 +1173,14 @@ test_that("un giro che simula o non manda porta i quattro contatori a zero", {
   # eval
   detto <- mail_round(
     changed, registro, born = nascita_di_prova(finti[["parola"]]),
-    mailer = raccoglitore()[["mailer"]], dry_run = TRUE
+    mailer = raccoglitore()[["mailer"]], dry_run = TRUE, granted = "16"
   )
 
   # test
   for (campo in c(
     "benvenuti_recapitati", "benvenuti_persi",
-    "credenziali_recapitate", "credenziali_perse"
+    "credenziali_recapitate", "credenziali_perse",
+    "accessi_recapitati", "accessi_persi"
   )) {
     expect_identical(detto[["contatori"]][[campo]], 0L)
   }
@@ -1464,4 +1465,87 @@ test_that("il sigillo del messaggio porta lo username che il giro ha appena scri
   # computed from the row as read would never match it.
   expect_true(grepl(request_seal(risolto), corpo, fixed = TRUE))
   expect_false(grepl(request_seal(registro), corpo, fixed = TRUE))
+})
+
+
+test_that("la mail di accesso va alla persona e a nessun altro", {
+  registro <- registro_di_prova()
+  posta <- raccoglitore()
+  detto <- mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    copy_to = "it@example.org", granted = "16"
+  )
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], "sara.esterna@example.org")
+  expect_null(mandate[[1L]][["cc"]])
+  expect_match(mandate[[1L]][["subject"]], "^Accesso a REDCap")
+  expect_identical(detto[["contatori"]][["accessi_recapitati"]], 1L)
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 0L)
+})
+
+
+test_that("una mail di accesso persa ha un codice suo e non si ritenta", {
+  registro <- registro_di_prova()
+  posta <- rifiuta_a("sara.esterna@example.org")
+  detto <- mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE, granted = "16"
+  )
+  expect_length(posta[["mandate"]](), 1L)
+  expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+  expect_identical(detto[["contatori"]][["posta_fallite"]], 0L)
+})
+
+
+test_that("senza indirizzo o senza riga la mail di accesso e' persa", {
+  senza <- registro_di_prova(contact_email = "")
+  posta <- raccoglitore()
+  a <- mail_round(
+    senza[0, colonne_cambiate, drop = FALSE], senza, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE, granted = "16"
+  )
+  b <- mail_round(
+    senza[0, colonne_cambiate, drop = FALSE], senza, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE, granted = "99"
+  )
+  expect_length(posta[["mandate"]](), 0L)
+  expect_equal(c(a[["errori"]], b[["errori"]]), rep("POSTA_ACCESSO_PERSA", 2L))
+})
+
+
+test_that("benvenuto e accesso nello stesso giro: prima il benvenuto", {
+  registro <- registro_di_prova()
+  posta <- raccoglitore()
+  mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro,
+    born = nascita_di_prova(finti[["parola"]]), mailer = posta[["mailer"]],
+    dry_run = FALSE, granted = "16"
+  )
+  oggetti <- vapply(posta[["mandate"]](), `[[`, "", "subject")
+  expect_lt(
+    grep("Il tuo account UBEP", oggetti), grep("Accesso a REDCap", oggetti)
+  )
+})
+
+
+test_that("la mail di accesso si dirotta e non parte in simulazione", {
+  registro <- registro_di_prova()
+  posta <- raccoglitore()
+  mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    redirect_to = "prova@example.org", granted = "16"
+  )
+  expect_equal(posta[["mandate"]]()[[1L]][["to"]], "prova@example.org")
+  expect_match(posta[["mandate"]]()[[1L]][["body"]], "^\\[PROVA\\]")
+  finta <- raccoglitore()
+  simulato <- mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = finta[["mailer"]], dry_run = TRUE, granted = "16"
+  )
+  expect_length(finta[["mandate"]](), 0L)
+  expect_identical(simulato[["contatori"]][["accessi_recapitati"]], 0L)
 })

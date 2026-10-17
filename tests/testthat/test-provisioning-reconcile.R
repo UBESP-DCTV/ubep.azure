@@ -1925,6 +1925,20 @@ test_that("senza mailer il giro porta anche i benvenuti a zero", {
 })
 
 
+test_that("senza mailer il giro porta anche gli accessi a zero", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_identical(esito[["posta"]][["accessi_recapitati"]], 0L)
+  expect_identical(esito[["posta"]][["accessi_persi"]], 0L)
+})
+
+
 test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
   # eval
   esito <- giro(

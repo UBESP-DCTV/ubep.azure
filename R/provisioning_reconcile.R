@@ -226,7 +226,10 @@ provisioning_reconcile <- function(register_url,
   # `identified` is empty by default because the branch above calls this before
   # the sweep has resolved anybody: a round that could not ask the tenant has
   # no identity to tell, and saying so is the honest message.
-  posted <- function(changed, born = list(), identified = NULL) {
+  posted <- function(changed,
+                     born = list(),
+                     identified = NULL,
+                     granted = character()) {
     if (is.null(mailer)) {
       return(list(
         recapitate = changed, errori = character(),
@@ -234,6 +237,7 @@ provisioning_reconcile <- function(register_url,
           posta_partite = 0L, posta_fallite = 0L,
           credenziali_recapitate = 0L, credenziali_perse = 0L,
           benvenuti_recapitati = 0L, benvenuti_persi = 0L,
+          accessi_recapitati = 0L, accessi_persi = 0L,
           posta_dirottata = FALSE
         )
       ))
@@ -241,7 +245,7 @@ provisioning_reconcile <- function(register_url,
     mail_round(
       changed, register, born, mailer, dry_run,
       redirect_to = redirect_to, copy_to = copy_to, reply_to = reply_to,
-      identified = identified, hosts = hosts
+      identified = identified, hosts = hosts, granted = granted
     )
   }
 

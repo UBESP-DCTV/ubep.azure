@@ -949,7 +949,17 @@ mail_redirect_note <- function(body, to, cc) {
 #' that did not leave holds no row back: holding it would not send the welcome
 #' again, it would only keep the outcome out of the register.
 #'
-#' The welcome goes to `contact_email`, the person. The outcome and the key go
+#' The access message is the third case of the same asymmetry. It leaves for
+#' the rows in `granted`, whose right this round created and the read-back
+#' confirmed, and the right is there once it leaves or not: the next round
+#' finds the row settled and does nothing, so nothing would send it again.
+#' Its failure goes out under `POSTA_ACCESSO_PERSA`, is counted apart in
+#' `accessi_recapitati` and `accessi_persi`, and holds no row back. It
+#' leaves after the welcome, so a person created and granted in the same
+#' round reads first that the account exists.
+#'
+#' The welcome and the access message go to `contact_email`, the person,
+#' with nobody in copy. The outcome and the key go
 #' to the referent, `mail_referent()`: the owner `identified` carries. The
 #' outcome of a row without one goes to `copy_to` alone, with a line saying
 #' so; its key goes nowhere.
@@ -977,8 +987,12 @@ mail_redirect_note <- function(body, to, cc) {
 #'   established rather than what the referent typed.
 #' @param hosts Named character vector, instance name to host, as
 #'   `provisioning_reconcile()` receives it from the inventory. Only the
-#'   welcome message reads it, to say where the row's instance opens; a row
-#'   whose instance it does not name gets a welcome without that address.
+#'   welcome and the access message read it, to say where the row's
+#'   instance opens; a row whose instance it does not name gets its message
+#'   without that address.
+#' @param granted The `record_id`s of the rows whose right this round created
+#'   and the read-back confirmed: each gets the access message
+#'   (`mail_access_message()`).
 #'
 #' @return A list with `recapitate`, `errori` and `contatori`.
 #'
@@ -992,12 +1006,14 @@ mail_round <- function(changed,
                        copy_to = NULL,
                        reply_to = NULL,
                        identified = NULL,
-                       hosts = NULL) {
+                       hosts = NULL,
+                       granted = character()) {
   stopifnot(
     is.data.frame(changed), is.data.frame(register), is.list(born),
     is.function(mailer),
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
-    is.null(hosts) || is.character(hosts)
+    is.null(hosts) || is.character(hosts),
+    is.character(granted)
   )
 
   # The address the welcome names, looked up by the row's instance. A server
@@ -1016,6 +1032,7 @@ mail_round <- function(changed,
     posta_partite = 0L, posta_fallite = 0L,
     credenziali_recapitate = 0L, credenziali_perse = 0L,
     benvenuti_recapitati = 0L, benvenuti_persi = 0L,
+    accessi_recapitati = 0L, accessi_persi = 0L,
     posta_dirottata = !is.null(redirect_to)
   )
 
@@ -1143,6 +1160,28 @@ mail_round <- function(changed,
       # The code carries no value with it: this string reaches the telemetry
       # record, which is shipped to a workspace and kept.
       errori <- c(errori, "POSTA_CREDENZIALE_PERSA")
+    }
+  }
+
+  # After the births, so a person created and granted in one round reads the
+  # welcome first. Not retried, like the welcome: the right exists and the
+  # next round finds nothing to do. A row the register does not hold, or one
+  # without an address, loses the message the way a failed send does.
+  for (id in granted) {
+    riga <- riga_di(id)
+    accesso <- if (is.null(riga)) {
+      list(ok = FALSE, errors = "POSTA_RIGA_NON_TROVATA")
+    } else {
+      consegna(
+        riga[["contact_email"]], NULL,
+        mail_access_message(riga, url = indirizzo_di(riga[["server"]]))
+      )
+    }
+    if (isTRUE(accesso[["ok"]])) {
+      conto[["accessi_recapitati"]] <- conto[["accessi_recapitati"]] + 1L
+    } else {
+      conto[["accessi_persi"]] <- conto[["accessi_persi"]] + 1L
+      errori <- c(errori, "POSTA_ACCESSO_PERSA")
     }
   }
 

@@ -14,7 +14,8 @@ mail_round(
   copy_to = NULL,
   reply_to = NULL,
   identified = NULL,
-  hosts = NULL
+  hosts = NULL,
+  granted = character()
 )
 }
 \arguments{
@@ -50,8 +51,13 @@ established rather than what the referent typed.}
 
 \item{hosts}{Named character vector, instance name to host, as
 \code{provisioning_reconcile()} receives it from the inventory. Only the
-welcome message reads it, to say where the row's instance opens; a row
-whose instance it does not name gets a welcome without that address.}
+welcome and the access message read it, to say where the row's
+instance opens; a row whose instance it does not name gets its message
+without that address.}
+
+\item{granted}{The \code{record_id}s of the rows whose right this round created
+and the read-back confirmed: each gets the access message
+(\code{mail_access_message()}).}
 }
 \value{
 A list with \code{recapitate}, \code{errori} and \code{contatori}.
@@ -73,7 +79,17 @@ counted apart from the outcome messages for the same reason, and a welcome
 that did not leave holds no row back: holding it would not send the welcome
 again, it would only keep the outcome out of the register.
 
-The welcome goes to \code{contact_email}, the person. The outcome and the key go
+The access message is the third case of the same asymmetry. It leaves for
+the rows in \code{granted}, whose right this round created and the read-back
+confirmed, and the right is there once it leaves or not: the next round
+finds the row settled and does nothing, so nothing would send it again.
+Its failure goes out under \code{POSTA_ACCESSO_PERSA}, is counted apart in
+\code{accessi_recapitati} and \code{accessi_persi}, and holds no row back. It
+leaves after the welcome, so a person created and granted in the same
+round reads first that the account exists.
+
+The welcome and the access message go to \code{contact_email}, the person,
+with nobody in copy. The outcome and the key go
 to the referent, \code{mail_referent()}: the owner \code{identified} carries. The
 outcome of a row without one goes to \code{copy_to} alone, with a line saying
 so; its key goes nowhere.
