@@ -765,10 +765,16 @@ dice che cosa non si è potuto stabilire, il record perché.
 
 **Il messaggio.** Va al proprietario, non a `requested_by`. Nomina chi ha
 cambiato la riga e porta il sigillo da incollare, e dice che può approvare il
-referente della riga oppure IT. Lo stesso sigillo sta nel dettaglio dell'esito,
-`SIGILLO_DIVERSO:<sigillo>`, ed è questo che porta il sigillo nuovo al
-proprietario quando la riga cambia ancora mentre è ferma: il dettaglio cambia
-con lei, l'esito risulta cambiato e il messaggio riparte.
+referente della riga oppure IT. Dice anche che cosa fa l'approvazione: al giro
+dopo la modifica si esegue se chi l'ha scritta ha *User Rights* con *Full
+Access* sul progetto, altrimenti il giro la rifiuta con
+`DATO_AMBITO_NON_AUTORIZZATO`; e approvare la modifica di altri cede la riga a
+chi l'ha scritta per ultimo, salvo che sia solo una revoca. Fino alla 0.20.1
+diceva soltanto che la modifica, approvata, diventava effettiva al giro dopo.
+Lo stesso sigillo sta nel dettaglio dell'esito, `SIGILLO_DIVERSO:<sigillo>`, ed
+è questo che porta il sigillo nuovo al proprietario quando la riga cambia
+ancora mentre è ferma: il dettaglio cambia con lei, l'esito risulta cambiato e
+il messaggio riparte.
 
 Quattro cose da sapere quando si tocca questo meccanismo:
 

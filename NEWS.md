@@ -15,9 +15,12 @@
   counts, not those of whoever approves, and the approval comes from the last
   owner or from IT. The way out of a write by someone without the rights is for
   the owner to change the value and put it back, since REDCap logs no write
-  that leaves the value as it was. The notes of the register's `seal_state`
-  and `approved_seal` fields, which still speak of the creator, are to be
-  updated on the live project.
+  that leaves the value as it was. The message of a held row says so: once
+  approved, the change is carried out only if whoever wrote it holds User
+  Rights with Full Access on the project, and approving somebody else's change
+  hands the row over, unless it is only a revocation. The notes of the
+  register's `seal_state` and `approved_seal` fields, which still speak of the
+  creator, are to be updated on the live project.
 
 * **`owned_by`, written by the channel and believed only from the log.** A new
   read-only field of the register holds the row's owner. The import right is

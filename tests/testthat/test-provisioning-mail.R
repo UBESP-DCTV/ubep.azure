@@ -1301,6 +1301,48 @@ test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", 
 })
 
 
+test_that("la riga trattenuta dice che cosa fa l'approvazione e che cosa no", {
+  # eval
+  corpo <- mail_outcome_message(
+    riga_trattenuta(edited_by = "bruno.verdi@ubep.unipd.it")
+  )[["body"]]
+
+  # test
+  # The gate asks the rights of whoever wrote the change, not of whoever
+  # approves it: an approval with no condition attached would promise a
+  # change the round then refuses. And approving somebody else's change hands
+  # the row over to them, which the owner has to know before pasting.
+  expect_false(grepl("diventa effettiva", corpo, fixed = TRUE))
+  expect_false(grepl("takes effect", corpo, fixed = TRUE))
+  expect_match(
+    corpo,
+    "si esegue se chi l'ha scritta ha User Rights con Full Access sul progetto",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "is applied on the next round if whoever wrote it holds User Rights",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "la rifiuta con DATO_AMBITO_NON_AUTORIZZATO", fixed = TRUE
+  )
+  expect_match(
+    corpo, "refuses it with DATO_AMBITO_NON_AUTORIZZATO", fixed = TRUE
+  )
+  expect_match(
+    corpo, "approvandola cedi la riga a chi l'ha scritta per ultimo",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "approving it hands the row over to whoever wrote it last",
+    fixed = TRUE
+  )
+  expect_match(corpo, "salvo che sia solo una revoca", fixed = TRUE)
+  expect_match(corpo, "unless it is only a revocation", fixed = TRUE)
+})
+
+
 test_that("ogni esito va al proprietario, mai a requested_by", {
   # eval
   riga <- list(

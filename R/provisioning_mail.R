@@ -184,6 +184,9 @@ mail_outcome_message <- function(row) {
   # whose approval counts, so it says that, and names who changed the row:
   # the owner is the one who has to judge the change. It does not say the
   # request had been applied: one still in the queue is held the same way.
+  # And it says what the approval does not do: the gate asks the rights of
+  # whoever wrote the change, not the approver's, and approving somebody
+  # else's change hands the row over to them, a revocation alone excepted.
   trattenuta <- if (identical(as.character(row[["outcome"]]), "held")) {
     sigillo <- mail_said_or(row[["seal_now"]], "non disponibile, chiedi a IT")
     list(
@@ -214,8 +217,16 @@ mail_outcome_message <- function(row) {
           "incollato prima della modifica non la approva. L'approvazione di ",
           "qualunque altro referente, compreso chi ha fatto la modifica, non ",
           "vale: il registro degli eventi di REDCap dice di chi e' la riga e ",
-          "chi ha scritto che cosa. Approvata, la modifica diventa ",
-          "effettiva al giro successivo."
+          "chi ha scritto che cosa."
+        ),
+        "",
+        paste0(
+          "Approvata, al giro successivo la modifica si esegue se chi l'ha ",
+          "scritta ha User Rights con Full Access sul progetto (ognuno, se ",
+          "sono piu' d'uno); altrimenti il giro la rifiuta con ",
+          "DATO_AMBITO_NON_AUTORIZZATO. Se la modifica e' di altri, ",
+          "approvandola cedi la riga a chi l'ha scritta per ultimo, salvo che ",
+          "sia solo una revoca."
         ),
         "",
         paste0(
@@ -250,8 +261,16 @@ mail_outcome_message <- function(row) {
           "has been applied the approval is spent, and a seal pasted before ",
           "the edit does not approve it. An approval by any other referent, ",
           "including whoever made the edit, does not count: REDCap's event ",
-          "log says who owns the row and who wrote what. Once approved, ",
-          "the edit takes effect on the next round."
+          "log says who owns the row and who wrote what."
+        ),
+        "",
+        paste0(
+          "Once approved, the edit is applied on the next round if whoever ",
+          "wrote it holds User Rights with Full Access on the project (each ",
+          "of them, if more than one); otherwise the round refuses it with ",
+          "DATO_AMBITO_NON_AUTORIZZATO. If somebody else made the edit, ",
+          "approving it hands the row over to whoever wrote it last, unless ",
+          "it is only a revocation."
         ),
         "",
         paste0(
