@@ -55,7 +55,9 @@ carried out is the newest write of the field below the seal, by anybody,
 the channel included; where the log holds none it is unknown, and the
 field counts if it was written above the seal. The current value comes
 from the register and not from the log, which cuts a value at its first
-apostrophe and would call \verb{D'Angelo} and \verb{D'Amico} equal.
+apostrophe and would call \verb{D'Angelo} and \verb{D'Amico} equal. For the same
+reason a value carried out that holds an apostrophe is unknown too: read
+\code{D}, it would make a later \code{D} look like no change.
 
 On a row never carried out there is no value to compare with, and every
 intent field written in its life counts, with its last author, empty or

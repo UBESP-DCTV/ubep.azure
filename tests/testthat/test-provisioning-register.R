@@ -1047,6 +1047,35 @@ test_that("un valore con l'apostrofo si confronta col registro e l'autore conta"
 })
 
 
+test_that("un valore eseguito con l'apostrofo e' ignoto, e il campo scritto dopo conta", { # nolint: line_length_linter.
+  # eval
+  # Carried out as `D'Amico`, which the log reads `D`; Bruno then writes
+  # exactly `D`.
+  eventi <- eventi_finti(
+    list(username = "bruno.verdi@ubep.unipd.it", details = "last_name = 'D'"),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', last_name = 'D'Amico', role_name = 'x'"
+    )
+  )
+
+  # test
+  # Compared with what the log reads, Bruno's value would equal the one
+  # carried out and his change would vanish. Where the value ends cannot be
+  # told, so it is unknown, and a field written since counts.
+  for (account in list(NULL, "svc-canale-ubep")) {
+    expect_equal(
+      log_change_authors(
+        eventi, "1", channel_account = account,
+        current = register_row(last_name = "D")
+      ),
+      "bruno.verdi@ubep.unipd.it"
+    )
+  }
+})
+
+
 test_that("le autrici in attesa leggono la riga attuale", {
   # eval
   # Newest first. Bruno moved the role away from what the round carried out

@@ -836,7 +836,9 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' the channel included; where the log holds none it is unknown, and the
 #' field counts if it was written above the seal. The current value comes
 #' from the register and not from the log, which cuts a value at its first
-#' apostrophe and would call `D'Angelo` and `D'Amico` equal.
+#' apostrophe and would call `D'Angelo` and `D'Amico` equal. For the same
+#' reason a value carried out that holds an apostrophe is unknown too: read
+#' `D`, it would make a later `D` look like no change.
 #'
 #' On a row never carried out there is no value to compare with, and every
 #' intent field written in its life counts, with its last author, empty or
@@ -935,7 +937,19 @@ log_change_authors <- function(events, record,
       # before the row was compared, if somebody wrote it since.
       return(any(wrote & window))
     }
-    now(field) != log_value(mine[done[[1L]], , drop = FALSE], field)
+    carried <- mine[done[[1L]], , drop = FALSE]
+    # The log does not escape an apostrophe inside a value, so the value read
+    # is whole only when its closing apostrophe ends the details or opens
+    # the next field. Otherwise where it ends cannot be told: cut at the
+    # apostrophe, `D'Amico` reads `D`, and a later `D` would read as no
+    # change. Unknown, as when the log does not hold it.
+    whole <- paste0(
+      "\\b", field, "\\s*=\\s*'[^']*'(\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+    )
+    if (!grepl(whole, as.character(carried[["details"]]))) {
+      return(any(wrote & window))
+    }
+    now(field) != log_value(carried, field)
   }
 
   last <- vapply(fields, function(field) {
