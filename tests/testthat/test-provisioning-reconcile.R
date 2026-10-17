@@ -3956,7 +3956,8 @@ test_that("un account del canale vuoto, di soli spazi o mancante ferma il giro",
   # eval and test
   # A blank name would make every row's channel nobody's: it is a missing
   # configuration, and the round stops before it asks the register anything.
-  for (account in list("", "  ", NA, NA_character_)) {
+  for (account in list("", "  ", NA, NA_character_, character(),
+                       c("svc-canale-ubep", ""))) {
     expect_error(
       giro(
         registro_doppio(record_json(list())), istanza_che_scrive(),
@@ -4390,4 +4391,43 @@ test_that("un referente che importa outcome e owned_by su una riga eseguita non 
   expect_equal(proprietari_scritti()[["owned_by"]], anna)
   mandate <- posta[["mandate"]]()
   expect_false(bruno %in% vapply(mandate, `[[`, "", "to"))
+})
+
+
+test_that("dopo il cambio dell'account il passaggio scritto dal vecchio resta creduto", { # nolint: line_length_linter.
+  # eval
+  # The token's old account carried Bruno's change out and passed the row to
+  # him; Bruno has changed the expiration since.
+  vecchio <- "svc-canale-vecchio"
+  dal_vecchio <- function(evento) {
+    utils::modifyList(evento, list(username = vecchio))
+  }
+  storia <- list(
+    cambio(bruno, "expiration = '2027-01-31'"),
+    dal_vecchio(esecuzione("111111111111")), dal_vecchio(passaggio(bruno)),
+    approvazione(anna, "111111111111"), cambio(bruno),
+    dal_vecchio(esecuzione())
+  )
+  con <- function(account) {
+    giro(
+      registro_con_log(
+        record_json(riga_cambiata(
+          expiration = "2027-01-31", applied_seal = "111111111111"
+        )),
+        storia = storia
+      ),
+      istanza_che_scrive(richiedenti = bruno), dry_run = FALSE,
+      channel_account = account
+    )
+  }
+
+  # test
+  # Both accounts listed: the passage stands, the row is Bruno's, and his
+  # own change is carried out on his rights.
+  entrambi <- con(c("svc-canale-ubep", vecchio))
+  expect_equal(as.character(entrambi[["esiti"]][["outcome"]]), "applied")
+  # The new account alone: the old one's passage is ignored, the row is
+  # Anna's again, and Bruno's change waits for her.
+  solo_nuovo <- con("svc-canale-ubep")
+  expect_equal(as.character(solo_nuovo[["esiti"]][["outcome"]]), "held")
 })

@@ -42,12 +42,13 @@ gives, for a run by hand; \code{NULL} otherwise.}
 the recipient of the report to IT.}
 
 \item{channel_account}{The REDCap username that holds the register's
-token, the account the round writes with. With it, only its writes of
-\code{owned_by} pass a row to another referent and only its seals date a
-row, and what any other account wrote in the channel's fields is
-ignored; with \code{NULL}, the default, every row belongs to its creator, and
-the channel is whoever wrote its fields. The runner reads it from
-\code{UBEP_CANALE_UTENTE}, which it requires.}
+token, the account the round writes with, or more than one while the
+token changes hands. With it, only their writes of \code{owned_by} pass a row
+to another referent and only their seals date a row, and what any other
+account wrote in the channel's fields is ignored; with \code{NULL}, the
+default, every row belongs to its creator, and the channel is whoever
+wrote its fields. The runner reads it from \code{UBEP_CANALE_UTENTE}, a list
+separated by commas, which it requires.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus

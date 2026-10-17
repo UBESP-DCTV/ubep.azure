@@ -25,8 +25,8 @@ log_next_owner(
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
 
-\item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured.}
+\item{channel_account}{The REDCap usernames that hold the round's token,
+one or more, or \code{NULL} when they are not configured.}
 
 \item{current}{The row as the round will leave it, a data frame of one
 row, or \code{NULL} when there is no row in hand, for \code{log_pending_authors()}.}

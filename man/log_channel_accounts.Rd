@@ -11,20 +11,21 @@ log_channel_accounts(events, record, channel_account = NULL)
 
 \item{record}{The record id to look at.}
 
-\item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured.}
+\item{channel_account}{The REDCap usernames that hold the round's token,
+one or more, or \code{NULL} when they are not configured.}
 }
 \value{
 A character vector of usernames. With \code{channel_account}, every
-spelling of that account the row's log carries, or the configured name
-when the log carries none; nobody else. Without, the authors of the
+spelling of those accounts the row's log carries, and each configured
+name the log does not carry; nobody else. Without, the authors of the
 channel fields, empty when no event wrote one of them.
 }
 \description{
 The account that holds the round's token, as the machine that runs the
-round configures it, and nobody else; or, where it is not configured,
-every account that wrote a field only the channel is meant to write,
-\code{register_channel_fields()}, in the row's current life. Callers drop the
+round configures it (more than one while the token changes hands), and
+nobody else; or, where it is not configured, every account that wrote a
+field only the channel is meant to write, \code{register_channel_fields()}, in
+the row's current life. Callers drop the
 channel's events by account, and read the answer one more way through
 \code{log_channel_unknown()}: without the configuration, two accounts writing
 those fields leave the log unable to say which writes are the round's.
@@ -52,11 +53,16 @@ nothing to guess, since the owner comes only from that account's writes of
 stays a change of its author, \code{log_change_authors()}, the channel's
 columns beside it or not.
 
-The configured name is typed by hand on the machine, so it is compared
-without regard to case, and answered with the spelling the log carries
-when the log carries it. Without it, \code{NULL}, the answer is the authors of
-the channel fields, as before the account was configured: what the round
-judges does not change for a caller that does not pass it, and
+More than one account can be configured, for the day the account that
+holds the token changes (decided on 2026-10-17): every one of them is the
+channel, so the old account's writes, its passages of \code{owned_by} among
+them, stay believed while it is listed.
+
+The configured names are typed by hand on the machine, so they are
+compared without regard to case, and answered with the spelling the log
+carries when the log carries it. Without them, \code{NULL}, the answer is the
+authors of the channel fields, as before the account was configured: what
+the round judges does not change for a caller that does not pass it, and
 \code{log_owner()} believes no write of \code{owned_by}.
 }
 \keyword{internal}

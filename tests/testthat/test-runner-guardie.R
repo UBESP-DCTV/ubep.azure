@@ -140,18 +140,42 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
   # Same limit as the guards above: `dev/` is not in the built package. The
   # package believes no write of `owned_by` without the account, so a runner
   # that forgot it would keep every row with its creator and say nothing.
+  # The variable is a list separated by commas, for the day the token's
+  # account changes: the reading and the stop are taken out of each script
+  # and run, so what is checked is what they do and not how they are spelled.
+  # Only those two expressions are evaluated, from the repository's own
+  # scripts, in an environment of their own.
   dev <- testthat::test_path("..", "..", "dev")
   skip_if_not(dir.exists(dev), "dev/ is not in the built package")
   for (nome in c("runner-canale.R", "runner-rapporto.R")) {
+    codice <- as.list(parse(file.path(dev, nome), keep.source = FALSE))
+    lettura <- Filter(function(e) {
+      is.call(e) && identical(e[[1L]], as.name("<-")) &&
+        identical(e[[2L]], as.name("CANALE_UTENTE"))
+    }, codice)
+    guardia <- Filter(function(e) {
+      is.call(e) && identical(e[[1L]], as.name("if")) &&
+        "CANALE_UTENTE" %in% all.names(e[[2L]])
+    }, codice)
+    legge <- function(valore) {
+      withr::local_envvar(UBEP_CANALE_UTENTE = valore)
+      ambiente <- new.env(parent = baseenv())
+      for (e in c(lettura, guardia)) {
+        eval(e, ambiente)
+      }
+      ambiente[["CANALE_UTENTE"]]
+    }
+    expect_length(guardia, 1L)
+    expect_equal(legge("svc-nuovo"), "svc-nuovo", info = nome)
+    expect_equal(
+      legge(" svc-nuovo , ,SVC-Vecchio,"), c("svc-nuovo", "SVC-Vecchio"),
+      info = nome
+    )
+    for (vuota in c("", "  ", " , ,")) {
+      expect_error(legge(vuota), "UBEP_CANALE_UTENTE", info = nome)
+    }
     testo <- paste(
       readLines(file.path(dev, nome), warn = FALSE), collapse = "\n"
-    )
-    expect_match(
-      testo, 'CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))',
-      fixed = TRUE, info = nome
-    )
-    expect_match(
-      testo, "if (!nzchar(CANALE_UTENTE)) {", fixed = TRUE, info = nome
     )
     expect_match(
       testo, "channel_account = CANALE_UTENTE", fixed = TRUE, info = nome

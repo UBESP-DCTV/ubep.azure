@@ -11,8 +11,9 @@ report_person_since(events, record, channel_account = NULL)
 
 \item{record}{The record id.}
 
-\item{channel_account}{The REDCap username that holds the register's
-token, or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+\item{channel_account}{The REDCap usernames that hold the register's
+token, one or more, or \code{NULL} when they are not configured, for
+\code{log_channel_accounts()}.}
 }
 \value{
 One stamp, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome; \code{character()} when the

@@ -2088,6 +2088,49 @@ test_that("un referente che importa outcome e owned_by su una riga eseguita non 
   expect_true(is.na(log_owner(eventi, "1", creatrice)))
 })
 
+test_that("con due account configurati le scritture del vecchio restano del canale", { # nolint: line_length_linter.
+  vecchio <- "svc-canale-vecchio"
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  dal_vecchio <- function(evento) {
+    utils::modifyList(evento, list(username = vecchio))
+  }
+  # Newest first. The token's old account passed the row to Bruno and sealed
+  # it, then wrote back the username on a round that held the row.
+  eventi <- eventi_finti(
+    dal_vecchio(list(
+      action = "Update record (API) 1",
+      details = "username = 'mario.rossi@ubep.unipd.it'"
+    )),
+    dal_vecchio(applicata),
+    dal_vecchio(passaggio(bruno))
+  )
+  entrambi <- c(canale, " SVC-Canale-Vecchio ")
+  expect_setequal(
+    log_channel_accounts(eventi, "1", entrambi), c(canale, vecchio)
+  )
+  expect_equal(log_owner(eventi, "1", creatrice, entrambi), bruno)
+  expect_equal(
+    log_change_authors(eventi, "1", channel_account = entrambi), character()
+  )
+  # With the new account alone, the old one is another account: its passage
+  # is ignored, and its write of an intent field is a change of its own.
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+  expect_equal(
+    log_change_authors(eventi, "1", channel_account = canale), vecchio
+  )
+})
+
+test_that("l'account del canale non ammette un elenco vuoto o voci vuote", {
+  eventi <- eventi_finti(applicata)
+  for (account in list(character(), "", c(canale, ""), c(canale, "  "),
+                       c(canale, NA), 1L)) {
+    expect_error(
+      log_channel_accounts(eventi, "1", account), "channel_account",
+      info = format(account)
+    )
+  }
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.

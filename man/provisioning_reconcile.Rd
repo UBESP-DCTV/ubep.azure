@@ -70,10 +70,11 @@ by default, so a runner that does not pass it leaves the owner as the
 only one who approves.}
 
 \item{channel_account}{The REDCap username that holds the register's
-token, the account the round writes with. Only its writes of \code{owned_by}
-are believed; with \code{NULL}, the default, none is, every row belongs to
-its creator, and the round writes no \code{owned_by}. The runner reads it
-from \code{UBEP_CANALE_UTENTE}, which it requires.}
+token, the account the round writes with, or more than one while the
+token changes hands. Only their writes of \code{owned_by} are believed; with
+\code{NULL}, the default, none is, every row belongs to its creator, and the
+round writes no \code{owned_by}. The runner reads it from
+\code{UBEP_CANALE_UTENTE}, a list separated by commas, which it requires.}
 
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
@@ -122,8 +123,8 @@ the project and have the gate check that colleague's rights. \code{owned_by} is
 3 and step 4 the round asks REDCap who was authenticated when each row was
 created, one call with \code{logtype = "record_add"} and no window, and then who
 each row belongs to now, one call with \code{logtype = "record"} and no window:
-the newest write of \code{owned_by} signed by \code{channel_account}, or the creator
-when that account never wrote one (\code{log_owner()}). Both are asked only when
+the newest write of \code{owned_by} signed by an account of \code{channel_account},
+or the creator when none wrote one (\code{log_owner()}). Both are asked only when
 a row is still standing to be judged or has changed since it was applied,
 and the second only once the first has answered.
 

@@ -25,8 +25,9 @@ log_pending_authors(
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
 
-\item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+\item{channel_account}{The REDCap usernames that hold the round's token,
+one or more, or \code{NULL} when they are not configured, for
+\code{log_channel_accounts()}.}
 
 \item{current}{The row as the round will leave it, a data frame of one
 row, or \code{NULL} when there is no row in hand, for \code{log_change_authors()}.}

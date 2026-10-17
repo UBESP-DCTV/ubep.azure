@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_register.R
 \name{channel_account_valid}
 \alias{channel_account_valid}
-\title{Whether a value can name the channel's account}
+\title{Whether a value can name the channel's accounts}
 \usage{
 channel_account_valid(channel_account)
 }
@@ -13,9 +13,10 @@ channel_account_valid(channel_account)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-\code{NULL}, not configured, or one REDCap username, not blank or missing: a
-blank name would make the channel nobody, which is a configuration that
-is missing and not one that says something. The check every function
-taking \code{channel_account} makes on entry.
+\code{NULL}, not configured, or one or more REDCap usernames, none of them
+blank or missing: a blank name would make the channel nobody, which is a
+configuration that is missing and not one that says something. More than
+one for the day the account that holds the token changes. The check every
+function taking \code{channel_account} makes on entry.
 }
 \keyword{internal}

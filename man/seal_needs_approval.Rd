@@ -25,9 +25,9 @@ order of \code{register}.}
 \item{approvers}{The IT accounts whose approval counts on any row: it
 decides what an earlier execution covered.}
 
-\item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
-\code{log_owner()}.}
+\item{channel_account}{The REDCap usernames that hold the round's token,
+one or more, or \code{NULL} when they are not configured, for
+\code{log_channel_accounts()} and \code{log_owner()}.}
 }
 \value{
 A logical vector, one answer per row. It answers about every row

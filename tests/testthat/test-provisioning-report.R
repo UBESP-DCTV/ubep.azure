@@ -2325,3 +2325,29 @@ test_that("il rapporto di dicembre usa il proprietario di fine dicembre", {
   expect_true(bruno %in% con_passaggio("2026-12-31 23:59"))
   expect_false(bruno %in% con_passaggio("2027-01-01 00:00"))
 })
+
+
+test_that("con due account configurati il passaggio scritto dal vecchio vale", {
+  # eval
+  # The token's old account passed the row to Bruno before the token moved.
+  vecchio <- "svc-canale-vecchio"
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+  dati <- scenario()
+  dati[["eventi"]] <- rbind(
+    evento("2026-10-20 05:00", vecchio, paste0("owned_by = '", bruno, "'"),
+           record = "41"),
+    dati[["eventi"]]
+  )
+  doppie(dati)
+  posta <- posta_finta()
+
+  esegui(withr::local_tempdir(), posta, channel_account = c(canale, vecchio))
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  a <- vapply(mail, `[[`, "", "to")
+  expect_true(bruno %in% a)
+  expect_match(
+    mail[[match(bruno, a)]][["body"]], "carla.inventata", fixed = TRUE
+  )
+})

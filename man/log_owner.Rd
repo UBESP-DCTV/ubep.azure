@@ -13,8 +13,8 @@ log_owner(events, record, creator, channel_account = NULL, before = NULL)
 
 \item{creator}{Who created the row, as \code{log_creators()} answers.}
 
-\item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured.}
+\item{channel_account}{The REDCap usernames that hold the round's token,
+one or more, or \code{NULL} when they are not configured.}
 
 \item{before}{A moment, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome and exactly that long,
 or \code{NULL} to read the whole log. A longer stamp, with seconds, would make
@@ -25,9 +25,9 @@ One username; \code{""} when no write of \code{owned_by} is believed and the
 creator is not known; \code{NA_character_} when the log cannot say.
 }
 \description{
-The value of the newest write of \code{owned_by} signed by the account that
+The value of the newest write of \code{owned_by} signed by an account that
 holds the round's token, in the row's current life; the creator, as
-\code{log_creators()} names it, when that account never wrote one.
+\code{log_creators()} names it, when none of them ever wrote one.
 }
 \details{
 The field itself is not believed. \code{owned_by} is \verb{@READONLY} on the form,

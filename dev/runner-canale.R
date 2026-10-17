@@ -87,9 +87,15 @@ APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
 # 2026-10-17). Il giro crede alle scritture di owned_by di questa utenza e
 # di nessun'altra: riconoscerla da cio' che scrive lascerebbe passare per
 # canale chi importa owned_by su una riga nuova. Sta sulla macchina e non
-# qui, perche' il repository e' pubblico. Gli spazi ai bordi si tolgono: una
-# variabile fatta di soli spazi e' una variabile che manca.
-CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))
+# qui, perche' il repository e' pubblico. E' un elenco separato da virgole,
+# per quando l'utenza del token cambia: si elencano la nuova e la vecchia, e
+# le scritture della vecchia restano credute finche' e' nell'elenco. Gli
+# spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
+# variabile fatta di soli spazi e virgole e' una variabile che manca.
+CANALE_UTENTE <- trimws(strsplit(
+  Sys.getenv("UBEP_CANALE_UTENTE"), ",", fixed = TRUE
+)[[1L]])
+CANALE_UTENTE <- CANALE_UTENTE[nzchar(CANALE_UTENTE)]
 
 # Ci si ferma qui e non alla prima mail rifiutata. Senza mittente ogni
 # messaggio verrebbe respinto, quindi nessuna riga sarebbe scritta: il giro
@@ -118,7 +124,7 @@ if (POSTA && !nzchar(POSTA_COPIA)) {
 # Senza l'utenza del canale il pacchetto non crede a nessuna scrittura di
 # owned_by e nessuna riga passa: un giro che la dimenticasse terrebbe ogni
 # riga al suo creatore senza dirlo.
-if (!nzchar(CANALE_UTENTE)) {
+if (length(CANALE_UTENTE) == 0L) {
   stop(
     "UBEP_CANALE_UTENTE non e' impostata: senza l'utenza del canale il ",
     "giro non sa a quali scritture di owned_by credere.",

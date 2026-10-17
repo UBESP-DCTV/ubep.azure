@@ -185,8 +185,9 @@ report_day_words <- function(date) {
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id.
-#' @param channel_account The REDCap username that holds the register's
-#'   token, or `NULL` when it is not configured, for `log_channel_accounts()`.
+#' @param channel_account The REDCap usernames that hold the register's
+#'   token, one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()`.
 #'
 #' @return The stamps of the channel's seal writes, `"%Y-%m-%d %H:%M"` in
 #'   Rome, oldest first; `character()` when there is none; `NA_character_`
@@ -1860,12 +1861,13 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' @param copy_to The address of IT: in copy on the referents' reports, and
 #'   the recipient of the report to IT.
 #' @param channel_account The REDCap username that holds the register's
-#'   token, the account the round writes with. With it, only its writes of
-#'   `owned_by` pass a row to another referent and only its seals date a
-#'   row, and what any other account wrote in the channel's fields is
-#'   ignored; with `NULL`, the default, every row belongs to its creator, and
-#'   the channel is whoever wrote its fields. The runner reads it from
-#'   `UBEP_CANALE_UTENTE`, which it requires.
+#'   token, the account the round writes with, or more than one while the
+#'   token changes hands. With it, only their writes of `owned_by` pass a row
+#'   to another referent and only their seals date a row, and what any other
+#'   account wrote in the channel's fields is ignored; with `NULL`, the
+#'   default, every row belongs to its creator, and the channel is whoever
+#'   wrote its fields. The runner reads it from `UBEP_CANALE_UTENTE`, a list
+#'   separated by commas, which it requires.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due, for whoever reads a single run.

@@ -33,8 +33,8 @@
 #' 3 and step 4 the round asks REDCap who was authenticated when each row was
 #' created, one call with `logtype = "record_add"` and no window, and then who
 #' each row belongs to now, one call with `logtype = "record"` and no window:
-#' the newest write of `owned_by` signed by `channel_account`, or the creator
-#' when that account never wrote one (`log_owner()`). Both are asked only when
+#' the newest write of `owned_by` signed by an account of `channel_account`,
+#' or the creator when none wrote one (`log_owner()`). Both are asked only when
 #' a row is still standing to be judged or has changed since it was applied,
 #' and the second only once the first has answered.
 #'
@@ -164,10 +164,11 @@
 #'   by default, so a runner that does not pass it leaves the owner as the
 #'   only one who approves.
 #' @param channel_account The REDCap username that holds the register's
-#'   token, the account the round writes with. Only its writes of `owned_by`
-#'   are believed; with `NULL`, the default, none is, every row belongs to
-#'   its creator, and the round writes no `owned_by`. The runner reads it
-#'   from `UBEP_CANALE_UTENTE`, which it requires.
+#'   token, the account the round writes with, or more than one while the
+#'   token changes hands. Only their writes of `owned_by` are believed; with
+#'   `NULL`, the default, none is, every row belongs to its creator, and the
+#'   round writes no `owned_by`. The runner reads it from
+#'   `UBEP_CANALE_UTENTE`, a list separated by commas, which it requires.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,

@@ -428,9 +428,10 @@ log_wrote <- function(events, fields) {
 #' Which accounts in a row's log are the channel
 #'
 #' The account that holds the round's token, as the machine that runs the
-#' round configures it, and nobody else; or, where it is not configured,
-#' every account that wrote a field only the channel is meant to write,
-#' `register_channel_fields()`, in the row's current life. Callers drop the
+#' round configures it (more than one while the token changes hands), and
+#' nobody else; or, where it is not configured, every account that wrote a
+#' field only the channel is meant to write, `register_channel_fields()`, in
+#' the row's current life. Callers drop the
 #' channel's events by account, and read the answer one more way through
 #' `log_channel_unknown()`: without the configuration, two accounts writing
 #' those fields leave the log unable to say which writes are the round's.
@@ -457,21 +458,26 @@ log_wrote <- function(events, fields) {
 #' stays a change of its author, `log_change_authors()`, the channel's
 #' columns beside it or not.
 #'
-#' The configured name is typed by hand on the machine, so it is compared
-#' without regard to case, and answered with the spelling the log carries
-#' when the log carries it. Without it, `NULL`, the answer is the authors of
-#' the channel fields, as before the account was configured: what the round
-#' judges does not change for a caller that does not pass it, and
+#' More than one account can be configured, for the day the account that
+#' holds the token changes (decided on 2026-10-17): every one of them is the
+#' channel, so the old account's writes, its passages of `owned_by` among
+#' them, stay believed while it is listed.
+#'
+#' The configured names are typed by hand on the machine, so they are
+#' compared without regard to case, and answered with the spelling the log
+#' carries when the log carries it. Without them, `NULL`, the answer is the
+#' authors of the channel fields, as before the account was configured: what
+#' the round judges does not change for a caller that does not pass it, and
 #' `log_owner()` believes no write of `owned_by`.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
 #'
 #' @return A character vector of usernames. With `channel_account`, every
-#'   spelling of that account the row's log carries, or the configured name
-#'   when the log carries none; nobody else. Without, the authors of the
+#'   spelling of those accounts the row's log carries, and each configured
+#'   name the log does not carry; nobody else. Without, the authors of the
 #'   channel fields, empty when no event wrote one of them.
 #'
 #' @keywords internal
@@ -509,12 +515,13 @@ log_channel_unknown <- function(channel, channel_account) {
 }
 
 
-#' Whether a value can name the channel's account
+#' Whether a value can name the channel's accounts
 #'
-#' `NULL`, not configured, or one REDCap username, not blank or missing: a
-#' blank name would make the channel nobody, which is a configuration that
-#' is missing and not one that says something. The check every function
-#' taking `channel_account` makes on entry.
+#' `NULL`, not configured, or one or more REDCap usernames, none of them
+#' blank or missing: a blank name would make the channel nobody, which is a
+#' configuration that is missing and not one that says something. More than
+#' one for the day the account that holds the token changes. The check every
+#' function taking `channel_account` makes on entry.
 #'
 #' @param channel_account The value a caller was handed.
 #'
@@ -523,7 +530,7 @@ log_channel_unknown <- function(channel, channel_account) {
 #' @keywords internal
 channel_account_valid <- function(channel_account) {
   is.null(channel_account) ||
-    (is.character(channel_account) && length(channel_account) == 1L &&
+    (is.character(channel_account) && length(channel_account) > 0L &&
        !anyNA(channel_account) && all(nzchar(trimws(channel_account))))
 }
 
@@ -604,9 +611,9 @@ log_stamp_reads <- function(stamps) {
 
 #' Who a row belongs to, from the log
 #'
-#' The value of the newest write of `owned_by` signed by the account that
+#' The value of the newest write of `owned_by` signed by an account that
 #' holds the round's token, in the row's current life; the creator, as
-#' `log_creators()` names it, when that account never wrote one.
+#' `log_creators()` names it, when none of them ever wrote one.
 #'
 #' The field itself is not believed. `owned_by` is `@READONLY` on the form,
 #' but an import draws no form: the import right is open to the referents,
@@ -659,8 +666,8 @@ log_stamp_reads <- function(stamps) {
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
 #' @param creator Who created the row, as `log_creators()` answers.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
 #' @param before A moment, `"%Y-%m-%d %H:%M"` in Rome and exactly that long,
 #'   or `NULL` to read the whole log. A longer stamp, with seconds, would make
 #'   a write of that same minute count as before it.
@@ -788,8 +795,9 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' @param record The record id to look at.
 #' @param fields The intent fields. Passed in by a caller that asks about
 #'   many rows, since deriving them reads the packaged dictionary.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()`.
 #' @param current The row as the round will leave it, a data frame of one
 #'   row holding every field in `fields`, or `NULL` when there is no row in
 #'   hand. Read only on a row the round has carried out.
@@ -970,9 +978,9 @@ log_approver <- function(authors, owner, approvers = character()) {
 #'   are read from the log with it.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
-#'   `log_owner()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()` and `log_owner()`.
 #'
 #' @return A character vector of usernames, newest first and each once;
 #'   `character()` when the stretch holds no uncovered change or the log holds
@@ -1064,8 +1072,9 @@ log_uncovered_authors <- function(events, record, creator,
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()`.
 #' @param current The row as the round will leave it, a data frame of one
 #'   row, or `NULL` when there is no row in hand, for `log_change_authors()`.
 #'
@@ -1197,9 +1206,9 @@ change_needs_approval <- function(authors, owner, sealed = TRUE,
 #'   is read from the log with it.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
-#'   `log_owner()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()` and `log_owner()`.
 #'
 #' @return `TRUE` when the others wrote a revocation and nothing else; `FALSE`
 #'   too when the owner is not known, or the channel, `log_channel_unknown()`.
@@ -1288,8 +1297,8 @@ log_revocation_only <- function(events, record, creator,
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
 #' @param current The row as the round will leave it, a data frame of one
 #'   row, or `NULL` when there is no row in hand, for `log_pending_authors()`.
 #'
@@ -1364,9 +1373,9 @@ log_next_owner <- function(events, record, creator,
 #'   order of `register`.
 #' @param approvers The IT accounts whose approval counts on any row: it
 #'   decides what an earlier execution covered.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
-#'   `log_owner()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()` and `log_owner()`.
 #'
 #' @return A logical vector, one answer per row. It answers about every row
 #'   it is handed, so the caller restricts it to the rows that changed.
@@ -1447,9 +1456,9 @@ seal_needs_approval <- function(register, events, creators,
 #'   order of `register`; the owner is read from the log with them.
 #' @param approvers The IT accounts whose approval counts on any row, as REDCap
 #'   usernames.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
-#'   `log_owner()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()` and `log_owner()`.
 #'
 #' @return A logical vector, one answer per row.
 #'
@@ -1510,9 +1519,9 @@ seal_approved <- function(register, events, creators,
 #'   is read from the log with it.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
-#'   `log_owner()`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()` and `log_owner()`.
 #'
 #' @return `TRUE` when the approval stands.
 #'

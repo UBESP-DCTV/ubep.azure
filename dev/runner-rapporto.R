@@ -111,9 +111,14 @@ POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
 # L'utenza REDCap che possiede il token del registro, la stessa del giro
 # (decisione del 2026-10-17). Solo le sue scritture di owned_by passano una
 # riga a un altro referente. Sta sulla macchina e non qui, perche' il
-# repository e' pubblico. Gli spazi ai bordi si tolgono: una variabile fatta
-# di soli spazi e' una variabile che manca.
-CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))
+# repository e' pubblico. E' un elenco separato da virgole, letto come nel
+# giro: quando l'utenza del token cambia si elencano la nuova e la vecchia.
+# Gli spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
+# variabile fatta di soli spazi e virgole e' una variabile che manca.
+CANALE_UTENTE <- trimws(strsplit(
+  Sys.getenv("UBEP_CANALE_UTENTE"), ",", fixed = TRUE
+)[[1L]])
+CANALE_UTENTE <- CANALE_UTENTE[nzchar(CANALE_UTENTE)]
 
 if (POSTA && !nzchar(POSTA_DA)) {
   stop(
@@ -126,7 +131,7 @@ if (POSTA && !nzchar(POSTA_DA)) {
 # Senza l'utenza del canale il pacchetto non crede a nessuna scrittura di
 # owned_by: un rapporto che la dimenticasse manderebbe ogni riga al suo
 # creatore, anche quella passata a un altro referente, senza dirlo.
-if (!nzchar(CANALE_UTENTE)) {
+if (length(CANALE_UTENTE) == 0L) {
   stop(
     "UBEP_CANALE_UTENTE non e' impostata: senza l'utenza del canale il ",
     "rapporto non sa a chi e' passata una riga.",
