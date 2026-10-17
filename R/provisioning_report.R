@@ -1865,7 +1865,8 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' leave over several days, until each referent has had theirs, and who is
 #' due must not change from one attempt to the next (decided on 2026-10-17):
 #' read on the day, a row passed on the 3rd would move from one referent's
-#' report to another's between two attempts, after one of the two had left.
+#' report to the other referent's between two attempts, after one of the two
+#' had left.
 #' Without `channel_account`, `NULL`, no write of `owned_by` is believed and
 #' every row stays with its creator.
 #'

@@ -107,7 +107,8 @@ changes nothing. The month's reports
 leave over several days, until each referent has had theirs, and who is
 due must not change from one attempt to the next (decided on 2026-10-17):
 read on the day, a row passed on the 3rd would move from one referent's
-report to another's between two attempts, after one of the two had left.
+report to the other referent's between two attempts, after one of the two
+had left.
 Without \code{channel_account}, \code{NULL}, no write of \code{owned_by} is believed and
 every row stays with its creator.
 }
