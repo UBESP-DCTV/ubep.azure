@@ -1315,6 +1315,13 @@ provisioning_reconcile <- function(register_url,
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
 
+  # The rows this round carried out, in the order of `register`, read once
+  # for the two doors that depend on it: the owner a passage decides, and
+  # the fresh seal.
+  applied <- record_ids %in% as.character(outcomes[["record_id"]])[
+    as.character(outcomes[["outcome"]]) == "applied"
+  ]
+
   # Who each row belongs to once this round is over. The passage is decided
   # here and once: by the round that carries the change out, after the gate
   # has let it through, on the row's log the round read before acting. The
@@ -1323,9 +1330,6 @@ provisioning_reconcile <- function(register_url,
   # and so does one whose next owner the log cannot say, which is the
   # direction that does not grant. A simulated round carries nothing out,
   # so it passes nothing on.
-  applied <- record_ids %in% as.character(outcomes[["record_id"]])[
-    as.character(outcomes[["outcome"]]) == "applied"
-  ]
   owner_after <- vapply(seq_along(record_ids), function(i) {
     if (!(applied[[i]] && checked[[i]])) {
       return(owners_now[[i]])
@@ -1446,28 +1450,22 @@ provisioning_reconcile <- function(register_url,
 
   sealing <- do.call(rbind, c(
     list(seal_payload("", "", "intact")[0, , drop = FALSE]),
-    lapply(
-      as.character(outcomes[["record_id"]])[
-        as.character(outcomes[["outcome"]]) == "applied"
-      ],
-      function(id) {
-        i <- match(id, record_ids)
-        seal_payload(
-          id,
-          seal_after[[i]],
-          # Applied while waiting for an approval says an approval carried
-          # this row here. A change the owner made alone was nobody's to
-          # contest, and leaves the row as it was. Otherwise the row keeps
-          # what it had: a change approved once stays approved until somebody
-          # edits the row again, which is when `modified` takes over below.
-          if (cleared[[i]] || identical(state_before[[i]], "approved")) {
-            "approved"
-          } else {
-            "intact"
-          }
-        )
-      }
-    ),
+    lapply(which(applied), function(i) {
+      seal_payload(
+        record_ids[[i]],
+        seal_after[[i]],
+        # Applied while waiting for an approval says an approval carried
+        # this row here. A change the owner made alone was nobody's to
+        # contest, and leaves the row as it was. Otherwise the row keeps
+        # what it had: a change approved once stays approved until somebody
+        # edits the row again, which is when `modified` takes over below.
+        if (cleared[[i]] || identical(state_before[[i]], "approved")) {
+          "approved"
+        } else {
+          "intact"
+        }
+      )
+    }),
     lapply(which(held), function(i) {
       seal_payload(record_ids[[i]], sealed[[i]], "modified")
     })
