@@ -520,6 +520,33 @@ register_seal_import <- function(url, token, payload) {
 }
 
 
+#' Write the row owner back, and nothing else
+#'
+#' The door exists so that no other field can travel with the owner: a defect
+#' in the round must not be able to rewrite the intent a person asked for, nor
+#' move the seal that says what was applied, while saying whose a row is.
+#'
+#' @inheritParams register_call
+#' @param payload A frame of exactly `record_id`, `owned_by`, as
+#'   `owner_payload()` returns. Zero rows calls nobody.
+#'
+#' @return The `register_call()` list plus `scritte`.
+#'
+#' @keywords internal
+register_owner_import <- function(url, token, payload) {
+  register_field_import(
+    url, token, payload,
+    expected = c("record_id", "owned_by"),
+    caller = "register_owner_import",
+    reason = paste(
+      "The owner must not ride with an outcome, an identity or a seal:",
+      "this door cannot write another field, so a defect cannot rewrite",
+      "the intent nor move the seal."
+    )
+  )
+}
+
+
 #' Send a body REDCap will overwrite, and check it took all of it
 #'
 #' The transport both writers share, and one copy of it rather than two. What

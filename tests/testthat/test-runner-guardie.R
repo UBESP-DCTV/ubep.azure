@@ -389,7 +389,8 @@ test_that("the creation path does not take over the carriers it replaces", {
 scritture <- function() {
   c(
     percorsi_di_scrittura(), "register_import", "register_identity_import",
-    "register_seal_import", "register_field_import", "directory_create_user"
+    "register_seal_import", "register_owner_import", "register_field_import",
+    "directory_create_user"
   )
 }
 

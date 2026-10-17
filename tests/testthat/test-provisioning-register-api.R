@@ -534,3 +534,58 @@ test_that("the creation log is asked for as creations only, without a window", {
   expect_null(captured[["body"]][["data"]][["beginTime"]])
   expect_equal(result[["log"]][["record"]], "20")
 })
+
+
+test_that("la porta del proprietario rifiuta ogni altro corpo", {
+  esito <- outcome_payload("1", "applied", at = "2026-08-14 03:00")
+  sigillo <- seal_payload("1", "000000000000", "intact")
+  piu_largo <- owner_payload("1", "bruno.verdi@ubep.unipd.it")
+  piu_largo[["outcome"]] <- "applied"
+  for (corpo in list(esito, sigillo, piu_largo)) {
+    expect_error(
+      register_owner_import("registro.example.org", "t0ken", corpo),
+      "record_id, owned_by"
+    )
+  }
+  expect_error(
+    register_seal_import(
+      "registro.example.org", "t0ken",
+      owner_payload("1", "bruno.verdi@ubep.unipd.it")
+    ),
+    "record_id, applied_seal, seal_state"
+  )
+})
+
+test_that("un corpo del proprietario vuoto non chiama nessuno", {
+  chiamato <- FALSE
+  detto <- httr2::with_mocked_responses(
+    function(req) {
+      chiamato <<- TRUE
+      httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
+    },
+    register_owner_import(
+      "registro.example.org", "t0ken",
+      owner_payload("1", "x@ubep.unipd.it")[0L, , drop = FALSE]
+    )
+  )
+  expect_false(chiamato)
+  expect_equal(detto[["scritte"]], 0L)
+})
+
+test_that("la porta del proprietario sovrascrive i soli due campi", {
+  catturata <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      catturata <<- req
+      httr2::response(status_code = 200L, body = charToRaw('{"count":1}'))
+    },
+    register_owner_import(
+      "registro.example.org", "t0ken",
+      owner_payload("1", "bruno.verdi@ubep.unipd.it")
+    )
+  )
+  dati <- catturata[["body"]][["data"]]
+  expect_equal(form_field_value(dati[["overwriteBehavior"]]), "overwrite")
+  mandato <- jsonlite::fromJSON(form_field_value(dati[["data"]]))
+  expect_equal(names(mandato), c("record_id", "owned_by"))
+})

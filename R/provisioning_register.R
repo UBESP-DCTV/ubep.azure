@@ -261,6 +261,40 @@ seal_payload <- function(record_id, seal, state) {
 }
 
 
+#' Build the body that writes the row owner into the register
+#'
+#' A fourth door beside the outcome, the identity and the seal, with the same
+#' reason: the columns are fixed here so a bug cannot rewrite anything else.
+#' The owner is the referent a row belongs to after its last approved change,
+#' and it is written apart from the seal and from the outcome because it is
+#' neither: a body that also carried them could move a seal or restate what
+#' the round did while only meaning to say whose the row is.
+#'
+#' An empty or missing owner is refused rather than written. The register
+#' reads an empty `owned_by` as "whoever created the row", so writing one would
+#' erase a decision with something that looks like an absence.
+#'
+#' @param record_id The register record to write to.
+#' @param owner The owner's address, never empty.
+#'
+#' @return A one-row data frame with exactly `record_id` and `owned_by`.
+#'
+#' @keywords internal
+owner_payload <- function(record_id, owner) {
+  stopifnot(
+    is.character(record_id), length(record_id) == 1L,
+    is.character(owner), length(owner) == 1L,
+    !is.na(owner), nzchar(trimws(owner))
+  )
+
+  data.frame(
+    record_id = record_id,
+    owned_by = owner,
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' Who last wrote one of these fields on this row
 #'
 #' Reads `details`, which REDCap fills with the fields an edit touched and the

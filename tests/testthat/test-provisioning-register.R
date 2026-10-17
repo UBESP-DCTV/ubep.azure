@@ -2176,3 +2176,11 @@ test_that("una modifica di un altro nella vita attuale ferma ancora la riga", { 
     log_pending_authors(prima, "1", creatrice), creatrice, sealed = FALSE
   ))
 })
+
+
+test_that("owner_payload porta il proprietario e nient'altro", {
+  corpo <- owner_payload("1", "bruno.verdi@ubep.unipd.it")
+  expect_equal(names(corpo), c("record_id", "owned_by"))
+  expect_error(owner_payload("1", ""))
+  expect_error(owner_payload("1", NA_character_))
+})
