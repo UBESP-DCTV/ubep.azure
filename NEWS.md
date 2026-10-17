@@ -71,7 +71,7 @@
 * **The fallback to `requested_by` is gone.** The outcome of a round that has
   no owner to give (sweep of the tenant failed, creation log or owners' log
   unreadable, no row to judge, a log that does not name the row) goes to IT
-  only, with the sentence "referente della riga non stabilito". The key never
+  only, with the sentence `referente della riga non stabilito`. The key never
   reaches anybody but the established owner. The round's mail to the owner,
   and the welcome, name the owner and not the creator.
 
@@ -91,8 +91,9 @@
 * **The welcome sends the questions to the right place.** It no longer
   promises the access itself "within four hours" and then goes silent: it says
   that another e-mail will come when the access is ready, normally within four
-  hours. And it sends the person to the owner first for any problem, and to IT
-  second, as the first sign-in instruction does.
+  hours (as before, only when the instance's address is known). And it sends
+  the person to the owner first for any problem, and to IT second, as the first
+  sign-in instruction does.
 
 * **The monthly report goes to the owner.** Each row is attributed to its
   owner as the month covered ended (the newest `owned_by` of the channel up to
