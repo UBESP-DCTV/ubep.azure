@@ -156,15 +156,16 @@ volte**, mai che si perda.
 accesso vanno alla persona, a `contact_email`. L'esito, qualunque sia, e la
 chiave di un account appena nato vanno al referente, e il referente è il
 **proprietario** della riga, che il giro legge dal registro degli eventi
-(`log_owner()`, §4): il creatore finché la riga non passa a un altro, lo stesso
-che il cancello dell'ambito giudica. Non `requested_by` e non il valore di
-`owned_by`: dal form `@USERNAME` riempie il primo, ma il *Data Import Tool* li
-scrive com'è nel CSV (`requested_by` misurato il 2026-09-02 e di nuovo il
-2026-10-16), e il giro non li riscrive; il proprietario viaggia in memoria,
-come per il cancello. Fino alla 0.20.0 un import con il campo vuoto perdeva la
-chiave (`POSTA_CREDENZIALE_PERSA`), e uno con un altro indirizzo mandava lì
-chiave ed esiti; dalla 0.20.1 la posta andava al creatore, dalla 0.21.0 va al
-proprietario.
+(`log_owner()`, §4): il creatore finché la riga non passa a un altro. Non
+`requested_by` e non il valore di `owned_by`: dal form `@USERNAME` riempie il
+primo, ma il *Data Import Tool* li scrive com'è nel CSV (`requested_by`
+misurato il 2026-09-02 e di nuovo il 2026-10-16), e il giro non li riscrive; il
+proprietario viaggia in memoria, come per il cancello. Fino alla 0.20.0 un
+import con il campo vuoto perdeva la chiave (`POSTA_CREDENZIALE_PERSA`), e uno
+con un altro indirizzo mandava lì chiave ed esiti; dalla 0.20.1 la posta andava
+al creatore, dalla 0.21.0 va al proprietario. Il cancello dell'ambito legge lo
+stesso proprietario, ma lo giudica solo quando nessuno ha cambiato la riga;
+altrimenti giudica chi ha scritto ciò che il giro esegue.
 
 **Dalla 0.21.0 il ripiego su `requested_by` non c'è più.** Una riga può
 cambiare mano, e il ripiego avrebbe scritto a un ex proprietario, la sola
@@ -702,12 +703,24 @@ importato per errore con le colonne del canale. Solo le scritture di
 digitati a mano sulla macchina, quindi si confrontano senza badare alle
 maiuscole.
 
-- **Un solo caso lascia la riga senza proprietario stabilito**: una scrittura di
+- **Tre casi lasciano la riga senza proprietario stabilito.** Una scrittura di
   `owned_by` senza autore leggibile più recente di quella del canale (o, se il
-  canale non ne ha scritte, una qualunque). Non nomina nessuno, ma potrebbe
-  essere del canale. Il giro ferma la riga su `TRASPORTO_AUTORE_NON_LEGGIBILE`,
+  canale non ne ha scritte, una qualunque): non nomina nessuno, ma potrebbe
+  essere del canale. Un creatore che il log delle creazioni non nomina, su una
+  riga in cui il canale non ha mai scritto `owned_by`. E una scrittura di
+  `owned_by` del canale che non ha la forma della sua porta,
+  `owned_by = '<valore>'` e nient'altro: con altri campi accanto, dove finisce
+  un valore e comincia il seguente non si distingue da un apostrofo dentro un
+  nome. Nei tre casi il giro ferma la riga su `TRASPORTO_AUTORE_NON_LEGGIBILE`,
   non esegue niente, e l'esito va solo a IT con la frase «referente della riga
-  non stabilito»; la chiave non va a nessuno.
+  non stabilito»; la chiave non va a nessuno. Il primo e il terzo non si
+  risolvono da soli: il log non dimentica, e il giro non scrive `owned_by` su
+  una riga di cui non conosce il proprietario. Come REDCap registri nel log un
+  apostrofo dentro un valore, con un escape o com'è, non è misurato: il valore
+  si legge intero fra il primo apostrofo e l'ultimo, e con un escape il nome
+  letto porterebbe anche il segno dell'escape, quindi non sarebbe quello del
+  referente. Va misurato prima che la porta scriva un proprietario con
+  l'apostrofo nel nome utente.
 - **Una scrittura estranea di un campo di intento** (`username` compreso) resta
   una modifica del suo autore, con le colonne del canale accanto o no: la riga
   aspetta l'approvazione del proprietario come per ogni altra modifica.
@@ -742,26 +755,32 @@ maiuscole.
 **Quando il registro degli eventi non basta.** Un autore che il log non
 stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è
 «è stato il proprietario». Vale quando una modifica di intento ha un autore
-vuoto: la riga prende `held`, ma l'approvazione del proprietario non la
-sblocca. Il cancello non ha di chi giudicare i diritti, e la riga approvata si
-ferma su `TRASPORTO_AUTORE_NON_LEGGIBILE`, il codice del caso seguente. Ne esce
-quando il proprietario riscrive quel campo, cambiandolo e rimettendolo (sopra,
-«La via d'uscita da una scrittura di chi non ha diritti»): l'ultima scrittura
-del campo è allora sua, e ha un autore.
+vuoto, sopra l'ultima esecuzione o nel tratto scoperto: la riga prende `held`,
+ma l'approvazione del proprietario non la sblocca. Il cancello non ha di chi
+giudicare i diritti, e la riga approvata si ferma su
+`TRASPORTO_AUTORE_NON_LEGGIBILE`, il codice del caso seguente. Ne esce quando
+il proprietario riscrive quel campo, cambiandolo e rimettendolo (sopra, «La
+via d'uscita da una scrittura di chi non ha diritti»): l'ultima scrittura del
+campo è allora sua, e ha un autore. Una `owned_by` con l'autore vuoto sopra
+quella del canale ferma invece la riga senza uscita (sopra, i tre casi senza
+proprietario stabilito). Gli autori vuoti sono probabilmente irraggiungibili,
+perché REDCap registra in ogni evento l'utente autenticato; che nel log del
+registro non ci siano eventi con `username` vuoto va verificato prima del
+rilascio.
 
 Diverso è il caso in cui il log **non si legge**, o il proprietario non è
 stabilito (il creatore non è nominato, o una `owned_by` senza autore sta sopra
-quella del canale, o, senza l'utenza configurata, due account hanno scritto i
-campi del canale): lì non c'è un proprietario a cui chiedere né
-un'approvazione che si possa verificare. La riga non prende `held` ma
-`TRASPORTO_AUTORE_NON_LEGGIBILE`, lo stesso codice che il cancello dà a una
-riga senza autore: torna in coda da sola al giro dopo, non si esegue, e il
-messaggio dice che il guasto è nostro invece di chiedere un sigillo che non
-approverebbe niente. Fino alla 0.18.0 prendeva `held`, con «Modificata da: non
-stabilito» e la mail a `requested_by`; dalla 0.21.0 l'esito di queste righe va
-solo a IT. Il codice del registro (per esempio
-`TRASPORTO_REGISTRO_RIFIUTATO`) va negli `errori` del record del giro: la riga
-dice che cosa non si è potuto stabilire, il record perché.
+quella del canale, o una `owned_by` del canale non ha la forma della sua porta,
+o, senza l'utenza configurata, due account hanno scritto i campi del canale):
+lì non c'è un proprietario a cui chiedere né un'approvazione che si possa
+verificare. La riga non prende `held` ma `TRASPORTO_AUTORE_NON_LEGGIBILE`, lo
+stesso codice che il cancello dà a una riga senza autore: torna in coda da sola
+al giro dopo, non si esegue, e il messaggio dice che il guasto è nostro invece
+di chiedere un sigillo che non approverebbe niente. Fino alla 0.18.0 prendeva
+`held`, con «Modificata da: non stabilito» e la mail a `requested_by`; dalla
+0.21.0 l'esito di queste righe va solo a IT. Il codice del registro (per
+esempio `TRASPORTO_REGISTRO_RIFIUTATO`) va negli `errori` del record del giro:
+la riga dice che cosa non si è potuto stabilire, il record perché.
 
 **Il messaggio.** Va al proprietario, non a `requested_by`. Nomina chi ha
 cambiato la riga e porta il sigillo da incollare, e dice che può approvare il
