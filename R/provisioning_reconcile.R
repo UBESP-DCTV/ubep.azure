@@ -687,6 +687,12 @@ provisioning_reconcile <- function(register_url,
 
   # The rights a provisional withdrawal is judged on are those of whoever had a
   # hand in it, and the instance answers only for the pairs it is asked about.
+  #
+  # Redundant since the gate asks about every subject: a withdrawal's authors
+  # are its subjects, so the pairs of `scope_expand()` above already hold
+  # these, and the deduplication below drops them. It stays for the history:
+  # it was written when the gate asked about the creator alone, and it is
+  # the place a reader of the withdrawal looks for its question.
   extra <- lapply(which(withdrawal & standing), function(i) {
     who <- pending[[i]]
     who <- who[!is.na(who) & nzchar(who)]
