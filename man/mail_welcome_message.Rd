@@ -31,9 +31,11 @@ It does name the instance, as the address REDCap opens at, and that is the
 same decision read from the other side. A message without a secret can carry
 the context, and of the two messages a creation sends this is the one that
 can: the message with the key carries none of it, because context is what
-makes a key spendable. It also says that access to the project normally
-follows within four hours, which is the cadence of the round. Without an
-address the message still leaves, without those two lines: a missing address
-is no reason to lose it.
+makes a key spendable. It also says that another message will come when
+access to the project is ready, normally within four hours, which is the
+cadence of the round. Without an address the message still leaves, without
+that line and the address: a missing address is no reason to lose it. It
+closes by sending the person to the referent first and to IT second, with
+\code{mail_first_contact()}.
 }
 \keyword{internal}

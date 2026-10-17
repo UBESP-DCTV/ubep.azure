@@ -155,8 +155,8 @@ test_that("il benvenuto dice da dove si apre REDCap, nelle due lingue", {
   expect_match(
     detto, "REDCap opens at: https://edc10.example.org/redcap/", fixed = TRUE
   )
-  expect_match(detto, "entro quattro ore da questo messaggio", fixed = TRUE)
-  expect_match(detto, "within four hours of this message", fixed = TRUE)
+  expect_match(detto, "di norma entro quattro ore.", fixed = TRUE)
+  expect_match(detto, "normally within four hours.", fixed = TRUE)
 })
 
 
@@ -196,6 +196,54 @@ test_that("senza indirizzo dell'istanza il benvenuto parte com'era", {
     expect_false(grepl("quattro ore", detto[["body"]], fixed = TRUE))
     expect_false(grepl("REDCap opens at", detto[["body"]], fixed = TRUE))
     expect_match(detto[["body"]], upn, fixed = TRUE)
+  }
+})
+
+
+test_that("il benvenuto promette un'altra mail e manda prima al referente", {
+  con <- mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    url = "https://edc10.example.org/"
+  )[["body"]]
+  senza_url <- mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+  senza_referente <- mail_welcome_message(
+    riga_di_prova(owner = ""), upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+
+  expect_match(con, paste0(
+    "Quando l'accesso al progetto sara' pronto riceverai un'altra mail, ",
+    "di norma entro quattro ore."
+  ), fixed = TRUE)
+  expect_match(con, paste0(
+    "When access to the project is ready you will receive another ",
+    "e-mail, normally within four hours."
+  ), fixed = TRUE)
+  expect_no_match(senza_url, "quattro ore", fixed = TRUE)
+  expect_match(senza_url, paste0(
+    "Per qualunque problema scrivi prima a cinzia@ubep.unipd.it, che ha ",
+    "chiesto il tuo account e risponde del tuo primo accesso. Se non ",
+    "riesci a raggiungerlo, rispondi a questo messaggio: arriva a IT."
+  ), fixed = TRUE)
+  expect_match(senza_url, paste0(
+    "For any problem write first to cinzia@ubep.unipd.it, who requested ",
+    "your account and is responsible for your first sign-in. If you ",
+    "cannot reach them, reply to this message: it goes to IT."
+  ), fixed = TRUE)
+  expect_match(senza_referente, paste0(
+    "Per qualunque problema scrivi prima al referente che ha chiesto il ",
+    "tuo account, che risponde del tuo primo accesso."
+  ), fixed = TRUE)
+  expect_match(senza_referente, paste0(
+    "For any problem write first to the referent who requested your ",
+    "account, who is responsible for your first sign-in."
+  ), fixed = TRUE)
+  for (corpo in c(con, senza_url, senza_referente)) {
+    expect_no_match(corpo, "Se qualcosa non torna", fixed = TRUE)
+    expect_no_match(corpo, "If anything looks wrong", fixed = TRUE)
+    expect_no_match(corpo, "da questo messaggio.", fixed = TRUE)
+    expect_false(grepl("[^\x01-\x7F]", corpo, perl = TRUE))
   }
 })
 

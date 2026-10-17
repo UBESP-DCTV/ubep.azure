@@ -414,6 +414,65 @@ mail_instance_url <- function(host) {
 }
 
 
+#' Say whom to write to first, in each language
+#'
+#' The same sentence closes the welcome and the access message, with one word
+#' changed: what the referent asked for, the account or the access. It is
+#' written once so the two cannot drift apart. With an address it names the
+#' referent; without one it describes them in a form that does not repeat
+#' itself, "the referent who requested your account, who is responsible for
+#' your first sign-in", so that a missing owner does not turn the sentence
+#' into a stutter in either language.
+#'
+#' @param referente The referent's address, as `mail_referent()` gives it;
+#'   empty when the log settled no owner.
+#' @param cosa What was asked for: `"account"` or `"accesso"`.
+#'
+#' @return A list with `it` and `en`, one string each.
+#'
+#' @keywords internal
+mail_first_contact <- function(referente, cosa) {
+  stopifnot(
+    is.character(referente), length(referente) == 1L,
+    is.character(cosa), length(cosa) == 1L, cosa %in% c("account", "accesso")
+  )
+
+  cosa_en <- if (cosa == "account") "account" else "access"
+  ha_chiesto <- paste0("ha chiesto il tuo ", cosa)
+  has_requested <- paste0("requested your ", cosa_en)
+
+  if (nzchar(referente)) {
+    chi <- list(
+      it = paste0(referente, ", che ", ha_chiesto, " e risponde"),
+      en = paste0(referente, ", who ", has_requested, " and is responsible")
+    )
+    it <- paste0(chi[["it"]], " del tuo primo accesso.")
+    en <- paste0(chi[["en"]], " for your first sign-in.")
+  } else {
+    it <- paste0(
+      "al referente che ", ha_chiesto, ", che risponde del tuo primo accesso."
+    )
+    en <- paste0(
+      "the referent who ", has_requested,
+      ", who is responsible for your first sign-in."
+    )
+  }
+
+  list(
+    it = paste0(
+      "Per qualunque problema scrivi prima ",
+      if (nzchar(referente)) "a " else "", it,
+      " Se non riesci a raggiungerlo, rispondi a questo messaggio: ",
+      "arriva a IT."
+    ),
+    en = paste0(
+      "For any problem write first to ", en,
+      " If you cannot reach them, reply to this message: it goes to IT."
+    )
+  )
+}
+
+
 #' Tell a person an account now exists for them, and what stands in the way
 #'
 #' It carries no way in, and that is the decision rather than an omission:
@@ -428,10 +487,12 @@ mail_instance_url <- function(host) {
 #' same decision read from the other side. A message without a secret can carry
 #' the context, and of the two messages a creation sends this is the one that
 #' can: the message with the key carries none of it, because context is what
-#' makes a key spendable. It also says that access to the project normally
-#' follows within four hours, which is the cadence of the round. Without an
-#' address the message still leaves, without those two lines: a missing address
-#' is no reason to lose it.
+#' makes a key spendable. It also says that another message will come when
+#' access to the project is ready, normally within four hours, which is the
+#' cadence of the round. Without an address the message still leaves, without
+#' that line and the address: a missing address is no reason to lose it. It
+#' closes by sending the person to the referent first and to IT second, with
+#' `mail_first_contact()`.
 #'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name, as created.
@@ -461,9 +522,11 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     )
   }
 
-  # Both lines or neither: the four hours are about the instance the address
-  # names, and without the address they would be a promise about a place the
-  # message does not say.
+  contatto <- mail_first_contact(referente, "account")
+
+  # The address and the promise of another message, or neither: the four hours
+  # are about the instance the address names, and without the address they
+  # would be a promise about a place the message does not say.
   istanza <- if (is.null(url) || is.na(url) || !nzchar(url)) {
     list(it = NULL, en = NULL)
   } else {
@@ -472,16 +535,16 @@ mail_welcome_message <- function(row, upn, url = NULL) {
         "",
         paste0("REDCap si apre da: ", url),
         paste0(
-          "L'accesso al progetto per cui e' stato chiesto l'account arriva di ",
-          "norma entro quattro ore da questo messaggio."
+          "Quando l'accesso al progetto sara' pronto riceverai un'altra mail, ",
+          "di norma entro quattro ore."
         )
       ),
       en = c(
         "",
         paste0("REDCap opens at: ", url),
         paste0(
-          "Access to the project the account was requested for normally ",
-          "arrives within four hours of this message."
+          "When access to the project is ready you will receive another ",
+          "e-mail, normally within four hours."
         )
       )
     )
@@ -508,7 +571,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     "- compilare il modulo con i tuoi dati di base.",
     "- confermare il tuo indirizzo di posta seguendo un link.",
     "",
-    "Se qualcosa non torna, rispondi a questo messaggio."
+    contatto[["it"]]
   )
 
   en <- c(
@@ -532,7 +595,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     "- fill in the basic user information form.",
     "- confirm your e-mail address by following a link.",
     "",
-    "If anything looks wrong, reply to this message."
+    contatto[["en"]]
   )
 
   list(
