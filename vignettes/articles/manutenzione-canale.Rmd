@@ -871,7 +871,10 @@ esegue la verifica e, se il fatto la smentisce, corregge qui.
   token, come la vede REDCap; se il token è cambiato di mano, rimette la
   vecchia utenza nell'elenco e **ce la lascia**: tolta, i suoi passaggi e i suoi
   sigilli non valgono più (vedi, sopra, «Se l'account del token del canale
-  cambia»). Il giro dopo riparte da solo.
+  cambia»). Il giro dopo riparte da solo. Come ogni giro fermato, il record
+  porta anche `registro_letto = FALSE`, e suona l'allarme del giro fermato
+  prima di agire: qui però il registro è stato letto e il token funziona, e il
+  guasto non va cercato lì.
 - **`TRASPORTO_PASSAGGIO_NON_REGISTRATO`**: il giro ha passato la riga a un
   altro proprietario e il passaggio non è entrato nel log. Succede quando il
   campo `owned_by` mostrava già il nuovo proprietario, perché un import lo
@@ -883,8 +886,15 @@ esegue la verifica e, se il fatto la smentisce, corregge qui.
   modifica sua non viene approvata ed eseguita, le approvazioni le dà il vecchio
   proprietario o IT (§4, «IT approva come il proprietario»). Allo stesso modo
   restano al vecchio proprietario l'esito, la chiave di un account nuovo e il
-  rapporto mensile, perché si leggono dal log. IT avvisa il nuovo proprietario
-  e approva al suo posto.
+  rapporto mensile, perché si leggono dal log, e il cancello: finché nessuno
+  cambia la riga, giudica il vecchio proprietario a ogni giro. Se ha perso i
+  diritti sul progetto, che è spesso la ragione del passaggio, la riga va in
+  `data_error` con `DATO_AMBITO_NON_AUTORIZZATO`, e l'esito va a lui. IT avvisa
+  il nuovo proprietario. La riga ne esce con una modifica del nuovo che resti
+  nella riga: si ferma, perché nel log il nuovo non è il proprietario, IT la
+  approva al posto del vecchio, il cancello giudica i diritti del nuovo, e il
+  giro che la esegue scrive di nuovo il passaggio. Senza una modifica del
+  nuovo, l'approvazione di IT non ha niente da sbloccare.
 - **`TRASPORTO_SIGILLO_NON_REGISTRATO`**: una riga eseguita ha nel campo
   `applied_seal` il sigillo che il giro scriverebbe, per un import, mentre
   l'ultimo sigillo del canale nel log è un altro. La porta dei sigilli non ha
@@ -893,6 +903,21 @@ esegue la verifica e, se il fatto la smentisce, corregge qui.
   giro e senza posta. Non fa danno, e va visto. Per fermarla si cambia con un
   import il valore di `applied_seal` di quella riga: al giro dopo il canale
   scrive il sigillo giusto, la scrittura cambia il valore e il log la registra.
+
+**La stessa mossa sposta il tratto scoperto.** Una riga ferma sul tratto fra le
+due ultime esecuzioni (il proprietario di quel tratto non si stabilisce, o
+resta una scrittura scoperta che il proprietario non c'è più a riscrivere) si
+sblocca nello stesso modo. Riportata la riga al valore eseguito, IT importa in
+`applied_seal` un valore qualunque diverso da quello del campo. Al giro dopo la
+riga risulta intatta e si esegue con i diritti del proprietario, che quindi
+deve averli; la porta dei sigilli trova nel campo un altro valore e riscrive il
+sigillo, REDCap registra la scrittura come un'esecuzione del canale, e il
+tratto da rileggere diventa quello fra questa esecuzione e la precedente. Se a
+riportare la riga al valore eseguito è IT, le sue scritture cadono nel tratto
+nuovo e sarebbero scoperte: prima di importare il sigillo IT incolla in
+`approved_seal` il sigillo della riga riportata, di norma quello che il campo
+`applied_seal` porta ancora, e l'approvazione le copre. Anche questa procedura
+è da confermare al primo caso.
 
 I due codici che non fermano il giro, `TRASPORTO_PASSAGGIO_NON_REGISTRATO` e
 `TRASPORTO_SIGILLO_NON_REGISTRATO`, si vedono solo leggendo gli `errori` del
