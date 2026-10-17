@@ -2181,3 +2181,81 @@ test_that("il rapporto di ottobre usa il proprietario della fine di ottobre", {
   # Without the configured account the row stays with its creator.
   expect_false(bruno %in% con_passaggio("2026-10-20 05:00", account = NULL))
 })
+
+
+# Whose row it is cannot be said: the report sends it to IT, and to no
+# referent, the creator included.
+test_that("una riga senza proprietario stabilito va a IT, non a un referente", {
+  # eval
+  # The channel wrote `owned_by` beside another field: where one value ends
+  # cannot be told, `log_owner()` answers NA, and the row is still dated.
+  dati <- scenario()
+  dati[["eventi"]] <- rbind(
+    evento("2026-10-20 05:00", canale,
+           "owned_by = 'bruno.fittizio@ubep.unipd.it', dag_name = 'torino'",
+           record = "41"),
+    dati[["eventi"]]
+  )
+  doppie(dati)
+  posta <- posta_finta()
+
+  esito <- esegui(withr::local_tempdir(), posta, channel_account = canale)
+
+  # test
+  expect_true(is.na(log_owner(
+    dati[["eventi"]], "41", referente, canale, before = "2026-11-01 00:00"
+  )))
+  mail <- posta[["inviate"]][["mail"]]
+  a <- vapply(mail, `[[`, "", "to")
+  expect_setequal(a, c(referente, it_prova))
+  expect_no_match(
+    mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
+  )
+  expect_match(
+    mail[[match(it_prova, a)]][["body"]],
+    paste0(
+      "Richiesta 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+      "edc10, progetto 9301. Il registro degli eventi non stabilisce a chi ",
+      "appartiene la riga."
+    ),
+    fixed = TRUE
+  )
+  # Row 43, with no creation, and now row 41.
+  expect_equal(esito[["senza_creatore"]], 2L)
+})
+
+
+test_that("un'altra utenza che scrive owned_by manda la riga a IT", {
+  # eval
+  # With the channel's account configured, a referent who imports `owned_by`
+  # is a second writer of the channel's fields: the log is ambiguous, the row
+  # has neither an owner nor a date, and IT is told which.
+  dati <- scenario()
+  dati[["eventi"]] <- rbind(
+    evento("2026-10-20 05:00", "bruno.fittizio@ubep.unipd.it",
+           "owned_by = 'bruno.fittizio@ubep.unipd.it'", record = "41"),
+    dati[["eventi"]]
+  )
+  doppie(dati)
+  posta <- posta_finta()
+
+  esegui(withr::local_tempdir(), posta, channel_account = canale)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  a <- vapply(mail, `[[`, "", "to")
+  expect_setequal(a, c(referente, it_prova))
+  expect_no_match(
+    mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
+  )
+  expect_match(
+    mail[[match(it_prova, a)]][["body"]],
+    paste0(
+      "Richiesta 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
+      "edc10, progetto 9301. Nel registro degli eventi i campi del canale li ",
+      "scrive piu' di un account, e non si sa quale abbia eseguito la riga. ",
+      "Referente: non stabilito."
+    ),
+    fixed = TRUE
+  )
+})
