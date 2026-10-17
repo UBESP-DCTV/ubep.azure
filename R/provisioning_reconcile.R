@@ -20,7 +20,8 @@
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
 #' 10. **create the accounts the gate allowed and the tenant does not hold**;
-#' 11. write back the outcome, and only what changed.
+#' 11. write back the outcome, then the owner, then the seal, and only what
+#'    changed.
 #'
 #' **The gate's subjects are read from the log, not from the row.**
 #' `requested_by` says who filed a request only because `@USERNAME` filled it
@@ -61,9 +62,12 @@
 #'
 #' Without `channel_account` no write of `owned_by` is believed: every row
 #' belongs to its creator and none passes, which is the safe answer for a
-#' caller that does not configure it. Recognizing the channel by what it
-#' writes instead would hand a colleague's new row to a referent who imports
-#' `owned_by` on it before the round has written there.
+#' caller that does not configure it. Nor does the round write `owned_by`
+#' then: it would write the creator over a passage a configured round
+#' decided, and the next configured round would read that write as the
+#' channel's newest. Recognizing the channel by what it writes instead
+#' would hand a colleague's new row to a referent who imports `owned_by` on
+#' it before the round has written there.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
@@ -161,9 +165,9 @@
 #'   only one who approves.
 #' @param channel_account The REDCap username that holds the register's
 #'   token, the account the round writes with. Only its writes of `owned_by`
-#'   are believed; with `NULL`, the default, none is, and every row belongs to
-#'   its creator. The runner reads it from `UBEP_CANALE_UTENTE`, which it
-#'   requires.
+#'   are believed; with `NULL`, the default, none is, every row belongs to
+#'   its creator, and the round writes no `owned_by`. The runner reads it
+#'   from `UBEP_CANALE_UTENTE`, which it requires.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -1310,12 +1314,43 @@ provisioning_reconcile <- function(register_url,
   # 11. only what changed, against the register as it was read and not as this
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
+
+  # Who each row belongs to once this round is over. The passage is decided
+  # here and once: by the round that carries the change out, after the gate
+  # has let it through, on the row's log the round read before acting. The
+  # row passes to the newest author who counts, `log_next_owner()`; a row
+  # the round did not carry out this pass stays with the owner of today,
+  # and so does one whose next owner the log cannot say, which is the
+  # direction that does not grant. A simulated round carries nothing out,
+  # so it passes nothing on.
+  applied <- record_ids %in% as.character(outcomes[["record_id"]])[
+    as.character(outcomes[["outcome"]]) == "applied"
+  ]
+  owner_after <- vapply(seq_along(record_ids), function(i) {
+    if (!(applied[[i]] && checked[[i]])) {
+      return(owners_now[[i]])
+    }
+    next_owner <- log_next_owner(
+      events, record_ids[[i]], creators[[i]], intent, approvers,
+      channel_account = channel_account,
+      current = register_after[i, , drop = FALSE]
+    )
+    if (is.na(next_owner) || !nzchar(next_owner)) {
+      owners_now[[i]]
+    } else {
+      next_owner
+    }
+  }, character(1))
+  passed <- applied & checked & nzchar(owner_after) &
+    owner_after != owners_now
+
   # The same minutes the identity door wrote, so the message names what the
   # round settled instead of what the referent left blank. And the owner, which
-  # is where the outcome and the key go: the owner the log names, the only one
-  # whose approval of a held row counts, where `requested_by` and `owned_by`
-  # are what an import wrote. With it, who changed the row, which is what the
-  # owner has to judge. No row is handed over yet.
+  # is where the outcome and the key go: the owner the log names once this
+  # round is over, the only one whose approval of a held row counts, where
+  # `requested_by` and `owned_by` are what an import wrote. A row this round
+  # passed on goes to its new owner, and the message says the row is theirs.
+  # With it, who changed the row, which is what the owner has to judge.
   edited_by <- vapply(pending, function(authors) {
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
@@ -1325,8 +1360,8 @@ provisioning_reconcile <- function(register_url,
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
-      owner = owners_now,
-      passed = FALSE,
+      owner = owner_after,
+      passed = passed,
       edited_by = edited_by,
       stringsAsFactors = FALSE
     )
@@ -1346,6 +1381,44 @@ provisioning_reconcile <- function(register_url,
   posta[["errori"]] <- c(
     posta[["errori"]], unlist(lapply(unanswered, function(a) a[["errors"]]))
   )
+
+  # The owners, through a door that takes nothing else, after the outcome and
+  # before the seals. Written whenever the owner is known and the field says
+  # something else: the first execution, a row filed before the field existed
+  # on the first round that sees it, every passage. Like the identity door,
+  # it writes on a simulated round too, where nobody is passed on.
+  #
+  # Below the seal, and the order is what makes it hold: whoever owns a
+  # stretch of the row's life is read below the seal that opens it, so the
+  # owner this round decided has to land before this round's seal, never
+  # above it.
+  #
+  # A passage that is not written is lost: the next round reads the owner
+  # from the log, finds the old one, and the row asks the old owner for its
+  # approvals. That is the direction that does not grant, so a refused body
+  # goes into the round's errors and the round goes on.
+  #
+  # Without the channel's account the door is not called at all. A round that
+  # does not know which account is its own would write the creator over a
+  # real passage, and the configured round after it would read that write as
+  # the channel's newest `owned_by`.
+  owner_written <- if (!is.null(channel_account)) {
+    register_owner_import(
+      register_url, register_token,
+      round_changed(
+        register,
+        do.call(rbind, c(
+          # The builder refuses an empty owner, so the empty frame that fixes
+          # the door's columns is cut from a placeholder.
+          list(owner_payload("", "-")[0, , drop = FALSE]),
+          lapply(which(nzchar(owner_after)), function(i) {
+            owner_payload(record_ids[[i]], owner_after[[i]])
+          })
+        )),
+        fields = "owned_by"
+      )
+    )
+  }
 
   # The seals, written last and through a door that takes nothing else.
   #
@@ -1439,7 +1512,7 @@ provisioning_reconcile <- function(register_url,
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
       identity_written[["errors"]], unique(log_errors), import[["errors"]],
-      posta[["errori"]], seal_written[["errors"]],
+      posta[["errori"]], owner_written[["errors"]], seal_written[["errors"]],
       if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA"
     )
   )

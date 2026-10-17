@@ -128,6 +128,19 @@ sigilli_scritti <- function() {
 }
 
 
+# What the register was actually told about the row owners, as a frame: the
+# fourth door, which carries `owned_by` and nothing else.
+proprietari_scritti <- function() {
+  corpi <- lapply(importazioni(c("record_id", "owned_by")), function(req) {
+    jsonlite::fromJSON(
+      form_field_value(req[["body"]][["data"]][["data"]]),
+      simplifyVector = TRUE
+    )
+  })
+  if (length(corpi) == 0L) NULL else do.call(rbind, corpi)
+}
+
+
 # One directory record, in the shape Graph puts on the wire. `auto_unbox` makes
 # a length-one value a scalar, which is how Graph writes it, and `I()` is what
 # keeps `otherMails` an array even when it holds exactly one address.
@@ -3965,4 +3978,190 @@ test_that("il cancello giudica ogni autore della modifica, non solo il primo", {
   )
   expect_length(scritte_solo_bruno, 0L)
   expect_equal(as.character(tutti[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("la prima esecuzione scrive il creatore in owned_by", {
+  # eval
+  giro(
+    registro_doppio(record_json(list(record_id = "1"))),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+})
+
+
+test_that("una riga di oggi riceve owned_by al primo giro, anche intatta", {
+  # eval
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  giro(
+    registro_doppio(record_json(list(
+      record_id = "1", username = "mario.rossi@ubep.unipd.it",
+      identity = "existing", outcome = "applied", applied_seal = fermo,
+      seal_state = "intact"
+    ))),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  # A row applied before the field existed has its owner written all the
+  # same, and its seal is not touched to do it.
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("un owned_by che dice gia' il proprietario non si riscrive", {
+  # eval
+  giro(
+    registro_doppio(record_json(list(record_id = "1", owned_by = anna))),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  expect_null(proprietari_scritti())
+})
+
+
+test_that("un owned_by falsificato si corregge dal log", {
+  # eval
+  giro(
+    registro_doppio(record_json(list(record_id = "1", owned_by = bruno))),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+})
+
+
+test_that("la modifica approvata ed eseguita passa la riga a chi l'ha scritta", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(approvazione(anna), cambio(bruno)), approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = bruno),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The outcome goes to the new owner, and tells them the row is theirs.
+  expect_equal(proprietari_scritti()[["owned_by"]], bruno)
+  esito <- Filter(
+    function(m) grepl("Richiesta 1", m[["subject"]], fixed = TRUE),
+    posta[["mandate"]]()
+  )
+  expect_equal(vapply(esito, `[[`, "", "to"), bruno)
+  expect_match(esito[[1L]][["body"]], "la riga e' tua", fixed = TRUE)
+})
+
+
+# Mario is no longer on the instance, so the revocation settles as
+# `already_gone` and the row is executed: the passage is really decided.
+senza_mario <- function() {
+  istanza_doppia(list(), list(username = bruno, user_rights = 1L))
+}
+
+
+test_that("una revoca libera eseguita non passa la riga", {
+  # eval
+  esito <- giro_cambiata(
+    list(cambio(bruno, "request_status = 'revoked'")),
+    riga = revocata(), istanza = senza_mario()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+})
+
+
+test_that("una revoca approvata dal proprietario non passa la riga", {
+  # eval
+  sigillo <- sigillo_cambiata(
+    role_name = "data entry", request_status = "revoked"
+  )
+  esito <- giro_cambiata(
+    list(
+      approvazione(anna, sigillo),
+      cambio(bruno, "request_status = 'revoked'")
+    ),
+    approvato = sigillo, riga = revocata(), istanza = senza_mario()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+})
+
+
+test_that("una modifica di IT approvata ed eseguita passa la riga a IT", {
+  # eval
+  it <- "it.redcap@ubep.unipd.it"
+  giro_cambiata(
+    list(approvazione(anna), cambio(it)), approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = it), approvers = it
+  )
+
+  # test
+  expect_equal(proprietari_scritti()[["owned_by"]], it)
+})
+
+
+test_that("owned_by si scrive dopo l'esito e prima del sigillo", {
+  # eval
+  giro_cambiata(
+    list(approvazione(anna), cambio(bruno)), approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = bruno)
+  )
+  porta <- function(campi) {
+    which(vapply(inviate, function(req) {
+      any(vapply(importazioni(campi), identical, logical(1), req))
+    }, logical(1)))
+  }
+
+  # test
+  # The owner of a stretch is read below the seal that opens it, so the
+  # owner has to stand below the seal of the same round.
+  expect_lt(porta(campi_esito), porta(c("record_id", "owned_by")))
+  expect_lt(
+    porta(c("record_id", "owned_by")),
+    porta(c("record_id", "applied_seal", "seal_state"))
+  )
+})
+
+
+test_that("un giro che simula non passa la riga", {
+  # eval
+  giro(
+    registro_con_log(
+      record_json(utils::modifyList(
+        riga_cambiata(), list(approved_seal = sigillo_cambiata())
+      )),
+      storia = list(approvazione(anna), cambio(bruno), esecuzione())
+    ),
+    istanza_che_scrive(richiedenti = bruno), dry_run = TRUE
+  )
+
+  # test
+  # The owner door writes on a simulated round as the identity door does,
+  # but nothing was applied, so the owner stays the one of today.
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+})
+
+
+test_that("senza l'account del canale il giro non scrive owned_by", {
+  # eval
+  giro_cambiata(
+    list(approvazione(anna), cambio(bruno)), approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = bruno),
+    channel_account = NULL
+  )
+
+  # test
+  expect_null(proprietari_scritti())
 })

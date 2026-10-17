@@ -71,9 +71,9 @@ only one who approves.}
 
 \item{channel_account}{The REDCap username that holds the register's
 token, the account the round writes with. Only its writes of \code{owned_by}
-are believed; with \code{NULL}, the default, none is, and every row belongs to
-its creator. The runner reads it from \code{UBEP_CANALE_UTENTE}, which it
-requires.}
+are believed; with \code{NULL}, the default, none is, every row belongs to
+its creator, and the round writes no \code{owned_by}. The runner reads it
+from \code{UBEP_CANALE_UTENTE}, which it requires.}
 
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
@@ -108,7 +108,8 @@ and rehearse there the grant of a person still to be created;
 \item batch by \verb{(server, project_id)}, never across two projects;
 \item read back what a real write did, before calling it applied;
 \item \strong{create the accounts the gate allowed and the tenant does not hold};
-\item write back the outcome, and only what changed.
+\item write back the outcome, then the owner, then the seal, and only what
+changed.
 }
 
 \strong{The gate's subjects are read from the log, not from the row.}
@@ -150,9 +151,12 @@ stops the row even when nobody touched it.
 
 Without \code{channel_account} no write of \code{owned_by} is believed: every row
 belongs to its creator and none passes, which is the safe answer for a
-caller that does not configure it. Recognizing the channel by what it
-writes instead would hand a colleague's new row to a referent who imports
-\code{owned_by} on it before the round has written there.
+caller that does not configure it. Nor does the round write \code{owned_by}
+then: it would write the creator over a passage a configured round
+decided, and the next configured round would read that write as the
+channel's newest. Recognizing the channel by what it writes instead
+would hand a colleague's new row to a referent who imports \code{owned_by} on
+it before the round has written there.
 
 A row the log cannot name is \strong{held and not refused}, which is the same
 distinction step 6 already makes between a permission that does not grant
