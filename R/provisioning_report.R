@@ -453,12 +453,15 @@ report_expired <- function(expiration, today) {
 #'
 #' A row whose log was read and does not date it is kept with `senza_data`:
 #' it is applied and the log does not say since when, which is a question for
-#' IT. `data_motivo` says which of the two ways: `senza_sigillo`, no seal
-#' written by the channel; `log_ambiguo`, the channel's fields written by
-#' more than one account, so that which one executed the row is unknown. The
-#' two send IT to look for different things. A row whose log could not be
-#' read is left out, since it cannot be judged on a reading that did not
-#' happen; the caller sends nothing on such a day.
+#' IT. `data_motivo` says which way: `senza_sigillo`, no seal written by the
+#' channel; `log_ambiguo`, without the channel's account configured, the
+#' channel's fields written by more than one account, so that which one
+#' executed the row is unknown; `orario_illeggibile`, with the account
+#' configured, a seal of the channel whose time does not read, the only way
+#' an execution leaves the row undated then. They send IT to look for
+#' different things. A row whose log could not be read is left out, since it
+#' cannot be judged on a reading that did not happen; the caller sends
+#' nothing on such a day.
 #'
 #' @param register The register as read.
 #' @param creators Whom each row belongs to, in the register's order: its
@@ -473,6 +476,8 @@ report_expired <- function(expiration, today) {
 #'   or `NULL` to date the person by the row's first execution.
 #' @param born When each row was made, as `report_born()` answers, in the
 #'   register's order; `NULL` when unknown.
+#' @param channel_known Whether the channel's account was configured when
+#'   `executions` were read: then no second account can blur the log.
 #'
 #' @return The kept rows of `register`, with `creator`, `attivata_il`,
 #'   `nel_mese`, `senza_data`, `data_motivo`, `persona_dal` and `creata_il`
@@ -480,14 +485,16 @@ report_expired <- function(expiration, today) {
 #'
 #' @keywords internal
 report_rows <- function(register, creators, executions, period,
-                        since = NULL, born = NULL) {
+                        since = NULL, born = NULL, channel_known = FALSE) {
   stopifnot(
     is.data.frame(register),
     is.character(creators), length(creators) == nrow(register),
     is.list(executions), length(executions) == nrow(register),
     is.list(period),
     is.null(since) || (is.list(since) && length(since) == nrow(register)),
-    is.null(born) || (is.character(born) && length(born) == nrow(register))
+    is.null(born) || (is.character(born) && length(born) == nrow(register)),
+    is.logical(channel_known), length(channel_known) == 1L,
+    !is.na(channel_known)
   )
 
   field <- function(name) {
@@ -531,8 +538,9 @@ report_rows <- function(register, creators, executions, period,
   rows[["attivata_il"]] <- first[keep]
   rows[["nel_mese"]] <- news[keep]
   rows[["senza_data"]] <- !dated[keep]
+  unreadable <- if (channel_known) "orario_illeggibile" else "log_ambiguo"
   rows[["data_motivo"]] <- ifelse(
-    dated, "", ifelse(ambiguous, "log_ambiguo", "senza_sigillo")
+    dated, "", ifelse(ambiguous, unreadable, "senza_sigillo")
   )[keep]
   person <- if (is.null(since)) {
     first
@@ -1353,9 +1361,10 @@ report_it_message <- function(it, period) {
   undated <- it[["senza_data"]]
   if (!is.null(undated) && nrow(undated) > 0L) {
     creator <- value(undated, "creator")
-    # Two different things to look for: a seal nobody wrote, or a seal written
-    # by two accounts, of which only one can be the channel.
-    ambiguous <- value(undated, "data_motivo") == "log_ambiguo"
+    # Different things to look for: a seal nobody wrote, a seal written by
+    # two accounts of which only one can be the channel (without the
+    # account configured), or a seal of the channel whose time does not read.
+    reason <- value(undated, "data_motivo")
     words <- row_words(undated)
     sections[[length(sections) + 1L]] <- list(
       n = nrow(undated),
@@ -1371,14 +1380,21 @@ report_it_message <- function(it, period) {
         paste0(
           words[["it"]], " ",
           ifelse(
-            ambiguous,
+            reason == "log_ambiguo",
             paste0(
               "Nel registro degli eventi i campi del canale li scrive piu' ",
               "di un account, e non si sa quale abbia eseguito la riga."
             ),
-            paste0(
-              "Il registro degli eventi non porta la scrittura del sigillo ",
-              "da parte del canale."
+            ifelse(
+              reason == "orario_illeggibile",
+              paste0(
+                "Il registro degli eventi porta una scrittura del sigillo da ",
+                "parte del canale con un orario che non si legge."
+              ),
+              paste0(
+                "Il registro degli eventi non porta la scrittura del sigillo ",
+                "da parte del canale."
+              )
             )
           ),
           " Referente: ", ifelse(nzchar(creator), creator, "non stabilito"),
@@ -1397,12 +1413,19 @@ report_it_message <- function(it, period) {
         paste0(
           words[["en"]], " ",
           ifelse(
-            ambiguous,
+            reason == "log_ambiguo",
             paste0(
               "In the event log the channel's fields are written by more ",
               "than one account, and which one executed the row is not known."
             ),
-            "The event log carries no seal written by the channel."
+            ifelse(
+              reason == "orario_illeggibile",
+              paste0(
+                "The event log holds a seal written by the channel at a time ",
+                "that does not read."
+              ),
+              "The event log carries no seal written by the channel."
+            )
           ),
           " Referent: ", ifelse(nzchar(creator), creator, "not established"),
           "."
@@ -1997,7 +2020,8 @@ provisioning_report <- function(register_url,
     }
 
     rows <- report_rows(
-      register, owners, executions, period, since, born
+      register, owners, executions, period, since, born,
+      channel_known = !is.null(channel_account)
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],

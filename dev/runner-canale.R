@@ -83,14 +83,14 @@ APPROVATORI_IT <- trimws(strsplit(
 )[[1L]])
 APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
 
-# L'utenza REDCap che possiede il token del registro (decisione del
-# 2026-10-17). Il giro crede alle scritture di owned_by di questa utenza e
-# di nessun'altra: riconoscerla da cio' che scrive lascerebbe passare per
-# canale chi importa owned_by su una riga nuova. Sta sulla macchina e non
-# qui, perche' il repository e' pubblico. E' un elenco separato da virgole,
-# per quando l'utenza del token cambia: si elencano la nuova e la vecchia, e
-# le scritture della vecchia restano credute finche' e' nell'elenco. Gli
-# spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
+# Le utenze REDCap che possiedono il token del registro (decisione del
+# 2026-10-17): una sola, o la nuova e la vecchia mentre il token cambia di
+# mano, e le scritture della vecchia restano credute finche' e' nell'elenco.
+# Il giro crede alle scritture di owned_by e dei sigilli di queste utenze e
+# di nessun'altra: riconoscerle da cio' che scrivono lascerebbe passare per
+# canale chi importa owned_by su una riga nuova. Stanno sulla macchina e non
+# qui, perche' il repository e' pubblico. E' un elenco separato da virgole.
+# Gli spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
 # variabile fatta di soli spazi e virgole e' una variabile che manca.
 CANALE_UTENTE <- trimws(strsplit(
   Sys.getenv("UBEP_CANALE_UTENTE"), ",", fixed = TRUE

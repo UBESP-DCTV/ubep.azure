@@ -108,12 +108,12 @@ POSTA_DA <- Sys.getenv("UBEP_POSTA_DA")
 POSTA_COPIA <- Sys.getenv("UBEP_POSTA_COPIA")
 POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
 
-# L'utenza REDCap che possiede il token del registro, la stessa del giro
-# (decisione del 2026-10-17). Solo le sue scritture di owned_by passano una
-# riga a un altro referente. Sta sulla macchina e non qui, perche' il
-# repository e' pubblico. E' un elenco separato da virgole, letto come nel
-# giro: quando l'utenza del token cambia si elencano la nuova e la vecchia.
-# Gli spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
+# Le utenze REDCap che possiedono il token del registro, le stesse del giro
+# (decisione del 2026-10-17): una sola, o la nuova e la vecchia mentre il
+# token cambia di mano. Solo le loro scritture di owned_by passano una riga a
+# un altro referente. Stanno sulla macchina e non qui, perche' il repository
+# e' pubblico. E' un elenco separato da virgole, letto come nel giro. Gli
+# spazi ai bordi di ogni voce si tolgono e le voci vuote si scartano: una
 # variabile fatta di soli spazi e virgole e' una variabile che manca.
 CANALE_UTENTE <- trimws(strsplit(
   Sys.getenv("UBEP_CANALE_UTENTE"), ",", fixed = TRUE

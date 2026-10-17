@@ -616,9 +616,9 @@ intento dopo l'ultima scrittura di `applied_seal` del canale, che è il segno
 dell'ultima esecuzione (con l'utenza configurata un sigillo importato da un
 altro account non è un'esecuzione, `log_executions()`: ruolo e sigillo nello
 stesso evento restano una modifica di chi li ha scritti), e solo quelle ancora
-presenti nella riga (sopra); ciò che viene
-prima era già stato eseguito. Se quella scrittura non è più nel log conta tutta
-la storia, che può solo far chiedere un'approvazione più spesso.
+presenti nella riga (sopra); ciò che viene prima era già stato eseguito. Se
+quella scrittura non è più nel log conta tutta la storia, che può solo far
+chiedere un'approvazione più spesso.
 
 «Già eseguito» vale per ciò che il giro ha letto, e il giro scrive il sigillo
 per ultimo: una modifica fatta mentre il giro interroga il tenant e le istanze
@@ -1365,9 +1365,9 @@ delle due la lavorazione non parte:
   rapporto: sono gli unici account a cui si crede quando dicono di chi è una
   riga e che cosa è stato eseguito (§4). Se manca, o è fatta di soli spazi e
   virgole, la lavorazione si ferma con un errore che la nomina, prima di
-  leggere qualunque cosa; l'unità muore, non lascia record, e suona l'allarme sull'assenza. La
-  legge la macchina e non si scrive nel repository, che è pubblico: il nome sta
-  nel foglio dei parametri.
+  leggere qualunque cosa; l'unità muore, non lascia record, e suona
+  l'allarme sull'assenza. La legge la macchina e non si scrive nel
+  repository, che è pubblico: il nome sta nel foglio dei parametri.
 - **`UBEP_POSTA_COPIA`** è l'indirizzo di IT in copia. Nel giro è obbligatoria
   con la posta accesa (`UBEP_POSTA=1`): è anche l'unico destinatario dell'esito
   di una riga senza proprietario stabilito, e senza di lei quell'esito non

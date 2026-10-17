@@ -2351,3 +2351,33 @@ test_that("con due account configurati il passaggio scritto dal vecchio vale", {
     mail[[match(bruno, a)]][["body"]], "carla.inventata", fixed = TRUE
   )
 })
+
+
+test_that("con l'account configurato una riga senza data non e' un log ambiguo", { # nolint: line_length_linter.
+  # eval
+  # The channel's seal on row 41 carries a time that does not read. With the
+  # account configured no second account can blur the log, and that is the
+  # only way an execution leaves the row undated.
+  dati <- scenario()
+  dati[["eventi"]][dati[["eventi"]][["record"]] == "41", "timestamp"] <-
+    "3 agosto"
+  doppie(dati)
+  posta <- posta_finta()
+
+  esegui(withr::local_tempdir(), posta, channel_account = canale)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  it <- mail[[match(it_prova, vapply(mail, `[[`, "", "to"))]][["body"]]
+  expect_no_match(it, "piu' di un account", fixed = TRUE)
+  expect_no_match(it, "more than one account", fixed = TRUE)
+  expect_match(it, "con un orario che non si legge", fixed = TRUE)
+  expect_match(it, "at a time that does not read", fixed = TRUE)
+  expect_equal(
+    report_rows(
+      registro_di(richiesta(record_id = "41")), referente,
+      list(NA_character_), novembre(), channel_known = TRUE
+    )[["data_motivo"]],
+    "orario_illeggibile"
+  )
+})

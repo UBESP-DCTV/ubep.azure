@@ -4,7 +4,15 @@
 \alias{report_rows}
 \title{The rows a month's report speaks about, with their owner and their date}
 \usage{
-report_rows(register, creators, executions, period, since = NULL, born = NULL)
+report_rows(
+  register,
+  creators,
+  executions,
+  period,
+  since = NULL,
+  born = NULL,
+  channel_known = FALSE
+)
 }
 \arguments{
 \item{register}{The register as read.}
@@ -25,6 +33,9 @@ or \code{NULL} to date the person by the row's first execution.}
 
 \item{born}{When each row was made, as \code{report_born()} answers, in the
 register's order; \code{NULL} when unknown.}
+
+\item{channel_known}{Whether the channel's account was configured when
+\code{executions} were read: then no second account can blur the log.}
 }
 \value{
 The kept rows of \code{register}, with \code{creator}, \code{attivata_il},
@@ -46,11 +57,14 @@ when it was executed again in the month after a change, \code{""} otherwise.
 
 A row whose log was read and does not date it is kept with \code{senza_data}:
 it is applied and the log does not say since when, which is a question for
-IT. \code{data_motivo} says which of the two ways: \code{senza_sigillo}, no seal
-written by the channel; \code{log_ambiguo}, the channel's fields written by
-more than one account, so that which one executed the row is unknown. The
-two send IT to look for different things. A row whose log could not be
-read is left out, since it cannot be judged on a reading that did not
-happen; the caller sends nothing on such a day.
+IT. \code{data_motivo} says which way: \code{senza_sigillo}, no seal written by the
+channel; \code{log_ambiguo}, without the channel's account configured, the
+channel's fields written by more than one account, so that which one
+executed the row is unknown; \code{orario_illeggibile}, with the account
+configured, a seal of the channel whose time does not read, the only way
+an execution leaves the row undated then. They send IT to look for
+different things. A row whose log could not be read is left out, since it
+cannot be judged on a reading that did not happen; the caller sends
+nothing on such a day.
 }
 \keyword{internal}
