@@ -1435,16 +1435,23 @@ raccolta impara le colonne prima che qualcuno le emetta):
 
 ## Che cosa questa guida non copre
 
-- **Il provisioning delle identità.** Non è ancora automatizzato: la
-  creazione dell’account si fa a mano, con la procedura storica. Il
-  confine è nominato invece di taciuto, perché chi cerca «come nasce
-  l’account» deve trovare una risposta, e «non ancora automatizzato» è
-  una risposta.
+- **La fine di un account.** Il canale crea gli account (§4, «Una
+  persona da creare») ma non li disabilita, non li cancella e non toglie
+  gli utenti dalle istanze: su Entra ha solo i permessi di leggere e
+  creare utenti. La disabilitazione a fine collaborazione la fa IT, a
+  mano. Il confine è nominato invece di taciuto, perché chi cerca «come
+  si chiude un account» deve trovare una risposta, e «fuori dal canale»
+  è una risposta.
 
-- **Il caricamento in batch delle richieste.** Passa da IT. Un import
-  per identificatore di record permetterebbe a un referente di
-  sovrascrivere le righe di un altro, e la difesa nativa non è ancora in
-  piedi.
+- **Il caricamento in batch delle richieste.** È aperto ai referenti dal
+  2026-10-16, con il *Data Import Tool* sul ruolo `referente`, e non ha
+  qui una procedura sua perché al canale non ne chiede una. Chi importa
+  risulta il creatore delle righe; il giro non si fida dei campi che
+  l’import scrive, ricalcola l’esito e trattiene una riga riscritta da
+  chi non l’ha creata («Una riga cambiata dopo essere stata applicata»,
+  §4); la posta va al creatore (§1). Che cosa fare per caricare lo
+  dicono le istruzioni per i referenti. IT non carica richieste per
+  conto dei referenti: il creatore risulterebbe IT.
 
 - **Quando passare dalla simulazione alla scrittura vera.** Vedi §1: il
   giro del canale simula finché nessuno gli chiede di scrivere per
