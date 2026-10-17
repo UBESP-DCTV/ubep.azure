@@ -600,6 +600,20 @@ log_stamp_reads <- function(stamps) {
 #' newest first, as everywhere else in the log. A write by the channel that
 #' leaves the field blank names nobody, and the one below it is read.
 #'
+#' The value is read whole, and not with `log_value()`, which stops at the
+#' first apostrophe: a UPN can hold one, so `luca.d'amico` would read
+#' `luca.d`, and the round would write that back as the owner and find it
+#' stable. The door writes `owned_by` alone, `register_owner_import()`, and
+#' REDCap logs only the fields an import changed, so the channel's event is
+#' `owned_by = '<value>'` and the value is everything between the first
+#' apostrophe and the last. The form is the one the rest of the log readers
+#' assume, `field = 'value'` with nothing escaped; how REDCap logs an
+#' apostrophe inside a value has not been measured. An event of the
+#' channel that wrote `owned_by` in any other form, beside other fields,
+#' makes the answer unknown: where one value ends and the next begins
+#' cannot be told from an apostrophe inside a name, and an unknown owner is
+#' the direction that holds the row.
+#'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
 #' @param creator Who created the row, as `log_creators()` answers.
@@ -641,14 +655,27 @@ log_owner <- function(events, record, creator, channel_account = NULL,
   }
 
   authors <- trimws(as.character(mine[["username"]]))
-  owners <- log_value(mine, "owned_by")
-  passed <- which(
-    log_wrote(mine, "owned_by") & authors == channel[[1L]] & nzchar(owners)
+  details <- trimws(as.character(mine[["details"]]))
+  details[is.na(details)] <- ""
+  # Greedy, so the value runs to the last apostrophe. Another field after
+  # `owned_by` shows inside what it took as `', field = '`; one before it
+  # leaves details that do not start with `owned_by`.
+  whole <- regmatches(
+    details, regexec("^owned_by\\s*=\\s*'(.*)'$", details)
   )
-  if (length(passed) == 0L) {
-    return(fallback)
+  written <- which(log_wrote(mine, "owned_by") & authors == channel[[1L]])
+  for (k in written) {
+    hit <- whole[[k]]
+    if (length(hit) < 2L ||
+          grepl("'\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'", hit[[2L]])) {
+      return(NA_character_)
+    }
+    owner <- trimws(hit[[2L]])
+    if (nzchar(owner)) {
+      return(owner)
+    }
   }
-  owners[[passed[[1L]]]]
+  fallback
 }
 
 

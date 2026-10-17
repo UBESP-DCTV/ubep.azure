@@ -56,5 +56,19 @@ write it dates could stand on either side.
 The newest write is read from the order of the answer, REDCap's own,
 newest first, as everywhere else in the log. A write by the channel that
 leaves the field blank names nobody, and the one below it is read.
+
+The value is read whole, and not with \code{log_value()}, which stops at the
+first apostrophe: a UPN can hold one, so \verb{luca.d'amico} would read
+\code{luca.d}, and the round would write that back as the owner and find it
+stable. The door writes \code{owned_by} alone, \code{register_owner_import()}, and
+REDCap logs only the fields an import changed, so the channel's event is
+\code{owned_by = '<value>'} and the value is everything between the first
+apostrophe and the last. The form is the one the rest of the log readers
+assume, \code{field = 'value'} with nothing escaped; how REDCap logs an
+apostrophe inside a value has not been measured. An event of the
+channel that wrote \code{owned_by} in any other form, beside other fields,
+makes the answer unknown: where one value ends and the next begins
+cannot be told from an apostrophe inside a name, and an unknown owner is
+the direction that holds the row.
 }
 \keyword{internal}

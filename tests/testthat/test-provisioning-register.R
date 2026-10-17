@@ -1563,6 +1563,47 @@ test_that("il proprietario alla data legge solo cio' che viene prima", {
 })
 
 
+test_that("la owned_by del canale si legge intera, anche con l'apostrofo", {
+  # The log writes the value between apostrophes and does not escape one
+  # inside it, and a UPN can hold one: read up to the first apostrophe, the
+  # owner would be `luca.d`, and the round would write that back as stable.
+  chi <- "luca.d'amico@ubep.unipd.it"
+  expect_equal(
+    log_owner(eventi_finti(passaggio(chi), applicata), "1", creatrice, canale),
+    chi
+  )
+  # A write by the channel that leaves the field blank still names nobody,
+  # and the one below it is read.
+  expect_equal(
+    log_owner(
+      eventi_finti(passaggio(""), passaggio(chi), applicata),
+      "1", creatrice, canale
+    ),
+    chi
+  )
+})
+
+
+test_that("una owned_by del canale scritta con altri campi non stabilisce il proprietario", { # nolint: line_length_linter.
+  # The owner door writes `owned_by` alone, so an event of the channel that
+  # carries other fields is not one the round wrote through it, and where
+  # one value ends and the next begins cannot be told apart from an
+  # apostrophe inside a name.
+  for (details in c(
+    "owned_by = 'bruno.verdi@ubep.unipd.it', seal_state = 'intact'",
+    "seal_state = 'intact', owned_by = 'bruno.verdi@ubep.unipd.it'"
+  )) {
+    eventi <- eventi_finti(
+      list(
+        username = canale, action = "Update record (API) 1", details = details
+      ),
+      applicata
+    )
+    expect_true(is.na(log_owner(eventi, "1", creatrice, canale)), info = details)
+  }
+})
+
+
 eseguita <- function(sigillo) {
   list(
     username = "svc-canale-ubep", action = "Update record (API) 1",
