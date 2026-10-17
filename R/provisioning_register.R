@@ -83,12 +83,15 @@ dictionary_choices <- function(text) {
 #' requester could type `applied` into the outcome, and the register would carry
 #' a success nobody produced.
 #'
+#' `owned_by` is written by the channel alone, and its value is not believed
+#' as written: who owns a row is read from the event log (`log_owner()`).
+#'
 #' @return A character vector of field names.
 #'
 #' @keywords internal
 register_readonly_fields <- function() {
   c(
-    "identity", "requested_by", "outcome", "outcome_detail",
+    "identity", "requested_by", "owned_by", "outcome", "outcome_detail",
     "outcome_at", "applied_as", "applied_seal", "seal_state"
   )
 }

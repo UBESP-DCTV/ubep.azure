@@ -15,4 +15,8 @@ API: the job keeps writing them while a requester cannot. Without the tag a
 requester could type \code{applied} into the outcome, and the register would carry
 a success nobody produced.
 }
+\details{
+\code{owned_by} is written by the channel alone, and its value is not believed
+as written: who owns a row is read from the event log (\code{log_owner()}).
+}
 \keyword{internal}

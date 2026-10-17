@@ -313,7 +313,7 @@ test_that("the packaged dictionary is a template with no fleet in it", {
   # release of this package to every movement of the fleet, and published the
   # list in a public repository. The other coded fields are the contract's own
   # vocabulary and stay.
-  expect_equal(nrow(dictionary), 20L)
+  expect_equal(nrow(dictionary), 21L)
   expect_true(is.na(choices) || !nzchar(choices))
   for (name in c("identity", "request_status", "outcome")) {
     kept <- dictionary[["Choices, Calculations, OR Slider Labels"]][
@@ -338,7 +338,7 @@ test_that("an instance list fills the template's choices", {
   # shift that map in silence.
   expect_equal(parsed[["code"]], c("srvA", "srvB"))
   expect_equal(parsed[["label"]], c("srvA", "srvB"))
-  expect_equal(nrow(dictionary), 20L)
+  expect_equal(nrow(dictionary), 21L)
 })
 
 
@@ -569,4 +569,71 @@ test_that("il campo dell'approvazione si vede anche su una riga mai eseguita", {
   # row could never be approved from the form.
   expect_match(logica[["approved_seal"]], '[outcome] = "held"', fixed = TRUE)
   expect_match(logica[["seal_state"]], '[outcome] = "held"', fixed = TRUE)
+})
+
+
+test_that("owned_by e' un campo del canale, fuori dal sigillo", {
+  # eval
+  dizionario <- register_dictionary()
+  campi <- dizionario[["Variable / Field Name"]]
+  riga <- dizionario[campi == "owned_by", , drop = FALSE]
+
+  # test
+  expect_equal(nrow(riga), 1L)
+  expect_equal(match("owned_by", campi), match("requested_by", campi) + 1L)
+  expect_equal(riga[["Form Name"]], "request_register")
+  expect_true(is.na(riga[["Section Header"]]))
+  expect_equal(riga[["Field Type"]], "text")
+  expect_equal(riga[["Field Label"]], "Row owner")
+  expect_equal(riga[["Field Note"]], paste(
+    "Written by the channel: the referent this row belongs to since its",
+    "last approved change. Empty means whoever created it."
+  ))
+  expect_equal(
+    riga[["Branching Logic (Show field only if...)"]], '[owned_by] <> ""'
+  )
+  expect_equal(riga[["Field Annotation"]], "@READONLY")
+  expect_true("owned_by" %in% register_channel_fields())
+  expect_true("owned_by" %in% register_unsealed_fields())
+  expect_false("owned_by" %in% register_intent_fields())
+})
+
+
+test_that("le note della protezione nominano chi possiede la riga", {
+  # eval
+  dizionario <- register_dictionary()
+  nota <- stats::setNames(
+    dizionario[["Field Note"]], dizionario[["Variable / Field Name"]]
+  )
+
+  # test
+  expect_match(
+    nota[["seal_state"]], "not by whoever owns the row alone", fixed = TRUE
+  )
+  expect_match(
+    nota[["seal_state"]], "until whoever owns the row, or IT, approves",
+    fixed = TRUE
+  )
+  expect_match(
+    nota[["approved_seal"]], "Only whoever owns the row, or IT, can approve",
+    fixed = TRUE
+  )
+  expect_match(
+    nota[["approved_seal"]], "the event log says who owns the row",
+    fixed = TRUE
+  )
+  expect_no_match(nota[["seal_state"]], "created", fixed = TRUE)
+  expect_no_match(nota[["approved_seal"]], "created", fixed = TRUE)
+})
+
+
+test_that("senza owned_by sul progetto il pacchetto nuovo ferma il giro", {
+  # eval
+  vivo <- register_dictionary(c("edc10", "edc12"))
+  vivo <- vivo[vivo[["Variable / Field Name"]] != "owned_by", , drop = FALSE]
+  detto <- compare_dictionary(vivo, c("edc10", "edc12"))
+
+  # test
+  expect_true("DIZIONARIO_CAMPO_ASSENTE:owned_by" %in% detto[["differences"]])
+  expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
 })

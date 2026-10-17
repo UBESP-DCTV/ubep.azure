@@ -425,6 +425,14 @@ test_that("il sigillo ignora i campi che scrive il giro", {
 })
 
 
+test_that("scrivere owned_by non muove il sigillo", {
+  expect_identical(
+    request_seal(register_row()),
+    request_seal(register_row(owned_by = "bruno.verdi@ubep.unipd.it"))
+  )
+})
+
+
 test_that("il sigillo non si muove quando qualcuno approva la modifica", {
   # eval
   prima <- request_seal(register_row())
