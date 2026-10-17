@@ -626,13 +626,11 @@ test_that("seal_approved non concede quando il log non nomina chi ha modificato"
 })
 
 
-# The round's write when it applied the row, in an earlier pass.
+# The round's write when it applied the row, in an earlier pass: the seals
+# door's event, which carries the seal and its state and nothing else.
 applicata <- list(
   username = "svc-canale-ubep", action = "Update record (API) 1",
-  details = paste0(
-    "outcome = 'applied', applied_seal = '000000000000', ",
-    "seal_state = 'intact'"
-  )
+  details = "applied_seal = '000000000000', seal_state = 'intact'"
 )
 
 
@@ -1648,8 +1646,7 @@ eseguita <- function(sigillo) {
   list(
     username = "svc-canale-ubep", action = "Update record (API) 1",
     details = paste0(
-      "outcome = 'applied', applied_seal = '", sigillo,
-      "', seal_state = 'approved'"
+      "applied_seal = '", sigillo, "', seal_state = 'approved'"
     )
   )
 }
@@ -2225,6 +2222,39 @@ test_that("il sigillo creduto e' l'ultimo scritto dal canale", {
     log_channel_seal(eventi_finti(sigillo_di(bruno)), "1", canale), ""
   )
   expect_error(log_channel_seal(eventi, "1", NULL))
+})
+
+test_that("un'esecuzione ha la forma della porta dei sigilli, non un valore che la cita", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  # Newest first. An outcome of the channel whose `applied_as` holds the
+  # text of a seal, read back from a group name somebody chose; below it,
+  # Bruno's change of the role, and the round's real execution.
+  citazione <- list(
+    username = canale, action = "Update record (API) 1",
+    details = paste0(
+      "outcome = 'applied', applied_as = 'role_name=data entry; ",
+      "dag_name=applied_seal = 'ffffffffffff'; expiration='"
+    )
+  )
+  eventi <- eventi_finti(
+    citazione, list(username = bruno, details = "role_name = 'read only'"),
+    applicata
+  )
+  # The outcome executed nothing: the seal believed is the door's, and
+  # Bruno's change still stands above the last execution.
+  expect_equal(log_channel_seal(eventi, "1", canale), "000000000000")
+  expect_equal(log_change_authors(eventi, "1", channel_account = canale), bruno)
+  # The door's own forms: the seal with its state, or the seal alone.
+  for (porta in c("applied_seal = 'aaaaaaaaaaaa', seal_state = 'approved'",
+                  "seal_state = 'intact', applied_seal = 'aaaaaaaaaaaa'",
+                  "applied_seal = 'aaaaaaaaaaaa'")) {
+    sigillata <- eventi_finti(
+      list(username = canale, details = porta), applicata
+    )
+    expect_equal(
+      log_channel_seal(sigillata, "1", canale), "aaaaaaaaaaaa", info = porta
+    )
+  }
 })
 
 

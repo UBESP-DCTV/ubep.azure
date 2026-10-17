@@ -2306,16 +2306,15 @@ test_that("una modifica di due giorni fa e' ancora di chi l'ha fatta", {
 })
 
 
-# What the round wrote when it applied the row, in an earlier pass: the event
-# that names the channel's account in the row's log.
+# What the round wrote when it applied the row, in an earlier pass: the seals
+# door's event, the one that names the channel's account in the row's log as
+# the mark of an execution.
 esecuzione <- function(sigillo = "000000000000") {
   list(
     timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
     action = "Update record (API) 1",
     details = paste0(
-      "identity = 'existing', outcome = 'applied', ",
-      "outcome_at = '2026-08-12 03:00', applied_seal = '", sigillo, "', ",
-      "seal_state = 'intact'"
+      "applied_seal = '", sigillo, "', seal_state = 'intact'"
     )
   )
 }

@@ -27,4 +27,13 @@ carried out. Without the account every write counts, as before: a second
 account writing the seal makes the channel unknown, \code{log_channel_unknown()},
 and the callers stop there.
 }
+\details{
+The channel's event has to have the form of the seals door, too: \code{details}
+holding \code{applied_seal} and at most \code{seal_state} beside it, nothing else.
+The door has written only those two fields since the seal exists, and
+REDCap logs only the fields an import changed. Read by the field name
+alone, an outcome of the channel whose \code{applied_as} quotes a seal, from a
+group name somebody chose on the instance, would pass for an execution
+and move the boundary above a change.
+}
 \keyword{internal}

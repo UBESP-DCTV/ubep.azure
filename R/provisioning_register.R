@@ -527,6 +527,14 @@ log_channel_unknown <- function(channel, channel_account) {
 #' account writing the seal makes the channel unknown, `log_channel_unknown()`,
 #' and the callers stop there.
 #'
+#' The channel's event has to have the form of the seals door, too: `details`
+#' holding `applied_seal` and at most `seal_state` beside it, nothing else.
+#' The door has written only those two fields since the seal exists, and
+#' REDCap logs only the fields an import changed. Read by the field name
+#' alone, an outcome of the channel whose `applied_as` quotes a seal, from a
+#' group name somebody chose on the instance, would pass for an execution
+#' and move the boundary above a change.
+#'
 #' @param events The row's events, newest first.
 #' @param channel What `log_channel_accounts()` answered for the row.
 #' @param channel_account What it was asked with.
@@ -539,7 +547,15 @@ log_executions <- function(events, channel, channel_account) {
   if (is.null(channel_account)) {
     return(which(wrote))
   }
-  which(wrote & trimws(as.character(events[["username"]])) %in% channel)
+  one <- "(applied_seal|seal_state)\\s*=\\s*'[^']*'"
+  door <- grepl(
+    paste0("^\\s*", one, "(\\s*,\\s*", one, ")?\\s*$"),
+    as.character(events[["details"]])
+  )
+  which(
+    wrote & door &
+      trimws(as.character(events[["username"]])) %in% channel
+  )
 }
 
 
