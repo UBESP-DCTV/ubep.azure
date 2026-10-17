@@ -160,6 +160,19 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
 })
 
 
+test_that("con la posta accesa il giro pretende la copia a IT", {
+  # Same limit as the guards above. The outcome of a row whose owner is not
+  # established goes to IT alone: without the copy it would leave for nobody,
+  # and a row whose message did not leave is not written.
+  script <- testthat::test_path("..", "..", "dev", "runner-canale.R")
+  skip_if_not(file.exists(script), "dev/ is not in the built package")
+  testo <- paste(readLines(script, warn = FALSE), collapse = "\n")
+  expect_match(
+    testo, "if (POSTA && !nzchar(POSTA_COPIA)) {", fixed = TRUE
+  )
+})
+
+
 # The write primitives, plus the one deliberate second write path. Read by both
 # guards below rather than written out twice, because what must not drift is
 # the list of what counts as a write: a fourth primitive added to one copy and

@@ -103,6 +103,17 @@ if (POSTA && !nzchar(POSTA_DA)) {
   )
 }
 
+# Per la stessa ragione la copia a IT: l'esito di una riga di cui il giro non
+# stabilisce il referente va solo a IT, e senza copia non partirebbe, quindi
+# la riga non sarebbe scritta e nessuno lo saprebbe.
+if (POSTA && !nzchar(POSTA_COPIA)) {
+  stop(
+    "UBEP_POSTA=1 senza UBEP_POSTA_COPIA: l'esito di una riga senza ",
+    "referente stabilito va solo a IT, e senza copia non partirebbe.",
+    call. = FALSE
+  )
+}
+
 # Senza l'utenza del canale il pacchetto non crede a nessuna scrittura di
 # owned_by e nessuna riga passa: un giro che la dimenticasse terrebbe ogni
 # riga al suo creatore senza dirlo.
