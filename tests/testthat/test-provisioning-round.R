@@ -562,7 +562,8 @@ test_that("the record's fields are exactly the rule's columns", {
     "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
     "errori", "posta_partite", "posta_fallite", "credenziali_recapitate",
     "credenziali_perse", "benvenuti_recapitati", "benvenuti_persi",
-    "accessi_recapitati", "accessi_persi", "posta_dirottata", "esiti_pending", "esiti_applied",
+    "accessi_recapitati", "accessi_persi", "posta_dirottata",
+    "esiti_pending", "esiti_applied",
     "esiti_data_error", "esiti_transport_error", "esiti_simulated",
     "esiti_held"
   )
