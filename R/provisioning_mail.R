@@ -951,7 +951,7 @@ mail_redirect_note <- function(body, to, cc) {
 #'
 #' The access message is the third case of the same asymmetry. It leaves for
 #' the rows in `granted`, whose right this round created and the read-back
-#' confirmed, and the right is there once it leaves or not: the next round
+#' confirmed, and the right is there whether it leaves or not: the next round
 #' finds the row settled and does nothing, so nothing would send it again.
 #' Its failure goes out under `POSTA_ACCESSO_PERSA`, is counted apart in
 #' `accessi_recapitati` and `accessi_persi`, and holds no row back. It

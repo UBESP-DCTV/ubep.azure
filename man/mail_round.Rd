@@ -81,7 +81,7 @@ again, it would only keep the outcome out of the register.
 
 The access message is the third case of the same asymmetry. It leaves for
 the rows in \code{granted}, whose right this round created and the read-back
-confirmed, and the right is there once it leaves or not: the next round
+confirmed, and the right is there whether it leaves or not: the next round
 finds the row settled and does nothing, so nothing would send it again.
 Its failure goes out under \code{POSTA_ACCESSO_PERSA}, is counted apart in
 \code{accessi_recapitati} and \code{accessi_persi}, and holds no row back. It
