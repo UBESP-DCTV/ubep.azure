@@ -3922,3 +3922,47 @@ test_that("un account del canale vuoto, di soli spazi o mancante ferma il giro",
     expect_length(inviate, 0L)
   }
 })
+
+
+test_that("il cancello giudica ogni autore della modifica, non solo il primo", {
+  # eval
+  # Anna filed the row and set its expiration; before any round applied it,
+  # Bruno set the role, and then Anna approved. Both wrote what the round
+  # would carry out, Bruno last, so he is the first author the log names.
+  riga <- list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", role_name = "read only", expiration = "2027-01-31"
+  )
+  approvato <- request_seal(do.call(riga_come_registro, riga))
+  giro_con <- function(richiedenti) {
+    giro(
+      registro_doppio(
+        record_json(c(riga, list(approved_seal = approvato))),
+        eventi = eventi_json(
+          list(
+            username = anna,
+            details = paste0("approved_seal = '", approvato, "'")
+          ),
+          list(username = bruno, details = "role_name = 'read only'"),
+          list(username = anna, details = "expiration = '2027-01-31'")
+        )
+      ),
+      istanza_che_scrive(richiedenti = richiedenti),
+      dry_run = FALSE
+    )
+  }
+  solo_bruno <- giro_con(bruno)
+  scritte_solo_bruno <- scritture()
+  tutti <- giro_con(c(anna, bruno))
+
+  # test
+  # Anna no longer manages the project, and her expiration is part of what
+  # would be carried out: Bruno's rights do not cover it. A gate that judged
+  # the first author alone would let the row through on Bruno's.
+  expect_equal(
+    as.character(solo_bruno[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(scritte_solo_bruno, 0L)
+  expect_equal(as.character(tutti[["esiti"]][["outcome"]]), "applied")
+})
