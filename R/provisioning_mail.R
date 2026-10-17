@@ -1170,7 +1170,7 @@ mail_round <- function(changed,
   for (id in granted) {
     riga <- riga_di(id)
     accesso <- if (is.null(riga)) {
-      list(ok = FALSE, errors = "POSTA_RIGA_NON_TROVATA")
+      list(ok = FALSE)
     } else {
       consegna(
         riga[["contact_email"]], NULL,
