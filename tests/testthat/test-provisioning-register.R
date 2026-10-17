@@ -1486,7 +1486,8 @@ test_that("una scrittura del canale senza autore rende ignoto il proprietario", 
 })
 
 
-# revisione 1
+# Writing a channel field does not make an account the channel: recognized by
+# what it writes, an import of owned_by would hand the row to whoever made it.
 test_that("chi importa owned_by su una riga nuova non passa per il canale", {
   # Anna filed the row; before the round ever wrote on it, Bruno imported
   # owned_by alone. He is the only account that wrote a channel field.
@@ -1677,7 +1678,9 @@ test_that("dopo il passaggio la modifica del creatore aspetta l'ultimo", {
   expect_false(seal_needs_approval(riga, sopra(creatrice), creatrice))
 })
 
-# revisione 2
+# A stretch of the row's life is judged with the owner who had it then, not
+# with the creator: read with the creator, an approval given by the owner of
+# that stretch looks like a stranger's.
 test_that("il tratto prima di un passaggio si legge col proprietario di allora", { # nolint: line_length_linter.
   # Newest first. Bruno owns the row since the execution sealed
   # 111111111111; Cinzia changed it, Bruno approved 222222222222, the round

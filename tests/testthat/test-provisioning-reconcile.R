@@ -4305,7 +4305,9 @@ test_that("la riattivazione dopo una revoca manda la mail", {
 })
 
 
-# revisione 5
+# A write the read-back does not show is not a grant: the next round finds
+# the right in place and is `noop`, so this one is the only chance to send,
+# and it must not, because nothing says the person has access.
 test_that("una concessione che la rilettura non conferma non manda la mail", {
   posta <- posta_raccolta()
   esito <- giro(
