@@ -1,3 +1,80 @@
+# ubep.azure 0.21.0
+
+* **A row passes to the last referent whose change was approved and carried
+  out.** Until now a row stayed with its creator for good, and a creator who
+  lost *User Rights* on the project, or left UBEP, could not have a colleague's
+  change carried out even when they approved it (decided on 2026-10-16). Now
+  the referent whose change the round carries out becomes the owner of the
+  row, IT accounts included, and with the row go the gate on the rights, the
+  approval of later changes, the outcome and the key, and the monthly report.
+  A revocation does not move the row, free or approved: so a revocation by the
+  owner followed by a change approved from another referent passes the row to
+  that other, and a revocation alone leaves it where it is. When several
+  accounts wrote since the last execution, the writes still in the row count
+  (decided on 2026-10-17): the gate judges the rights of every author who
+  counts, not those of whoever approves, and the approval comes from the last
+  owner or from IT. The way out of a write by someone without the rights is for
+  the owner to change the value and put it back, since REDCap logs no write
+  that leaves the value as it was.
+
+* **`owned_by`, written by the channel and believed only from the log.** A new
+  read-only field of the register holds the row's owner. The import right is
+  open to the referents, so the value is never trusted: the owner is the value
+  of the newest `owned_by` written by the channel's account in the event log,
+  or the creator when the channel has not written one (`log_owner()`,
+  `log_next_owner()`, `register_owner_import()`). **The field has to be added
+  to the register before the package is installed**: 0.20.1 tolerates it
+  (`DIZIONARIO_CAMPO_IN_PIU`), 0.21.0 without it stops
+  (`DIZIONARIO_CAMPO_ASSENTE`). At the first round every row receives it.
+
+* **The channel's account is configured.** `provisioning_reconcile()` and
+  `provisioning_report()` take `channel_account`, and `dev/runner-canale.R`
+  and `dev/runner-rapporto.R` read it from `UBEP_CANALE_UTENTE`, which is now
+  **required** by both jobs: without it they stop and say so. Recognizing the
+  channel by what it writes would make a referent who imports `owned_by` on a
+  colleague's new row the only "channel" of that row. With the package default,
+  `NULL`, no write of `owned_by` is believed and no row passes. Both job
+  copies in `/opt` are to be replaced together with the package. If the
+  account that holds the token ever changes, the rows with writes of the old
+  account in their current life become ambiguous and are held.
+
+* **`UBEP_POSTA_COPIA` is required with the mail on.** The outcome of a row
+  whose owner is not established goes to IT alone, and without the address it
+  would not leave.
+
+* **The fallback to `requested_by` is gone.** The outcome of a round that has
+  no owner to give (sweep of the tenant failed, creation log or owners' log
+  unreadable, no row to judge, a log that does not name the row) goes to IT
+  only, with the sentence "referente della riga non stabilito". The key never
+  reaches anybody but the established owner. The round's mail to the owner,
+  and the welcome, name the owner and not the creator.
+
+* **A mail tells the person when they have the access.** When the round grants
+  a right (`creato`, confirmed by the read-back) the person receives an
+  access message with the instance, the project, the role, the group if any,
+  the last day of access and who answers for the project. It does not leave
+  for an updated right, a revocation, an access already in place (so not when
+  a bench is switched back on) or a simulated round, and it goes to
+  `contact_email` with nobody in copy. It is not retried: a lost one counts in
+  the new `accessi_persi` (and `accessi_recapitati`), with the error
+  `POSTA_ACCESSO_PERSA`. **Release order:** the two columns first in the
+  `UbepCanale_CL` table and its collection rule, then the package, and last,
+  after a record that carries them, the alarm on `accessi_persi > 0` and the
+  incomplete-record alarm with the two columns.
+
+* **The welcome sends the questions to the right place.** It no longer
+  promises the access "within four hours" and then goes silent: it says
+  another e-mail will come when the access is ready. And it sends the person
+  to the owner first for any problem, and to IT second, as the first sign-in
+  instruction does.
+
+* **The monthly report goes to the owner.** Each row is attributed to its
+  owner as the month covered ended (the newest `owned_by` of the channel up to
+  that moment, or the creator), so the list of who is due does not change
+  between two attempts. `senza_creatore` keeps its name and now means "without
+  an established owner". The notes of `seal_state` and `approved_seal` in the
+  register are to be updated on the live project.
+
 # ubep.azure 0.20.1
 
 * **The round's mail to a referent goes to the row's creator.** The outcome
