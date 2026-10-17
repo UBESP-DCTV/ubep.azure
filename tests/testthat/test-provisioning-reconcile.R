@@ -4165,3 +4165,44 @@ test_that("senza l'account del canale il giro non scrive owned_by", {
   # test
   expect_null(proprietari_scritti())
 })
+
+
+# A register that refuses the owner door alone, as REDCap refuses an import
+# it does not take, and answers everything else as `registro` does.
+rifiuta_proprietari <- function(registro) {
+  function(data) {
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (length(sent) > 0L &&
+            setequal(names(sent[[1L]]), c("record_id", "owned_by"))) {
+        return('{"error":"The field owned_by could not be saved"}')
+      }
+    }
+    registro(data)
+  }
+}
+
+
+test_that("una porta del proprietario rifiutata arriva al record del giro, e il sigillo si scrive", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    rifiuta_proprietari(registro_con_log(
+      record_json(utils::modifyList(
+        riga_cambiata(), list(approved_seal = sigillo_cambiata())
+      )),
+      storia = list(approvazione(anna), cambio(bruno), esecuzione())
+    )),
+    istanza_che_scrive(richiedenti = bruno), dry_run = FALSE
+  )
+
+  # test
+  # The passage is lost and the round says so, in its record and nowhere
+  # else; the seal of what it carried out is written all the same.
+  expect_length(importazioni(c("record_id", "owned_by")), 1L)
+  expect_equal(esito[["errori"]], "TRASPORTO_REGISTRO_RIFIUTATO")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_cambiata()
+  )
+})
