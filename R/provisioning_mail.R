@@ -700,8 +700,7 @@ mail_access_message <- function(row, url = NULL) {
     subject = paste0(
       "Accesso a REDCap / REDCap access: ", server, ", progetto ", pid
     ),
-    body = paste(c(it, "", "---", "", en), collapse = "
-")
+    body = paste(c(it, "", "---", "", en), collapse = "\n")
   )
 }
 

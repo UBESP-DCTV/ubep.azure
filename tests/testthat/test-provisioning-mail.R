@@ -243,7 +243,7 @@ test_that("il benvenuto promette un'altra mail e manda prima al referente", {
     expect_no_match(corpo, "Se qualcosa non torna", fixed = TRUE)
     expect_no_match(corpo, "If anything looks wrong", fixed = TRUE)
     expect_no_match(corpo, "da questo messaggio.", fixed = TRUE)
-    expect_false(grepl("[^\x01-\x7F]", corpo, perl = TRUE))
+    expect_false(grepl("[^\\x01-\\x7F]", corpo, perl = TRUE))
   }
 })
 
@@ -283,10 +283,8 @@ test_that("la mail di accesso dice dove, come e fino a quando", {
     "your access and is responsible for your first sign-in. If you ",
     "cannot reach them, reply to this message: it goes to IT."
   ), fixed = TRUE)
-  expect_match(corpo, "
----
-", fixed = TRUE)
-  expect_false(grepl("[^\x01-\x7F]", corpo, perl = TRUE))
+  expect_match(corpo, "\n---\n", fixed = TRUE)
+  expect_false(grepl("[^\\x01-\\x7F]", corpo, perl = TRUE))
 })
 
 
