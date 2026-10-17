@@ -22,31 +22,48 @@
 #' 10. **create the accounts the gate allowed and the tenant does not hold**;
 #' 11. write back the outcome, and only what changed.
 #'
-#' **The gate's subject is read from the log, not from the row.** `requested_by`
-#' says who filed a request only because `@USERNAME` filled it in, and an
-#' action tag governs the form REDCap draws rather than the layer that writes:
-#' measured on 2026-09-02, an import writes that field verbatim, so anyone
-#' holding the Data Import Tool could name a colleague who manages the project
-#' and have the gate check that colleague's rights. So between step 3 and step
-#' 4 the round asks REDCap who was authenticated when each row was created and
-#' puts that name in the column the gate reads. One call, `logtype =
-#' "record_add"` and no window: a record is created once, so the answer holds
-#' one row per record that ever existed rather than one per event, and it is
-#' asked only when a row is still standing to be judged or has changed since
-#' it was applied.
+#' **The gate's subjects are read from the log, not from the row.**
+#' `requested_by` says who filed a request only because `@USERNAME` filled it
+#' in, and an action tag governs the form REDCap draws rather than the layer
+#' that writes: measured on 2026-09-02, an import writes that field verbatim,
+#' so anyone holding the Data Import Tool could name a colleague who manages
+#' the project and have the gate check that colleague's rights. `owned_by` is
+#' `@READONLY` and written verbatim by an import all the same. So between step
+#' 3 and step 4 the round asks REDCap who was authenticated when each row was
+#' created, one call with `logtype = "record_add"` and no window, and then who
+#' each row belongs to now, one call with `logtype = "record"` and no window:
+#' the newest write of `owned_by` signed by `channel_account`, or the creator
+#' when that account never wrote one (`log_owner()`). Both are asked only when
+#' a row is still standing to be judged or has changed since it was applied,
+#' and the second only once the first has answered.
 #'
-#' **A row somebody other than its creator changed waits for its creator**,
-#' whether the round has applied it already or not yet. The same creator the
-#' gate judges is the one person who can approve somebody else's change, so
-#' whoever approves has already had their rights on the project checked, and
-#' will again on every round. Who made the change is read from that row's own
-#' log, whole, and without the round's own writes; the rule is
-#' `change_needs_approval()`. The log is asked once per row that needs it: a
-#' row whose seal moved, and a row not applied yet that the round could act
-#' on. Two exceptions, both decided on 2026-10-15. A revocation and nothing
-#' else, made by somebody who manages the project, does not wait: it is
-#' judged at the gate, step 6, because the rights come from the instance. And
-#' the IT accounts in `approvers` approve as the creator does.
+#' **A row belongs to its owner, and a change somebody else had a hand in
+#' waits for the owner's approval**, whether the round has applied the row
+#' already or not yet. The owner is the creator until the round passes the
+#' row on to the last referent whose change was approved and carried out.
+#' Who made the change is read from that row's own log, whole, and without
+#' the round's own writes, and only the writes still in the row count; the
+#' rule is `change_needs_approval()`. The log is asked once per row that needs
+#' it: a row whose seal moved, and a row not applied yet that the round could
+#' act on. Two exceptions, both decided on 2026-10-15. A revocation and
+#' nothing else, made by somebody who manages the project, does not wait: it
+#' is judged at the gate, step 6, because the rights come from the instance.
+#' And the IT accounts in `approvers` approve as the owner does.
+#'
+#' **The gate judges whoever wrote what the round carries out**: every author
+#' of the change, and the owner when nobody changed the row. Each of them must
+#' have been able to do it by hand. Whoever approved is not asked, because
+#' approving is not writing and adds no power to the change: an approved
+#' change by a referent who does not manage the project stops at the gate,
+#' and an owner who lost the rights can still let a manager's change through.
+#' The gate asks on every round, so an owner who no longer manages the project
+#' stops the row even when nobody touched it.
+#'
+#' Without `channel_account` no write of `owned_by` is believed: every row
+#' belongs to its creator and none passes, which is the safe answer for a
+#' caller that does not configure it. Recognizing the channel by what it
+#' writes instead would hand a colleague's new row to a referent who imports
+#' `owned_by` on it before the round has written there.
 #'
 #' A row the log cannot name is **held and not refused**, which is the same
 #' distinction step 6 already makes between a permission that does not grant
@@ -54,9 +71,11 @@
 #' our failure and not the referent's, and the code that carries it is a
 #' `TRASPORTO_` one so the row comes back next round and the mail comes to us.
 #' The same holds for a changed row whose own log could not be read, or whose
-#' creator the log does not name: it takes `TRASPORTO_AUTORE_NON_LEGGIBILE`
+#' owner the log does not establish, and for a change with an author the log
+#' does not name, approved or not: it takes `TRASPORTO_AUTORE_NON_LEGGIBILE`
 #' and not `held`, because a held message asks for an approval that nobody
-#' could give, from a creator nobody could name.
+#' could give, from an owner nobody could name, and the gate would have
+#' nobody whose rights to ask.
 #'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
@@ -138,8 +157,13 @@
 #' @inheritParams mail_round
 #' @param approvers The IT accounts whose approval of a change counts on any
 #'   row, as REDCap usernames. Read by the runner from the machine and empty
-#'   by default, so a runner that does not pass it leaves the creator as the
+#'   by default, so a runner that does not pass it leaves the owner as the
 #'   only one who approves.
+#' @param channel_account The REDCap username that holds the register's
+#'   token, the account the round writes with. Only its writes of `owned_by`
+#'   are believed; with `NULL`, the default, none is, and every row belongs to
+#'   its creator. The runner reads it from `UBEP_CANALE_UTENTE`, which it
+#'   requires.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -163,6 +187,7 @@ provisioning_reconcile <- function(register_url,
                                    copy_to = NULL,
                                    reply_to = NULL,
                                    approvers = character(),
+                                   channel_account = NULL,
                                    at = format(
                                      Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"
                                    )) {
@@ -173,6 +198,9 @@ provisioning_reconcile <- function(register_url,
     is.character(graph_url), length(graph_url) == 1L,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
     is.character(approvers),
+    is.null(channel_account) ||
+      (is.character(channel_account) && length(channel_account) == 1L &&
+         !is.na(channel_account) && nzchar(channel_account)),
     is.character(at), length(at) == 1L
   )
 
@@ -385,14 +413,15 @@ provisioning_reconcile <- function(register_url,
   sealed[is.na(sealed)] <- ""
   tampered <- nzchar(sealed) & sealed != request_seal(register)
 
-  # Who was authenticated when each row was made. It is the name the gate has
-  # to judge, and since 2026-10-14 it is also the one person a change to the
-  # row by somebody else waits for, so it is read before the changed rows are
-  # judged. `requested_by` cannot be it: `@USERNAME` is an action tag, it
-  # governs the form REDCap draws, and an import draws none -- measured on
-  # 2026-09-02, an import writes that field verbatim, so anyone with the Data
-  # Import Tool could declare themselves somebody who manages the project and
-  # have the gate check that somebody's rights.
+  # Who was authenticated when each row was made. It is the row's owner until
+  # the round passes the row on, the name the gate judges when nobody changed
+  # the row and the one person a change by somebody else waits for, so it is
+  # read before the changed rows are judged. `requested_by` cannot be it:
+  # `@USERNAME` is an action tag, it governs the form REDCap draws, and an
+  # import draws none -- measured on 2026-09-02, an import writes that field
+  # verbatim, so anyone with the Data Import Tool could declare themselves
+  # somebody who manages the project and have the gate check that somebody's
+  # rights.
   #
   # Asked with `logtype = "record_add"` and no window at all, and both halves
   # matter. The classification is REDCap's, so this package never reads the
@@ -411,25 +440,51 @@ provisioning_reconcile <- function(register_url,
   # `TRASPORTO_` code the register gave -- instead of being dropped here.
   log_errors <- character()
   creators <- rep("", nrow(register))
+  owners_now <- rep("", nrow(register))
   if (any(admitted | awaiting | tampered)) {
     reading_creations <- register_log(
       register_url, register_token, logtype = "record_add"
     )
     if (isTRUE(reading_creations[["ok"]])) {
       creators <- log_creators(reading_creations[["log"]], record_ids)
+
+      # Who each row belongs to now: the newest write of `owned_by` signed by
+      # the channel's account, or the creator, `log_owner()`. One call for
+      # the whole round, `logtype = "record"` and no window, since a passage
+      # can be older than any window and the row would go back to its creator
+      # without it. That logtype holds creations, changes and deletions in
+      # REDCap's order, so `log_of_record()` cuts the lives as on one row's
+      # log; a REDCap that ignored the parameter would answer with the whole
+      # log, a superset `log_owner()` filters by row and by field. Asked only
+      # once the creators are known, since the owner falls back on them. A
+      # row whose owner the log cannot say, or a log that could not be read,
+      # has no owner this round: `""`, the direction that does not grant.
+      reading_owners <- register_log(
+        register_url, register_token, logtype = "record"
+      )
+      if (isTRUE(reading_owners[["ok"]])) {
+        owners_now <- vapply(seq_along(record_ids), function(i) {
+          owner <- log_owner(
+            reading_owners[["log"]], record_ids[[i]], creators[[i]],
+            channel_account
+          )
+          if (is.na(owner)) "" else owner
+        }, character(1))
+      } else {
+        log_errors <- c(log_errors, reading_owners[["errors"]])
+      }
     } else {
       log_errors <- c(log_errors, reading_creations[["errors"]])
     }
   }
 
-  # A row the round has never applied carries no seal to compare, and is the
-  # creator's all the same: changed by somebody else while it waits in the
-  # queue, it would be carried out on the creator's authority -- the gate
-  # checks the creator's rights -- with nobody asking the creator. So its log
+  # A row the round has never applied carries no seal to compare, and is its
+  # owner's all the same: changed by somebody else while it waits in the
+  # queue, it would be carried out with nobody asking the owner. So its log
   # is read too, whenever the round could act on it: the gate let it through
-  # or it waits to be created, and its creator is known. A row whose creator
+  # or it waits to be created, and its owner is known. A row whose owner
   # could not be read stops at the gate anyway, on a `TRASPORTO_` code.
-  fresh <- !nzchar(sealed) & (admitted | awaiting) & nzchar(creators)
+  fresh <- !nzchar(sealed) & (admitted | awaiting) & nzchar(owners_now)
   checked <- tampered | fresh
 
   # The log is read only for a row that needs it, one call per row and with no
@@ -447,7 +502,7 @@ provisioning_reconcile <- function(register_url,
       register_url, register_token, record = record_ids[[i]]
     )
     # A log that could not be read leaves the row held. "I could not ask who
-    # did this" is not "the creator did it", and between the two ways of being
+    # did this" is not "the owner did it", and between the two ways of being
     # wrong this is the one that does not grant. It has to be said, not left
     # to the empty log: on a row never applied an empty log reads as nobody
     # having changed it.
@@ -459,32 +514,57 @@ provisioning_reconcile <- function(register_url,
     }
   }
 
-  # A change made by the creator alone is the creator's to make, and goes on
-  # as any other row. Anybody else's hand in it and the row stops here, where
-  # a withdrawn one stops, until the creator approves: applying it would grant
+  # The register as this round will have left it, and not as it read it. The
+  # round resolves `username` and writes it back in this same pass, so sealing
+  # the row as read would seal a version the register is about to stop
+  # holding: `username` is inside the seal -- it has to be, since changing it
+  # changes who gets the access -- and the next round would find every applied
+  # row modified, by the round's own hand. The mechanism would accuse itself
+  # on the ordinary path, on every row, one pass after each apply.
+  #
+  # The seal a held row asks its owner to paste is computed on it for the
+  # same reason: the owner reads the row after this round has written the
+  # username, and a seal of the row as read would never match it. And the
+  # authors of a change are read against it: a field the round is about to
+  # bring back to the value carried out is no change, the username included.
+  #
+  # `resolved_names` is what the register ends up with either way: written when
+  # it differs, already there when it does not.
+  register_after <- register
+  register_after[["username"]] <- resolved_names
+  seal_after <- request_seal(register_after)
+
+  # A change made by the owner alone is the owner's to make, and goes on as
+  # any other row. Anybody else's hand in it and the row stops here, where a
+  # withdrawn one stops, until the owner approves: applying it would grant
   # whatever the edit says on the authority of a round that ran before the
-  # edit existed, and of a request somebody else filed. The rule is in
-  # `change_needs_approval()` and nowhere else. An edit made while an earlier
-  # round ran counts as well: it sits below that round's seal, which covers
-  # only what the round had read, and `log_pending_authors()` finds it there.
+  # edit existed, and of a request that belongs to somebody else. The rule is
+  # in `change_needs_approval()` and nowhere else. An edit made while an
+  # earlier round ran counts as well: it sits below that round's seal, which
+  # covers only what the round had read, and `log_pending_authors()` finds it
+  # there.
   awaits <- checked
   awaits[checked] <- seal_needs_approval(
-    register[checked, , drop = FALSE], events, creators[checked], approvers
+    register_after[checked, , drop = FALSE], events, creators[checked],
+    approvers, channel_account = channel_account
   )
-  cleared <- awaits & seal_approved(register, events, creators, approvers)
+  cleared <- awaits & seal_approved(
+    register, events, creators, approvers, channel_account = channel_account
+  )
 
-  # A changed row whose log could not be read, or whose creator the log does
+  # A changed row whose log could not be read, or whose owner the log does
   # not name, is neither approved nor held: there is no change anybody could
-  # approve, nor a creator to ask. It stops on the code the gate gives a row
+  # approve, nor an owner to ask. It stops on the code the gate gives a row
   # with no author, so it comes back next round and the message says the
   # failure is ours, instead of asking the referent for a seal that approves
-  # nothing.
-  blind <- (checked & unread) | (tampered & !nzchar(creators))
+  # nothing. So a held row always has an owner, and its message never has to
+  # say both that it goes to IT alone and that it goes to the owner.
+  blind <- (checked & unread) | (tampered & !nzchar(owners_now))
 
-  # A revocation and nothing else, by somebody other than the creator, is
-  # free when they manage the project, and only the instance can say whether
-  # they do. So it is not held here: it stands provisionally and the gate
-  # decides, asking the rights of everybody with a hand in it.
+  # A revocation and nothing else, by somebody other than the owner, is free
+  # when they manage the project, and only the instance can say whether they
+  # do. So it is not held here: it stands provisionally and the gate decides,
+  # asking the rights of everybody with a hand in it.
   intent <- register_intent_fields()
   revoked_now <- trimws(as.character(register[["request_status"]])) %in%
     "revoked"
@@ -494,38 +574,28 @@ provisioning_reconcile <- function(register_url,
   withdrawal <- awaits & !cleared & !blind & revoked_now & admitted
   withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
     log_revocation_only(
-      events, record_ids[[i]], creators[[i]], intent, approvers
+      events, record_ids[[i]], creators[[i]], intent, approvers,
+      channel_account = channel_account
     )
   }, logical(1))
-  withdrawal_authors <- lapply(seq_along(record_ids), function(i) {
-    if (!withdrawal[[i]]) {
+
+  # Who has a hand in the version the round would carry out, read once per
+  # row whose log the round read: what the gate judges, what a provisional
+  # withdrawal stands on, and what the held message names. `NA` where the log
+  # cannot say.
+  pending <- lapply(seq_along(record_ids), function(i) {
+    if (!checked[[i]] || unread[[i]]) {
       return(character())
     }
     log_pending_authors(
-      events, record_ids[[i]], creators[[i]], intent, approvers
+      events, record_ids[[i]], creators[[i]], intent, approvers,
+      channel_account = channel_account,
+      current = register_after[i, , drop = FALSE]
     )
   })
 
   held <- awaits & !cleared & !blind & !withdrawal
   standing <- (admitted | awaiting) & !held & !blind
-
-  # The register as this round will have left it, and not as it read it. The
-  # round resolves `username` and writes it back in this same pass, so sealing
-  # the row as read would seal a version the register is about to stop
-  # holding: `username` is inside the seal -- it has to be, since changing it
-  # changes who gets the access -- and the next round would find every applied
-  # row modified, by the round's own hand. The mechanism would accuse itself
-  # on the ordinary path, on every row, one pass after each apply.
-  #
-  # The seal a held row asks its creator to paste is computed on it for the
-  # same reason: the creator reads the row after this round has written the
-  # username, and a seal of the row as read would never match it.
-  #
-  # `resolved_names` is what the register ends up with either way: written when
-  # it differs, already there when it does not.
-  register_after <- register
-  register_after[["username"]] <- resolved_names
-  seal_after <- request_seal(register_after)
 
   held_outcome <- function(i) {
     outcome_payload(
@@ -545,10 +615,10 @@ provisioning_reconcile <- function(register_url,
       # undo it. `ambiguous` would send the referent to fix a name nobody
       # complained about until the edit.
       #
-      # The detail carries the seal the creator has to paste, and that is what
-      # tells the creator about a second change: the seal moves with it, so
+      # The detail carries the seal the owner has to paste, and that is what
+      # tells the owner about a second change: the seal moves with it, so
       # the outcome reads as changed and the message leaves again with the
-      # new value, while the one the creator holds approves nothing any more.
+      # new value, while the one the owner holds approves nothing any more.
       # It is also where a referent who lost the message finds it, on the row
       # itself.
       if (held[[i]]) {
@@ -594,21 +664,31 @@ provisioning_reconcile <- function(register_url,
   # `register_to_desired()` builds a pair out of `username`, and the value it
   # must build it out of is the resolved one. An `absent` row travels with an
   # empty one, so it reaches the scope question without ever becoming a pair.
-  # `requested_by` carries the creator the log named, for the gate.
+  # `requested_by` carries the owner the log named, and not what the row says.
   resolved <- register
   resolved[["username"]] <- resolved_names
   resolved[["identity"]] <- verdicts
-  resolved[["requested_by"]] <- creators
+  resolved[["requested_by"]] <- owners_now
   resolved <- resolved[standing, , drop = FALSE]
+
+  # Whom the gate judges for each row: whoever wrote what the round carries
+  # out, since each of them must be able to do it by hand, and the owner when
+  # nobody changed the row. Whoever approved is not among them: approving is
+  # not writing, and adds no power to the change. So an approved change by a
+  # referent who does not manage the project stops at the gate, and an owner
+  # who lost the rights can still let a manager's change through.
+  subjects <- lapply(seq_along(record_ids), function(i) {
+    if (length(pending[[i]]) > 0L) pending[[i]] else owners_now[[i]]
+  })
 
   # 4. the pure layer
   plan <- register_to_desired(resolved)
-  asks <- scope_pairs(resolved)
+  asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
 
   # The rights a provisional withdrawal is judged on are those of whoever had a
   # hand in it, and the instance answers only for the pairs it is asked about.
   extra <- lapply(which(withdrawal & standing), function(i) {
-    who <- withdrawal_authors[[i]]
+    who <- pending[[i]]
     who <- who[!is.na(who) & nzchar(who)]
     server <- trimws(as.character(register[["server"]][[i]]))
     project <- trimws(as.character(register[["project_id"]][[i]]))
@@ -682,7 +762,14 @@ provisioning_reconcile <- function(register_url,
   # own reading of the register's log. So it takes a `TRASPORTO_` code: the
   # row stays queued and comes back next round, and the mail comes to us.
   # Same shape and same reason as `TRASPORTO_PERMESSO_NON_LEGGIBILE`.
-  unnamed <- !scope_filled(resolved[["requested_by"]])
+  #
+  # The same holds for a change whose authors the log cannot name, approved
+  # or not: an approval adds no power to it, and the gate would have nobody
+  # whose rights to ask for what is carried out.
+  unnamed <- !scope_filled(resolved[["requested_by"]]) |
+    vapply(subjects[standing], function(who) {
+      anyNA(who) || !all(nzchar(trimws(who)))
+    }, logical(1))
   for (id in as.character(resolved[["record_id"]])[unnamed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "TRASPORTO_AUTORE_NON_LEGGIBILE"
@@ -811,18 +898,27 @@ provisioning_reconcile <- function(register_url,
     rights <- round_rights(server, state)
     provisional <- as.character(rows[["record_id"]]) %in%
       record_ids[withdrawal]
-    refused <- scope_errors(rows[!provisional, , drop = FALSE], rights)
+    # Every subject of a row is asked, and the row is one: refused when any
+    # of them could not have done it by hand.
+    judged <- rows[!provisional, , drop = FALSE]
+    refused <- scope_merge(scope_errors(
+      scope_expand(
+        judged,
+        subjects[match(as.character(judged[["record_id"]]), record_ids)]
+      ),
+      rights
+    ))
     refused <- refused[names(refused) %in% ids]
 
     # A provisional withdrawal is judged on the rights of whoever had a hand
-    # in it, and not on the creator's alone: one that stands goes on as any
-    # other row, one that does not stand waits for the creator after all.
+    # in it, and not on the owner's alone: one that stands goes on as any
+    # other row, one that does not stand waits for the owner after all.
     waits <- character()
     for (id in intersect(ids, record_ids[withdrawal])) {
       i <- match(id, record_ids)
       verdict <- scope_withdrawal(
         rows[as.character(rows[["record_id"]]) == id, , drop = FALSE],
-        withdrawal_authors[[i]], creators[[i]], nzchar(sealed[[i]]), rights
+        pending[[i]], owners_now[[i]], nzchar(sealed[[i]]), rights
       )
       if (identical(verdict, "held")) {
         waits <- c(waits, id)
@@ -1068,7 +1164,7 @@ provisioning_reconcile <- function(register_url,
       # nobody got to ask. A person the rehearsal did not let through is not
       # among them, for the same reason.
       in_scope = setdiff(ids, c(names(refused), waits, unready)),
-      # The withdrawals the gate sent back to wait for their creator.
+      # The withdrawals the gate sent back to wait for their owner.
       trattenute = waits,
       esiti = do.call(rbind, c(
         list(empty_outcomes),
@@ -1210,18 +1306,11 @@ provisioning_reconcile <- function(register_url,
   changed <- round_changed(register, outcomes)
   # The same minutes the identity door wrote, so the message names what the
   # round settled instead of what the referent left blank. And the owner, which
-  # is where the outcome and the key go: the referent the gate judged, and the
-  # only one whose approval of a held row counts, where `requested_by` is what
-  # an import wrote. With it, who changed the row, which is what the owner has
-  # to judge. For now the owner is the creator the log named, and no row is
-  # handed over.
-  edited_by <- vapply(seq_along(record_ids), function(i) {
-    if (!checked[[i]]) {
-      return("")
-    }
-    authors <- log_pending_authors(
-      events, record_ids[[i]], creators[[i]], intent, approvers
-    )
+  # is where the outcome and the key go: the owner the log names, the only one
+  # whose approval of a held row counts, where `requested_by` and `owned_by`
+  # are what an import wrote. With it, who changed the row, which is what the
+  # owner has to judge. No row is handed over yet.
+  edited_by <- vapply(pending, function(authors) {
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
   posta <- posted(
@@ -1230,7 +1319,7 @@ provisioning_reconcile <- function(register_url,
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
-      owner = creators,
+      owner = owners_now,
       passed = FALSE,
       edited_by = edited_by,
       stringsAsFactors = FALSE
@@ -1288,7 +1377,7 @@ provisioning_reconcile <- function(register_url,
           id,
           seal_after[[i]],
           # Applied while waiting for an approval says an approval carried
-          # this row here. A change the creator made alone was nobody's to
+          # this row here. A change the owner made alone was nobody's to
           # contest, and leaves the row as it was. Otherwise the row keeps
           # what it had: a change approved once stays approved until somebody
           # edits the row again, which is when `modified` takes over below.

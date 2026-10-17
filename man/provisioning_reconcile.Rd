@@ -18,6 +18,7 @@ provisioning_reconcile(
   copy_to = NULL,
   reply_to = NULL,
   approvers = character(),
+  channel_account = NULL,
   at = format(Sys.time(), "\%Y-\%m-\%d \%H:\%M", tz = "UTC")
 )
 }
@@ -65,8 +66,14 @@ mailer closure is what carries it to the transport.}
 
 \item{approvers}{The IT accounts whose approval of a change counts on any
 row, as REDCap usernames. Read by the runner from the machine and empty
-by default, so a runner that does not pass it leaves the creator as the
+by default, so a runner that does not pass it leaves the owner as the
 only one who approves.}
+
+\item{channel_account}{The REDCap username that holds the register's
+token, the account the round writes with. Only its writes of \code{owned_by}
+are believed; with \code{NULL}, the default, none is, and every row belongs to
+its creator. The runner reads it from \code{UBEP_CANALE_UTENTE}, which it
+requires.}
 
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
@@ -104,30 +111,48 @@ and rehearse there the grant of a person still to be created;
 \item write back the outcome, and only what changed.
 }
 
-\strong{The gate's subject is read from the log, not from the row.} \code{requested_by}
-says who filed a request only because \verb{@USERNAME} filled it in, and an
-action tag governs the form REDCap draws rather than the layer that writes:
-measured on 2026-09-02, an import writes that field verbatim, so anyone
-holding the Data Import Tool could name a colleague who manages the project
-and have the gate check that colleague's rights. So between step 3 and step
-4 the round asks REDCap who was authenticated when each row was created and
-puts that name in the column the gate reads. One call, \code{logtype = "record_add"} and no window: a record is created once, so the answer holds
-one row per record that ever existed rather than one per event, and it is
-asked only when a row is still standing to be judged or has changed since
-it was applied.
+\strong{The gate's subjects are read from the log, not from the row.}
+\code{requested_by} says who filed a request only because \verb{@USERNAME} filled it
+in, and an action tag governs the form REDCap draws rather than the layer
+that writes: measured on 2026-09-02, an import writes that field verbatim,
+so anyone holding the Data Import Tool could name a colleague who manages
+the project and have the gate check that colleague's rights. \code{owned_by} is
+\verb{@READONLY} and written verbatim by an import all the same. So between step
+3 and step 4 the round asks REDCap who was authenticated when each row was
+created, one call with \code{logtype = "record_add"} and no window, and then who
+each row belongs to now, one call with \code{logtype = "record"} and no window:
+the newest write of \code{owned_by} signed by \code{channel_account}, or the creator
+when that account never wrote one (\code{log_owner()}). Both are asked only when
+a row is still standing to be judged or has changed since it was applied,
+and the second only once the first has answered.
 
-\strong{A row somebody other than its creator changed waits for its creator},
-whether the round has applied it already or not yet. The same creator the
-gate judges is the one person who can approve somebody else's change, so
-whoever approves has already had their rights on the project checked, and
-will again on every round. Who made the change is read from that row's own
-log, whole, and without the round's own writes; the rule is
-\code{change_needs_approval()}. The log is asked once per row that needs it: a
-row whose seal moved, and a row not applied yet that the round could act
-on. Two exceptions, both decided on 2026-10-15. A revocation and nothing
-else, made by somebody who manages the project, does not wait: it is
-judged at the gate, step 6, because the rights come from the instance. And
-the IT accounts in \code{approvers} approve as the creator does.
+\strong{A row belongs to its owner, and a change somebody else had a hand in
+waits for the owner's approval}, whether the round has applied the row
+already or not yet. The owner is the creator until the round passes the
+row on to the last referent whose change was approved and carried out.
+Who made the change is read from that row's own log, whole, and without
+the round's own writes, and only the writes still in the row count; the
+rule is \code{change_needs_approval()}. The log is asked once per row that needs
+it: a row whose seal moved, and a row not applied yet that the round could
+act on. Two exceptions, both decided on 2026-10-15. A revocation and
+nothing else, made by somebody who manages the project, does not wait: it
+is judged at the gate, step 6, because the rights come from the instance.
+And the IT accounts in \code{approvers} approve as the owner does.
+
+\strong{The gate judges whoever wrote what the round carries out}: every author
+of the change, and the owner when nobody changed the row. Each of them must
+have been able to do it by hand. Whoever approved is not asked, because
+approving is not writing and adds no power to the change: an approved
+change by a referent who does not manage the project stops at the gate,
+and an owner who lost the rights can still let a manager's change through.
+The gate asks on every round, so an owner who no longer manages the project
+stops the row even when nobody touched it.
+
+Without \code{channel_account} no write of \code{owned_by} is believed: every row
+belongs to its creator and none passes, which is the safe answer for a
+caller that does not configure it. Recognizing the channel by what it
+writes instead would hand a colleague's new row to a referent who imports
+\code{owned_by} on it before the round has written there.
 
 A row the log cannot name is \strong{held and not refused}, which is the same
 distinction step 6 already makes between a permission that does not grant
@@ -135,9 +160,11 @@ and one that could not be read. "I could not establish who filed this" is
 our failure and not the referent's, and the code that carries it is a
 \code{TRASPORTO_} one so the row comes back next round and the mail comes to us.
 The same holds for a changed row whose own log could not be read, or whose
-creator the log does not name: it takes \code{TRASPORTO_AUTORE_NON_LEGGIBILE}
+owner the log does not establish, and for a change with an author the log
+does not name, approved or not: it takes \code{TRASPORTO_AUTORE_NON_LEGGIBILE}
 and not \code{held}, because a held message asks for an approval that nobody
-could give, from a creator nobody could name.
+could give, from an owner nobody could name, and the gate would have
+nobody whose rights to ask.
 
 \strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
 the design — and the reason is latency: resolving and acting have the same

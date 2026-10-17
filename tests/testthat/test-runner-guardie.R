@@ -136,6 +136,30 @@ test_that("the guard is coarse on purpose and catches a mention in a comment", {
 })
 
 
+test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
+  # Same limit as the guards above: `dev/` is not in the built package. The
+  # package believes no write of `owned_by` without the account, so a runner
+  # that forgot it would keep every row with its creator and say nothing.
+  dev <- testthat::test_path("..", "..", "dev")
+  skip_if_not(dir.exists(dev), "dev/ is not in the built package")
+  for (nome in c("runner-canale.R")) {
+    testo <- paste(
+      readLines(file.path(dev, nome), warn = FALSE), collapse = "\n"
+    )
+    expect_match(
+      testo, 'CANALE_UTENTE <- Sys.getenv("UBEP_CANALE_UTENTE")',
+      fixed = TRUE, info = nome
+    )
+    expect_match(
+      testo, "if (!nzchar(CANALE_UTENTE)) {", fixed = TRUE, info = nome
+    )
+    expect_match(
+      testo, "channel_account = CANALE_UTENTE", fixed = TRUE, info = nome
+    )
+  }
+})
+
+
 # The write primitives, plus the one deliberate second write path. Read by both
 # guards below rather than written out twice, because what must not drift is
 # the list of what counts as a write: a fourth primitive added to one copy and

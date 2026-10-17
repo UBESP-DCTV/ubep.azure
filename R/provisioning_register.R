@@ -1351,9 +1351,10 @@ seal_needs_approval <- function(register, events, creators,
 #' conditions. It is what keeps a request whose owner has left UBEP from
 #' waiting for ever, without deleting the row and losing who filed it. The
 #' list lives on the machine that runs the round and never in this
-#' repository. One limit is worth knowing: the scope gate still asks the
-#' creator's rights on the project, so no approval, from IT or anybody else,
-#' carries a row whose creator no longer manages the project.
+#' repository. Whoever approves has no rights checked: the scope gate asks
+#' the rights of whoever wrote the change the round carries out, so an
+#' approval carries a manager's change on a row whose owner no longer manages
+#' the project, and never a change by somebody who does not.
 #'
 #' An unreadable log is not this function's to decide. It answers about the
 #' events and the creators it was handed, and a caller holding neither gets

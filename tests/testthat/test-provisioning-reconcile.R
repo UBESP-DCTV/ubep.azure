@@ -205,7 +205,11 @@ dizionario_json <- function() {
 # `@USERNAME` fills that field in with the account REDCap authenticated, so
 # the two agree. A test about the forgery is a test where they disagree, and
 # it says so by passing `creazioni` itself.
-registro_doppio <- function(records, eventi = "[]", creazioni = NULL) {
+# `proprietari` is the answer to the owners' log, `logtype = "record"`, and
+# defaults to the creations alone: a log where the channel never wrote
+# `owned_by`, so every row belongs to whoever created it.
+registro_doppio <- function(records, eventi = "[]", creazioni = NULL,
+                            proprietari = NULL) {
   if (is.null(creazioni)) {
     righe <- tryCatch(
       jsonlite::fromJSON(records, simplifyVector = FALSE),
@@ -224,11 +228,17 @@ registro_doppio <- function(records, eventi = "[]", creazioni = NULL) {
       auto_unbox = TRUE
     ))
   }
+  if (is.null(proprietari)) {
+    proprietari <- creazioni
+  }
   function(data) {
     if (identical(form_field_value(data[["content"]]), "metadata")) {
       return(dizionario_json())
     }
     if (identical(form_field_value(data[["content"]]), "log")) {
+      if (identical(form_field_value(data[["logtype"]] %||% ""), "record")) {
+        return(proprietari)
+      }
       # The two log questions are not the same question, and a double that
       # answered both from one fixture would let a test about edits quietly
       # stand in for a test about creations. `logtype` is what tells them
@@ -263,7 +273,7 @@ record_default <- function(row) {
     first_name = "Mario", last_name = "Rossi",
     contact_email = "mario.rossi@example.org",
     role_name = "data entry", dag_name = "", expiration = "",
-    requested_by = "anna.bianchi@ubep.unipd.it",
+    requested_by = "anna.bianchi@ubep.unipd.it", owned_by = "",
     request_status = "active",
     outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
     applied_seal = "", seal_state = "", approved_seal = ""
@@ -349,20 +359,33 @@ istanza_doppia <- function(..., contract = 3L) {
 # accept a value and store another, and a test whose grown row only ever
 # echoed back what was asked would pass just as well built from the write
 # response's own plan as from a genuine re-read.
-istanza_che_scrive <- function() {
+#
+# `richiedenti` manage the project, one state row each with User Rights; the
+# gate judges whoever wrote what the round carries out, so a test about a
+# change by somebody other than the owner names them here. `senza_diritti` are
+# users of the project who do not manage it.
+istanza_che_scrive <- function(richiedenti = "anna.bianchi@ubep.unipd.it",
+                               senza_diritti = character()) {
   written <- FALSE
-  requester <- list(
-    username = "anna.bianchi@ubep.unipd.it", project_id = 9003L,
-    role_name = NULL, dag_name = NULL, expiration = NULL, user_rights = 1L
+  utente <- function(chi, diritti) {
+    list(
+      username = chi, project_id = 9003L,
+      role_name = NULL, dag_name = NULL, expiration = NULL,
+      user_rights = diritti
+    )
+  }
+  requesters <- c(
+    lapply(richiedenti, utente, diritti = 1L),
+    lapply(senza_diritti, utente, diritti = 0L)
   )
 
   function(data) {
     if (identical(data[["operation"]], "apply") && isFALSE(data[["dry_run"]])) {
       written <<- TRUE
     }
-    rows <- list(requester)
+    rows <- requesters
     if (written) {
-      rows[[2]] <- list(
+      rows[[length(rows) + 1L]] <- list(
         username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
         role_name = "data entry", dag_name = NULL, expiration = "2027-01-01",
         user_rights = 0L
@@ -393,10 +416,13 @@ creazione_riuscita <- function() {
 }
 
 
+# `channel_account` is the account `registro_con_log()` signs the round's
+# writes with; a test that wants the package without it passes `NULL`.
 giro <- function(registro,
                  istanza,
                  directory = directory_doppia(),
                  creazione = creazione_riuscita(),
+                 channel_account = "svc-canale-ubep",
                  ...) {
   inviate <<- list() # nolint: assignment_linter.
   httr2::with_mocked_responses(
@@ -409,6 +435,7 @@ giro <- function(registro,
       graph_token = "gr4ph",
       graph_url = "graph.example.org/v1.0",
       instances = c("edc10", "edc12"),
+      channel_account = channel_account,
       at = "2026-08-14 03:00",
       ...
     )
@@ -1996,7 +2023,10 @@ test_that("l'approvazione di chi ha creato la riga la sblocca, e la risigilla", 
         )
       )
     ),
-    istanza_che_scrive(),
+    # Bruno wrote the change, so the gate judges Bruno's rights.
+    istanza_che_scrive(richiedenti = c(
+      "anna.bianchi@ubep.unipd.it", "bruno.verdi@ubep.unipd.it"
+    )),
     dry_run = FALSE
   )
 
@@ -2085,7 +2115,8 @@ creazioni_finte <- function(...) {
 # log, carrying only the fields it changed -- which is what REDCap does, so a
 # round that wrote something before reading the log reads its own write, and
 # reads it without the fields that did not move. `storia` is what happened
-# before the round, newest first.
+# before the round, newest first. Asked for the owners' log, it answers with
+# every row's events and the creations below them.
 registro_con_log <- function(records,
                              storia = list(),
                              canale = "svc-canale-ubep",
@@ -2132,6 +2163,22 @@ registro_con_log <- function(records,
           record = id
         )), scritti)
       }
+    }
+    # The owners' log, `logtype = "record"`: every row's events with no
+    # window, newest first, and the creations at the bottom, as REDCap holds
+    # them under the oldest stamps.
+    if (identical(form_field_value(data[["content"]]), "log") &&
+          identical(form_field_value(data[["logtype"]] %||% ""), "record")) {
+      nati <- jsonlite::fromJSON(
+        base(list(content = "log", logtype = "record_add")),
+        simplifyVector = FALSE
+      )
+      if (!is.null(names(nati))) {
+        nati <- list()
+      }
+      return(as.character(jsonlite::toJSON(
+        c(lapply(c(scritti, storia), completa), nati), auto_unbox = TRUE
+      )))
     }
     if (identical(form_field_value(data[["content"]]), "log") &&
           is.null(data[["logtype"]])) {
@@ -2392,7 +2439,8 @@ test_that("l'approvazione di chi ha creato la riga vale", {
   # eval
   esito <- giro_cambiata(
     list(approvazione(anna), cambio(bruno)),
-    approvato = sigillo_cambiata()
+    approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno))
   )
 
   # test
@@ -2619,6 +2667,7 @@ test_that("l'approvazione di IT sblocca la modifica di un altro", {
   esito <- giro_cambiata(
     list(approvazione(it), cambio(bruno)),
     approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
     approvers = it
   )
 
@@ -2744,24 +2793,23 @@ test_that("chi ha creato la riga revoca la propria richiesta subito", {
 })
 
 
-test_that("l'approvazione passa dal cancello sui diritti di chi ha creato la riga", { # nolint: line_length_linter.
+test_that("chi approva non ha bisogno dei diritti: un proprietario che li ha persi cede la riga", { # nolint: line_length_linter.
   # eval
-  # Anna approves Bruno's change, and Anna no longer manages the project.
+  # Anna approves Bruno's change, and Anna no longer manages the project;
+  # Bruno does.
   esito <- giro_cambiata(
     list(approvazione(anna), cambio(bruno)),
     approvato = sigillo_cambiata(),
-    istanza = istanza_doppia(list(user_rights = 0L))
+    istanza = istanza_che_scrive(richiedenti = bruno, senza_diritti = anna)
   )
 
   # test
-  # Whoever approves does not need rights of their own checked, because the
-  # only person who can approve is the creator, and the scope gate asks the
-  # creator's rights on every round. An approval is not a way past it.
-  expect_equal(
-    as.character(esito[["esiti"]][["outcome_detail"]]),
-    "DATO_AMBITO_NON_AUTORIZZATO"
-  )
-  expect_length(scritture(), 0L)
+  # The gate judges whoever wrote what the round carries out, and approving
+  # is not writing: it adds no power to the change. So an owner who lost the
+  # rights can still let a manager's change through, instead of leaving the
+  # row stuck with an owner whose rights nothing can bring back.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
 })
 
 
@@ -2789,7 +2837,8 @@ test_that("una modifica di due giorni fa approvata da chi ha creato la riga si e
       approvazione(anna, timestamp = "2026-08-13 23:00"),
       cambio(bruno, timestamp = "2026-08-12 22:00")
     ),
-    approvato = sigillo_cambiata()
+    approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno))
   )
 
   # test
@@ -3060,7 +3109,7 @@ test_that("l'approvazione di chi l'ha creata sblocca una richiesta non ancora es
         list(username = bruno, details = "role_name = 'read only'")
       )
     ),
-    istanza_che_scrive(),
+    istanza_che_scrive(richiedenti = c(anna, bruno)),
     dry_run = FALSE
   )
 
@@ -3517,4 +3566,308 @@ test_that("il giro non scrive requested_by nel registro", {
   }))
   expect_true("outcome" %in% scritti)
   expect_false("requested_by" %in% scritti)
+})
+
+
+# The channel's write of the row's owner, as the owner door leaves it: signed
+# by the account `giro()` configures, below the execution of the round that
+# decided the passage.
+passaggio <- function(chi, ...) {
+  utils::modifyList(
+    list(
+      timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 1",
+      details = paste0("owned_by = '", chi, "'")
+    ),
+    list(...)
+  )
+}
+
+
+# Newest first: Bruno changed Anna's row, Anna approved, a round carried it
+# out under seal 111111111111 and passed the row to Bruno. What the test adds
+# stands above that execution.
+dopo_passaggio <- function(...) {
+  c(
+    list(...),
+    list(
+      esecuzione("111111111111"), passaggio(bruno),
+      approvazione(anna, "111111111111"), cambio(bruno)
+    )
+  )
+}
+
+
+test_that("dopo il passaggio la modifica dell'ultimo si esegue subito", {
+  # eval
+  esito <- giro_cambiata(
+    dopo_passaggio(cambio(bruno, "expiration = '2027-01-31'")),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    ),
+    istanza = istanza_che_scrive(richiedenti = bruno)
+  )
+
+  # test
+  # The row is Bruno's now, so his own change needs nobody, and the gate
+  # judges his rights, not Anna's.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+})
+
+
+test_that("dopo il passaggio la modifica del creatore aspetta l'ultimo", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    dopo_passaggio(cambio(anna, "expiration = '2027-01-31'")),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    ),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Having created the row no longer makes it Anna's: her change is somebody
+  # else's, and the message asking for the approval goes to Bruno.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), bruno)
+})
+
+
+test_that("il cancello giudica ogni giro i diritti dell'ultimo", {
+  # eval
+  # The row stands as the round left it after the passage: sealed, approved,
+  # nobody has touched it since. Bruno owns it; only Anna manages 9003.
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  righe <- record_json(list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", outcome = "applied", applied_seal = fermo,
+    seal_state = "approved"
+  ))
+  storia <- list(
+    esecuzione(fermo), passaggio(bruno), approvazione(anna, fermo),
+    cambio(bruno), esecuzione()
+  )
+  solo_anna <- giro(
+    registro_con_log(righe, storia = storia), istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Nothing changed, and the gate still asks every round: an owner who lost
+  # the rights stops the row as the creator did before the passage.
+  expect_equal(
+    as.character(solo_anna[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("il cancello chiede i diritti di chi ha scritto la modifica, non di chi l'ha approvata", { # nolint: line_length_linter.
+  # eval
+  senza_bruno <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata(), istanza = istanza_che_scrive()
+  )
+  chiesti <- chiesti_allo_stato()
+  con_bruno <- giro_cambiata(
+    list(approvazione(anna), cambio(bruno)),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = bruno)
+  )
+
+  # test
+  # Whoever wrote what is carried out must be able to do it by hand. Anna's
+  # approval adds no power to Bruno's change, so it is Bruno who is asked.
+  expect_equal(
+    as.character(senza_bruno[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_true(bruno %in% chiesti)
+  expect_equal(as.character(con_bruno[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("una modifica approvata senza autore stabilito non si esegue", {
+  # eval
+  # The approval is Anna's and stands, but the change below it has a blank
+  # author: nobody whose rights the gate could ask.
+  esito <- giro_cambiata(
+    list(approvazione(anna), cambio("")),
+    approvato = sigillo_cambiata(),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno))
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("il valore di owned_by nel registro non si crede", {
+  # eval
+  # The field names Bruno, and the channel never wrote it: an import did.
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(anna)), riga = riga_cambiata(owned_by = bruno),
+    istanza = istanza_che_scrive(), mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The row is Anna's, read from the log: her change is carried out on her
+  # rights, and the outcome goes to her.
+  expect_length(scritture(), 1L)
+  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), anna)
+})
+
+
+test_that("il giro chiede il log dei proprietari una volta, senza finestra", {
+  # eval
+  giro(registro_doppio(record_json(list())), istanza_che_scrive())
+  chiesti <- Filter(function(req) {
+    identical(
+      form_field_value(req[["body"]][["data"]][["logtype"]] %||% ""), "record"
+    )
+  }, inviate)
+
+  # test
+  # The owner is the newest write of the channel, however old: a window would
+  # lose a passage decided before it and give the row back to its creator.
+  expect_length(chiesti, 1L)
+  expect_null(chiesti[[1L]][["body"]][["data"]][["beginTime"]])
+  expect_null(chiesti[[1L]][["body"]][["data"]][["record"]])
+})
+
+
+test_that("un log dei proprietari illeggibile tiene le righe, non le rifiuta", {
+  # eval
+  esito <- giro(
+    registro_doppio(
+      record_json(list()),
+      proprietari = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  # Nobody established is not the creator established: the row waits under
+  # a code that says the failure is ours, and the reason reaches the record.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+  expect_true(length(esito[["errori"]]) > 0L)
+})
+
+
+test_that("senza l'account del canale nessuna riga passa", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    dopo_passaggio(cambio(bruno, "expiration = '2027-01-31'")),
+    riga = riga_cambiata(
+      expiration = "2027-01-31", applied_seal = "111111111111"
+    ),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
+    mailer = posta[["mailer"]], channel_account = NULL
+  )
+
+  # test
+  # Anna is still the owner: Bruno's change waits for her.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), anna)
+})
+
+
+test_that("chi importa owned_by su una riga nuova la ferma, e l'esito va a IT", { # nolint: line_length_linter.
+  # eval
+  # Anna filed the row; before any round, Bruno imported owned_by alone.
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      storia = list(list(
+        username = bruno, details = paste0("owned_by = '", bruno, "'")
+      ))
+    ),
+    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # Two accounts write what only the channel writes, so the log cannot say
+  # whose the row is: neither Bruno's rights nor Anna's carry it, and the
+  # outcome goes to IT alone.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), "it@example.org")
+})
+
+
+test_that("una spazzata fallita manda l'esito a IT, con il referente non stabilito", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(list(record_id = "1"))),
+    istanza_doppia(list()),
+    function() stop("Could not resolve host"),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # The round stopped before reading the log, so nobody owns the row this
+  # round: the outcome goes to IT alone, and says so.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), "it@example.org")
+  expect_match(
+    mandate[[1L]][["body"]], "Referente della riga non stabilito", fixed = TRUE
+  )
+})
+
+
+test_that("una riga cambiata senza proprietario stabilito non si trattiene", {
+  # eval
+  # Bruno changes the role of Anna's applied row and imports owned_by with
+  # it: the log cannot say whose the row is.
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    list(cambio(
+      bruno, paste0("role_name = 'read only', owned_by = '", bruno, "'")
+    )),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # A held message asks the owner for an approval; with no owner it would
+  # say both that it goes to IT alone and that it goes to whoever owns the
+  # row. The row is not held: it waits under our code, and the message says
+  # only the first.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), "it@example.org")
+  expect_match(
+    mandate[[1L]][["body"]], "Referente della riga non stabilito", fixed = TRUE
+  )
+  expect_no_match(
+    mandate[[1L]][["body"]], "va al referente della riga", fixed = TRUE
+  )
 })

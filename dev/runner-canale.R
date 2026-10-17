@@ -74,14 +74,21 @@ POSTA_DA <- Sys.getenv("UBEP_POSTA_DA")
 POSTA_COPIA <- Sys.getenv("UBEP_POSTA_COPIA")
 POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
 
-# Le utenze IT che approvano una modifica su qualunque riga, come chi l'ha
-# creata (decisione del 2026-10-15): nomi utente REDCap separati da virgole.
-# L'elenco sta sulla macchina e non qui, perche' il repository e' pubblico.
-# Senza la variabile approva solo chi ha creato la riga, come prima.
+# Le utenze IT che approvano una modifica su qualunque riga, come il suo
+# proprietario (decisione del 2026-10-15): nomi utente REDCap separati da
+# virgole. L'elenco sta sulla macchina e non qui, perche' il repository e'
+# pubblico. Senza la variabile approva solo il proprietario della riga.
 APPROVATORI_IT <- trimws(strsplit(
   Sys.getenv("UBEP_APPROVATORI_IT"), ",", fixed = TRUE
 )[[1L]])
 APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
+
+# L'utenza REDCap che possiede il token del registro (decisione del
+# 2026-10-17). Il giro crede alle scritture di owned_by di questa utenza e
+# di nessun'altra: riconoscerla da cio' che scrive lascerebbe passare per
+# canale chi importa owned_by su una riga nuova. Sta sulla macchina e non
+# qui, perche' il repository e' pubblico.
+CANALE_UTENTE <- Sys.getenv("UBEP_CANALE_UTENTE")
 
 # Ci si ferma qui e non alla prima mail rifiutata. Senza mittente ogni
 # messaggio verrebbe respinto, quindi nessuna riga sarebbe scritta: il giro
@@ -92,6 +99,17 @@ if (POSTA && !nzchar(POSTA_DA)) {
   stop(
     "UBEP_POSTA=1 senza UBEP_POSTA_DA: senza mittente ogni messaggio ",
     "verrebbe rifiutato, e con esso si fermerebbe la scrittura nel registro.",
+    call. = FALSE
+  )
+}
+
+# Senza l'utenza del canale il pacchetto non crede a nessuna scrittura di
+# owned_by e nessuna riga passa: un giro che la dimenticasse terrebbe ogni
+# riga al suo creatore senza dirlo.
+if (!nzchar(CANALE_UTENTE)) {
+  stop(
+    "UBEP_CANALE_UTENTE non e' impostata: senza l'utenza del canale il ",
+    "giro non sa a quali scritture di owned_by credere.",
     call. = FALSE
   )
 }
@@ -222,6 +240,7 @@ esito <- ubep.azure:::provisioning_reconcile(
   copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
   reply_to = if (nzchar(POSTA_RISPOSTE)) POSTA_RISPOSTE else NULL,
   approvers = APPROVATORI_IT,
+  channel_account = CANALE_UTENTE,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 
