@@ -1400,7 +1400,10 @@ provisioning_reconcile <- function(register_url,
   # A passage that is not written is lost: the next round reads the owner
   # from the log, finds the old one, and the row asks the old owner for its
   # approvals. That is the direction that does not grant, so a refused body
-  # goes into the round's errors and the round goes on.
+  # goes into the round's errors and the round goes on. The outcome has left
+  # already by then: the new owner has read that the row is theirs, and the
+  # passage is not in the log. The error in the round's record is what IT
+  # acts on.
   #
   # Without the channel's account the door is not called at all. A round that
   # does not know which account is its own would write the creator over a
