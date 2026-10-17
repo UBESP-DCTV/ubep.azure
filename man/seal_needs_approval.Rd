@@ -4,7 +4,13 @@
 \alias{seal_needs_approval}
 \title{Whether each changed row waits for an approval}
 \usage{
-seal_needs_approval(register, events, creators, approvers = character())
+seal_needs_approval(
+  register,
+  events,
+  creators,
+  approvers = character(),
+  channel_account = NULL
+)
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
@@ -17,6 +23,9 @@ order of \code{register}.}
 
 \item{approvers}{The IT accounts whose approval counts on any row: it
 decides what an earlier execution covered.}
+
+\item{channel_account}{The REDCap username that holds the round's token,
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 A logical vector, one answer per row. It answers about every row

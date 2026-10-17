@@ -126,11 +126,16 @@ register_unsealed_fields <- function() {
 #'
 #' Every read-only field but `requested_by`, which `@USERNAME` fills in with
 #' the account that creates the row: it is the one read-only field a person
-#' writes. The rest are `@READONLY` on the form, and the import right that
-#' would let a person write them anyway is granted to nobody, so an event that
-#' wrote one of them was written by the account that holds the round's token.
-#' That is how the round tells its own writes apart in the event log without
-#' anybody configuring the name of that account.
+#' writes. The rest are `@READONLY` on the form, and only the round is meant
+#' to write them.
+#'
+#' Meant, and not guaranteed. `@READONLY` governs the form REDCap draws, and
+#' an import draws none: the import right is open to the referents, and an
+#' import writes these fields as it writes any other. So a write of one of
+#' them does not say by itself that the round made it. The account that holds
+#' the round's token is configured, `channel_account`, and
+#' `log_channel_accounts()` reads these fields to find any other account that
+#' wrote them, which makes the row's log ambiguous.
 #'
 #' @return A character vector of field names.
 #'
@@ -386,11 +391,11 @@ log_wrote <- function(events, fields) {
 
 #' Which accounts in a row's log are the channel
 #'
-#' The authors of the events that wrote a field only the channel writes,
-#' `register_channel_fields()`. No configuration names the account that holds
-#' the round's token, and none is needed: on any row the round has applied
-#' the log carries at least the write of its seal, and that write is signed by
-#' that account.
+#' The account that holds the round's token, as the machine that runs the
+#' round configures it, followed by every other account that wrote a field
+#' only the channel is meant to write, `register_channel_fields()`, in the
+#' row's current life. Callers read the answer one way: longer than one, and
+#' the log cannot say which writes are the round's, so the row is held.
 #'
 #' It has to be recognized by the account and not by the event. REDCap logs
 #' only the fields an import changed, so when the round writes back a username
@@ -398,19 +403,52 @@ log_wrote <- function(events, fields) {
 #' alone -- an intent field, written by the channel, with nothing in the event
 #' itself to say so.
 #'
+#' The account is configured, decided on 2026-10-17. Recognized by what it
+#' writes alone, the channel is whoever wrote a channel field, and the import
+#' right is open to the referents: one who imports `owned_by` on a colleague's
+#' new row, before the round has written on it, would be the only "channel"
+#' of that row. Named by the configuration, the round's account answers first
+#' even on a row where it has not written yet, and that referent comes second,
+#' which makes the row ambiguous.
+#'
+#' The configured name is typed by hand on the machine, so it is compared
+#' without regard to case, and answered with the spelling the log carries
+#' when the log carries it. Without it, `NULL`, the answer is the authors of
+#' the channel fields, as before the account was configured: what the round
+#' judges does not change for a caller that does not pass it, and
+#' `log_owner()` believes no write of `owned_by`.
+#'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured.
 #'
-#' @return A character vector of usernames, empty when no event wrote one of
-#'   those fields.
+#' @return A character vector of usernames. With `channel_account`, it starts
+#'   with that account and is one long when nobody else wrote a channel field.
+#'   Without, it is empty when no event wrote one of those fields.
 #'
 #' @keywords internal
-log_channel_accounts <- function(events, record) {
-  stopifnot(is.data.frame(events))
+log_channel_accounts <- function(events, record, channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events),
+    is.null(channel_account) ||
+      (is.character(channel_account) && length(channel_account) == 1L &&
+         !is.na(channel_account) && nzchar(trimws(channel_account)))
+  )
 
   mine <- log_of_record(events, record)
   authors <- trimws(as.character(mine[["username"]]))
-  unique(authors[log_wrote(mine, register_channel_fields()) & nzchar(authors)])
+  writers <- unique(
+    authors[log_wrote(mine, register_channel_fields()) & nzchar(authors)]
+  )
+  if (is.null(channel_account)) {
+    return(writers)
+  }
+
+  configured <- trimws(channel_account)
+  logged <- authors[which(tolower(authors) == tolower(configured))]
+  own <- if (length(logged) > 0L) logged[[1L]] else configured
+  c(own, writers[!tolower(writers) %in% tolower(configured)])
 }
 
 
@@ -471,6 +509,107 @@ log_creators <- function(events, records) {
 }
 
 
+#' Whether each of these stamps reads as one of the log's
+#'
+#' REDCap writes its stamps `"%Y-%m-%d %H:%M"`, to the minute, in the
+#' instance's civil time. A stamp that does not start that way cannot be
+#' placed before or after anything, and every reader that dates by the log
+#' answers "unknown" on it rather than comparing a string it cannot read.
+#'
+#' @param stamps The stamps, as the log's `timestamp` column carries them.
+#'
+#' @return A logical vector, one answer per stamp.
+#'
+#' @keywords internal
+log_stamp_reads <- function(stamps) {
+  grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}", stamps)
+}
+
+
+#' Who a row belongs to, from the log
+#'
+#' The value of the newest write of `owned_by` signed by the account that
+#' holds the round's token, in the row's current life; the creator, as
+#' `log_creators()` names it, when that account never wrote one.
+#'
+#' The field itself is not believed. `owned_by` is `@READONLY` on the form,
+#' but an import draws no form: the import right is open to the referents,
+#' and an import writes the field as it writes any other. The log names who
+#' was authenticated for each write, so it says which value the round wrote,
+#' the same principle that names the creator from the log and not from
+#' `requested_by`.
+#'
+#' The round's account is configured, decided on 2026-10-17, and without it,
+#' `NULL`, no write of `owned_by` is believed and the row belongs to its
+#' creator. Recognizing the round by what it writes would hand the row to a
+#' referent who imports `owned_by` alone on a colleague's new row before the
+#' round has written on it; with the account configured, that referent makes
+#' the row ambiguous, `log_channel_accounts()`, and the answer is unknown.
+#' The ambiguity is read first, so a row whose log is ambiguous is unknown
+#' with or without the configured account.
+#'
+#' `before` asks who the row belonged to at a moment, and only what stands
+#' strictly before it counts. It is in the instance's civil time, which is
+#' Rome, the time the log's stamps are in, as for `report_executions()`: no
+#' conversion can move a write across it. A stamp of the row's log that does
+#' not read as one, `log_stamp_reads()`, makes the answer unknown, since the
+#' write it dates could stand on either side.
+#'
+#' The newest write is read from the order of the answer, REDCap's own,
+#' newest first, as everywhere else in the log. A write by the channel that
+#' leaves the field blank names nobody, and the one below it is read.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured.
+#' @param before A moment, `"%Y-%m-%d %H:%M"` in Rome, or `NULL` to read the
+#'   whole log.
+#'
+#' @return One username; `""` when no write of `owned_by` is believed and the
+#'   creator is not known; `NA_character_` when the log cannot say.
+#'
+#' @keywords internal
+log_owner <- function(events, record, creator, channel_account = NULL,
+                      before = NULL) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.null(before) ||
+      (is.character(before) && length(before) == 1L &&
+         isTRUE(log_stamp_reads(before)))
+  )
+
+  fallback <- if (is.na(creator)) "" else trimws(creator)
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (length(channel) > 1L) {
+    return(NA_character_)
+  }
+  if (is.null(channel_account)) {
+    return(fallback)
+  }
+
+  if (!is.null(before)) {
+    stamps <- trimws(as.character(mine[["timestamp"]]))
+    if (!all(log_stamp_reads(stamps))) {
+      return(NA_character_)
+    }
+    mine <- mine[substr(stamps, 1L, 16L) < before, , drop = FALSE]
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  owners <- log_value(mine, "owned_by")
+  passed <- which(
+    log_wrote(mine, "owned_by") & authors == channel[[1L]] & nzchar(owners)
+  )
+  if (length(passed) == 0L) {
+    return(fallback)
+  }
+  owners[[passed[[1L]]]]
+}
+
+
 #' Who changed a row since the round last applied it
 #'
 #' The people whose writes to an intent field stand between the round's last
@@ -503,6 +642,8 @@ log_creators <- function(events, records) {
 #' @param record The record id to look at.
 #' @param fields The intent fields. Passed in by a caller that asks about
 #'   many rows, since deriving them reads the packaged dictionary.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return A character vector of usernames, newest first and each once;
 #'   `character()` when nobody changed an intent field; `NA_character_` when
@@ -510,11 +651,12 @@ log_creators <- function(events, records) {
 #'
 #' @keywords internal
 log_change_authors <- function(events, record,
-                               fields = register_intent_fields()) {
+                               fields = register_intent_fields(),
+                               channel_account = NULL) {
   stopifnot(is.data.frame(events), is.character(fields))
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(NA_character_)
   }
@@ -624,6 +766,8 @@ log_approver <- function(authors, creator, approvers = character()) {
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return A character vector of usernames, newest first and each once;
 #'   `character()` when the stretch holds no uncovered change or the log holds
@@ -632,14 +776,15 @@ log_approver <- function(authors, creator, approvers = character()) {
 #' @keywords internal
 log_uncovered_authors <- function(events, record, creator,
                                   fields = register_intent_fields(),
-                                  approvers = character()) {
+                                  approvers = character(),
+                                  channel_account = NULL) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.character(fields), is.character(approvers)
   )
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(NA_character_)
   }
@@ -695,6 +840,8 @@ log_uncovered_authors <- function(events, record, creator,
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return A character vector of usernames, each once; `NA_character_` when
 #'   either half cannot say.
@@ -702,10 +849,13 @@ log_uncovered_authors <- function(events, record, creator,
 #' @keywords internal
 log_pending_authors <- function(events, record, creator,
                                 fields = register_intent_fields(),
-                                approvers = character()) {
+                                approvers = character(),
+                                channel_account = NULL) {
   authors <- c(
-    log_change_authors(events, record, fields),
-    log_uncovered_authors(events, record, creator, fields, approvers)
+    log_change_authors(events, record, fields, channel_account),
+    log_uncovered_authors(
+      events, record, creator, fields, approvers, channel_account
+    )
   )
   if (anyNA(authors)) {
     return(NA_character_)
@@ -814,13 +964,16 @@ change_needs_approval <- function(authors, creator, sealed = TRUE,
 #' @param fields The intent fields.
 #'
 #' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return `TRUE` when the others wrote a revocation and nothing else.
 #'
 #' @keywords internal
 log_revocation_only <- function(events, record, creator,
                                 fields = register_intent_fields(),
-                                approvers = character()) {
+                                approvers = character(),
+                                channel_account = NULL) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.character(fields), is.character(approvers)
@@ -831,14 +984,14 @@ log_revocation_only <- function(events, record, creator,
     return(FALSE)
   }
   uncovered <- log_uncovered_authors(
-    events, record, creator, fields, approvers
+    events, record, creator, fields, approvers, channel_account
   )
   if (anyNA(uncovered) || length(uncovered) > 0L) {
     return(FALSE)
   }
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(FALSE)
   }
@@ -873,13 +1026,16 @@ log_revocation_only <- function(events, record, creator,
 #'   order of `register`.
 #' @param approvers The IT accounts whose approval counts on any row: it
 #'   decides what an earlier execution covered.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return A logical vector, one answer per row. It answers about every row
 #'   it is handed, so the caller restricts it to the rows that changed.
 #'
 #' @keywords internal
 seal_needs_approval <- function(register, events, creators,
-                                approvers = character()) {
+                                approvers = character(),
+                                channel_account = NULL) {
   stopifnot(
     is.data.frame(register), is.data.frame(events),
     is.character(creators), length(creators) == nrow(register),
@@ -892,7 +1048,9 @@ seal_needs_approval <- function(register, events, creators,
   intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
     change_needs_approval(
-      log_pending_authors(events, ids[[i]], creators[[i]], intent, approvers),
+      log_pending_authors(
+        events, ids[[i]], creators[[i]], intent, approvers, channel_account
+      ),
       creators[[i]],
       sealed = nzchar(sealed[[i]])
     )
@@ -946,12 +1104,15 @@ seal_needs_approval <- function(register, events, creators,
 #'   order of `register`. `""` approves nothing.
 #' @param approvers The IT accounts whose approval counts on any row, as REDCap
 #'   usernames.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return A logical vector, one answer per row.
 #'
 #' @keywords internal
 seal_approved <- function(register, events, creators,
-                          approvers = character()) {
+                          approvers = character(),
+                          channel_account = NULL) {
   stopifnot(
     is.data.frame(register), is.data.frame(events),
     is.character(creators), length(creators) == nrow(register),
@@ -973,7 +1134,9 @@ seal_approved <- function(register, events, creators,
       return(FALSE)
     }
 
-    log_approval_stands(events, ids[[i]], creators[[i]], intent, approvers)
+    log_approval_stands(
+      events, ids[[i]], creators[[i]], intent, approvers, channel_account
+    )
   }, logical(1))
 }
 
@@ -1003,20 +1166,23 @@ seal_approved <- function(register, events, creators,
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return `TRUE` when the approval stands.
 #'
 #' @keywords internal
 log_approval_stands <- function(events, record, creator,
                                 fields = register_intent_fields(),
-                                approvers = character()) {
+                                approvers = character(),
+                                channel_account = NULL) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.character(fields), is.character(approvers)
   )
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(FALSE)
   }

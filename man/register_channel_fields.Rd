@@ -12,10 +12,16 @@ A character vector of field names.
 \description{
 Every read-only field but \code{requested_by}, which \verb{@USERNAME} fills in with
 the account that creates the row: it is the one read-only field a person
-writes. The rest are \verb{@READONLY} on the form, and the import right that
-would let a person write them anyway is granted to nobody, so an event that
-wrote one of them was written by the account that holds the round's token.
-That is how the round tells its own writes apart in the event log without
-anybody configuring the name of that account.
+writes. The rest are \verb{@READONLY} on the form, and only the round is meant
+to write them.
+}
+\details{
+Meant, and not guaranteed. \verb{@READONLY} governs the form REDCap draws, and
+an import draws none: the import right is open to the referents, and an
+import writes these fields as it writes any other. So a write of one of
+them does not say by itself that the round made it. The account that holds
+the round's token is configured, \code{channel_account}, and
+\code{log_channel_accounts()} reads these fields to find any other account that
+wrote them, which makes the row's log ambiguous.
 }
 \keyword{internal}

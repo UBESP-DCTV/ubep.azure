@@ -1225,6 +1225,131 @@ test_that("an edit does not pass for a creation if REDCap ignored the filter", {
 })
 
 
+# The account the round's token belongs to, as the runner configures it.
+canale <- "svc-canale-ubep"
+
+# The channel's write of the row's owner, as the owner door leaves it.
+passaggio <- function(chi, ...) {
+  list(
+    username = canale, action = "Update record (API) 1",
+    details = paste0("owned_by = '", chi, "'"), ...
+  )
+}
+
+
+test_that("senza scritture del canale la riga e' del creatore", {
+  eventi <- eventi_finti(applicata)
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+  expect_equal(log_owner(eventi, "1", "", canale), "")
+})
+
+
+test_that("il proprietario e' l'ultima owned_by scritta dal canale", {
+  eventi <- eventi_finti(
+    passaggio("bruno.verdi@ubep.unipd.it"), applicata, passaggio(creatrice)
+  )
+  expect_equal(
+    log_owner(eventi, "1", creatrice, canale), "bruno.verdi@ubep.unipd.it"
+  )
+  # Typed by hand on the machine: a capital letter does not void it.
+  expect_equal(
+    log_owner(eventi, "1", creatrice, "SVC-Canale-Ubep"),
+    "bruno.verdi@ubep.unipd.it"
+  )
+})
+
+
+test_that("senza l'account del canale nessuna owned_by si crede", {
+  eventi <- eventi_finti(passaggio("bruno.verdi@ubep.unipd.it"), applicata)
+  expect_equal(log_owner(eventi, "1", creatrice), creatrice)
+})
+
+
+test_that("una owned_by scritta da un'altra utenza rende ignoto il proprietario", { # nolint: line_length_linter.
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"
+    ),
+    applicata
+  )
+  expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
+})
+
+
+# revisione 1
+test_that("chi importa owned_by su una riga nuova non passa per il canale", {
+  # Anna filed the row; before the round ever wrote on it, Bruno imported
+  # owned_by alone. He is the only account that wrote a channel field.
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "owned_by = 'bruno.verdi@ubep.unipd.it'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  # Recognized by what it writes, the channel would be Bruno.
+  expect_equal(log_channel_accounts(eventi, "1"), "bruno.verdi@ubep.unipd.it")
+  expect_equal(
+    log_channel_accounts(eventi, "1", canale),
+    c(canale, "bruno.verdi@ubep.unipd.it")
+  )
+  expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
+  expect_true(is.na(
+    log_pending_authors(eventi, "1", creatrice, channel_account = canale)
+  ))
+})
+
+
+test_that("la vita di prima di un id riusato non lascia il proprietario", {
+  eventi <- eventi_finti(
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1'"
+    ),
+    passaggio("collaudo.prova@ubep.unipd.it"),
+    list(
+      username = "collaudo.prova@ubep.unipd.it", action = "Create record 1",
+      details = "record_id = '1'"
+    )
+  )
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+})
+
+
+test_that("un evento di un'altra riga non nomina il proprietario", {
+  eventi <- eventi_finti(
+    passaggio("bruno.verdi@ubep.unipd.it", record = "2"), applicata
+  )
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+})
+
+
+test_that("il proprietario alla data legge solo cio' che viene prima", {
+  eventi <- eventi_finti(
+    passaggio("bruno.verdi@ubep.unipd.it", timestamp = "2026-11-01 00:00"),
+    passaggio("cinzia.rossi@ubep.unipd.it", timestamp = "2026-10-31 23:59"),
+    applicata
+  )
+  expect_equal(
+    log_owner(eventi, "1", creatrice, canale, before = "2026-11-01 00:00"),
+    "cinzia.rossi@ubep.unipd.it"
+  )
+  expect_equal(
+    log_owner(eventi, "1", creatrice, canale, before = "2026-10-31 23:59"),
+    creatrice
+  )
+  storto <- eventi_finti(passaggio(creatrice, timestamp = "ieri"), applicata)
+  expect_true(is.na(
+    log_owner(storto, "1", creatrice, canale, before = "2026-11-01 00:00")
+  ))
+})
+
+
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.
 # The register was emptied on 2026-09-01, and the id came back as a request

@@ -4,23 +4,27 @@
 \alias{log_channel_accounts}
 \title{Which accounts in a row's log are the channel}
 \usage{
-log_channel_accounts(events, record)
+log_channel_accounts(events, record, channel_account = NULL)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
 
 \item{record}{The record id to look at.}
+
+\item{channel_account}{The REDCap username that holds the round's token,
+or \code{NULL} when it is not configured.}
 }
 \value{
-A character vector of usernames, empty when no event wrote one of
-those fields.
+A character vector of usernames. With \code{channel_account}, it starts
+with that account and is one long when nobody else wrote a channel field.
+Without, it is empty when no event wrote one of those fields.
 }
 \description{
-The authors of the events that wrote a field only the channel writes,
-\code{register_channel_fields()}. No configuration names the account that holds
-the round's token, and none is needed: on any row the round has applied
-the log carries at least the write of its seal, and that write is signed by
-that account.
+The account that holds the round's token, as the machine that runs the
+round configures it, followed by every other account that wrote a field
+only the channel is meant to write, \code{register_channel_fields()}, in the
+row's current life. Callers read the answer one way: longer than one, and
+the log cannot say which writes are the round's, so the row is held.
 }
 \details{
 It has to be recognized by the account and not by the event. REDCap logs
@@ -28,5 +32,20 @@ only the fields an import changed, so when the round writes back a username
 it resolved and the verdict has not moved, the event carries \code{username}
 alone -- an intent field, written by the channel, with nothing in the event
 itself to say so.
+
+The account is configured, decided on 2026-10-17. Recognized by what it
+writes alone, the channel is whoever wrote a channel field, and the import
+right is open to the referents: one who imports \code{owned_by} on a colleague's
+new row, before the round has written on it, would be the only "channel"
+of that row. Named by the configuration, the round's account answers first
+even on a row where it has not written yet, and that referent comes second,
+which makes the row ambiguous.
+
+The configured name is typed by hand on the machine, so it is compared
+without regard to case, and answered with the spelling the log carries
+when the log carries it. Without it, \code{NULL}, the answer is the authors of
+the channel fields, as before the account was configured: what the round
+judges does not change for a caller that does not pass it, and
+\code{log_owner()} believes no write of \code{owned_by}.
 }
 \keyword{internal}

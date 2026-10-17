@@ -9,7 +9,8 @@ log_revocation_only(
   record,
   creator,
   fields = register_intent_fields(),
-  approvers = character()
+  approvers = character(),
+  channel_account = NULL
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ log_revocation_only(
 \item{fields}{The intent fields.}
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
+
+\item{channel_account}{The REDCap username that holds the round's token,
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 \code{TRUE} when the others wrote a revocation and nothing else.

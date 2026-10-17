@@ -4,7 +4,13 @@
 \alias{seal_approved}
 \title{Whether a change to an applied row has been approved}
 \usage{
-seal_approved(register, events, creators, approvers = character())
+seal_approved(
+  register,
+  events,
+  creators,
+  approvers = character(),
+  channel_account = NULL
+)
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
@@ -16,6 +22,9 @@ order of \code{register}. \code{""} approves nothing.}
 
 \item{approvers}{The IT accounts whose approval counts on any row, as REDCap
 usernames.}
+
+\item{channel_account}{The REDCap username that holds the round's token,
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 A logical vector, one answer per row.

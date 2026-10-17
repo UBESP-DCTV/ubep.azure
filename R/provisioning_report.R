@@ -203,7 +203,7 @@ report_executions <- function(events, record) {
   stamps <- trimws(as.character(mine[["timestamp"]][sealed]))
 
   # A stamp that does not read as one cannot place the row in any month.
-  if (!all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}", stamps))) {
+  if (!all(log_stamp_reads(stamps))) {
     return(NA_character_)
   }
 
@@ -252,7 +252,7 @@ report_person_since <- function(events, record) {
   }
   stamps <- trimws(as.character(mine[["timestamp"]][sealed]))
 
-  if (!all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}", stamps))) {
+  if (!all(log_stamp_reads(stamps))) {
     return(NA_character_)
   }
   if (length(stamps) == 0L) {

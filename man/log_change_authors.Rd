@@ -4,7 +4,12 @@
 \alias{log_change_authors}
 \title{Who changed a row since the round last applied it}
 \usage{
-log_change_authors(events, record, fields = register_intent_fields())
+log_change_authors(
+  events,
+  record,
+  fields = register_intent_fields(),
+  channel_account = NULL
+)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -13,6 +18,9 @@ log_change_authors(events, record, fields = register_intent_fields())
 
 \item{fields}{The intent fields. Passed in by a caller that asks about
 many rows, since deriving them reads the packaged dictionary.}
+
+\item{channel_account}{The REDCap username that holds the round's token,
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 A character vector of usernames, newest first and each once;
