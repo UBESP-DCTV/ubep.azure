@@ -1134,6 +1134,71 @@ log_revocation_only <- function(events, record, creator,
 }
 
 
+#' Who owns a row once the round has carried it out
+#'
+#' The owner after the execution of the version the log describes: the row
+#' passes to the newest of the authors who count, `log_pending_authors()`,
+#' which is the referent whose change the round is carrying out. IT included:
+#' a change IT wrote and the round carried out makes IT the owner.
+#'
+#' The passage is decided once, by the round that carries the change out,
+#' after the gate has let it through: what this function reads is a version
+#' already approved, and it does not judge the approval again.
+#'
+#' The act is judged, not the path that led to it (choice of \[clc\] of
+#' 2026-10-17). A revocation does not move the row, whether it went through
+#' freely or was approved: when what the others wrote is a withdrawal and
+#' nothing else, `log_revocation_only()`, the owner stays who it was.
+#'
+#' Without the channel's account, `channel_account = NULL`, no write of
+#' `owned_by` is believed and no row passes: the answer is the owner of
+#' today, the creator.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers.
+#' @param fields The intent fields.
+#' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap username that holds the round's token,
+#'   or `NULL` when it is not configured.
+#' @param current The row as the round will leave it, a data frame of one
+#'   row, or `NULL` when there is no row in hand, for `log_pending_authors()`.
+#'
+#' @return One username; `""` or `NA_character_` as `log_owner()` answers
+#'   them, and `NA_character_` too when the log cannot say who the authors
+#'   are.
+#'
+#' @keywords internal
+log_next_owner <- function(events, record, creator,
+                           fields = register_intent_fields(),
+                           approvers = character(),
+                           channel_account = NULL, current = NULL) {
+  owner <- log_owner(events, record, creator, channel_account)
+  if (is.na(owner) || !nzchar(owner) || is.null(channel_account)) {
+    return(owner)
+  }
+
+  pending <- log_pending_authors(
+    events, record, creator, fields, approvers,
+    channel_account = channel_account, current = current
+  )
+  if (anyNA(pending)) {
+    return(NA_character_)
+  }
+  if (length(pending) == 0L) {
+    return(owner)
+  }
+  if (log_revocation_only(
+    events, record, creator, fields, approvers,
+    channel_account = channel_account
+  )) {
+    return(owner)
+  }
+
+  pending[[1L]]
+}
+
+
 #' Whether each changed row waits for an approval
 #'
 #' `change_needs_approval()` asked once per row, of the authors the row's log

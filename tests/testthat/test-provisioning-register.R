@@ -1811,6 +1811,85 @@ test_that("il tratto distingue il proprietario di allora da quello di oggi", {
   )
 })
 
+test_that("la modifica approvata ed eseguita passa la riga a chi l'ha scritta", { # nolint: line_length_linter.
+  chi <- function(..., account = canale) {
+    log_next_owner(
+      eventi_finti(..., applicata), "1", creatrice,
+      approvers = "it.prova@ubep.unipd.it", channel_account = account
+    )
+  }
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  cinzia <- "cinzia.rossi@ubep.unipd.it"
+  it <- "it.prova@ubep.unipd.it"
+  ok <- list(username = creatrice, details = "approved_seal = 'x'")
+  expect_equal(
+    chi(ok, list(username = bruno, details = "role_name = 'a'")), bruno
+  )
+  # Without the configured account nobody passes the row.
+  expect_equal(
+    chi(ok, list(username = bruno, details = "role_name = 'a'"),
+        account = NULL),
+    creatrice
+  )
+  expect_equal(
+    chi(list(username = creatrice, details = "role_name = 'a'")), creatrice
+  )
+  expect_equal(chi(ok, list(username = it, details = "dag_name = 'b'")), it)
+  expect_equal(
+    chi(ok, list(username = cinzia, details = "dag_name = 'b'"),
+        list(username = bruno, details = "role_name = 'a'")),
+    cinzia
+  )
+  expect_equal(
+    chi(list(username = creatrice, details = "dag_name = 'b'"), ok,
+        list(username = bruno, details = "role_name = 'a'")),
+    creatrice
+  )
+})
+
+test_that("una revoca, libera o approvata, non passa la riga", {
+  revoca <- list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "request_status = 'revoked'"
+  )
+  ok <- list(username = creatrice, details = "approved_seal = 'x'")
+  expect_equal(
+    log_next_owner(
+      eventi_finti(revoca, applicata), "1", creatrice, channel_account = canale
+    ),
+    creatrice
+  )
+  expect_equal(
+    log_next_owner(
+      eventi_finti(ok, revoca, applicata), "1", creatrice,
+      channel_account = canale
+    ),
+    creatrice
+  )
+})
+
+test_that("dopo un passaggio la riga passa ancora a chi scrive per ultimo", {
+  eventi <- passata(
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "approved_seal = 'x'"
+    ),
+    list(username = "cinzia.rossi@ubep.unipd.it", details = "dag_name = 'b'")
+  )
+  expect_equal(
+    log_next_owner(eventi, "1", creatrice, channel_account = canale),
+    "cinzia.rossi@ubep.unipd.it"
+  )
+})
+
+test_that("un log che non dice gli autori non stabilisce il proprietario", {
+  eventi <- eventi_finti(
+    list(username = "", details = "role_name = 'a'"), applicata
+  )
+  expect_true(
+    is.na(log_next_owner(eventi, "1", creatrice, channel_account = canale))
+  )
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.
