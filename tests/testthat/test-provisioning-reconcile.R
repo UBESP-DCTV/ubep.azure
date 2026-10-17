@@ -3765,7 +3765,36 @@ test_that("un log dei proprietari illeggibile tiene le righe, non le rifiuta", {
     "TRASPORTO_AUTORE_NON_LEGGIBILE"
   )
   expect_length(scritture(), 0L)
-  expect_true(length(esito[["errori"]]) > 0L)
+  # The register's answer to the owners' log, the only log that failed here.
+  expect_match(
+    esito[["errori"]], "^TRASPORTO_REGISTRO_RIFIUTATO$", all = FALSE
+  )
+})
+
+
+test_that("senza il log delle creazioni il log dei proprietari non si chiede", {
+  # eval
+  giro(
+    registro_doppio(
+      record_json(list()),
+      creazioni = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_doppia(list()),
+    dry_run = FALSE
+  )
+  chiesti <- function(tipo) {
+    Filter(function(req) {
+      identical(
+        form_field_value(req[["body"]][["data"]][["logtype"]] %||% ""), tipo
+      )
+    }, inviate)
+  }
+
+  # test
+  # The owner falls back on the creator, so without the creators the owners'
+  # log could answer nothing the round would act on.
+  expect_length(chiesti("record_add"), 1L)
+  expect_length(chiesti("record"), 0L)
 })
 
 
@@ -3829,12 +3858,16 @@ test_that("una spazzata fallita manda l'esito a IT, con il referente non stabili
 
   # test
   # The round stopped before reading the log, so nobody owns the row this
-  # round: the outcome goes to IT alone, and says so.
+  # round: the outcome goes to IT alone, and says so in both languages.
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
   mandate <- posta[["mandate"]]()
   expect_equal(vapply(mandate, `[[`, "", "to"), "it@example.org")
   expect_match(
     mandate[[1L]][["body"]], "Referente della riga non stabilito", fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]], "Whoever owns the row is not established",
+    fixed = TRUE
   )
 })
 
