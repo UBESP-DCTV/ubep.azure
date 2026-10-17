@@ -1901,6 +1901,30 @@ test_that("chi ha scritto solo la revoca non prende la riga di un altro", {
   )
 })
 
+test_that("una modifica scoperta sotto il sigillo non e' una revoca", {
+  revoca <- list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "request_status = 'revoked'"
+  )
+  ok <- list(username = creatrice, details = "approved_seal = 'x'")
+  chi <- function(sotto) {
+    log_next_owner(
+      eventi_finti(
+        ok, revoca, applicata,
+        list(username = sotto, details = "role_name = 'a'")
+      ),
+      "1", creatrice, channel_account = canale
+    )
+  }
+  # Cinzia's change below the seal is in the version carried out; Bruno only
+  # withdrew above it.
+  expect_equal(
+    chi("cinzia.rossi@ubep.unipd.it"), "cinzia.rossi@ubep.unipd.it"
+  )
+  # Bruno's own change below the seal makes him more than a withdrawal.
+  expect_equal(chi("bruno.verdi@ubep.unipd.it"), "bruno.verdi@ubep.unipd.it")
+})
+
 test_that("dopo un passaggio la riga passa ancora a chi scrive per ultimo", {
   eventi <- passata(
     list(

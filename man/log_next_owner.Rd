@@ -49,15 +49,22 @@ already approved, and it does not judge the approval again.
 
 The act is judged, not the path that led to it (decided on 2026-10-17). A
 revocation does not move the row, whether it went through freely or was
-approved: whoever wrote, since the round's last execution, only
-\code{request_status = 'revoked'} and no other intent field never becomes the
-owner, even when the version also holds somebody else's change. The row
-passes to the newest of the other authors who count, and stays with the
-owner of today when only withdrawals are left. What an author wrote is read
-from every write of theirs since the last execution, not only from the
-writes still in the row, as \code{log_revocation_only()} reads the others; an
-author who counts only for a change below the execution,
-\code{log_uncovered_authors()}, wrote no withdrawal there and is not one.
+approved: whoever wrote only \code{request_status = 'revoked'} and no other
+intent field never becomes the owner, even when the version also holds
+somebody else's change. The row passes to the newest of the other authors
+who count, and stays with the owner of today when only withdrawals are
+left.
+
+An author counts in two stretches, and is a withdrawal alone only when
+every write of theirs that counts, in both, is one. Above the last
+execution, every write of theirs is read, not only the ones still in the
+row, as \code{log_revocation_only()} reads the others. Below it, an uncovered
+change, \code{log_uncovered_authors()}, is never a withdrawal, which that
+function leaves out: an author it names changed something the version
+carried out holds, and can take the row, whatever they wrote above. So a
+revocation above the execution over an uncovered change by somebody else
+passes the row to that somebody, and over an uncovered change of their
+own to its author.
 
 Without the channel's account, \code{channel_account = NULL}, no write of
 \code{owned_by} is believed and no row passes: the answer is the one of

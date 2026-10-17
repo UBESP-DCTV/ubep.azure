@@ -1147,15 +1147,22 @@ log_revocation_only <- function(events, record, creator,
 #'
 #' The act is judged, not the path that led to it (decided on 2026-10-17). A
 #' revocation does not move the row, whether it went through freely or was
-#' approved: whoever wrote, since the round's last execution, only
-#' `request_status = 'revoked'` and no other intent field never becomes the
-#' owner, even when the version also holds somebody else's change. The row
-#' passes to the newest of the other authors who count, and stays with the
-#' owner of today when only withdrawals are left. What an author wrote is read
-#' from every write of theirs since the last execution, not only from the
-#' writes still in the row, as `log_revocation_only()` reads the others; an
-#' author who counts only for a change below the execution,
-#' `log_uncovered_authors()`, wrote no withdrawal there and is not one.
+#' approved: whoever wrote only `request_status = 'revoked'` and no other
+#' intent field never becomes the owner, even when the version also holds
+#' somebody else's change. The row passes to the newest of the other authors
+#' who count, and stays with the owner of today when only withdrawals are
+#' left.
+#'
+#' An author counts in two stretches, and is a withdrawal alone only when
+#' every write of theirs that counts, in both, is one. Above the last
+#' execution, every write of theirs is read, not only the ones still in the
+#' row, as `log_revocation_only()` reads the others. Below it, an uncovered
+#' change, `log_uncovered_authors()`, is never a withdrawal, which that
+#' function leaves out: an author it names changed something the version
+#' carried out holds, and can take the row, whatever they wrote above. So a
+#' revocation above the execution over an uncovered change by somebody else
+#' passes the row to that somebody, and over an uncovered change of their
+#' own to its author.
 #'
 #' Without the channel's account, `channel_account = NULL`, no write of
 #' `owned_by` is believed and no row passes: the answer is the one of
@@ -1197,8 +1204,13 @@ log_next_owner <- function(events, record, creator,
     return(owner)
   }
 
-  # Since the last execution, newest first; nothing above it when there is
-  # none, and then the whole life.
+  # An uncovered change below the last execution is never a withdrawal.
+  uncovered <- log_uncovered_authors(
+    events, record, creator, fields, approvers, channel_account
+  )
+
+  # Above the last execution, newest first; when there is none, the whole
+  # life.
   mine <- log_of_record(events, record)
   executed <- which(log_wrote(mine, "applied_seal"))
   if (length(executed) > 0L) {
@@ -1208,7 +1220,7 @@ log_next_owner <- function(events, record, creator,
   wrote <- log_wrote(mine, fields)
   withdrew <- vapply(pending, function(who) {
     theirs <- mine[which(wrote & authors == who), , drop = FALSE]
-    nrow(theirs) > 0L &&
+    !who %in% uncovered && nrow(theirs) > 0L &&
       all(log_value(theirs, "request_status") == "revoked") &&
       !any(log_wrote(theirs, setdiff(fields, "request_status")))
   }, logical(1), USE.NAMES = FALSE)
