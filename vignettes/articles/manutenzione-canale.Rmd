@@ -173,22 +173,25 @@ stabilisce l'esito va **solo a IT**, all'indirizzo di `UBEP_POSTA_COPIA`, con la
 frase «referente della riga non stabilito». Succede in un giro che non ha un
 proprietario da dare: anagrafica non letta, log delle creazioni o log dei
 proprietari illeggibile, nessuna riga da giudicare, un log che non nomina la
-riga, una scrittura di `owned_by` senza autore sopra quella del canale (§4).
-La chiave non va a nessuno che non sia il
-proprietario stabilito: una riga il cui proprietario il log non nomina si ferma
-su `TRASPORTO_AUTORE_NON_LEGGIBILE` e nessuno nasce. Per la stessa ragione, con
+riga, una scrittura di `owned_by` senza autore sopra quella del canale (§4). La
+chiave non va a nessuno che non sia il proprietario stabilito: una riga il cui
+proprietario il log non nomina si ferma su `TRASPORTO_AUTORE_NON_LEGGIBILE` e
+nessuno nasce. Per la stessa ragione, con
 la posta accesa `UBEP_POSTA_COPIA` è obbligatoria (§8): senza IT in copia
 l'esito di quelle righe non parte.
 
 **Il benvenuto cambia due frasi con la 0.21.0.** La prima non promette più
-l'accesso da solo: «Quando l'accesso al progetto sara' pronto riceverai
-un'altra mail, di norma entro quattro ore.», perché quella mail ora esiste (§4,
-«La mail di accesso»). La seconda manda le domande al proprietario prima che a
-IT: «Per qualunque problema scrivi prima a <referente>, che ha chiesto il tuo
-account e risponde del tuo primo accesso. Se non riesci a raggiungerlo,
-rispondi a questo messaggio: arriva a IT.» Senza proprietario stabilito il
-nome non c'è: «Per qualunque problema scrivi prima al referente che ha chiesto
-il tuo account, che risponde del tuo primo accesso.» e il resto uguale.
+l'accesso da solo: «Quando l'accesso al progetto sara' pronto riceverai un'altra
+mail, di norma entro quattro ore.», perché quella mail ora esiste (§4, «La mail
+di accesso»). Come prima, la frase c'è solo se l'indirizzo dell'istanza è noto:
+la promessa riguarda quell'istanza, e senza indirizzo sarebbe una promessa su un
+posto che il messaggio non nomina. La seconda manda le domande al proprietario
+prima che a IT: «Per qualunque problema scrivi prima a <referente>, che ha
+chiesto il tuo account e risponde del tuo primo accesso. Se non riesci a
+raggiungerlo, rispondi a questo messaggio: arriva a IT.» Senza proprietario
+stabilito il nome non c'è: «Per qualunque problema scrivi prima al referente che
+ha chiesto il tuo account, che risponde del tuo primo accesso.» e il resto
+uguale.
 
 **La posta è spenta di default**, e la ragione non è intuitiva: con «manda
 prima, scrivi dopo» una posta semplicemente spenta bloccherebbe *ogni* scrittura
@@ -440,10 +443,10 @@ dopo il rilascio, a ogni passaggio. Si scrive anche in un giro simulato, come
 l'identità, dove nessuno passa. Un passaggio non scritto si perde: il giro dopo
 legge dal log il vecchio proprietario e la riga chiede le approvazioni a lui. Il
 corpo rifiutato va negli `errori` del record, ed è lì che IT lo trova; l'esito è
-già partito, e il nuovo proprietario ha già letto che la riga è sua. Senza
-l'account del canale configurato la porta non viene chiamata (più sotto, «Tre
-codici del proprietario e del sigillo» dice che cosa fare quando un passaggio o
-un sigillo non entra nel log).
+già partito, e il nuovo proprietario ha già letto che la riga è sua. Per i casi
+in cui un passaggio o un sigillo non entra nel log c'è un codice a parte (più
+sotto, «Tre codici del proprietario e del sigillo»). Senza l'account del canale
+configurato la porta non viene chiamata.
 
 Il sigillo ha una porta sua e non è una colonna dell'esito, e la ragione è
 che il corpo dell'esito si scrive a ogni esito: una colonna del sigillo lì
@@ -712,8 +715,11 @@ maiuscole.
   scritto un campo del canale, il nome è sbagliato, o la vecchia utenza è stata
   tolta prima che la nuova scrivesse: il giro si ferma prima di giudicare
   qualunque riga, con `TRASPORTO_REGISTRO_CANALE_ASSENTE` negli errori del
-  record (`log_channel_absent()`). Su un registro mai sigillato non si ferma:
-  non c'è ancora un canale da aver visto.
+  record (`log_channel_absent()`). Il controllo conta un `applied_seal` scritto
+  da chiunque: un registro mai servito dal canale, ma con un sigillo importato
+  da un referente, fa fermare il giro finché il canale non ha scritto. Su un
+  registro senza nessun sigillo non si ferma: non c'è ancora un canale da aver
+  visto.
 
 **Quando il registro degli eventi non basta.** Un autore che il log non
 stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è
@@ -808,6 +814,10 @@ Stanno negli `errori` del record del giro, non sulla riga, e dicono che il
 registro degli eventi e i campi del registro non concordano. Nessuno concede
 niente: la direzione in cui sbagliano è quella che non concede.
 
+**Le azioni di IT che seguono sono dedotte dal codice e non sono state provate
+con un caso reale.** Sono una procedura da confermare al primo caso: chi la
+esegue la verifica e, se il fatto la smentisce, corregge qui.
+
 - **`TRASPORTO_REGISTRO_CANALE_ASSENTE`**: il giro si è fermato prima di
   giudicare qualunque riga (il record porta `fermato`, un giro fermato prima di
   agire come nel §5). Nel log dei proprietari c'è almeno un sigillo e nessuna
@@ -815,9 +825,10 @@ niente: la direzione in cui sbagliano è quella che non concede.
   nome è sbagliato, o in un cambio di token la vecchia utenza è stata tolta
   dall'elenco prima che la nuova scrivesse. Nel registro non c'è niente da
   riparare. IT confronta ogni nome dell'elenco con l'utenza che possiede il
-  token, come la vede REDCap; se il token sta cambiando di mano, rimette la
-  vecchia utenza nell'elenco finché la nuova non ha scritto; il giro dopo
-  riparte da solo.
+  token, come la vede REDCap; se il token è cambiato di mano, rimette la
+  vecchia utenza nell'elenco e **ce la lascia**: tolta, i suoi passaggi e i suoi
+  sigilli non valgono più (vedi, sopra, «Se l'account del token del canale
+  cambia»). Il giro dopo riparte da solo.
 - **`TRASPORTO_PASSAGGIO_NON_REGISTRATO`**: il giro ha passato la riga a un
   altro proprietario e il passaggio non è entrato nel log. Succede quando il
   campo `owned_by` mostrava già il nuovo proprietario, perché un import lo
@@ -827,8 +838,10 @@ niente: la direzione in cui sbagliano è quella che non concede.
   riga resta del vecchio proprietario. L'esito è già partito, quindi il nuovo
   proprietario ha letto che la riga è sua, e il giro non ritenta: finché una
   modifica sua non viene approvata ed eseguita, le approvazioni le dà il vecchio
-  proprietario o IT (§4, «IT approva come il proprietario»). IT avvisa il nuovo
-  proprietario e approva al suo posto.
+  proprietario o IT (§4, «IT approva come il proprietario»). Allo stesso modo
+  restano al vecchio proprietario l'esito, la chiave di un account nuovo e il
+  rapporto mensile, perché si leggono dal log. IT avvisa il nuovo proprietario
+  e approva al suo posto.
 - **`TRASPORTO_SIGILLO_NON_REGISTRATO`**: una riga eseguita ha nel campo
   `applied_seal` il sigillo che il giro scriverebbe, per un import, mentre
   l'ultimo sigillo del canale nel log è un altro. La porta dei sigilli non ha
@@ -837,6 +850,13 @@ niente: la direzione in cui sbagliano è quella che non concede.
   giro e senza posta. Non fa danno, e va visto. Per fermarla si cambia con un
   import il valore di `applied_seal` di quella riga: al giro dopo il canale
   scrive il sigillo giusto, la scrittura cambia il valore e il log la registra.
+
+I due codici che non fermano il giro, `TRASPORTO_PASSAGGIO_NON_REGISTRATO` e
+`TRASPORTO_SIGILLO_NON_REGISTRATO`, si vedono solo leggendo gli `errori` del
+record del giro. Nessuna delle regole del §5 li legge: se serve un allarme, è
+una regola nuova, che qui si propone e che va decisa e messa nel foglio dei
+parametri, con la sua gravità. `TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il
+giro, e lo si vede anche dal giro fermato prima di agire.
 
 ### Una persona da creare
 
@@ -1270,8 +1290,8 @@ registro: un `contact_email` vuoto spiega il caso da solo; altrimenti il journal
 della lavorazione riporta la risposta del servizio di posta.
 
 **Accesso perso (gravità proposta 2, da fissare nel foglio dei parametri).**
-Una persona ha ricevuto il diritto su un progetto
-e la mail che glielo dice non è partita: `accessi_persi` è maggiore di zero, e
+Una persona ha ricevuto il diritto su un progetto e la mail che glielo dice non
+è partita: `accessi_persi` è maggiore di zero, e
 fra gli errori del giro c'è `POSTA_ACCESSO_PERSA`. Il diritto c'è, e il giro non
 lo manda un'altra volta: la persona non sa di avere l'accesso, quindi IT le
 scrive, con l'istanza, l'indirizzo, il numero del progetto, il ruolo e l'ultimo
@@ -1413,8 +1433,10 @@ con la posta accesa**, e senza la prima la lavorazione non parte:
 
 - **`UBEP_CANALE_UTENTE`** è lo username REDCap che possiede il token del
   registro, cioè l'utenza che scrive per conto del canale, o più d'uno
-  separati da virgole mentre il token cambia di mano (spazi ai bordi di ogni
-  voce tolti, voci vuote scartate). Serve alle due lavorazioni, il giro e il
+  separati da virgole quando il token è cambiato di mano: la vecchia utenza
+  resta nell'elenco, perché tolta i suoi passaggi e i suoi sigilli non valgono
+  più (§4, «Se l'account del token del canale cambia»). Spazi ai bordi di ogni
+  voce tolti, voci vuote scartate. Serve alle due lavorazioni, il giro e il
   rapporto: sono gli unici account a cui si crede quando dicono di chi è una
   riga e che cosa è stato eseguito (§4). Se manca, o è fatta di soli spazi e
   virgole, la lavorazione si ferma con un errore che la nomina, prima di
