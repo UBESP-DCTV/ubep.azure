@@ -15,11 +15,13 @@ One address, possibly empty.
 }
 \description{
 The row's owner: who the creation log names as having made the row, until
-an approved change by another referent hands it over. The round settles it
-from the log and passes it on as \code{owner}. It is the referent the scope gate
-judges, and the only one whose approval of a change counts, IT aside. Every
-message the round sends to whoever asked goes there: the outcome, whatever
-it is, and the key of an account just made.
+an approved change by another referent hands it over, which the log holds
+as a write of \code{owned_by} by the channel's account. The round settles it
+from the log and passes it on as \code{owner}. It is the only one whose
+approval of a change counts, IT aside; the scope gate judges whoever wrote
+what the round carries out, which is the owner only when nobody else
+changed the row. Every message the round sends to whoever asked goes
+there: the outcome, whatever it is, and the key of an account just made.
 }
 \details{
 Not \code{requested_by}. On the form \verb{@USERNAME} fills it in and the two agree;
@@ -33,11 +35,12 @@ And there is no fallback to it. Once a row can change hands, a fallback
 would write to a former owner, the one person who should no longer hear
 about the row. An empty owner means the round could not settle it, and
 the outcome then goes to IT alone and says so (see \code{mail_round()}). That
-happens in four cases: a sweep of the tenant that failed, which asks no
-log; a creation log that could not be read; a round with no row to judge,
-which does not ask the creation log at all; a creation log that does not
-name the row. No key reaches anybody then: a row whose owner the log does
-not name stops at the gate on \code{TRASPORTO_AUTORE_NON_LEGGIBILE}, and
-nobody is made for it.
+happens on a sweep of the tenant that failed, which asks no log; on a
+creation log or an owners' log that could not be read; on a round with no
+row to judge, which asks neither; on a creation log that does not name the
+row; and on an owner the log leaves ambiguous, when an account other than
+the channel's wrote a field only the channel writes. No key reaches
+anybody then: a row whose owner the log does not name stops at the gate
+on \code{TRASPORTO_AUTORE_NON_LEGGIBILE}, and nobody is made for it.
 }
 \keyword{internal}
