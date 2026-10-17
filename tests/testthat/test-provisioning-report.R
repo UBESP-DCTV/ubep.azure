@@ -2259,3 +2259,39 @@ test_that("un'altra utenza che scrive owned_by manda la riga a IT", {
     fixed = TRUE
   )
 })
+
+
+test_that("una scrittura dopo la fine del mese non cambia il proprietario", {
+  # eval
+  # The channel passed the row to Bruno in October; on 2 November another
+  # account imports `owned_by`. On the whole log that write makes the row
+  # ambiguous; October's report, sent on the 3rd, must still read October.
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+  dati <- scenario()
+  dati[["eventi"]] <- rbind(
+    evento("2026-11-02 10:00", "elena.supposta@ubep.unipd.it",
+           "owned_by = 'elena.supposta@ubep.unipd.it'", record = "41"),
+    evento("2026-10-20 05:00", canale, paste0("owned_by = '", bruno, "'"),
+           record = "41"),
+    dati[["eventi"]]
+  )
+  doppie(dati)
+  posta <- posta_finta()
+
+  esegui(withr::local_tempdir(), posta, ora = "2026-11-03 06:30",
+         channel_account = canale)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  a <- vapply(mail, `[[`, "", "to")
+  expect_no_match(
+    mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
+  )
+  # The date is read on the whole log, and the November write leaves the row
+  # undated: it goes to IT, under the owner it had at the end of October.
+  expect_match(
+    mail[[match(it_prova, a)]][["body"]],
+    paste0("Referente: ", bruno, "."),
+    fixed = TRUE
+  )
+})

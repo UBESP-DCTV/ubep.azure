@@ -98,8 +98,10 @@ outcome, under the name \code{report_it_key()}; the referents' reports go to the
 owner's account, with \code{copy_to} in copy.
 
 A row goes to its owner as the month covered ended, at midnight in Rome
-between its last day and the next month's first, \code{log_owner()} with
-\code{before}, and not to its owner on the day of the run. The month's reports
+between its last day and the next month's first, and not to its owner on
+the day of the run: \code{log_owner()} reads the row's log cut at that moment,
+so a write after it, of \code{owned_by} or of any other field of the channel,
+changes nothing. The month's reports
 leave over several days, until each referent has had theirs, and who is
 due must not change from one attempt to the next (decided on 2026-10-17):
 read on the day, a row passed on the 3rd would move from one referent's

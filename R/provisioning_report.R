@@ -1833,8 +1833,10 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' owner's account, with `copy_to` in copy.
 #'
 #' A row goes to its owner as the month covered ended, at midnight in Rome
-#' between its last day and the next month's first, `log_owner()` with
-#' `before`, and not to its owner on the day of the run. The month's reports
+#' between its last day and the next month's first, and not to its owner on
+#' the day of the run: `log_owner()` reads the row's log cut at that moment,
+#' so a write after it, of `owned_by` or of any other field of the channel,
+#' changes nothing. The month's reports
 #' leave over several days, until each referent has had theirs, and who is
 #' due must not change from one attempt to the next (decided on 2026-10-17):
 #' read on the day, a row passed on the 3rd would move from one referent's
@@ -1972,9 +1974,18 @@ provisioning_report <- function(register_url,
         since[i] <- list(
           report_person_since(answer[["log"]], ids[[i]], channel_account)
         )
+        # The owner is read on the log as it stood when the month ended:
+        # `before` cuts the writes of `owned_by` only, and a write of a
+        # channel field after it would still make the row ambiguous. A stamp
+        # that does not read stays, and the owner is unknown, as on the
+        # whole log.
+        stamps <- trimws(as.character(answer[["log"]][["timestamp"]]))
+        upto <- answer[["log"]][
+          !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,
+          drop = FALSE
+        ]
         owner <- log_owner(
-          answer[["log"]], ids[[i]], creators[[i]], channel_account,
-          before = month_end
+          upto, ids[[i]], creators[[i]], channel_account, before = month_end
         )
         owners[[i]] <- if (is.na(owner)) "" else owner
       } else {
