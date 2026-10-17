@@ -84,7 +84,10 @@ A list with \code{at}, \code{fermato}, \code{schema}, \code{istanze}, \code{esit
 REDCap took and not the identities: they are two writes into two field
 families, and one counter for both would be a number nobody could read
 back into either. \code{credenziali} carries what the accounts created this
-round were born with, and it is the only road those take.
+round were born with, and it is the only road those take. \code{errori}
+carries the codes of every write and log that failed, and
+\code{TRASPORTO_PASSAGGIO_NON_REGISTRATO} when a passage the field already
+showed could not be written into the log.
 }
 \description{
 The only function that holds the register and the instances at the same

@@ -4585,3 +4585,62 @@ test_that("senza il log dei proprietari il sigillo del campo non fa eseguire nie
   )
   expect_length(scritture(), 0L)
 })
+
+
+# Anna's applied row: Bruno changed the role, Anna approved, and Bruno also
+# imported his own name into `owned_by`, so the field already says what the
+# passage this round decides will say.
+giro_passaggio_anticipato <- function(registro = identity, ...) {
+  giro(
+    registro(registro_con_log(
+      record_json(utils::modifyList(
+        riga_cambiata(owned_by = bruno),
+        list(approved_seal = sigillo_cambiata())
+      )),
+      storia = list(approvazione(anna), cambio(bruno), esecuzione())
+    )),
+    istanza_che_scrive(richiedenti = bruno), dry_run = FALSE, ...
+  )
+}
+
+
+test_that("un passaggio che il campo mostra gia' si registra con due scritture", {
+  # eval
+  esito <- giro_passaggio_anticipato()
+
+  # test
+  # REDCap logs no write that leaves a value as it was, so writing Bruno
+  # over Bruno would leave the log without the passage. The door writes the
+  # owner of today first, then Bruno: two writes of the channel, the newest
+  # one the passage.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(proprietari_scritti()[["owned_by"]], c(anna, bruno))
+  expect_false("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% esito[["errori"]])
+})
+
+
+test_that("un passaggio che non si registra lo dice nel record del giro", {
+  # eval
+  # The register refuses the first of the two writes, the owner of today.
+  rifiuta_anna <- function(registro) {
+    function(data) {
+      if (identical(form_field_value(data[["action"]]), "import")) {
+        sent <- jsonlite::fromJSON(
+          form_field_value(data[["data"]]), simplifyVector = FALSE
+        )
+        if (length(sent) > 0L && identical(sent[[1L]][["owned_by"]], anna)) {
+          return('{"error":"The field owned_by could not be saved"}')
+        }
+      }
+      registro(data)
+    }
+  }
+  esito <- giro_passaggio_anticipato(rifiuta_anna)
+
+  # test
+  # The field already said Bruno, so the door has nothing left to write, and
+  # the passage is not in the log: the round's record says so.
+  expect_length(importazioni(c("record_id", "owned_by")), 1L)
+  expect_true("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% esito[["errori"]])
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})

@@ -190,7 +190,10 @@
 #'   REDCap took and not the identities: they are two writes into two field
 #'   families, and one counter for both would be a number nobody could read
 #'   back into either. `credenziali` carries what the accounts created this
-#'   round were born with, and it is the only road those take.
+#'   round were born with, and it is the only road those take. `errori`
+#'   carries the codes of every write and log that failed, and
+#'   `TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage the field already
+#'   showed could not be written into the log.
 #'
 #' @keywords internal
 provisioning_reconcile <- function(register_url,
@@ -1482,11 +1485,37 @@ provisioning_reconcile <- function(register_url,
   # does not know which account is its own would write the creator over a
   # real passage, and the configured round after it would read that write as
   # the channel's newest `owned_by`.
+  #
+  # A passage the field already shows, because somebody imported the new
+  # owner's name before the round decided it, would not be written at all:
+  # the door writes only what differs, and REDCap logs no write that leaves
+  # a value as it was. So for those rows the door first writes the owner of
+  # today, which differs, and then the new one: two writes of the channel,
+  # the newest of them the passage. If the first is refused the passage is
+  # not in the log, and the round's record says so,
+  # `TRASPORTO_PASSAGGIO_NON_REGISTRATO`; if the second is, the field and the
+  # log both keep the owner of today, the direction that does not grant.
+  shown <- trimws(as.character(register[["owned_by"]] %||% ""))
+  shown[is.na(shown)] <- ""
+  relog <- passed & nzchar(owners_now) & shown == owner_after
   owner_written <- if (!is.null(channel_account)) {
-    register_owner_import(
+    before <- register
+    first <- list(ok = TRUE, errors = character())
+    if (any(relog)) {
+      first <- register_owner_import(
+        register_url, register_token,
+        do.call(rbind, lapply(which(relog), function(i) {
+          owner_payload(record_ids[[i]], owners_now[[i]])
+        }))
+      )
+      if (isTRUE(first[["ok"]])) {
+        before[["owned_by"]][relog] <- owners_now[relog]
+      }
+    }
+    written <- register_owner_import(
       register_url, register_token,
       round_changed(
-        register,
+        before,
         do.call(rbind, c(
           # The builder refuses an empty owner, so the empty frame that fixes
           # the door's columns is cut from a placeholder.
@@ -1498,6 +1527,13 @@ provisioning_reconcile <- function(register_url,
         fields = "owned_by"
       )
     )
+    lost <- any(relog) &&
+      !(isTRUE(first[["ok"]]) && isTRUE(written[["ok"]]))
+    written[["errors"]] <- c(
+      first[["errors"]], written[["errors"]],
+      if (lost) "TRASPORTO_PASSAGGIO_NON_REGISTRATO"
+    )
+    written
   }
 
   # The seals, written last and through a door that takes nothing else.
