@@ -15,7 +15,9 @@
   counts, not those of whoever approves, and the approval comes from the last
   owner or from IT. The way out of a write by someone without the rights is for
   the owner to change the value and put it back, since REDCap logs no write
-  that leaves the value as it was.
+  that leaves the value as it was. The notes of the register's `seal_state`
+  and `approved_seal` fields, which still speak of the creator, are to be
+  updated on the live project.
 
 * **`owned_by`, written by the channel and believed only from the log.** A new
   read-only field of the register holds the row's owner. The import right is
@@ -40,17 +42,27 @@
   the channel's columns neither stops the row nor takes it, and only a write
   of `owned_by` with no author, above the channel's newest, leaves the owner
   unknown. The seal comes from the log too: whether a row changed is judged
-  against the last `applied_seal` the channel wrote, not against the field,
-  so a referent who changes a row and imports the seal of the changed row
-  has the change held for the owner, and a row the channel never sealed is
-  a row never carried out. `UBEP_CANALE_UTENTE` (and `channel_account`)
-  takes more than one account, separated by commas: when the account that
-  holds the token changes, list the new one and the old one, and the old
-  one's writes, its passages of a row among them, stay believed while it is
-  listed. A round
-  that finds the register sealed and none of the listed accounts in its log
-  stops before judging any row, with `TRASPORTO_REGISTRO_CANALE_ASSENTE`: a
-  name typed wrong, or the old account dropped before the new one wrote.
+  against the last `applied_seal` the channel wrote, not against the field, so
+  a referent who changes a row and imports the seal of the changed row has the
+  change held for the owner, and a row the channel never sealed is a row never
+  carried out. `UBEP_CANALE_UTENTE` (and `channel_account`) takes more than one
+  account, separated by commas: when the account that holds the token changes,
+  list the new one and the old one, and the old one's writes, its passages of a
+  row among them, stay believed while it is listed.
+
+* **Three new error codes in the round's record.** All of them say that the
+  event log and the register's fields do not agree, and none grants anything.
+  `TRASPORTO_REGISTRO_CANALE_ASSENTE`: the register is sealed and none of the
+  listed accounts has written in its log, so the round stops before judging
+  any row; the name is typed wrong, or the old account was dropped before the
+  new one wrote. `TRASPORTO_PASSAGGIO_NON_REGISTRATO`: a passage whose new
+  owner the field already showed, written by an import, could not be put in
+  the log (the round writes the owner of today first and the new one after, so
+  that REDCap logs both), and the log keeps the old owner. And
+  `TRASPORTO_SIGILLO_NON_REGISTRATO`: an applied row's field already holds the
+  seal the round writes while the channel's last seal in the log is another,
+  so the row is read and carried out again every round, without mail; changing
+  the field's value by import lets the next round write and log the seal.
 
 * **`UBEP_POSTA_COPIA` is required with the mail on.** The outcome of a row
   whose owner is not established goes to IT alone, and without the address it
@@ -77,17 +89,16 @@
   incomplete-record alarm with the two columns.
 
 * **The welcome sends the questions to the right place.** It no longer
-  promises the access "within four hours" and then goes silent: it says
-  another e-mail will come when the access is ready. And it sends the person
-  to the owner first for any problem, and to IT second, as the first sign-in
-  instruction does.
+  promises the access itself "within four hours" and then goes silent: it says
+  that another e-mail will come when the access is ready, normally within four
+  hours. And it sends the person to the owner first for any problem, and to IT
+  second, as the first sign-in instruction does.
 
 * **The monthly report goes to the owner.** Each row is attributed to its
   owner as the month covered ended (the newest `owned_by` of the channel up to
   that moment, or the creator), so the list of who is due does not change
   between two attempts. `senza_creatore` keeps its name and now means "without
-  an established owner". The notes of `seal_state` and `approved_seal` in the
-  register are to be updated on the live project.
+  an established owner".
 
 # ubep.azure 0.20.1
 
