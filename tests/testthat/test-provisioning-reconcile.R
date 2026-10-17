@@ -3907,7 +3907,7 @@ test_that("una riga cambiata senza proprietario stabilito non si trattiene", {
 
 
 test_that("un account del canale vuoto, di soli spazi o mancante ferma il giro", { # nolint: line_length_linter.
-  # eval / test
+  # eval and test
   # A blank name would make every row's channel nobody's: it is a missing
   # configuration, and the round stops before it asks the register anything.
   for (account in list("", "  ", NA, NA_character_)) {
