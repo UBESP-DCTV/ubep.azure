@@ -193,7 +193,10 @@
 #'   round were born with, and it is the only road those take. `errori`
 #'   carries the codes of every write and log that failed, and
 #'   `TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage the field already
-#'   showed could not be written into the log.
+#'   showed could not be written into the log, and
+#'   `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
+#'   held the seal the round writes and the channel's last seal in the log
+#'   is another.
 #'
 #' @keywords internal
 provisioning_reconcile <- function(register_url,
@@ -1595,6 +1598,14 @@ provisioning_reconcile <- function(register_url,
     )
   )
 
+  # A seal the log cannot receive. An applied row whose field already holds
+  # the seal the round writes, while the channel's last seal in the log is
+  # another, was sealed by somebody else with the very value the round would
+  # have written: the door has nothing to change, REDCap would log nothing
+  # anyway, and the next round still finds the row moved, rereads its log
+  # and carries it out again. Harmless, and it has to be seen.
+  unlogged <- applied & carried == seal_after & sealed != seal_after
+
   list(
     at = at,
     fermato = FALSE,
@@ -1629,7 +1640,8 @@ provisioning_reconcile <- function(register_url,
     errori = c(
       identity_written[["errors"]], unique(log_errors), import[["errors"]],
       posta[["errori"]], owner_written[["errors"]], seal_written[["errors"]],
-      if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA"
+      if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA",
+      if (any(unlogged)) "TRASPORTO_SIGILLO_NON_REGISTRATO"
     )
   )
 }

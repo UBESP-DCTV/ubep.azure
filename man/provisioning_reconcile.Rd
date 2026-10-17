@@ -87,7 +87,10 @@ back into either. \code{credenziali} carries what the accounts created this
 round were born with, and it is the only road those take. \code{errori}
 carries the codes of every write and log that failed, and
 \code{TRASPORTO_PASSAGGIO_NON_REGISTRATO} when a passage the field already
-showed could not be written into the log.
+showed could not be written into the log, and
+\code{TRASPORTO_SIGILLO_NON_REGISTRATO} when an applied row's field already
+held the seal the round writes and the channel's last seal in the log
+is another.
 }
 \description{
 The only function that holds the register and the instances at the same

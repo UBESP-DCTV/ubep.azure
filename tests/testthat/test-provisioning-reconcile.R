@@ -4644,3 +4644,29 @@ test_that("un passaggio che non si registra lo dice nel record del giro", {
   expect_true("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% esito[["errori"]])
   expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
 })
+
+
+test_that("un sigillo che il log non puo' ricevere lo dice nel record del giro", {
+  # eval
+  # Bruno changed the role and imported the seal of the changed row; Anna
+  # approved it, and the round carries it out on Bruno's rights. The seal it
+  # would write is the one the field holds already, and REDCap logs no write
+  # that leaves a value as it was: the log keeps the old seal of the channel.
+  cambiata <- riga_cambiata()
+  falso <- request_seal(do.call(riga_come_registro, cambiata))
+  esito <- giro(
+    registro_con_log(
+      record_json(utils::modifyList(
+        cambiata, list(applied_seal = falso, approved_seal = falso)
+      )),
+      storia = list(
+        approvazione(anna, falso), sigillo_importato(falso), esecuzione()
+      )
+    ),
+    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_true("TRASPORTO_SIGILLO_NON_REGISTRATO" %in% esito[["errori"]])
+})
