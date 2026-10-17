@@ -884,6 +884,152 @@ test_that("una modifica d'intenzione senza autore rende ignoto l'autore", {
 })
 
 
+test_that("una scrittura poi sovrascritta non conta", {
+  # eval
+  # Newest first. Bruno set the role, Anna set it again, and the row now
+  # holds Anna's value.
+  eventi <- eventi_finti(
+    list(username = creatrice, details = "role_name = 'data entry'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'read only'"
+    )
+  )
+
+  # test
+  # What the round would carry out is Anna's value: Bruno's write is no longer
+  # in the row, so it is not part of the change.
+  expect_equal(
+    log_change_authors(
+      eventi, "1", current = register_row(role_name = "data entry")
+    ),
+    creatrice
+  )
+  expect_equal(log_change_authors(eventi, "1"), creatrice)
+})
+
+
+test_that("un campo tornato al valore eseguito non conta", {
+  # eval
+  # Newest first. Bruno moved the role away from what the round carried out
+  # and then back to it.
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'read only'"
+    )
+  )
+
+  # test
+  # The row asks for what was carried out already: nothing to carry out, and
+  # nobody to ask. Without the row in hand the last write still counts.
+  expect_equal(
+    log_change_authors(
+      eventi, "1", current = register_row(role_name = "read only")
+    ),
+    character()
+  )
+  expect_equal(log_change_authors(eventi, "1"), "bruno.verdi@ubep.unipd.it")
+})
+
+
+test_that("su una riga mai eseguita conta l'ultimo autore di ogni campo pieno", { # nolint: line_length_linter.
+  # eval
+  # Newest first, and no execution: Anna created the row, Cinzia changed the
+  # role, Bruno emptied the group.
+  eventi <- eventi_finti(
+    list(username = "bruno.verdi@ubep.unipd.it", details = "dag_name = ''"),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "role_name = 'data entry'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = paste0(
+        "record_id = '1', role_name = 'read only', dag_name = 'centro-02'"
+      )
+    )
+  )
+
+  # test
+  # Every field with a value is part of what the round would carry out, and
+  # it answers to whoever wrote it last. An empty field carries nothing.
+  expect_equal(
+    log_change_authors(eventi, "1", current = register_row(dag_name = "")),
+    c("cinzia.rossi@ubep.unipd.it", creatrice)
+  )
+})
+
+
+# revisione 4
+test_that("un valore con l'apostrofo si confronta col registro e l'autore conta", { # nolint: line_length_linter.
+  # eval
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "last_name = 'D'Angelo'"
+    ),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', last_name = 'D'Amico'"
+    )
+  )
+
+  # test
+  # The log cuts both values at the apostrophe, `D`, and would call them
+  # equal. The current value comes from the register, which holds it whole.
+  expect_equal(
+    log_change_authors(
+      eventi, "1", current = register_row(last_name = "D'Angelo")
+    ),
+    "bruno.verdi@ubep.unipd.it"
+  )
+})
+
+
+test_that("le autrici in attesa leggono la riga attuale", {
+  # eval
+  # Newest first. Bruno moved the role away from what the round carried out
+  # and then back to it.
+  eventi <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'admin'"
+    ),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'read only'"
+    )
+  )
+
+  # test
+  expect_equal(
+    log_pending_authors(
+      eventi, "1", creatrice,
+      current = register_row(role_name = "read only")
+    ),
+    character()
+  )
+})
+
+
 test_that("solo una modifica tutta del creatore non chiede approvazione", {
   # eval, test
   # The one place the rule lives. A revocation follows it too, until it is

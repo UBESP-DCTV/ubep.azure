@@ -8,7 +8,8 @@ log_change_authors(
   events,
   record,
   fields = register_intent_fields(),
-  channel_account = NULL
+  channel_account = NULL,
+  current = NULL
 )
 }
 \arguments{
@@ -21,11 +22,15 @@ many rows, since deriving them reads the packaged dictionary.}
 
 \item{channel_account}{The REDCap username that holds the round's token,
 or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+
+\item{current}{The row as the round will leave it, a data frame of one
+row, or \code{NULL} when there is no row in hand.}
 }
 \value{
-A character vector of usernames, newest first and each once;
-\code{character()} when nobody changed an intent field; \code{NA_character_} when
-the log cannot say who did.
+A character vector of usernames, newest first (by the write that
+counts) and each once; \code{character()} when no intent field changed, or
+nobody but the channel changed one; \code{NA_character_} when the log cannot
+say who did.
 }
 \description{
 The people whose writes to an intent field stand between the round's last
@@ -37,6 +42,26 @@ is now asked to carry out. Where the row's log no longer holds that event
 the whole history counts, which can only ask for an approval more often.
 }
 \details{
+Only the writes still in the row count, decided on 2026-10-17 (option (a)
+of three). For each intent field whose current value differs from the one
+carried out, the author is whoever wrote that field last; a write somebody
+then overwrote is not part of the change, and a field brought back to the
+value carried out is no change at all. On a row never carried out every
+field with a value counts. The value carried out is the newest write of the
+field below the seal, by anybody, the channel included; where the log holds
+none it is unknown, and the field counts if it was written above the seal.
+The current value comes from the register and not from the log, which
+cuts a value at its first apostrophe and would call \verb{D'Angelo} and
+\verb{D'Amico} equal. Without the row in hand, \code{current = NULL}, every field
+written since the last execution counts, with its last author.
+
+This is also the way out of a write by somebody who could not have made
+it by hand: the owner writes that field again, and the other is no longer
+its author. Without it a row touched by mistake would stay held for ever,
+since nothing is ever deleted. REDCap logs no write that leaves the value
+as it was, so writing again means changing the value and then putting it
+back.
+
 "Carried out already" holds for what the round read, and the seal is
 written at the end of the round: a change made while the round ran sits
 below it and was not. \code{log_uncovered_authors()} looks for those, and
@@ -46,14 +71,15 @@ judges.
 The round's own writes are not a change. It writes \code{username} back when it
 resolves it, and \code{username} is an intent field: counted, the channel would
 be an author of every row whose username it settles. Its account is the one
-\code{log_channel_accounts()} names, and its events are dropped by account.
+\code{log_channel_accounts()} names, and its events are dropped by account: a
+field only the channel wrote since the last execution carries no author.
 
 Two cases make the answer unknown rather than short, and the caller holds
 the row on both. A second account writing what only the channel is meant
 to write is a referent's import, since the import right is open to them
 and an import writes \verb{@READONLY} fields too, or a value that happens to
 read as a field assignment; taking it for the channel would drop its
-author from the change. And an intent write whose
-author is blank names nobody, which is not the same as naming the creator.
+author from the change. And a write that counts whose author is blank
+names nobody, which is not the same as naming the creator.
 }
 \keyword{internal}

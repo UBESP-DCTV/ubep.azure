@@ -10,7 +10,8 @@ log_pending_authors(
   creator,
   fields = register_intent_fields(),
   approvers = character(),
-  channel_account = NULL
+  channel_account = NULL,
+  current = NULL
 )
 }
 \arguments{
@@ -26,6 +27,9 @@ log_pending_authors(
 
 \item{channel_account}{The REDCap username that holds the round's token,
 or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+
+\item{current}{The row as the round will leave it, a data frame of one
+row, or \code{NULL} when there is no row in hand, for \code{log_change_authors()}.}
 }
 \value{
 A character vector of usernames, each once; \code{NA_character_} when
