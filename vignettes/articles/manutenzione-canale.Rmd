@@ -666,8 +666,9 @@ l'autore della modifica, e non passa per chi ha riportato il campo al valore
 eseguito.
 
 Basta un tratto: una modifica scoperta ferma la riga, una riga ferma non scrive
-sigilli, e il confine non si sposta finché il proprietario non approva o
-qualcuno non riscrive il campo. Copre anche l'approvazione di IT, e una revoca
+sigilli, e il confine non si sposta finché il proprietario non approva.
+Riscrivere il campo non lo sposta: toglie la modifica dalla riga, e una riga
+tornata al sigillo non si risigilla. Copre anche l'approvazione di IT, e una revoca
 sola non è mai scoperta: non concede niente, e contata farebbe approvare al
 proprietario la riattivazione della propria richiesta dopo una revoca libera
 di chi gestisce il progetto.
@@ -742,7 +743,7 @@ maiuscole.
   storia le ferma in attesa del proprietario. Il cambio è un evento da
   preparare, non una modifica di configurazione da fare in un momento qualunque.
   La vecchia utenza resta nell'elenco ma perde il token e il diritto di import
-  sul registro (pid 236): finché è elencata, ciò che scrive si crede come del
+  sul registro: finché è elencata, ciò che scrive si crede come del
   canale.
 - **Nessuna persona usa un'utenza dell'elenco.** Le scritture delle utenze di
   `UBEP_CANALE_UTENTE` sono del canale: non sono modifiche di nessuno, quindi
@@ -1268,13 +1269,13 @@ riceve un messaggio.
 La 0.21.0 risponde **sì** a tutte e due le domande, e porta due colonne nuove
 nel record del giro. Il rilascio è in cinque passi, nell'ordine:
 
-1. **Il campo `owned_by` sul registro (pid 236).** Tocca lo schema con un campo
+1. **Il campo `owned_by` sul registro.** Tocca lo schema con un campo
    solo, quindi due tempi e non l'atto unico: il campo si aggiunge **prima** del
    pacchetto. La 0.20.1 lo tollera (`DIZIONARIO_CAMPO_IN_PIU`) e continua a
    girare; la 0.21.0 senza il campo si ferma (`DIZIONARIO_CAMPO_ASSENTE`). La
    riga del dizionario è quella impacchettata (`request_register`, sezione vuota
    dopo `requested_by`, testo, etichetta *Row owner*, `@READONLY`, visibile
-   quando non è vuoto). Nello stesso momento si aggiornano su pid 236 le note di
+   quando non è vuoto). Nello stesso momento si aggiornano sul registro le note di
    `seal_state` e `approved_seal`, che ora parlano del referente della riga e
    non del creatore: `compare_dictionary()` non confronta le note, quindi non
    fermano il giro, ma restano a dire una cosa non più vera.

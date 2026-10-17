@@ -82,9 +82,9 @@ above the seal is the author of that change.
 
 One stretch is enough. An uncovered change makes the next round hold the
 row, and a held row writes no seal: the stretch does not move until the
-owner approves, and that approval covers the version holding the change,
-or until somebody writes the field again, which takes the change out of
-the row.
+owner approves, and that approval covers the version holding the change.
+Writing the field again does not move it: it takes the change out of the
+row, and a row back at the seal is not sealed anew.
 
 Two kinds of leave besides the owner's, both from 2026-10-15. An approval
 by one of the IT accounts covers as the owner's does, since it is what
