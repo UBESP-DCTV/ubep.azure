@@ -141,6 +141,20 @@ nothing else, made by somebody who manages the project, does not wait: it
 is judged at the gate, step 6, because the rights come from the instance.
 And the IT accounts in \code{approvers} approve as the owner does.
 
+\strong{The seal, like the owner, comes from the channel's log} when
+\code{channel_account} is configured (decided on 2026-10-17). Whether a row
+moved is the row's seal against the last \code{applied_seal} the channel wrote
+in the row's current life, read from the owners' log (\code{log_channel_seal()}),
+and not against the field: an import writes the field as any other, and a
+referent who changed a row and imported the seal of the changed row would
+have it carried out on the owner's rights. A row the channel never sealed
+is one never carried out, whatever the field holds. The field gets the
+channel's seal back on the row's next execution; a held row keeps the
+field as it is, since a seal the channel rewrote there would read in the
+log as one more execution. Without the account, or when the owners' log
+cannot be read, the field is compared as before; in the second case no
+row has an owner, and none is carried out.
+
 \strong{The gate judges whoever wrote what the round carries out}: every author
 of the change, and the owner when nobody changed the row. Each of them must
 have been able to do it by hand. Whoever approved is not asked, because

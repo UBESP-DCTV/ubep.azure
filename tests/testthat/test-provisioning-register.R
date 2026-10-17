@@ -2212,6 +2212,21 @@ test_that("un sigillo scritto da un altro account non nasconde la sua revoca", {
   )
 })
 
+test_that("il sigillo creduto e' l'ultimo scritto dal canale", {
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  eventi <- eventi_finti(sigillo_di(bruno), applicata)
+  expect_equal(log_channel_seal(eventi, "1", canale), "000000000000")
+  expect_equal(
+    log_channel_seal(eventi, "1", c("SVC-Canale-Ubep", "svc-vecchio")),
+    "000000000000"
+  )
+  # Never sealed by the channel: a row never carried out.
+  expect_equal(
+    log_channel_seal(eventi_finti(sigillo_di(bruno)), "1", canale), ""
+  )
+  expect_error(log_channel_seal(eventi, "1", NULL))
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.

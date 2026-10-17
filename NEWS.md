@@ -39,7 +39,11 @@
   is ignored (decided on 2026-10-17): a referent who imports a CSV carrying
   the channel's columns neither stops the row nor takes it, and only a write
   of `owned_by` with no author, above the channel's newest, leaves the owner
-  unknown. `UBEP_CANALE_UTENTE` (and `channel_account`) takes more than one
+  unknown. The seal comes from the log too: whether a row changed is judged
+  against the last `applied_seal` the channel wrote, not against the field,
+  so a referent who changes a row and imports the seal of the changed row
+  has the change held for the owner, and a row the channel never sealed is
+  a row never carried out. `UBEP_CANALE_UTENTE` (and `channel_account`) takes more than one
   account, separated by commas: when the account that holds the token
   changes, list the new one and the old one, and the old one's writes, its
   passages of a row among them, stay believed while it is listed.

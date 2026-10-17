@@ -1947,11 +1947,21 @@ test_that("senza mailer il giro porta anche gli accessi a zero", {
 
 test_that("una riga cambiata dopo l'applicazione non si riapplica da sola", {
   # eval
+  # The round's seal, in the owners' log it reads the seal from: with the
+  # channel's account configured, the field alone says nothing.
+  sigillato <- as.character(jsonlite::toJSON(list(list(
+    timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+    action = "Update record (API) 1",
+    details = "applied_seal = '000000000000'", record = "1"
+  )), auto_unbox = TRUE))
   esito <- giro(
-    registro_doppio(record_json(list(
-      record_id = "1", outcome = "applied",
-      applied_seal = "000000000000"
-    ))),
+    registro_doppio(
+      record_json(list(
+        record_id = "1", outcome = "applied",
+        applied_seal = "000000000000"
+      )),
+      proprietari = sigillato
+    ),
     istanza_doppia(list()),
     dry_run = FALSE
   )
@@ -4430,4 +4440,149 @@ test_that("dopo il cambio dell'account il passaggio scritto dal vecchio resta cr
   # Anna's again, and Bruno's change waits for her.
   solo_nuovo <- con("svc-canale-ubep")
   expect_equal(as.character(solo_nuovo[["esiti"]][["outcome"]]), "held")
+})
+
+
+# A referent's CSV that writes the seal along with the row: the seal is a
+# public hash, and the field is written by an import as any other.
+sigillo_importato <- function(sigillo, details = "role_name = 'read only'") {
+  cambio(bruno, paste0(details, ", applied_seal = '", sigillo, "'"))
+}
+
+
+test_that("chi cambia il ruolo e importa il sigillo della riga cambiata la ferma", { # nolint: line_length_linter.
+  # eval
+  # Anna's applied row. Bruno changes the role and imports, in the same CSV,
+  # the seal of the row as he changed it: compared with the field, the row
+  # would look untouched.
+  cambiata <- riga_cambiata()
+  falso <- request_seal(do.call(riga_come_registro, cambiata))
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
+      storia = list(sigillo_importato(falso), esecuzione())
+    ),
+    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The seal the round compares against is the channel's, from the log: the
+  # row changed, Bruno changed it, and it waits for Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  mandate <- posta[["mandate"]]()
+  expect_equal(vapply(mandate, `[[`, "", "to"), anna)
+  expect_match(mandate[[1L]][["body"]], bruno, fixed = TRUE)
+})
+
+
+test_that("ruolo e sigillo nello stesso evento di un altro: dopo l'approvazione si guardano i suoi diritti", { # nolint: line_length_linter.
+  # eval
+  # Bruno writes the role and a seal of his own in one event; Anna approves
+  # the row as it stands.
+  storia <- list(
+    approvazione(anna), sigillo_importato("ffffffffffff")
+  )
+  con <- function(richiedenti) {
+    giro_cambiata(
+      storia, approvato = sigillo_cambiata(),
+      riga = riga_cambiata(applied_seal = "ffffffffffff"),
+      istanza = istanza_che_scrive(richiedenti = richiedenti)
+    )
+  }
+  senza_bruno <- con(anna)
+  chiesti <- chiesti_allo_stato()
+  con_bruno <- con(c(anna, bruno))
+
+  # test
+  # The change is Bruno's, and his rights are the ones asked.
+  expect_equal(
+    as.character(senza_bruno[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_true(bruno %in% chiesti)
+  expect_equal(as.character(con_bruno[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("un sigillo importato da solo lascia la riga intatta, e il canale lo riscrive", { # nolint: line_length_linter.
+  # eval
+  # Anna's applied row, untouched; Bruno imports a seal and nothing else.
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  righe <- record_json(list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", outcome = "applied",
+    applied_seal = "ffffffffffff", seal_state = "intact"
+  ))
+  esito <- giro(
+    registro_con_log(
+      righe,
+      storia = list(
+        cambio(bruno, "applied_seal = 'ffffffffffff'"), esecuzione(fermo)
+      )
+    ),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  # Nothing the row asks for moved: it is carried out on Anna's rights, and
+  # the field gets back the channel's seal.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(sigilli_scritti()[["applied_seal"]]), fermo)
+})
+
+
+test_that("una riga mai sigillata dal canale e' mai eseguita, qualunque sigillo porti", { # nolint: line_length_linter.
+  # eval
+  # Anna's new row, never carried out. Bruno changes the role and imports the
+  # seal of the row as he changed it.
+  cambiata <- list(record_id = "1", role_name = "read only")
+  falso <- request_seal(do.call(riga_come_registro, cambiata))
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
+      storia = list(sigillo_importato(falso))
+    ),
+    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Compared with the field, the row would read as applied and untouched,
+  # and Bruno's role would be granted on Anna's rights. The channel never
+  # sealed it, so it is a row waiting for its first execution, and Bruno's
+  # hand in it waits for Anna.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), anna)
+})
+
+
+test_that("senza il log dei proprietari il sigillo del campo non fa eseguire niente", { # nolint: line_length_linter.
+  # eval
+  # The same forged row, on a round whose owners' log cannot be read: the
+  # seal is the field's, as before, and the row looks untouched.
+  cambiata <- riga_cambiata()
+  falso <- request_seal(do.call(riga_come_registro, cambiata))
+  esito <- giro(
+    registro_doppio(
+      record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
+      proprietari = '{"error":"You do not have Logging privileges"}'
+    ),
+    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE
+  )
+
+  # test
+  # No owner this round, so nobody whose rights the gate could ask: the row
+  # waits on our code.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  )
+  expect_length(scritture(), 0L)
 })

@@ -543,6 +543,43 @@ log_executions <- function(events, channel, channel_account) {
 }
 
 
+#' The seal the channel last wrote on a row, from the log
+#'
+#' The value of the round's last execution, `log_executions()`, in the row's
+#' current life: the seal of the version the round last carried out. What
+#' the round compares the row against to tell whether it changed since,
+#' with the channel's account configured (decided on 2026-10-17), in place of
+#' the `applied_seal` field. The field is `@READONLY` on the form and written
+#' by an import as any other: a referent who changes a row and imports the
+#' seal of the changed row, a public hash, would make it look untouched, and
+#' the change would be carried out on the owner's rights. The log names who
+#' wrote each seal, as it names who wrote each owner.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them the round reads the field.
+#'
+#' @return One seal; `""` when the channel never sealed the row in its
+#'   current life, which makes it a row never carried out.
+#'
+#' @keywords internal
+log_channel_seal <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  if (length(executed) == 0L) {
+    return("")
+  }
+  log_value(mine[executed[[1L]], , drop = FALSE], "applied_seal")
+}
+
+
 #' Whether a value can name the channel's accounts
 #'
 #' `NULL`, not configured, or one or more REDCap usernames, none of them

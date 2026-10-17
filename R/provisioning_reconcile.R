@@ -51,6 +51,20 @@
 #' is judged at the gate, step 6, because the rights come from the instance.
 #' And the IT accounts in `approvers` approve as the owner does.
 #'
+#' **The seal, like the owner, comes from the channel's log** when
+#' `channel_account` is configured (decided on 2026-10-17). Whether a row
+#' moved is the row's seal against the last `applied_seal` the channel wrote
+#' in the row's current life, read from the owners' log (`log_channel_seal()`),
+#' and not against the field: an import writes the field as any other, and a
+#' referent who changed a row and imported the seal of the changed row would
+#' have it carried out on the owner's rights. A row the channel never sealed
+#' is one never carried out, whatever the field holds. The field gets the
+#' channel's seal back on the row's next execution; a held row keeps the
+#' field as it is, since a seal the channel rewrote there would read in the
+#' log as one more execution. Without the account, or when the owners' log
+#' cannot be read, the field is compared as before; in the second case no
+#' row has an owner, and none is carried out.
+#'
 #' **The gate judges whoever wrote what the round carries out**: every author
 #' of the change, and the owner when nobody changed the row. Each of them must
 #' have been able to do it by hand. Whoever approved is not asked, because
@@ -416,8 +430,17 @@ provisioning_reconcile <- function(register_url,
   # so any referent can edit any row, in good faith or by mistake. The seal is
   # what notices: it covers what was asked and not what happened, so it moves
   # only when somebody changed the request itself.
-  sealed <- trimws(as.character(register[["applied_seal"]] %||% ""))
-  sealed[is.na(sealed)] <- ""
+  #
+  # `carried` is the seal the field holds, and `sealed` the one the round
+  # believes. They are the same until the owners' log is read: with the
+  # channel's account configured, the seal the round compares against is the
+  # channel's last one in that log, `log_channel_seal()`, and not the field,
+  # which an import writes as any other (decided on 2026-10-17). Without the
+  # account the field stands. Without the log it stands too, and then no row
+  # has an owner this round, so none is carried out.
+  carried <- trimws(as.character(register[["applied_seal"]] %||% ""))
+  carried[is.na(carried)] <- ""
+  sealed <- carried
   tampered <- nzchar(sealed) & sealed != request_seal(register)
 
   # Who was authenticated when each row was made. It is the row's owner until
@@ -477,6 +500,16 @@ provisioning_reconcile <- function(register_url,
           )
           if (is.na(owner)) "" else owner
         }, character(1))
+        # The seal, from the same log and for the same reason as the owner:
+        # a seal another account imported says nothing about what the round
+        # carried out. A row the channel never sealed in its current life is
+        # one the round never carried out, whatever the field says.
+        if (!is.null(channel_account)) {
+          sealed <- vapply(record_ids, function(id) {
+            log_channel_seal(reading_owners[["log"]], id, channel_account)
+          }, character(1), USE.NAMES = FALSE)
+          tampered <- nzchar(sealed) & sealed != request_seal(register)
+        }
       } else {
         log_errors <- c(log_errors, reading_owners[["errors"]])
       }
@@ -550,9 +583,14 @@ provisioning_reconcile <- function(register_url,
   # earlier round ran counts as well: it sits below that round's seal, which
   # covers only what the round had read, and `log_pending_authors()` finds it
   # there.
+  #
+  # Whether a row carries a seal is the believed seal's to say, not the
+  # field's.
+  believed <- register_after
+  believed[["applied_seal"]] <- sealed
   awaits <- checked
   awaits[checked] <- seal_needs_approval(
-    register_after[checked, , drop = FALSE], events, creators[checked],
+    believed[checked, , drop = FALSE], events, creators[checked],
     approvers, channel_account = channel_account
   )
   cleared <- awaits & seal_approved(
@@ -1476,6 +1514,9 @@ provisioning_reconcile <- function(register_url,
   #
   # The seal of an applied row is computed on `register_after`, the register
   # as this round will have left it, for the reason given where it is built.
+  # It is written whenever the field holds something else, so a field
+  # another account rewrote gets the channel's seal back on the row's next
+  # execution.
 
   # `approved` is sticky, and it has to be to mean anything. Recomputed as
   # `intact` on every ordinary round it would name a state that lasts one
@@ -1504,8 +1545,11 @@ provisioning_reconcile <- function(register_url,
         }
       )
     }),
+    # The field and not the believed seal: rewritten by the channel, a seal
+    # the field lost would land in the log as one more execution, above the
+    # change the row is held for, and that change would read as carried out.
     lapply(which(held), function(i) {
-      seal_payload(record_ids[[i]], sealed[[i]], "modified")
+      seal_payload(record_ids[[i]], carried[[i]], "modified")
     })
   ))
   seal_written <- register_seal_import(
