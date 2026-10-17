@@ -33,12 +33,11 @@ row names, as the instance reported it this round.}
 }
 \description{
 \strong{The one place the rule lives}, decided on 2026-10-14. A request belongs
-to whoever owns it, and the owner answers for it: the scope gate asks the
-owner's rights on the project every round, and the credentials of an
-account it makes go to the owner. The owner is whoever created the row
-until the round passes it on: since 2026-10-16 the row belongs to the last
-referent whose change was approved and carried out, \code{log_owner()}, and its
-approval comes from that referent or from IT. So:
+to whoever owns it, and the row answers to its owner: a change somebody
+else had a hand in is carried out only once the owner, or IT, has approved
+it. The owner is whoever created the row until the round passes it on:
+since 2026-10-16 the row belongs to the last referent whose change was
+approved and carried out, \code{log_owner()}. So:
 }
 \details{
 \itemize{

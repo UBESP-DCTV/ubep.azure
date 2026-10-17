@@ -18,14 +18,16 @@ log_uncovered_authors(
 
 \item{record}{The record id to look at.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers.}
+\item{creator}{Who created the row, as \code{log_creators()} answers; the owners
+are read from the log with it.}
 
 \item{fields}{The intent fields.}
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
 
 \item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
+\code{log_owner()}.}
 }
 \value{
 A character vector of usernames, newest first and each once;
@@ -58,6 +60,14 @@ decided belongs to the stretch after it. Read with today's owner instead,
 the approval of the one before would be a stranger's after a passage, and
 the row would be held again with no new change in it.
 
+One write is judged with today's owner as well: one that stands above the
+newest approval that covers, written while the round that passes the row
+ran, after the approval and before the seal. The outgoing owner who writes
+there is not the new owner, and nobody else would name the change, since
+below the seal \code{log_change_authors()} reads it as the value carried out.
+So a write above that approval counts when its author is not the owner of
+then or not the owner of today, \code{log_owner()} on the whole log.
+
 One stretch is enough. An uncovered change makes the next round hold the
 row, and a held row writes no seal: the stretch does not move until the
 owner approves, and that approval covers the version holding the change.
@@ -70,9 +80,8 @@ in it can reach anybody through the owner's next edit. Counted, it would
 make the owner approve the reactivation of their own request after a
 manager's free revocation.
 
-Unknown, \code{NA_character_}, when the creator or the owner of the stretch is
-not known, when two accounts write the channel's fields, or when an
-uncovered change has a blank author: the caller holds the row on all of
-them.
+Unknown, \code{NA_character_}, when the owner of the stretch is not known, when
+two accounts write the channel's fields, or when an uncovered change has a
+blank author: the caller holds the row on all three.
 }
 \keyword{internal}

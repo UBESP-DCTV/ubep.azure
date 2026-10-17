@@ -1708,6 +1708,109 @@ test_that("seal_approved inoltra l'account del canale al log", {
   )
 })
 
+# correzione 1
+test_that("chi esce scrivendo durante il giro che passa la riga resta autore", {
+  # Newest first. Bruno owns the row since 111111111111; Cinzia changed the
+  # group, Bruno approved 222222222222, then wrote the group himself while
+  # the round ran, and the round passed the row to Cinzia and sealed it.
+  eventi <- eventi_finti(
+    eseguita("222222222222"),
+    passaggio("cinzia.rossi@ubep.unipd.it"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "dag_name = 'centro-99'"
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "approved_seal = '222222222222'"
+    ),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "dag_name = 'centro-02'"
+    ),
+    eseguita("111111111111"),
+    passaggio("bruno.verdi@ubep.unipd.it"),
+    list(username = creatrice, details = "approved_seal = '111111111111'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    applicata
+  )
+  riga <- register_row(
+    role_name = "read only", dag_name = "centro-99",
+    applied_seal = "222222222222"
+  )
+  # Below the seal, his write reads as the value carried out: only the
+  # stretch can name it, and only with the owner of today.
+  expect_equal(
+    log_pending_authors(
+      eventi, "1", creatrice, channel_account = canale, current = riga
+    ),
+    "bruno.verdi@ubep.unipd.it"
+  )
+  expect_true(
+    seal_needs_approval(riga, eventi, creatrice, channel_account = canale)
+  )
+  # An approval of the seal carried out does not release the version that
+  # holds Bruno's group, even from Cinzia; her approval of this one does.
+  vecchia <- riga
+  vecchia[["approved_seal"]] <- "222222222222"
+  sua <- rbind(
+    eventi_finti(list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "approved_seal = '222222222222'"
+    )),
+    eventi
+  )
+  expect_false(seal_approved(vecchia, sua, creatrice, channel_account = canale))
+  nuova <- riga
+  nuova[["approved_seal"]] <- request_seal(nuova)
+  sua <- rbind(
+    eventi_finti(list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = paste0("approved_seal = '", nuova[["approved_seal"]], "'")
+    )),
+    eventi
+  )
+  expect_true(seal_approved(nuova, sua, creatrice, channel_account = canale))
+})
+
+test_that("il tratto distingue il proprietario di allora da quello di oggi", {
+  # Newest first. Bruno owns the row since 111111111111; Cinzia changed the
+  # group and Davide the role, Bruno approved 222222222222 over both, and the
+  # round passed the row to Davide and sealed it. Read with Davide, today's
+  # owner, Bruno's approval would cover nothing and Cinzia would come back.
+  eventi <- eventi_finti(
+    eseguita("222222222222"),
+    passaggio("davide.neri@ubep.unipd.it"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "approved_seal = '222222222222'"
+    ),
+    list(
+      username = "davide.neri@ubep.unipd.it",
+      details = "role_name = 'data entry'"
+    ),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "dag_name = 'centro-02'"
+    ),
+    eseguita("111111111111"),
+    passaggio("bruno.verdi@ubep.unipd.it"),
+    list(username = creatrice, details = "approved_seal = '111111111111'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    applicata
+  )
+  expect_equal(
+    log_uncovered_authors(eventi, "1", creatrice, channel_account = canale),
+    character()
+  )
+})
+
 
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.
