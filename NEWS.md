@@ -30,7 +30,8 @@
   `log_next_owner()`, `register_owner_import()`). **The field has to be added
   to the register before the package is installed**: 0.20.1 tolerates it
   (`DIZIONARIO_CAMPO_IN_PIU`), 0.21.0 without it stops
-  (`DIZIONARIO_CAMPO_ASSENTE`). At the first round every row receives it.
+  (`DIZIONARIO_CAMPO_ASSENTE`). At the first round every row whose owner is
+  established receives it.
 
 * **The channel's account is configured.** `provisioning_reconcile()` and
   `provisioning_report()` take `channel_account`, and `dev/runner-canale.R`
@@ -67,9 +68,10 @@
   so the row is read and carried out again every round, without mail; changing
   the field's value by import lets the next round write and log the seal.
 
-* **`UBEP_POSTA_COPIA` is required with the mail on.** The outcome of a row
-  whose owner is not established goes to IT alone, and without the address it
-  would not leave.
+* **`UBEP_POSTA_COPIA` is required with the mail on in the channel's job**,
+  `dev/runner-canale.R`, not in the report's. The outcome of a row whose owner
+  is not established goes to IT alone, and without the address it would not
+  leave.
 
 * **The fallback to `requested_by` is gone.** The outcome of a round that has
   no owner to give (sweep of the tenant failed, creation log or owners' log
