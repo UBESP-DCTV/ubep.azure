@@ -2253,6 +2253,22 @@ test_that("il sigillo creduto e' l'ultimo scritto dal canale", {
   expect_error(log_channel_seal(eventi, "1", NULL))
 })
 
+test_that("il canale configurato e' assente solo da un registro gia' sigillato", {
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  sigillato <- eventi_finti(
+    list(username = bruno, details = "role_name = 'read only'"), applicata
+  )
+  expect_false(log_channel_absent(sigillato, canale))
+  expect_false(
+    log_channel_absent(sigillato, c("svc-nuovo", "SVC-Canale-Ubep"))
+  )
+  expect_true(log_channel_absent(sigillato, "svc-nuovo"))
+  # Nothing sealed yet: no channel to have seen.
+  nuovo <- eventi_finti(list(username = bruno, details = "role_name = 'x'"))
+  expect_false(log_channel_absent(nuovo, "svc-nuovo"))
+  expect_error(log_channel_absent(sigillato, NULL))
+})
+
 test_that("un'esecuzione ha la forma della porta dei sigilli, non un valore che la cita", { # nolint: line_length_linter.
   bruno <- "bruno.verdi@ubep.unipd.it"
   # Newest first. An outcome of the channel whose `applied_as` holds the

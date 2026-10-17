@@ -701,6 +701,13 @@ maiuscole.
   loro storia le ferma in attesa del proprietario. Il cambio è un evento da
   preparare, non una modifica di configurazione da fare in un momento
   qualunque.
+- **Un'utenza che il log non ha mai visto ferma il giro.** Se nel log dei
+  proprietari c'è almeno un sigillo e nessuna delle utenze elencate vi ha mai
+  scritto un campo del canale, il nome è sbagliato, o la vecchia utenza è
+  stata tolta prima che la nuova scrivesse: il giro si ferma prima di
+  giudicare qualunque riga, con `TRASPORTO_REGISTRO_CANALE_ASSENTE` negli
+  errori del record (`log_channel_absent()`). Su un registro mai sigillato non
+  si ferma: non c'è ancora un canale da aver visto.
 
 **Quando il registro degli eventi non basta.** Un autore che il log non
 stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è

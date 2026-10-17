@@ -90,7 +90,9 @@ carries the codes of every write and log that failed, and
 showed could not be written into the log, and
 \code{TRASPORTO_SIGILLO_NON_REGISTRATO} when an applied row's field already
 held the seal the round writes and the channel's last seal in the log
-is another.
+is another. A round that finds the register sealed and none of the
+accounts of \code{channel_account} in its log stops, \code{fermato}, with
+\code{TRASPORTO_REGISTRO_CANALE_ASSENTE} (\code{log_channel_absent()}).
 }
 \description{
 The only function that holds the register and the instances at the same

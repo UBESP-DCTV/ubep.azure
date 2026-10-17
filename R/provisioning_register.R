@@ -596,6 +596,42 @@ log_channel_seal <- function(events, record, channel_account) {
 }
 
 
+#' Whether the configured channel never appears in a log it must be in
+#'
+#' The whole log, not one row's: `TRUE` when it holds a write of
+#' `applied_seal`, so the channel has run on this register, and no account
+#' in `channel_account` ever wrote a field of the channel,
+#' `register_channel_fields()`. That is a name typed wrong on the machine,
+#' or the token's old account dropped from the list before the new one wrote
+#' anything. Read with it, every seal and every passage of the channel
+#' would be somebody else's: rows back to their creators, every row with a
+#' hand other than the owner's held. A register where nothing was ever
+#' sealed answers `FALSE`: there is no channel yet to have seen.
+#'
+#' @param events The owners' log, `logtype = "record"`.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`.
+#'
+#' @return `TRUE` or `FALSE`.
+#'
+#' @keywords internal
+log_channel_absent <- function(events, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  if (!any(log_wrote(events, "applied_seal"))) {
+    return(FALSE)
+  }
+  authors <- tolower(trimws(as.character(events[["username"]])))
+  !any(
+    authors %in% tolower(trimws(channel_account)) &
+      log_wrote(events, register_channel_fields())
+  )
+}
+
+
 #' Whether a value can name the channel's accounts
 #'
 #' `NULL`, not configured, or one or more REDCap usernames, none of them

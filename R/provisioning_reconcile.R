@@ -196,7 +196,9 @@
 #'   showed could not be written into the log, and
 #'   `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
 #'   held the seal the round writes and the channel's last seal in the log
-#'   is another.
+#'   is another. A round that finds the register sealed and none of the
+#'   accounts of `channel_account` in its log stops, `fermato`, with
+#'   `TRASPORTO_REGISTRO_CANALE_ASSENTE` (`log_channel_absent()`).
 #'
 #' @keywords internal
 provisioning_reconcile <- function(register_url,
@@ -499,6 +501,19 @@ provisioning_reconcile <- function(register_url,
         register_url, register_token, logtype = "record"
       )
       if (isTRUE(reading_owners[["ok"]])) {
+        # A configured account the log has never seen, on a register the
+        # channel has sealed: a name typed wrong, or the old account dropped
+        # too early. Every write of the channel would read as somebody
+        # else's, so the round stops here, before it judges or writes
+        # anything but the identities, which do not depend on it.
+        if (!is.null(channel_account) &&
+              log_channel_absent(reading_owners[["log"]], channel_account)) {
+          return(halted(
+            c(identity_written[["errors"]],
+              "TRASPORTO_REGISTRO_CANALE_ASSENTE"),
+            schema = schema
+          ))
+        }
         owners_now <- vapply(seq_along(record_ids), function(i) {
           owner <- log_owner(
             reading_owners[["log"]], record_ids[[i]], creators[[i]],

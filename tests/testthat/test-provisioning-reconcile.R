@@ -4435,10 +4435,12 @@ test_that("dopo il cambio dell'account il passaggio scritto dal vecchio resta cr
   # own change is carried out on his rights.
   entrambi <- con(c("svc-canale-ubep", vecchio))
   expect_equal(as.character(entrambi[["esiti"]][["outcome"]]), "applied")
-  # The new account alone: the old one's passage is ignored, the row is
-  # Anna's again, and Bruno's change waits for her.
+  # The new account alone, which has written nothing on this register yet:
+  # every write of the channel would read as somebody else's, so the round
+  # stops before judging anything.
   solo_nuovo <- con("svc-canale-ubep")
-  expect_equal(as.character(solo_nuovo[["esiti"]][["outcome"]]), "held")
+  expect_true(solo_nuovo[["fermato"]])
+  expect_equal(solo_nuovo[["errori"]], "TRASPORTO_REGISTRO_CANALE_ASSENTE")
 })
 
 
@@ -4669,4 +4671,45 @@ test_that("un sigillo che il log non puo' ricevere lo dice nel record del giro",
   # test
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
   expect_true("TRASPORTO_SIGILLO_NON_REGISTRATO" %in% esito[["errori"]])
+})
+
+
+test_that("un'utenza del canale che il log non ha mai visto ferma il giro", {
+  # eval
+  # Anna's applied row, sealed by the channel; the machine names an account
+  # that never wrote on this register, a typo or the old one dropped too
+  # early.
+  posta <- posta_raccolta()
+  esito <- giro_cambiata(
+    list(cambio(anna)), istanza = istanza_che_scrive(),
+    mailer = posta[["mailer"]], channel_account = "svc-canale-sbagliato"
+  )
+
+  # test
+  # Read with that name, every seal and every passage of the channel would
+  # be somebody else's: rows back to their creators, every change held. The
+  # round stops before it judges or writes anything, and says why.
+  expect_true(esito[["fermato"]])
+  expect_equal(esito[["errori"]], "TRASPORTO_REGISTRO_CANALE_ASSENTE")
+  expect_length(importazioni(), 0L)
+  expect_length(scritture(), 0L)
+  expect_length(posta[["mandate"]](), 0L)
+})
+
+
+test_that("su un registro nuovo un'utenza mai vista non ferma il giro", {
+  # eval
+  # Nothing has been sealed yet: there is no channel to have seen. The
+  # double signs the round's own writes with the account configured.
+  esito <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1")), canale = "svc-canale-nuovo"
+    ),
+    istanza_che_scrive(), dry_run = FALSE,
+    channel_account = "svc-canale-nuovo"
+  )
+
+  # test
+  expect_false(esito[["fermato"]])
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
 })

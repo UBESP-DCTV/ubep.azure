@@ -46,7 +46,10 @@
   a row never carried out. `UBEP_CANALE_UTENTE` (and `channel_account`) takes more than one
   account, separated by commas: when the account that holds the token
   changes, list the new one and the old one, and the old one's writes, its
-  passages of a row among them, stay believed while it is listed.
+  passages of a row among them, stay believed while it is listed. A round
+  that finds the register sealed and none of the listed accounts in its log
+  stops before judging any row, with `TRASPORTO_REGISTRO_CANALE_ASSENTE`: a
+  name typed wrong, or the old account dropped before the new one wrote.
 
 * **`UBEP_POSTA_COPIA` is required with the mail on.** The outcome of a row
   whose owner is not established goes to IT alone, and without the address it
