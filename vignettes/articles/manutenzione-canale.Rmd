@@ -983,6 +983,12 @@ decidere, e i quattro casi che ne escono sono voluti:
 per le revoche, per `settled`, `already_gone` e `withdrawn`, in un giro simulato
 (che non scrive) e con la posta spenta.
 
+**Non parte mai per una concessione che la rilettura non conferma.** La riga
+prende `transport_error` con `TRASPORTO_SCRITTURA_NON_CONFERMATA` e la mail non
+parte; il giro dopo, se il diritto c'è, trova la coppia a posto (`noop`) e non
+ha niente da mandare. Non si conta in `accessi_persi`, perché nessun invio è
+fallito: la persona non viene avvisata, e lo dice solo quel codice sulla riga.
+
 **Va alla persona, a `contact_email`, e a nessun altro**: niente copia al
 referente, niente copia a IT. Con un indirizzo vuoto la mail è persa, come per
 il benvenuto. Il dirottamento e la prova a secco valgono come per gli altri
