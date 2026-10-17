@@ -741,6 +741,14 @@ maiuscole.
   righe che ha sigillato tornano mai eseguite, quindi una mano altrui nella loro
   storia le ferma in attesa del proprietario. Il cambio è un evento da
   preparare, non una modifica di configurazione da fare in un momento qualunque.
+  La vecchia utenza resta nell'elenco ma perde il token e il diritto di import
+  sul registro (pid 236): finché è elencata, ciò che scrive si crede come del
+  canale.
+- **Nessuna persona usa un'utenza dell'elenco.** Le scritture delle utenze di
+  `UBEP_CANALE_UTENTE` sono del canale: non sono modifiche di nessuno, quindi
+  chi scrivesse da una di loro sarebbe invisibile come autore, e i suoi
+  `owned_by` e `applied_seal` si crederebbero come passaggi ed esecuzioni. Sono
+  utenze di servizio, e il loro token lo usa solo la lavorazione.
 - **Un'utenza che il log non ha mai visto ferma il giro.** Se nel log dei
   proprietari c'è almeno un sigillo e nessuna delle utenze elencate vi ha mai
   scritto un campo del canale, il nome è sbagliato, o la vecchia utenza è stata
@@ -1500,17 +1508,19 @@ Il foglio raccoglie otto famiglie:
 con la posta accesa**, e senza la prima la lavorazione non parte:
 
 - **`UBEP_CANALE_UTENTE`** è lo username REDCap che possiede il token del
-  registro, cioè l'utenza che scrive per conto del canale, o più d'uno
-  separati da virgole quando il token è cambiato di mano: la vecchia utenza
-  resta nell'elenco, perché tolta i suoi passaggi e i suoi sigilli non valgono
-  più (§4, «Se l'account del token del canale cambia»). Spazi ai bordi di ogni
-  voce tolti, voci vuote scartate. Serve alle due lavorazioni, il giro e il
-  rapporto: sono gli unici account a cui si crede quando dicono di chi è una
-  riga e che cosa è stato eseguito (§4). Se manca, o è fatta di soli spazi e
-  virgole, la lavorazione si ferma con un errore che la nomina, prima di
-  leggere qualunque cosa; l'unità muore, non lascia record, e suona
-  l'allarme sull'assenza. La legge la macchina e non si scrive nel
-  repository, che è pubblico: il nome sta nel foglio dei parametri.
+  registro, cioè l'utenza che scrive per conto del canale, o più d'uno separati
+  da virgole quando il token è cambiato di mano: la vecchia utenza resta
+  nell'elenco, perché tolta i suoi passaggi e i suoi sigilli non valgono più, ma
+  perde il token e il diritto di import sul registro (§4, «Se l'account del
+  token del canale cambia»). Nessuna persona usa un'utenza dell'elenco: le sue
+  scritture si credono come del canale, e chi la usasse non comparirebbe come
+  autore di niente. Spazi ai bordi di ogni voce tolti, voci vuote scartate.
+  Serve alle due lavorazioni, il giro e il rapporto: sono gli unici account a
+  cui si crede quando dicono di chi è una riga e che cosa è stato eseguito (§4).
+  Se manca, o è fatta di soli spazi e virgole, la lavorazione si ferma con un
+  errore che la nomina, prima di leggere qualunque cosa; l'unità muore, non
+  lascia record, e suona l'allarme sull'assenza. La legge la macchina e non si
+  scrive nel repository, che è pubblico: il nome sta nel foglio dei parametri.
 - **`UBEP_POSTA_COPIA`** è l'indirizzo di IT in copia. Nel giro è obbligatoria
   con la posta accesa (`UBEP_POSTA=1`): è anche l'unico destinatario dell'esito
   di una riga senza proprietario stabilito, e senza di lei quell'esito non
