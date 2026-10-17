@@ -14,7 +14,8 @@ provisioning_report(
   month = NULL,
   mailer = NULL,
   redirect_to = NULL,
-  copy_to = NULL
+  copy_to = NULL,
+  channel_account = NULL
 )
 }
 \arguments{
@@ -39,6 +40,13 @@ gives, for a run by hand; \code{NULL} otherwise.}
 
 \item{copy_to}{The address of IT: in copy on the referents' reports, and
 the recipient of the report to IT.}
+
+\item{channel_account}{The REDCap username that holds the register's
+token, the account the round writes with. With it, only its writes of
+\code{owned_by} pass a row to another referent, and a row where somebody else
+wrote a channel field is undated; with \code{NULL}, the default, every row
+belongs to its creator, and the channel is whoever wrote its fields.
+The runner reads it from \code{UBEP_CANALE_UTENTE}, which it requires.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus
@@ -87,6 +95,16 @@ month writes nothing at all.
 
 The report to IT goes to \code{copy_to}, the address IT is in copy at on every
 outcome, under the name \code{report_it_key()}; the referents' reports go to the
-creator's account, with \code{copy_to} in copy.
+owner's account, with \code{copy_to} in copy.
+
+A row goes to its owner as the month covered ended, at midnight in Rome
+between its last day and the next month's first, \code{log_owner()} with
+\code{before}, and not to its owner on the day of the run. The month's reports
+leave over several days, until each referent has had theirs, and who is
+due must not change from one attempt to the next (decided on 2026-10-17):
+read on the day, a row passed on the 3rd would move from one referent's
+report to another's between two attempts, after one of the two had left.
+Without \code{channel_account}, \code{NULL}, no write of \code{owned_by} is believed and
+every row stays with its creator.
 }
 \keyword{internal}

@@ -9,8 +9,11 @@ report_rows(register, creators, executions, period, since = NULL, born = NULL)
 \arguments{
 \item{register}{The register as read.}
 
-\item{creators}{Who created each row, as \code{log_creators()} answers, in the
-register's order.}
+\item{creators}{Whom each row belongs to, in the register's order: its
+owner at the end of the month covered, as \code{provisioning_report()} reads
+it with \code{log_owner()}, which is the creator \code{log_creators()} names when
+the round never passed the row on; \code{""} when that is not established.
+The name and the \code{creator} column it fills predate the owner, and stay.}
 
 \item{executions}{One element per row, in the register's order: what
 \code{report_executions()} answered, or \code{NULL} where the log was not read.}

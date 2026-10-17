@@ -142,7 +142,7 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
   # that forgot it would keep every row with its creator and say nothing.
   dev <- testthat::test_path("..", "..", "dev")
   skip_if_not(dir.exists(dev), "dev/ is not in the built package")
-  for (nome in c("runner-canale.R")) {
+  for (nome in c("runner-canale.R", "runner-rapporto.R")) {
     testo <- paste(
       readLines(file.path(dev, nome), warn = FALSE), collapse = "\n"
     )

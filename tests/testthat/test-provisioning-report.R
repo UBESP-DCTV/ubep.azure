@@ -2109,3 +2109,54 @@ test_that("a run tells a new account from the creation log and Entra", {
     "ruolo user, senza scadenza. Account nuovo."
   ), fixed = TRUE)
 })
+
+
+test_that("una riga passata a un altro referente va nel suo rapporto", {
+  # eval
+  dati <- scenario()
+  dati[["eventi"]] <- rbind(
+    evento("2026-10-20 05:00", canale,
+           "owned_by = 'bruno.fittizio@ubep.unipd.it'", record = "41"),
+    dati[["eventi"]]
+  )
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esegui(cartella, posta, channel_account = canale)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  a <- vapply(mail, `[[`, "", "to")
+  expect_setequal(a, c(referente, "bruno.fittizio@ubep.unipd.it", it_prova))
+  di_bruno <- mail[[match("bruno.fittizio@ubep.unipd.it", a)]][["body"]]
+  expect_match(di_bruno, "carla.inventata@ubep.unipd.it", fixed = TRUE)
+  expect_no_match(
+    mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
+  )
+})
+
+
+# alla data: il mese si chiude a mezzanotte di Roma
+test_that("il rapporto di ottobre usa il proprietario della fine di ottobre", {
+  # eval
+  con_passaggio <- function(quando, account = canale) {
+    dati <- scenario()
+    dati[["eventi"]] <- rbind(
+      evento(quando, canale, "owned_by = 'bruno.fittizio@ubep.unipd.it'",
+             record = "41"),
+      dati[["eventi"]]
+    )
+    doppie(dati)
+    posta <- posta_finta()
+    esegui(withr::local_tempdir(), posta, channel_account = account)
+    vapply(posta[["inviate"]][["mail"]], `[[`, "", "to")
+  }
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+
+  # test
+  expect_true(bruno %in% con_passaggio("2026-10-31 23:59"))
+  expect_false(bruno %in% con_passaggio("2026-11-01 00:00"))
+  # Without the configured account the row stays with its creator.
+  expect_false(bruno %in% con_passaggio("2026-10-20 05:00", account = NULL))
+})

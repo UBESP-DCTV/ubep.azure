@@ -4,12 +4,15 @@
 \alias{report_executions}
 \title{When the channel executed a row, from the row's own log}
 \usage{
-report_executions(events, record)
+report_executions(events, record, channel_account = NULL)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
 
 \item{record}{The record id.}
+
+\item{channel_account}{The REDCap username that holds the register's
+token, or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 The stamps of the channel's seal writes, \code{"\%Y-\%m-\%d \%H:\%M"} in
@@ -30,10 +33,12 @@ parameter. Measured on 2026-10-16 that \code{exportLogging} honors it; the
 filter stays, at no cost, because an instance that ignored it would hand
 back the whole log, where another row's execution would date this one.
 
-The author has to be the channel, which \code{log_channel_accounts()} names
-without configuration. When two accounts write the channel's fields the log
-cannot say which of them executed the row, and the answer is unknown rather
-than a guess.
+The author has to be the channel, the account \code{log_channel_accounts()}
+names: the configured \code{channel_account}, or, without it, whoever wrote the
+channel's fields. When two accounts write those fields the log cannot say
+which of them executed the row, and the answer is unknown rather than a
+guess. With the account configured, a referent who imported a channel
+field is the second of those two, and the row is undated.
 
 Only the row that stands now is read. The register reuses record ids: one
 made for a field test, deleted on 2026-09-01 with the rest and made again

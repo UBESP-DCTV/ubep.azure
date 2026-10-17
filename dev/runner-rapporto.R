@@ -108,10 +108,28 @@ POSTA_DA <- Sys.getenv("UBEP_POSTA_DA")
 POSTA_COPIA <- Sys.getenv("UBEP_POSTA_COPIA")
 POSTA_RISPOSTE <- Sys.getenv("UBEP_POSTA_RISPOSTE")
 
+# L'utenza REDCap che possiede il token del registro, la stessa del giro
+# (decisione del 2026-10-17). Solo le sue scritture di owned_by passano una
+# riga a un altro referente. Sta sulla macchina e non qui, perche' il
+# repository e' pubblico. Gli spazi ai bordi si tolgono: una variabile fatta
+# di soli spazi e' una variabile che manca.
+CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))
+
 if (POSTA && !nzchar(POSTA_DA)) {
   stop(
     "UBEP_RAPPORTO_POSTA=1 senza UBEP_POSTA_DA: senza mittente ogni ",
     "messaggio verrebbe rifiutato.",
+    call. = FALSE
+  )
+}
+
+# Senza l'utenza del canale il pacchetto non crede a nessuna scrittura di
+# owned_by: un rapporto che la dimenticasse manderebbe ogni riga al suo
+# creatore, anche quella passata a un altro referente, senza dirlo.
+if (!nzchar(CANALE_UTENTE)) {
+  stop(
+    "UBEP_CANALE_UTENTE non e' impostata: senza l'utenza del canale il ",
+    "rapporto non sa a chi e' passata una riga.",
     call. = FALSE
   )
 }
@@ -208,7 +226,8 @@ esito <- ubep.azure:::provisioning_report(
   month = MESE,
   mailer = mailer,
   redirect_to = if (nzchar(POSTA_A)) POSTA_A else NULL,
-  copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL
+  copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
+  channel_account = CANALE_UTENTE
 )
 
 # Il record e' anche il riassunto sullo standard output: cio' che si stampa e

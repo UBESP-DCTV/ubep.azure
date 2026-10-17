@@ -4,12 +4,15 @@
 \alias{report_person_since}
 \title{Since when the person a row names now has had its access}
 \usage{
-report_person_since(events, record)
+report_person_since(events, record, channel_account = NULL)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
 
 \item{record}{The record id.}
+
+\item{channel_account}{The REDCap username that holds the register's
+token, or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 }
 \value{
 One stamp, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome; \code{character()} when the

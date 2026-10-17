@@ -160,10 +160,12 @@ report_day_words <- function(date) {
 #' filter stays, at no cost, because an instance that ignored it would hand
 #' back the whole log, where another row's execution would date this one.
 #'
-#' The author has to be the channel, which `log_channel_accounts()` names
-#' without configuration. When two accounts write the channel's fields the log
-#' cannot say which of them executed the row, and the answer is unknown rather
-#' than a guess.
+#' The author has to be the channel, the account `log_channel_accounts()`
+#' names: the configured `channel_account`, or, without it, whoever wrote the
+#' channel's fields. When two accounts write those fields the log cannot say
+#' which of them executed the row, and the answer is unknown rather than a
+#' guess. With the account configured, a referent who imported a channel
+#' field is the second of those two, and the row is undated.
 #'
 #' Only the row that stands now is read. The register reuses record ids: one
 #' made for a field test, deleted on 2026-09-01 with the rest and made again
@@ -182,17 +184,19 @@ report_day_words <- function(date) {
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id.
+#' @param channel_account The REDCap username that holds the register's
+#'   token, or `NULL` when it is not configured, for `log_channel_accounts()`.
 #'
 #' @return The stamps of the channel's seal writes, `"%Y-%m-%d %H:%M"` in
 #'   Rome, oldest first; `character()` when there is none; `NA_character_`
 #'   when the log cannot say.
 #'
 #' @keywords internal
-report_executions <- function(events, record) {
+report_executions <- function(events, record, channel_account = NULL) {
   stopifnot(is.data.frame(events))
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(NA_character_)
   }
@@ -234,11 +238,11 @@ report_executions <- function(events, record) {
 #'   the log cannot say.
 #'
 #' @keywords internal
-report_person_since <- function(events, record) {
+report_person_since <- function(events, record, channel_account = NULL) {
   stopifnot(is.data.frame(events))
 
   mine <- log_of_record(events, record)
-  channel <- log_channel_accounts(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
     return(NA_character_)
   }
@@ -455,8 +459,11 @@ report_expired <- function(expiration, today) {
 #' happen; the caller sends nothing on such a day.
 #'
 #' @param register The register as read.
-#' @param creators Who created each row, as `log_creators()` answers, in the
-#'   register's order.
+#' @param creators Whom each row belongs to, in the register's order: its
+#'   owner at the end of the month covered, as `provisioning_report()` reads
+#'   it with `log_owner()`, which is the creator `log_creators()` names when
+#'   the round never passed the row on; `""` when that is not established.
+#'   The name and the `creator` column it fills predate the owner, and stay.
 #' @param executions One element per row, in the register's order: what
 #'   `report_executions()` answered, or `NULL` where the log was not read.
 #' @param period What `report_month()` answered.
@@ -547,10 +554,14 @@ report_rows <- function(register, creators, executions, period,
 
 #' Put each row in the report it belongs to
 #'
-#' A row belongs to **whoever created it**, as the creation log says, and not
-#' to `requested_by`, which an import writes as it likes. The report goes to
-#' the same person the round asks to approve a change. A person asked for by
-#' two referents is in both reports, each with their own rows.
+#' A row belongs to **its owner**, as the log says, and not to
+#' `requested_by`, which an import writes as it likes: the creator, or the
+#' referent the round has since passed the row to by writing `owned_by`
+#' (`log_owner()`). The column is still called `creator`, from before rows
+#' could pass. The owner is the one standing at the end of the month covered,
+#' which `provisioning_report()` settles before it gets here. The report goes
+#' to the same person the round asks to approve a change. A person asked for
+#' by two referents is in both reports, each with their own rows.
 #'
 #' Three items, of which phase 1 fills two:
 #'
@@ -574,10 +585,11 @@ report_rows <- function(register, creators, executions, period,
 #'   not checked.
 #'
 #' What has no referent to go to goes to IT, and to nobody else: a row whose
-#' creator the log does not name, or whose creator Entra holds disabled, or
-#' does not hold, or cannot say; a person whose account is disabled, missing,
-#' without a creation date or that cannot otherwise be judged; a row the log
-#' does not date. A disabled creator receives nothing.
+#' owner the log does not establish (no creation names it, or the log cannot
+#' say whom it belongs to, `log_owner()`), or whose owner Entra holds
+#' disabled, or does not hold, or cannot say; a person whose account is
+#' disabled, missing, without a creation date or that cannot otherwise be
+#' judged; a row the log does not date. A disabled owner receives nothing.
 #'
 #' A referent whose people went to IT without being judged is told how
 #' many, in the report itself: the principle of the all-clear, which must not
@@ -599,8 +611,12 @@ report_rows <- function(register, creators, executions, period,
 #'   (people) and `non_giudicati` (a count); `it`, `NULL` when there is
 #'   nothing for IT, otherwise a list of `senza_referente` (rows, with
 #'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`) and
-#'   `senza_data` (rows); and `senza_creatore`,
-#'   how many rows have no referent to go to.
+#'   `senza_data` (rows); and `senza_creatore`, how many rows have no
+#'   referent to go to. Since rows can pass, that means without an
+#'   established owner and not only without a creator; the name stays,
+#'   because it is a column of `UbepRapporto_CL`, and a renamed column would
+#'   keep the table's history under one name and the new records under
+#'   another.
 #'
 #' @keywords internal
 report_assemble <- function(rows, directory, period, previous = list(),
@@ -1811,7 +1827,17 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #'
 #' The report to IT goes to `copy_to`, the address IT is in copy at on every
 #' outcome, under the name `report_it_key()`; the referents' reports go to the
-#' creator's account, with `copy_to` in copy.
+#' owner's account, with `copy_to` in copy.
+#'
+#' A row goes to its owner as the month covered ended, at midnight in Rome
+#' between its last day and the next month's first, `log_owner()` with
+#' `before`, and not to its owner on the day of the run. The month's reports
+#' leave over several days, until each referent has had theirs, and who is
+#' due must not change from one attempt to the next (decided on 2026-10-17):
+#' read on the day, a row passed on the 3rd would move from one referent's
+#' report to another's between two attempts, after one of the two had left.
+#' Without `channel_account`, `NULL`, no write of `owned_by` is believed and
+#' every row stays with its creator.
 #'
 #' @param register_url,register_token The register's host and API token.
 #' @param graph_token,graph_url The Microsoft Graph access token and endpoint.
@@ -1827,6 +1853,12 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' @param redirect_to One address replacing every recipient, or `NULL`.
 #' @param copy_to The address of IT: in copy on the referents' reports, and
 #'   the recipient of the report to IT.
+#' @param channel_account The REDCap username that holds the register's
+#'   token, the account the round writes with. With it, only its writes of
+#'   `owned_by` pass a row to another referent, and a row where somebody else
+#'   wrote a channel field is undated; with `NULL`, the default, every row
+#'   belongs to its creator, and the channel is whoever wrote its fields.
+#'   The runner reads it from `UBEP_CANALE_UTENTE`, which it requires.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due, for whoever reads a single run.
@@ -1841,12 +1873,16 @@ provisioning_report <- function(register_url,
                                 month = NULL,
                                 mailer = NULL,
                                 redirect_to = NULL,
-                                copy_to = NULL) {
+                                copy_to = NULL,
+                                channel_account = NULL) {
   stopifnot(
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
     is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
-    is.null(mailer) || is.function(mailer)
+    is.null(mailer) || is.function(mailer),
+    is.null(channel_account) ||
+      (is.character(channel_account) && length(channel_account) == 1L &&
+         !is.na(channel_account) && nzchar(trimws(channel_account)))
   )
 
   period <- report_month(now, month)
@@ -1918,13 +1954,26 @@ provisioning_report <- function(register_url,
     # looking at again.
     executions <- rep(list(NULL), nrow(register))
     since <- rep(list(NULL), nrow(register))
+    # The owner as the month covered ended, and not today's. The rows whose
+    # log is not read keep their creator: none of them enters the report.
+    owners <- creators
+    month_end <- paste0(report_shift_month(period[["mese"]], 1L), "-01 00:00")
     active <- field("request_status") == "active" &
       field("outcome") == "applied"
     for (i in which(active)) {
       answer <- register_log(register_url, register_token, record = ids[[i]])
       if (isTRUE(answer[["ok"]])) {
-        executions[i] <- list(report_executions(answer[["log"]], ids[[i]]))
-        since[i] <- list(report_person_since(answer[["log"]], ids[[i]]))
+        executions[i] <- list(
+          report_executions(answer[["log"]], ids[[i]], channel_account)
+        )
+        since[i] <- list(
+          report_person_since(answer[["log"]], ids[[i]], channel_account)
+        )
+        owner <- log_owner(
+          answer[["log"]], ids[[i]], creators[[i]], channel_account,
+          before = month_end
+        )
+        owners[[i]] <- if (is.na(owner)) "" else owner
       } else {
         logs_read <- FALSE
         errors <- c(errors, answer[["errors"]])
@@ -1932,7 +1981,7 @@ provisioning_report <- function(register_url,
     }
 
     rows <- report_rows(
-      register, creators, executions, period, since, born
+      register, owners, executions, period, since, born
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
