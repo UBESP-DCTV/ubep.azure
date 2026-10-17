@@ -220,3 +220,69 @@ test_that("scope_pairs asks once per triple and only about askable rows", {
   expect_setequal(pairs[["project_id"]], c("9003", "9004"))
   expect_equal(unique(pairs[["username"]]), "anna.bianchi@ubep.unipd.it")
 })
+
+
+righe_due <- function() {
+  data.frame(
+    record_id = c("1", "2"), server = "edc10", project_id = "9003",
+    requested_by = "", stringsAsFactors = FALSE
+  )
+}
+
+
+diritti_di <- function(...) {
+  chi <- c(...)
+  if (length(chi) == 0L) {
+    return(data.frame(
+      server = character(), project_id = character(),
+      username = character(), user_rights = integer(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  data.frame(
+    server = "edc10", project_id = "9003", username = names(chi),
+    user_rights = unname(chi), stringsAsFactors = FALSE
+  )
+}
+
+
+test_that("il cancello chiede i diritti di ciascun autore", {
+  allargato <- scope_expand(
+    righe_due(), list(c("bruno@ubep.unipd.it", "cinzia@ubep.unipd.it"),
+                      "anna@ubep.unipd.it")
+  )
+  expect_equal(allargato[["record_id"]], c("1", "1", "2"))
+  expect_equal(
+    allargato[["requested_by"]],
+    c("bruno@ubep.unipd.it", "cinzia@ubep.unipd.it", "anna@ubep.unipd.it")
+  )
+  rifiuti <- scope_merge(scope_errors(
+    allargato,
+    diritti_di(`bruno@ubep.unipd.it` = 1L, `anna@ubep.unipd.it` = 1L)
+  ))
+  expect_equal(rifiuti, list(`1` = "DATO_AMBITO_NON_AUTORIZZATO"))
+})
+
+
+test_that("un permesso illeggibile di un autore tiene la riga in coda", {
+  allargato <- scope_expand(
+    righe_due()[1L, ],
+    list(c("bruno@ubep.unipd.it", "cinzia@ubep.unipd.it"))
+  )
+  rifiuti <- scope_merge(scope_errors(
+    allargato,
+    diritti_di(`bruno@ubep.unipd.it` = 0L, `cinzia@ubep.unipd.it` = NA)
+  ))
+  expect_equal(rifiuti, list(`1` = "TRASPORTO_PERMESSO_NON_LEGGIBILE"))
+})
+
+
+test_that("una riga senza soggetti resta una riga non attribuita", {
+  allargato <- scope_expand(righe_due()[1L, ], list(character()))
+  expect_equal(nrow(allargato), 1L)
+  expect_equal(allargato[["requested_by"]], "")
+  expect_equal(
+    scope_merge(scope_errors(allargato, diritti_di())),
+    list(`1` = "DATO_AMBITO_NON_AUTORIZZATO")
+  )
+})

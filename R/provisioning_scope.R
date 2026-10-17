@@ -208,6 +208,86 @@ scope_errors <- function(register, rights) {
 }
 
 
+#' Put one line in the register for each person the gate must judge
+#'
+#' The gate asks of a requester "could you have done this by hand". What the
+#' channel executes can have been written by more than one person, and the
+#' rule is the same for all of them: **whoever wrote what is executed must be
+#' able to do it by hand.** The rights of whoever approves are not checked,
+#' because approving is not writing: it adds no power to the change.
+#'
+#' This turns a register and the people to judge for each of its rows into a
+#' register `scope_errors()` can read: one line per row and subject, with
+#' `requested_by` set to the subject. A row with nobody to judge stays once,
+#' with an empty `requested_by`, so that `scope_errors()` refuses it as not
+#' attributed and it does not slip through for lack of a name.
+#'
+#' @param register The register as a data frame, carrying at least
+#'   `record_id`, `server` and `project_id`.
+#' @param subjects A list as long as the rows of `register`, each element the
+#'   usernames to judge for that row.
+#'
+#' @return `register` with one line per row and subject, in the order of the
+#'   rows and then of the subjects, and `requested_by` equal to the subject.
+#'
+#' @keywords internal
+scope_expand <- function(register, subjects) {
+  stopifnot(
+    is.data.frame(register),
+    all(c("record_id", "server", "project_id") %in% names(register)),
+    is.list(subjects), length(subjects) == nrow(register)
+  )
+
+  who <- lapply(subjects, function(s) {
+    s <- unique(as.character(s))
+    if (length(s) == 0L) "" else s
+  })
+  rows <- rep(seq_len(nrow(register)), lengths(who))
+
+  out <- register[rows, , drop = FALSE]
+  out[["requested_by"]] <- as.character(unlist(who, use.names = FALSE))
+  rownames(out) <- NULL
+
+  out
+}
+
+
+#' Bring the refusals of the several subjects of a row back to one
+#'
+#' The other half of `scope_expand()`: `scope_errors()` answers per line, so a
+#' row judged on several people comes back once for each of them who is
+#' refused. The row is one, and so is its answer. A permission nobody could
+#' read decides it, because that refusal is not a verdict about anybody and
+#' keeps the row queued; otherwise the row is refused as not authorized.
+#'
+#' @param refused What `scope_errors()` returned for an expanded register: a
+#'   named list, names repeated.
+#'
+#' @return A named list, one entry per `record_id`, in the order each first
+#'   appears, holding `"TRASPORTO_PERMESSO_NON_LEGGIBILE"` when any of its
+#'   codes is that and `"DATO_AMBITO_NON_AUTORIZZATO"` otherwise.
+#'
+#' @keywords internal
+scope_merge <- function(refused) {
+  stopifnot(is.list(refused))
+
+  ids <- unique(names(refused))
+  codes <- vapply(ids, function(id) {
+    mine <- unlist(refused[names(refused) == id])
+    if ("TRASPORTO_PERMESSO_NON_LEGGIBILE" %in% mine) {
+      "TRASPORTO_PERMESSO_NON_LEGGIBILE"
+    } else {
+      "DATO_AMBITO_NON_AUTORIZZATO"
+    }
+  }, character(1L))
+
+  out <- as.list(codes)
+  names(out) <- ids
+
+  out
+}
+
+
 #' Judge at the gate a revocation somebody other than its creator made
 #'
 #' The second half of the exception `change_needs_approval()` makes for a
@@ -232,7 +312,8 @@ scope_errors <- function(register, rights) {
 #' @param row The row, one line of the register as the gate reads it.
 #' @param authors Who has a hand in the change, as `log_pending_authors()`
 #'   answers.
-#' @param creator Who created the row.
+#' @param owner Who the row belongs to: the creator, or the referent it passed
+#'   to.
 #' @param sealed Whether the row carries the seal of an execution.
 #' @param rights The rights the instance reported, as `round_rights()` builds
 #'   them.
@@ -241,13 +322,13 @@ scope_errors <- function(register, rights) {
 #'   creator; otherwise the refusal code, as `scope_errors()` gives it.
 #'
 #' @keywords internal
-scope_withdrawal <- function(row, authors, creator, sealed, rights) {
+scope_withdrawal <- function(row, authors, owner, sealed, rights) {
   stopifnot(
     is.data.frame(row), nrow(row) == 1L, is.character(authors),
-    is.character(creator), length(creator) == 1L, is.data.frame(rights)
+    is.character(owner), length(owner) == 1L, is.data.frame(rights)
   )
 
-  creator <- trimws(creator)
+  owner <- trimws(owner)
   subjects <- unique(trimws(authors))
   if (anyNA(subjects) || !all(nzchar(subjects)) || length(subjects) == 0L) {
     return("held")
@@ -264,13 +345,13 @@ scope_withdrawal <- function(row, authors, creator, sealed, rights) {
   if ("TRASPORTO_PERMESSO_NON_LEGGIBILE" %in% unlist(refused)) {
     return("TRASPORTO_PERMESSO_NON_LEGGIBILE")
   }
-  if (creator %in% names(refused)) {
+  if (owner %in% names(refused)) {
     return("DATO_AMBITO_NON_AUTORIZZATO")
   }
 
   managers <- setdiff(subjects, names(refused))
   waits <- change_needs_approval(
-    authors, creator, sealed = sealed, revocation = TRUE, managers = managers
+    authors, owner, sealed = sealed, revocation = TRUE, managers = managers
   )
   if (waits) "held" else ""
 }

@@ -4,7 +4,7 @@
 \alias{scope_withdrawal}
 \title{Judge at the gate a revocation somebody other than its creator made}
 \usage{
-scope_withdrawal(row, authors, creator, sealed, rights)
+scope_withdrawal(row, authors, owner, sealed, rights)
 }
 \arguments{
 \item{row}{The row, one line of the register as the gate reads it.}
@@ -12,7 +12,8 @@ scope_withdrawal(row, authors, creator, sealed, rights)
 \item{authors}{Who has a hand in the change, as \code{log_pending_authors()}
 answers.}
 
-\item{creator}{Who created the row.}
+\item{owner}{Who the row belongs to: the creator, or the referent it passed
+to.}
 
 \item{sealed}{Whether the row carries the seal of an execution.}
 
