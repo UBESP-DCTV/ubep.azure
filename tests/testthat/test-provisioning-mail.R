@@ -292,6 +292,11 @@ test_that("senza gruppo, scadenza o indirizzo le righe cambiano o mancano", {
   corpo <- mail_access_message(riga_di_prova())[["body"]]
   expect_no_match(corpo, "Gruppo:", fixed = TRUE)
   expect_no_match(corpo, "REDCap si apre da", fixed = TRUE)
+  for (url in list(NULL, NA_character_, "")) {
+    detto <- mail_access_message(riga_di_prova(), url = url)[["body"]]
+    expect_no_match(detto, "REDCap si apre da", fixed = TRUE)
+    expect_no_match(detto, "REDCap opens at", fixed = TRUE)
+  }
   expect_match(
     corpo, "Ultimo giorno di accesso: nessuno, l'accesso non scade.",
     fixed = TRUE
@@ -304,7 +309,12 @@ test_that("senza gruppo, scadenza o indirizzo le righe cambiano o mancano", {
 
 
 test_that("la mail di accesso non porta segreti", {
-  corpo <- mail_access_message(riga_di_prova())[["body"]]
+  # The fake secret sits in the fields it could leak from if the function read
+  # the wrong one: what was applied, why a row failed, the unverified address.
+  corpo <- mail_access_message(riga_di_prova(
+    applied_as = finti[["parola"]], outcome_detail = finti[["parola"]],
+    contact_email = finti[["parola"]]
+  ))[["body"]]
   expect_false(grepl(finti[["parola"]], corpo, fixed = TRUE))
   expect_no_match(corpo, "Chiave", fixed = TRUE)
 })
@@ -324,6 +334,7 @@ test_that("senza proprietario la mail di accesso non nomina nessuno", {
     "access, who is responsible for your first sign-in. If you cannot ",
     "reach them, reply to this message: it goes to IT."
   ), fixed = TRUE)
+  expect_false(grepl("[^\\x01-\\x7F]", corpo, perl = TRUE))
 })
 
 
