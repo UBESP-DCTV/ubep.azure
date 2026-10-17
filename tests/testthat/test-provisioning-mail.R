@@ -1513,6 +1513,10 @@ test_that("senza indirizzo o senza riga la mail di accesso e' persa", {
   )
   expect_length(posta[["mandate"]](), 0L)
   expect_equal(c(a[["errori"]], b[["errori"]]), rep("POSTA_ACCESSO_PERSA", 2L))
+  for (detto in list(a, b)) {
+    expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+    expect_identical(detto[["contatori"]][["accessi_recapitati"]], 0L)
+  }
 })
 
 

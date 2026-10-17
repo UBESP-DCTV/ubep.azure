@@ -3757,13 +3757,17 @@ test_that("il valore di owned_by nel registro non si crede", {
   # test
   # The row is Anna's, read from the log: her change is carried out on her
   # rights, and the outcome goes to her. The access message the grant also
-  # sends goes to the person, and is left out here.
-  esiti_mandati <- Filter(
-    function(m) !startsWith(m[["subject"]], "Accesso a REDCap"),
-    posta[["mandate"]]()
+  # sends goes to the person the row names, and Bruno gets nothing at all.
+  mandate <- posta[["mandate"]]()
+  di_accesso <- vapply(
+    mandate, function(m) startsWith(m[["subject"]], "Accesso a REDCap"), NA
   )
   expect_length(scritture(), 1L)
-  expect_equal(vapply(esiti_mandati, `[[`, "", "to"), anna)
+  expect_equal(vapply(mandate[!di_accesso], `[[`, "", "to"), anna)
+  expect_equal(
+    vapply(mandate[di_accesso], `[[`, "", "to"), "mario.rossi@example.org"
+  )
+  expect_false(bruno %in% vapply(mandate, `[[`, "", "to"))
 })
 
 
@@ -4274,7 +4278,7 @@ test_that("un banco riacceso o un accesso dato a mano non manda la mail", {
 
 test_that("un ruolo cambiato non manda la mail", {
   posta <- posta_raccolta()
-  giro(
+  esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list(), list(
       username = "mario.rossi@ubep.unipd.it", role_name = "read only",
@@ -4282,6 +4286,10 @@ test_that("un ruolo cambiato non manda la mail", {
     )),
     dry_run = FALSE, mailer = posta[["mailer"]]
   )
+  # The update did go through: the instance answered the write and the
+  # read-back shows the pair. Only a creation sends the access message.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
   expect_length(accessi(posta), 0L)
 })
 
@@ -4313,14 +4321,30 @@ test_that("una concessione che la rilettura non conferma non manda la mail", {
 
 test_that("una revoca o un giro che simula non mandano la mail", {
   posta <- posta_raccolta()
-  giro_cambiata(
+  # Mario is there until the revoke, and gone from the read-back after it,
+  # so the revoke is confirmed and comes back `applied`.
+  revocato <- FALSE
+  istanza_che_revoca <- function(data) {
+    if (identical(data[["operation"]], "revoke") &&
+          isFALSE(data[["dry_run"]])) {
+      revocato <<- TRUE # nolint: assignment_linter.
+    }
+    righe <- if (revocato) list(list()) else con_mario(list())
+    do.call(istanza_doppia, righe)(data)
+  }
+  revoca <- giro_cambiata(
     list(cambio(anna, "request_status = 'revoked'")), riga = revocata(),
-    istanza = do.call(istanza_doppia, con_mario(list())),
-    mailer = posta[["mailer"]]
+    istanza = istanza_che_revoca, mailer = posta[["mailer"]]
   )
-  giro(
+  # Read before the next round, which starts a new list of requests.
+  expect_length(revoche(), 1L)
+  simulato <- giro(
     registro_doppio(record_json(list())), istanza_che_scrive(),
     dry_run = TRUE, mailer = posta[["mailer"]]
   )
+  # Both did what they were asked: the revoke was carried out, the
+  # simulation planned the grant. Neither is a grant created this round.
+  expect_equal(as.character(revoca[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(simulato[["esiti"]][["outcome"]]), "simulated")
   expect_length(accessi(posta), 0L)
 })
