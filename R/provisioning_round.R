@@ -532,6 +532,12 @@ round_record <- function(esito, scrittura, posta) {
       benvenuti_recapitati =
         as.integer(contatori[["benvenuti_recapitati"]] %||% 0L),
       benvenuti_persi = as.integer(contatori[["benvenuti_persi"]] %||% 0L),
+      # And the access message's: one that did not leave has a person who
+      # does not know they now have access, and nothing sends it again, since
+      # the next round finds the right in place.
+      accessi_recapitati =
+        as.integer(contatori[["accessi_recapitati"]] %||% 0L),
+      accessi_persi = as.integer(contatori[["accessi_persi"]] %||% 0L),
       # A redirect left on by mistake would otherwise be silent: every referent
       # would stop hearing from the channel and nothing would say so.
       posta_dirottata = isTRUE(contatori[["posta_dirottata"]])

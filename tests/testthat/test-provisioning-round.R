@@ -408,6 +408,7 @@ posta_finta <- function(...) {
       posta_partite = 1L, posta_fallite = 0L,
       credenziali_recapitate = 0L, credenziali_perse = 0L,
       benvenuti_recapitati = 0L, benvenuti_persi = 0L,
+      accessi_recapitati = 0L, accessi_persi = 0L,
       posta_dirottata = FALSE
     ),
     list(...)
@@ -524,9 +525,14 @@ test_that("the record's list fields stay arrays when they hold one item", {
 test_that("the record's fields are exactly the rule's columns", {
   # eval
   # The columns of UbepCanale_CL, minus `TimeGenerated`, which the runner adds
-  # at emission time: twenty-five here, twenty-six in the table.
+  # at emission time: twenty-seven here, twenty-eight in the table.
   #
-  # The two `benvenuti_` counters are the newest, and they follow the order
+  # The two `accessi_` counters are the newest, and they follow the order the
+  # `benvenuti_` ones did: the table and the collection rule learn them before
+  # the package that emits them is installed, or an access message that did
+  # not leave lands in a column nobody can read.
+  #
+  # The two `benvenuti_` counters came before them, and they follow the order
   # the five below did: the table and the collection rule learn them before
   # the package that emits them is installed, and only then does
   # `ubep-canale-benvenuto-perso` have a column to watch.
@@ -556,7 +562,7 @@ test_that("the record's fields are exactly the rule's columns", {
     "schema_differenze", "istanze", "irraggiungibili", "righe", "scritte",
     "errori", "posta_partite", "posta_fallite", "credenziali_recapitate",
     "credenziali_perse", "benvenuti_recapitati", "benvenuti_persi",
-    "posta_dirottata", "esiti_pending", "esiti_applied",
+    "accessi_recapitati", "accessi_persi", "posta_dirottata", "esiti_pending", "esiti_applied",
     "esiti_data_error", "esiti_transport_error", "esiti_simulated",
     "esiti_held"
   )
@@ -626,6 +632,21 @@ test_that("il record del giro conta i benvenuti accanto alle credenziali", {
   expect_identical(record[["credenziali_recapitate"]], 2L)
   expect_identical(record[["posta_partite"]], 1L)
   expect_identical(record[["posta_fallite"]], 0L)
+})
+
+
+test_that("il record del giro conta le mail di accesso", {
+  record <- round_record(
+    esito_finto(
+      posta = posta_finta(accessi_recapitati = 2L, accessi_persi = 1L)
+    ),
+    TRUE, TRUE
+  )
+  expect_identical(record[["accessi_recapitati"]], 2L)
+  expect_identical(record[["accessi_persi"]], 1L)
+  vuoto <- round_record(esito_finto(), TRUE, FALSE)
+  expect_identical(vuoto[["accessi_recapitati"]], 0L)
+  expect_identical(vuoto[["accessi_persi"]], 0L)
 })
 
 
