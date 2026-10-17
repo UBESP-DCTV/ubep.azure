@@ -26,6 +26,7 @@ riga_di_prova <- function(...) {
       contact_email = "sara.esterna@example.org", identity = "existing",
       role_name = "collaudo-canale", dag_name = "", expiration = "",
       requested_by = "cinzia@ubep.unipd.it", request_status = "active",
+      owner = "cinzia@ubep.unipd.it",
       outcome = "data_error", outcome_detail = "DATO_RUOLO_INESISTENTE",
       outcome_at = "2026-08-24 12:04", applied_as = ""
     ),

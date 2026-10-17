@@ -131,22 +131,58 @@ mail_outcome_message <- function(row) {
   # Only an executed row gets the sentence that says which of the two opposite
   # things `applied` meant. On every other outcome nothing was done, and the
   # sentence would be answering a question nobody asked.
+  #
+  # An applied change that handed the row over says so right after it: the
+  # reader is the new owner, and the message is where they learn that the
+  # approvals of the row's changes are theirs now.
   fatto <- if (identical(as.character(row[["outcome"]]), "applied")) {
+    passaggio <- isTRUE(row[["passed"]])
     list(
-      it = paste0("Che cosa e' successo: ", status[["it"]], "."),
-      en = paste0("What happened: ", status[["en"]], ".")
+      it = c(
+        paste0("Che cosa e' successo: ", status[["it"]], "."),
+        if (passaggio) {
+          paste0(
+            "Da questa modifica la riga e' tua: le modifiche di altri ",
+            "referenti aspettano la tua approvazione, oppure quella di IT."
+          )
+        }
+      ),
+      en = c(
+        paste0("What happened: ", status[["en"]], "."),
+        if (passaggio) {
+          paste0(
+            "From this change on the row is yours: changes by other ",
+            "referents wait for your approval, or IT's."
+          )
+        }
+      )
     )
   } else {
     list(it = NULL, en = NULL)
+  }
+
+  # With nobody established as the row's owner the message goes to IT alone,
+  # and says so on its first lines: IT reads it without knowing which of the
+  # rows it concerns would have gone elsewhere.
+  senza_referente <- if (nzchar(mail_referent(row))) {
+    list(it = NULL, en = NULL)
+  } else {
+    list(
+      it = "Referente della riga non stabilito: questo messaggio va solo a IT.",
+      en = paste0(
+        "Whoever owns the row is not established: this message goes to IT ",
+        "only."
+      )
+    )
   }
 
   # A held row is the only outcome that asks the reader to do something whose
   # instructions are not in the work instruction, and the value it asks them to
   # paste is computed from the row: a referent who is not told it cannot
   # approve anything, and a protection nobody can clear is an outage with a
-  # nicer name. The message goes to whoever created the row, the only person
+  # nicer name. The message goes to whoever owns the row, the only person
   # whose approval counts, so it says that, and names who changed the row:
-  # the creator is the one who has to judge the change. It does not say the
+  # the owner is the one who has to judge the change. It does not say the
   # request had been applied: one still in the queue is held the same way.
   trattenuta <- if (identical(as.character(row[["outcome"]]), "held")) {
     sigillo <- mail_said_or(row[["seal_now"]], "non disponibile, chiedi a IT")
@@ -156,9 +192,9 @@ mail_outcome_message <- function(row) {
         paste0(
           "Questa richiesta e' stata modificata, prima o dopo essere stata ",
           "eseguita, e il canale non ha applicato la modifica perche' non ",
-          "risulta fatta solo da chi l'ha creata. La puo' approvare solo chi ",
-          "l'ha creata, oppure IT: questo messaggio va a chi risulta averla ",
-          "creata."
+          "risulta fatta solo dal referente della riga. La puo' approvare ",
+          "solo il referente della riga, oppure IT: questo messaggio va al ",
+          "referente della riga."
         ),
         paste0("Modificata da: ", mail_said_or(
           row[["edited_by"]], "non stabilito dal registro degli eventi"
@@ -177,8 +213,8 @@ mail_outcome_message <- function(row) {
           "eseguita la modifica, l'approvazione e' consumata, e un sigillo ",
           "incollato prima della modifica non la approva. L'approvazione di ",
           "qualunque altro referente, compreso chi ha fatto la modifica, non ",
-          "vale: il registro degli eventi di REDCap dice chi ha creato la ",
-          "riga e chi ha scritto che cosa. Approvata, la modifica diventa ",
+          "vale: il registro degli eventi di REDCap dice di chi e' la riga e ",
+          "chi ha scritto che cosa. Approvata, la modifica diventa ",
           "effettiva al giro successivo."
         ),
         "",
@@ -194,9 +230,8 @@ mail_outcome_message <- function(row) {
         paste0(
           "This request was edited, before or after it was applied, and the ",
           "channel did not apply the edit because it is not on record as made ",
-          "by the request's creator alone. Only whoever created the request, ",
-          "or IT, can approve it: this message goes to whoever is on record ",
-          "as its creator."
+          "by whoever owns the row alone. Only whoever owns the row, or IT, ",
+          "can approve it: this message goes to whoever owns the row."
         ),
         paste0("Edited by: ", mail_said_or(
           row[["edited_by"]], "not established from the event log"
@@ -215,7 +250,7 @@ mail_outcome_message <- function(row) {
           "has been applied the approval is spent, and a seal pasted before ",
           "the edit does not approve it. An approval by any other referent, ",
           "including whoever made the edit, does not count: REDCap's event ",
-          "log says who created the row and who wrote what. Once approved, ",
+          "log says who owns the row and who wrote what. Once approved, ",
           "the edit takes effect on the next round."
         ),
         "",
@@ -233,6 +268,7 @@ mail_outcome_message <- function(row) {
 
   it <- c(
     paste0("La richiesta ", id, " del registro di provisioning ha un esito."),
+    senza_referente[["it"]],
     "",
     paste0("Esito: ", said[["it"]], " (", row[["outcome"]], ")"),
     fatto[["it"]],
@@ -266,6 +302,7 @@ mail_outcome_message <- function(row) {
 
   en <- c(
     paste0("Request ", id, " in the provisioning register has an outcome."),
+    senza_referente[["en"]],
     "",
     paste0("Outcome: ", said[["en"]], " (", row[["outcome"]], ")"),
     fatto[["en"]],
@@ -309,11 +346,12 @@ mail_outcome_message <- function(row) {
 
 #' Who the round's mail to a row's referent goes to
 #'
-#' The creator: the account REDCap authenticated when the row was made, which
-#' the round reads from the creation log and passes on as `creator`. It is the
-#' referent the scope gate judged, and the only one whose approval of a change
-#' counts, IT aside. Every message the round sends to whoever asked goes
-#' there: the outcome, whatever it is, and the key of an account just made.
+#' The row's owner: who the creation log names as having made the row, until
+#' an approved change by another referent hands it over. The round settles it
+#' from the log and passes it on as `owner`. It is the referent the scope gate
+#' judges, and the only one whose approval of a change counts, IT aside. Every
+#' message the round sends to whoever asked goes there: the outcome, whatever
+#' it is, and the key of an account just made.
 #'
 #' Not `requested_by`. On the form `@USERNAME` fills it in and the two agree;
 #' the Data Import Tool writes it as the CSV has it (measured on 2026-09-02
@@ -322,16 +360,19 @@ mail_outcome_message <- function(row) {
 #' one naming another address sent both there, to the person themselves if
 #' the file said so, against the rule that the key stays with the referent.
 #'
-#' `requested_by` remains the fallback for a row without a creator, and no key
-#' reaches it: a row whose creator the log does not name stops at the gate on
-#' `TRASPORTO_AUTORE_NON_LEGGIBILE`, and nobody is made for it. An outcome
-#' can, on a round that has no creator to hand: one whose sweep of the tenant
-#' failed, which asks no log; one whose creation log could not be read, or
-#' does not name the row; one where no row needed judging, which does not ask
-#' the creation log at all.
+#' And there is no fallback to it. Once a row can change hands, a fallback
+#' would write to a former owner, the one person who should no longer hear
+#' about the row. An empty owner means the round could not settle it, and
+#' the outcome then goes to IT alone and says so (see `mail_round()`). That
+#' happens in four cases: a sweep of the tenant that failed, which asks no
+#' log; a creation log that could not be read; a round with no row to judge,
+#' which does not ask the creation log at all; a creation log that does not
+#' name the row. No key reaches anybody then: a row whose owner the log does
+#' not name stops at the gate on `TRASPORTO_AUTORE_NON_LEGGIBILE`, and
+#' nobody is made for it.
 #'
 #' @param row One register row as a list, with this round's outcome and the
-#'   `creator` the round read.
+#'   `owner` the round settled.
 #'
 #' @return One address, possibly empty.
 #'
@@ -339,11 +380,7 @@ mail_outcome_message <- function(row) {
 mail_referent <- function(row) {
   stopifnot(is.list(row))
 
-  creator <- mail_said_or(row[["creator"]], "")
-  if (nzchar(creator)) {
-    return(creator)
-  }
-  mail_said_or(row[["requested_by"]], "")
+  mail_said_or(row[["owner"]], "")
 }
 
 
@@ -381,8 +418,8 @@ mail_instance_url <- function(host) {
 #' so a secret sent there would let anyone who can file a request have an
 #' account born in the tenant and its key delivered to an address of their own
 #' choosing. The referent who asked for the account hands it over instead; this
-#' message says so, and names them as `mail_referent()` does: the creator the
-#' log named, who receives the key, and not `requested_by`.
+#' message says so, and names them as `mail_referent()` does: the owner the
+#' log settled, who receives the key, and not `requested_by`.
 #'
 #' It does name the instance, as the address REDCap opens at, and that is the
 #' same decision read from the other side. A message without a secret can carry
@@ -407,10 +444,19 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     is.null(url) || length(url) == 1L
   )
 
-  # The person the key goes to, so the creator and not the field an import
+  # The person the key goes to, so the owner and not the field an import
   # writes as it likes: naming another would send the person to wait for
-  # somebody who never receives it.
-  referente <- mail_said_or(mail_referent(row), "chi ha compilato la richiesta")
+  # somebody who never receives it. Without an owner, a description that
+  # names nobody, in each language.
+  referente <- mail_said_or(mail_referent(row), "")
+  chi <- if (nzchar(referente)) {
+    list(it = referente, en = referente)
+  } else {
+    list(
+      it = "il referente che ha chiesto l'account",
+      en = "the referent who requested the account"
+    )
+  }
 
   # Both lines or neither: the four hours are about the instance the address
   # names, and without the address they would be a promise about a place the
@@ -449,7 +495,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     "",
     paste0(
       "La chiave d'ingresso non e' in questo messaggio: te la consegna ",
-      referente, ", che e' la persona che ha chiesto l'account per te."
+      chi[["it"]], ", che e' la persona che ha chiesto l'account per te."
     ),
     "",
     "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
@@ -472,7 +518,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     istanza[["en"]],
     "",
     paste0(
-      "The way in is not in this message: ", referente,
+      "The way in is not in this message: ", chi[["en"]],
       " will hand it to you, as the person who requested the account."
     ),
     "",
@@ -729,8 +775,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' again, it would only keep the outcome out of the register.
 #'
 #' The welcome goes to `contact_email`, the person. The outcome and the key go
-#' to the referent, `mail_referent()`: the creator `identified` carries, and
-#' `requested_by` only for a row without one.
+#' to the referent, `mail_referent()`: the owner `identified` carries. The
+#' outcome of a row without one goes to `copy_to` alone, with a line saying
+#' so; its key goes nowhere.
 #'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
@@ -741,13 +788,15 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param dry_run When `TRUE` nothing is sent and every row comes back
 #'   writable -- the round behaves as it did before this file existed.
 #' @param redirect_to One address replacing every recipient, for a field test.
-#' @param copy_to Address in copy, on the outcome message only.
+#' @param copy_to Address in copy, on the outcome message only; and the one
+#'   address the outcome goes to when the row has no established owner.
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
 #' @param identified What this round settled about each row, as a frame with
-#'   `record_id` and the fields it settled: the identity; `creator`, who the
-#'   creation log says made the row, where the outcome and the key go
-#'   (`mail_referent()`); `edited_by`, who changed a held row since
+#'   `record_id` and the fields it settled: the identity; `owner`, who the
+#'   log says the row belongs to, where the outcome and the key go
+#'   (`mail_referent()`); `passed`, whether the change applied this round
+#'   handed the row over; `edited_by`, who changed a held row since
 #'   it was applied, as the row's log says. `register` is the register as read,
 #'   on purpose; this is how the message names what the round has just
 #'   established rather than what the referent typed.
@@ -864,9 +913,14 @@ mail_round <- function(changed,
     for (campo in intersect(names(changed), names(riga))) {
       riga[[campo]] <- changed[[campo]][[i]]
     }
-    esito <- consegna(
-      mail_referent(riga), copy_to, mail_outcome_message(riga)
-    )
+    # To IT alone when nobody owns the row, and not in copy: there is nobody
+    # to copy. The message says so itself.
+    destinatario <- mail_referent(riga)
+    esito <- if (nzchar(destinatario)) {
+      consegna(destinatario, copy_to, mail_outcome_message(riga))
+    } else {
+      consegna(copy_to, NULL, mail_outcome_message(riga))
+    }
     partite[[i]] <- isTRUE(esito[["ok"]])
     if (!partite[[i]]) errori <- c(errori, esito[["errors"]])
   }
@@ -897,8 +951,9 @@ mail_round <- function(changed,
       conto[["benvenuti_persi"]] <- conto[["benvenuti_persi"]] + 1L
       errori <- c(errori, "POSTA_BENVENUTO_PERSO")
     }
-    # To the creator, whose rights let the account be made, and not to the
-    # `requested_by` the row carries: an import writes that one as it likes.
+    # To the owner, and not to the `requested_by` the row carries: an import
+    # writes that one as it likes. With no owner the key has nowhere to go and
+    # is lost and counted: not even IT receives it.
     segreto <- consegna(
       mail_referent(riga), NULL,
       mail_credential_message(

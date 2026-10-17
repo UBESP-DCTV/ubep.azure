@@ -3257,22 +3257,27 @@ test_that("senza il creatore la riga cambiata non chiede un'approvazione", {
     ),
     istanza_che_scrive(),
     dry_run = FALSE,
-    mailer = posta[["mailer"]]
+    mailer = posta[["mailer"]],
+    copy_to = "it@example.org"
   )
 
   # test
-  # The creator could not be read this round, and nobody can approve until it
-  # is. A held message would ask the reader for a seal that approves nothing
-  # and claim to reach the creator when it does not: the row takes the code
-  # the gate gives a row with no author, and the message says it is ours.
+  # The creator could not be read this round, so the row has no owner and
+  # nobody can approve until it is. A held message would ask the reader for a
+  # seal that approves nothing and claim to reach the owner when it does not:
+  # the row takes the code the gate gives a row with no author, the message
+  # says it is ours, and it goes to IT alone, whom it tells so. `requested_by`
+  # (here `anna`) is not a fallback.
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
   expect_equal(
     as.character(esito[["esiti"]][["outcome_detail"]]),
     "TRASPORTO_AUTORE_NON_LEGGIBILE"
   )
   mandate <- posta[["mandate"]]()
-  expect_equal(vapply(mandate, `[[`, "", "to"), anna)
+  expect_equal(vapply(mandate, `[[`, "", "to"), "it@example.org")
   expect_no_match(mandate[[1L]][["body"]], "approved_seal", fixed = TRUE)
+  expect_match(mandate[[1L]][["body"]], "Referente della riga non stabilito",
+               fixed = TRUE)
 })
 
 

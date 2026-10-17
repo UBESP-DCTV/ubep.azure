@@ -1209,11 +1209,12 @@ provisioning_reconcile <- function(register_url,
   # round has been rewriting it
   changed <- round_changed(register, outcomes)
   # The same minutes the identity door wrote, so the message names what the
-  # round settled instead of what the referent left blank. And the creator the
-  # log named, which is where the outcome and the key go: the referent the
-  # gate judged, and the only one whose approval of a held row counts, where
-  # `requested_by` is what an import wrote. With it, who changed the row,
-  # which is what the creator has to judge.
+  # round settled instead of what the referent left blank. And the owner, which
+  # is where the outcome and the key go: the referent the gate judged, and the
+  # only one whose approval of a held row counts, where `requested_by` is what
+  # an import wrote. With it, who changed the row, which is what the owner has
+  # to judge. For now the owner is the creator the log named, and no row is
+  # handed over.
   edited_by <- vapply(seq_along(record_ids), function(i) {
     if (!checked[[i]]) {
       return("")
@@ -1229,7 +1230,8 @@ provisioning_reconcile <- function(register_url,
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
-      creator = creators,
+      owner = creators,
+      passed = FALSE,
       edited_by = edited_by,
       stringsAsFactors = FALSE
     )

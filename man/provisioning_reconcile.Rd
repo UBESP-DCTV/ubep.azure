@@ -57,7 +57,8 @@ carry \code{TRASPORTO_CREAZIONE_SENZA_POSTA}.}
 
 \item{redirect_to}{One address replacing every recipient, for a field test.}
 
-\item{copy_to}{Address in copy, on the outcome message only.}
+\item{copy_to}{Address in copy, on the outcome message only; and the one
+address the outcome goes to when the row has no established owner.}
 
 \item{reply_to}{Kept for the caller's symmetry with \code{mail_send()}; the
 mailer closure is what carries it to the transport.}

@@ -8,17 +8,18 @@ mail_referent(row)
 }
 \arguments{
 \item{row}{One register row as a list, with this round's outcome and the
-\code{creator} the round read.}
+\code{owner} the round settled.}
 }
 \value{
 One address, possibly empty.
 }
 \description{
-The creator: the account REDCap authenticated when the row was made, which
-the round reads from the creation log and passes on as \code{creator}. It is the
-referent the scope gate judged, and the only one whose approval of a change
-counts, IT aside. Every message the round sends to whoever asked goes
-there: the outcome, whatever it is, and the key of an account just made.
+The row's owner: who the creation log names as having made the row, until
+an approved change by another referent hands it over. The round settles it
+from the log and passes it on as \code{owner}. It is the referent the scope gate
+judges, and the only one whose approval of a change counts, IT aside. Every
+message the round sends to whoever asked goes there: the outcome, whatever
+it is, and the key of an account just made.
 }
 \details{
 Not \code{requested_by}. On the form \verb{@USERNAME} fills it in and the two agree;
@@ -28,12 +29,15 @@ that field, an import that left it empty lost the key and the outcome, and
 one naming another address sent both there, to the person themselves if
 the file said so, against the rule that the key stays with the referent.
 
-\code{requested_by} remains the fallback for a row without a creator, and no key
-reaches it: a row whose creator the log does not name stops at the gate on
-\code{TRASPORTO_AUTORE_NON_LEGGIBILE}, and nobody is made for it. An outcome
-can, on a round that has no creator to hand: one whose sweep of the tenant
-failed, which asks no log; one whose creation log could not be read, or
-does not name the row; one where no row needed judging, which does not ask
-the creation log at all.
+And there is no fallback to it. Once a row can change hands, a fallback
+would write to a former owner, the one person who should no longer hear
+about the row. An empty owner means the round could not settle it, and
+the outcome then goes to IT alone and says so (see \code{mail_round()}). That
+happens in four cases: a sweep of the tenant that failed, which asks no
+log; a creation log that could not be read; a round with no row to judge,
+which does not ask the creation log at all; a creation log that does not
+name the row. No key reaches anybody then: a row whose owner the log does
+not name stops at the gate on \code{TRASPORTO_AUTORE_NON_LEGGIBILE}, and
+nobody is made for it.
 }
 \keyword{internal}

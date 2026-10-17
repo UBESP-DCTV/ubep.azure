@@ -103,38 +103,40 @@ test_that("le istruzioni di primo accesso non portano nessun segreto", {
 })
 
 
-test_that("il benvenuto nomina chi ha creato la riga, non chi la riga nomina", {
+test_that("il benvenuto nomina il proprietario, non chi la riga nomina", {
   # eval
   importata <- mail_welcome_message(
     riga_di_prova(
       requested_by = "nominato.da.import@example.org",
-      creator = "creatrice.riga@example.org"
+      owner = "proprietaria.riga@example.org"
     ),
     upn = "sara.collaudozeta@ubep.unipd.it"
   )[["body"]]
-  senza_creatore <- mail_welcome_message(
-    riga_di_prova(creator = ""), upn = "sara.collaudozeta@ubep.unipd.it"
-  )[["body"]]
-  nessuno <- mail_welcome_message(
-    riga_di_prova(requested_by = "", creator = ""),
-    upn = "sara.collaudozeta@ubep.unipd.it"
+  senza_proprietario <- mail_welcome_message(
+    riga_di_prova(owner = ""), upn = "sara.collaudozeta@ubep.unipd.it"
   )[["body"]]
 
   # test
   # The welcome tells the person who will hand them the key, and the key goes
-  # to the creator: naming the address the CSV carried would send the person
-  # to wait for somebody who never receives it.
+  # to the row's owner: naming the address the CSV carried would send the
+  # person to wait for somebody who never receives it.
   expect_match(
-    importata, "te la consegna creatrice.riga@example.org", fixed = TRUE
+    importata, "te la consegna proprietaria.riga@example.org", fixed = TRUE
   )
   expect_match(
-    importata, "creatrice.riga@example.org will hand it to you", fixed = TRUE
+    importata, "proprietaria.riga@example.org will hand it to you",
+    fixed = TRUE
   )
   expect_no_match(importata, "nominato.da.import@example.org", fixed = TRUE)
-  expect_match(senza_creatore, "te la consegna cinzia@ubep.unipd.it",
-               fixed = TRUE)
-  expect_match(nessuno, "te la consegna chi ha compilato la richiesta",
-               fixed = TRUE)
+  expect_match(
+    senza_proprietario,
+    "te la consegna il referente che ha chiesto l'account", fixed = TRUE
+  )
+  expect_match(
+    senza_proprietario,
+    "the referent who requested the account will hand it to you", fixed = TRUE
+  )
+  expect_no_match(senza_proprietario, "cinzia@ubep.unipd.it", fixed = TRUE)
 })
 
 
@@ -659,11 +661,15 @@ test_that("una nascita produce due messaggi, a due destinatari diversi", {
 
 
 # One round that applies row 16 and makes its account, with `requested_by` and
-# the creator the log named set apart. A row filed through the Data Import
-# Tool carries in `requested_by` whatever the CSV had; the creator is the
-# account REDCap authenticated, which `identified` hands to the post. The key
-# is an argument so the fake value keeps coming from `finti`.
-giro_con_creatore <- function(requested_by, creator, chiave) {
+# the owner the round settled set apart. A row filed through the Data Import
+# Tool carries in `requested_by` whatever the CSV had; the owner is who the
+# creation log, and the approved changes after it, say the row belongs to,
+# which `identified` hands to the post. The key is an argument so the fake
+# value keeps coming from `finti`.
+giro_con_proprietario <- function(requested_by,
+                                  owner,
+                                  chiave,
+                                  copy_to = NULL) {
   registro <- registro_di_prova(requested_by = requested_by)
   changed <- registro[, colonne_cambiate, drop = FALSE]
   changed[["outcome"]] <- "applied"
@@ -674,10 +680,10 @@ giro_con_creatore <- function(requested_by, creator, chiave) {
     born = list(list(
       record_id = "16", upn = "sara@ubep.unipd.it", credential = chiave
     )),
-    mailer = posta[["mailer"]], dry_run = FALSE,
+    mailer = posta[["mailer"]], dry_run = FALSE, copy_to = copy_to,
     identified = data.frame(
       record_id = "16", username = "sara.collaudozeta@ubep.unipd.it",
-      identity = "existing", creator = creator, edited_by = "",
+      identity = "existing", owner = owner, passed = FALSE, edited_by = "",
       stringsAsFactors = FALSE
     )
   )
@@ -698,18 +704,18 @@ giro_con_creatore <- function(requested_by, creator, chiave) {
 }
 
 
-test_that("una riga importata per altri manda esito e chiave al creatore", {
+test_that("una riga importata per altri manda esito e chiave al proprietario", {
   # eval
-  visto <- giro_con_creatore(
+  visto <- giro_con_proprietario(
     requested_by = "nominato.da.import@example.org",
-    creator = "creatrice.riga@example.org", chiave = finti[["parola"]]
+    owner = "proprietaria.riga@example.org", chiave = finti[["parola"]]
   )
 
   # test
-  # The key stays with the referent the gate judged. An import that names
+  # The key stays with the referent the row belongs to. An import that names
   # somebody else, the person themselves included, does not move it.
-  expect_equal(visto[["esito"]], "creatrice.riga@example.org")
-  expect_equal(visto[["chiave"]], "creatrice.riga@example.org")
+  expect_equal(visto[["esito"]], "proprietaria.riga@example.org")
+  expect_equal(visto[["chiave"]], "proprietaria.riga@example.org")
   expect_equal(visto[["benvenuto"]], "sara.esterna@example.org")
   expect_false("nominato.da.import@example.org" %in% visto[["tutti"]])
   expect_equal(visto[["detto"]][["contatori"]][["credenziali_recapitate"]], 1L)
@@ -718,16 +724,16 @@ test_that("una riga importata per altri manda esito e chiave al creatore", {
 
 test_that("una riga importata senza requested_by non perde la chiave", {
   # eval
-  visto <- giro_con_creatore(
-    requested_by = "", creator = "creatrice.riga@example.org",
+  visto <- giro_con_proprietario(
+    requested_by = "", owner = "proprietaria.riga@example.org",
     chiave = finti[["parola"]]
   )
 
   # test
   # Sent to the empty field, the key had no recipient: the account was born
   # and nobody could get into it, and the outcome stayed out of the register.
-  expect_equal(visto[["esito"]], "creatrice.riga@example.org")
-  expect_equal(visto[["chiave"]], "creatrice.riga@example.org")
+  expect_equal(visto[["esito"]], "proprietaria.riga@example.org")
+  expect_equal(visto[["chiave"]], "proprietaria.riga@example.org")
   expect_equal(visto[["detto"]][["contatori"]][["credenziali_recapitate"]], 1L)
   expect_equal(visto[["detto"]][["contatori"]][["credenziali_perse"]], 0L)
   expect_false("POSTA_SENZA_DESTINATARIO" %in% visto[["detto"]][["errori"]])
@@ -738,9 +744,9 @@ test_that("una riga importata senza requested_by non perde la chiave", {
 
 test_that("una riga del modulo, dove i due coincidono, resta com'era", {
   # eval
-  visto <- giro_con_creatore(
+  visto <- giro_con_proprietario(
     requested_by = "referente.modulo@example.org",
-    creator = "referente.modulo@example.org", chiave = finti[["parola"]]
+    owner = "referente.modulo@example.org", chiave = finti[["parola"]]
   )
 
   # test
@@ -750,19 +756,18 @@ test_that("una riga del modulo, dove i due coincidono, resta com'era", {
 })
 
 
-test_that("una riga senza creatore leggibile ripiega su requested_by", {
+test_that("la chiave non va a nessuno che non sia il proprietario stabilito", {
   # eval
-  visto <- giro_con_creatore(
-    requested_by = "referente.modulo@example.org", creator = "",
-    chiave = finti[["parola"]]
+  visto <- giro_con_proprietario(
+    requested_by = "nominato.da.import@example.org", owner = "",
+    chiave = finti[["parola"]], copy_to = "it@example.org"
   )
 
   # test
-  # The round does not make an account for a row whose creator it could not
-  # read, so the key does not reach this in a round; a caller that hands the
-  # post such a row gets the field the row carries.
-  expect_equal(visto[["esito"]], "referente.modulo@example.org")
-  expect_equal(visto[["chiave"]], "referente.modulo@example.org")
+  expect_length(visto[["chiave"]], 0L)
+  expect_false("nominato.da.import@example.org" %in% visto[["tutti"]])
+  expect_equal(visto[["detto"]][["contatori"]][["credenziali_perse"]], 1L)
+  expect_true("POSTA_CREDENZIALE_PERSA" %in% visto[["detto"]][["errori"]])
 })
 
 
@@ -1101,24 +1106,22 @@ riga_trattenuta <- function(...) {
 }
 
 
-test_that("la riga trattenuta dice che approva solo chi l'ha creata, o IT", {
+test_that("la riga trattenuta dice che approva solo il proprietario, o IT", {
   # eval
   corpo <- mail_outcome_message(
     riga_trattenuta(edited_by = "bruno.verdi@ubep.unipd.it")
   )[["body"]]
 
   # test
-  # The message goes to the creator and has to say why: the approval of any
+  # The message goes to the row's owner and has to say why: the approval of any
   # other referent, the author of the change included, does not count.
   # Sending the reader to "another referent" would ask for an act the round
   # ignores. IT approves too since 2026-10-15, and the message says so.
-  expect_match(corpo, "solo chi l'ha creata, oppure IT", fixed = TRUE)
-  expect_match(
-    corpo, "Only whoever created the request, or IT,", fixed = TRUE
-  )
+  expect_match(corpo, "solo il referente della riga, oppure IT", fixed = TRUE)
+  expect_match(corpo, "Only whoever owns the row, or IT,", fixed = TRUE)
   expect_false(grepl("un altro referente", corpo, fixed = TRUE))
   expect_false(grepl("another referent", corpo, fixed = TRUE))
-  # Who changed the row is what the creator needs to judge the change.
+  # Who changed the row is what the owner needs to judge the change.
   expect_match(
     corpo, "Modificata da: bruno.verdi@ubep.unipd.it", fixed = TRUE
   )
@@ -1156,37 +1159,99 @@ test_that("la riga trattenuta dice quando il log non nomina chi l'ha cambiata", 
 })
 
 
-test_that("ogni esito va al creatore, e a requested_by solo se manca", {
+test_that("ogni esito va al proprietario, mai a requested_by", {
   # eval
   riga <- list(
     record_id = "42", requested_by = "nominato.da.import@example.org",
-    creator = "creatrice.riga@example.org"
+    owner = "proprietaria.riga@example.org"
   )
 
   # test
   # `requested_by` is what `@USERNAME` wrote on the form, and what the CSV
-  # carried on an import: the Data Import Tool writes it verbatim. The creator
-  # is the account REDCap authenticated, and it is the one referent the gate
-  # judged, so every outcome goes there and not only the held one.
+  # carried on an import: the Data Import Tool writes it verbatim. The owner is
+  # settled from the log, so every outcome goes there and not only the held
+  # one, and there is no fallback: after a hand-over it would write to a
+  # former owner.
   for (esito in outcome_vocabulary()) {
     expect_equal(
-      mail_referent(c(riga, outcome = esito)), "creatrice.riga@example.org"
+      mail_referent(c(riga, outcome = esito)), "proprietaria.riga@example.org"
     )
   }
-  # The fallback, for a row whose creator nobody could read.
+  expect_equal(mail_referent(c(riga[1:2], owner = "")), "")
   expect_equal(
     mail_referent(list(
-      record_id = "42", outcome = "held",
+      record_id = "42", creator = "creatrice.riga@example.org",
       requested_by = "nominato.da.import@example.org"
     )),
-    "nominato.da.import@example.org"
+    ""
   )
   expect_equal(
-    mail_referent(c(riga[c("record_id", "requested_by")], creator = "")),
-    "nominato.da.import@example.org"
+    mail_referent(list(record_id = "42", requested_by = NA, owner = NA)), ""
   )
-  expect_equal(
-    mail_referent(list(record_id = "42", requested_by = NA, creator = NA)), ""
+})
+
+
+test_that("senza proprietario l'esito va solo a IT, e lo dice", {
+  # eval
+  registro <- registro_di_prova(owner = "")
+  changed <- registro[, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  detto <- mail_round(
+    changed, registro, born = list(), mailer = posta[["mailer"]],
+    dry_run = FALSE, copy_to = "it@example.org"
+  )
+
+  # test
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], "it@example.org")
+  expect_null(mandate[[1L]][["cc"]])
+  expect_match(
+    mandate[[1L]][["body"]],
+    "Referente della riga non stabilito: questo messaggio va solo a IT.",
+    fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]],
+    "Whoever owns the row is not established: this message goes to IT only.",
+    fixed = TRUE
+  )
+  expect_equal(nrow(detto[["recapitate"]]), 1L)
+
+  # eval
+  senza_it <- mail_round(
+    changed, registro, born = list(), mailer = raccoglitore()[["mailer"]],
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(nrow(senza_it[["recapitate"]]), 0L)
+  expect_true("POSTA_SENZA_DESTINATARIO" %in% senza_it[["errori"]])
+})
+
+
+test_that("l'esito che passa la riga lo dice al nuovo proprietario", {
+  # eval
+  passata <- mail_outcome_message(riga_di_prova(
+    outcome = "applied", outcome_detail = "", passed = TRUE
+  ))[["body"]]
+  ferma <- mail_outcome_message(riga_di_prova(
+    outcome = "held", passed = TRUE, seal_now = "9f3c1a7b04de"
+  ))[["body"]]
+
+  # test
+  expect_match(passata, paste0(
+    "Da questa modifica la riga e' tua: le modifiche di altri referenti ",
+    "aspettano la tua approvazione, oppure quella di IT."
+  ), fixed = TRUE)
+  expect_match(passata, paste0(
+    "From this change on the row is yours: changes by other referents ",
+    "wait for your approval, or IT's."
+  ), fixed = TRUE)
+  expect_no_match(ferma, "la riga e' tua", fixed = TRUE)
+  expect_no_match(
+    mail_outcome_message(riga_di_prova(outcome = "applied"))[["body"]],
+    "la riga e' tua", fixed = TRUE
   )
 })
 
