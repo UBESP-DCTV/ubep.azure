@@ -511,14 +511,25 @@ mail_welcome_message <- function(row, upn, url = NULL) {
   # The person the key goes to, so the owner and not the field an import
   # writes as it likes: naming another would send the person to wait for
   # somebody who never receives it. Without an owner, a description that
-  # names nobody, in each language.
+  # names nobody, in each language and in a form that says "requested" once.
   referente <- mail_said_or(mail_referent(row), "")
-  chi <- if (nzchar(referente)) {
-    list(it = referente, en = referente)
+  consegna <- if (nzchar(referente)) {
+    list(
+      it = paste0(
+        "te la consegna ", referente,
+        ", che e' la persona che ha chiesto l'account per te."
+      ),
+      en = paste0(
+        referente, " will hand it to you, as the person who requested the ",
+        "account."
+      )
+    )
   } else {
     list(
-      it = "il referente che ha chiesto l'account",
-      en = "the referent who requested the account"
+      it = "te la consegna il referente che ha chiesto l'account per te.",
+      en = paste0(
+        "the referent who requested the account for you will hand it to you."
+      )
     )
   }
 
@@ -560,8 +571,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     istanza[["it"]],
     "",
     paste0(
-      "La chiave d'ingresso non e' in questo messaggio: te la consegna ",
-      chi[["it"]], ", che e' la persona che ha chiesto l'account per te."
+      "La chiave d'ingresso non e' in questo messaggio: ", consegna[["it"]]
     ),
     "",
     "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
@@ -584,8 +594,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     istanza[["en"]],
     "",
     paste0(
-      "The way in is not in this message: ", chi[["en"]],
-      " will hand it to you, as the person who requested the account."
+      "The way in is not in this message: ", consegna[["en"]]
     ),
     "",
     "At first sign-in you will be asked three things, in this order:",

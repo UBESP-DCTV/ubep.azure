@@ -130,12 +130,15 @@ test_that("il benvenuto nomina il proprietario, non chi la riga nomina", {
   expect_no_match(importata, "nominato.da.import@example.org", fixed = TRUE)
   expect_match(
     senza_proprietario,
-    "te la consegna il referente che ha chiesto l'account", fixed = TRUE
+    "te la consegna il referente che ha chiesto l'account per te.",
+    fixed = TRUE
   )
   expect_match(
     senza_proprietario,
-    "the referent who requested the account will hand it to you", fixed = TRUE
+    "the referent who requested the account for you will hand it to you.",
+    fixed = TRUE
   )
+  expect_false(grepl("[^\\x01-\\x7F]", senza_proprietario, perl = TRUE))
   expect_no_match(senza_proprietario, "cinzia@ubep.unipd.it", fixed = TRUE)
 })
 
