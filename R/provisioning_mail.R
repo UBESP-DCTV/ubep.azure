@@ -605,6 +605,107 @@ mail_welcome_message <- function(row, upn, url = NULL) {
 }
 
 
+#' Tell a person they now have access to a project
+#'
+#' The second message of a creation, and the one that carries the context the
+#' welcome leaves out on purpose: which project, on which instance, with which
+#' role and group, until when. It carries no secret and no way in, so it can
+#' say all of it. The key travels in `mail_credential_message()`, which says
+#' none of this.
+#'
+#' The last day is the register's `expiration`, the day the request wrote, and
+#' not the day REDCap stores. REDCap's expiration is the first day without
+#' access, one day later than the last day the person has it
+#' (`to_redcap_expiration()`), and the value in `applied_as` is that stored
+#' one: printed as "last day" it would
+#' promise a day more than the person gets.
+#'
+#' The project is named by its number and not by its title. The title is
+#' written by whoever builds the project, the register does not hold it, and
+#' fetching it would add a call to REDCap to a message whose job is to leave.
+#'
+#' The owner, when there is one, is named as the project's contact; without
+#' one the line is left out and the closing sentence describes the referent
+#' instead (`mail_first_contact()`), so a missing owner costs no message.
+#'
+#' @param row One register row as a list.
+#' @param url The address the row's instance opens at, from
+#'   `mail_instance_url()`; `NULL`, `NA` or empty leaves the line out.
+#'
+#' @return A list with `subject` and `body`.
+#'
+#' @keywords internal
+mail_access_message <- function(row, url = NULL) {
+  stopifnot(is.list(row), is.null(url) || length(url) == 1L)
+
+  referente <- mail_said_or(mail_referent(row), "")
+  contatto <- mail_first_contact(referente, "accesso")
+  server <- row[["server"]]
+  pid <- row[["project_id"]]
+  gruppo <- mail_said_or(row[["dag_name"]], "")
+  scadenza <- mail_said_or(row[["expiration"]], "")
+  indirizzo <- !(is.null(url) || is.na(url) || !nzchar(url))
+
+  it <- c(
+    paste0("Ciao ", row[["first_name"]], ","),
+    "",
+    paste0("ora hai accesso in REDCap al progetto ", pid, " su ", server, "."),
+    if (indirizzo) paste0("REDCap si apre da: ", url),
+    paste0("Ruolo: ", row[["role_name"]]),
+    if (nzchar(gruppo)) paste0("Gruppo: ", gruppo),
+    if (nzchar(scadenza)) {
+      paste0("Ultimo giorno di accesso: ", scadenza)
+    } else {
+      "Ultimo giorno di accesso: nessuno, l'accesso non scade."
+    },
+    "",
+    if (nzchar(referente)) {
+      c(
+        paste0(
+          "Del progetto risponde ", referente, ", il referente della richiesta."
+        ),
+        ""
+      )
+    },
+    contatto[["it"]]
+  )
+
+  en <- c(
+    paste0("Hello ", row[["first_name"]], ","),
+    "",
+    paste0(
+      "you now have access in REDCap to project ", pid, " on ", server, "."
+    ),
+    if (indirizzo) paste0("REDCap opens at: ", url),
+    paste0("Role: ", row[["role_name"]]),
+    if (nzchar(gruppo)) paste0("Group: ", gruppo),
+    if (nzchar(scadenza)) {
+      paste0("Last day of access: ", scadenza)
+    } else {
+      "Last day of access: none, the access does not expire."
+    },
+    "",
+    if (nzchar(referente)) {
+      c(
+        paste0(
+          referente, ", who owns the request, answers for the project."
+        ),
+        ""
+      )
+    },
+    contatto[["en"]]
+  )
+
+  list(
+    subject = paste0(
+      "Accesso a REDCap / REDCap access: ", server, ", progetto ", pid
+    ),
+    body = paste(c(it, "", "---", "", en), collapse = "
+")
+  )
+}
+
+
 #' Hand the way in to the person who asked for the account
 #'
 #' It carries the UPN, the key, and nothing else. No project, no role, no

@@ -248,6 +248,87 @@ test_that("il benvenuto promette un'altra mail e manda prima al referente", {
 })
 
 
+test_that("la mail di accesso dice dove, come e fino a quando", {
+  msg <- mail_access_message(
+    riga_di_prova(dag_name = "centro-01", expiration = "2027-01-31",
+                  applied_as = "role_name=x; dag_name=; expiration=2027-02-01"),
+    url = "https://edc10.example.org/"
+  )
+  corpo <- msg[["body"]]
+  expect_equal(
+    msg[["subject"]], "Accesso a REDCap / REDCap access: edc10, progetto 29"
+  )
+  expect_match(corpo, "ora hai accesso in REDCap al progetto 29 su edc10.",
+               fixed = TRUE)
+  expect_match(corpo, "you now have access in REDCap to project 29 on edc10.",
+               fixed = TRUE)
+  expect_match(corpo, "REDCap si apre da: https://edc10.example.org/",
+               fixed = TRUE)
+  expect_match(corpo, "Ruolo: collaudo-canale", fixed = TRUE)
+  expect_match(corpo, "Gruppo: centro-01", fixed = TRUE)
+  expect_match(corpo, "Ultimo giorno di accesso: 2027-01-31", fixed = TRUE)
+  expect_match(corpo, "Last day of access: 2027-01-31", fixed = TRUE)
+  expect_no_match(corpo, "2027-02-01", fixed = TRUE)
+  expect_match(corpo, paste0(
+    "Del progetto risponde cinzia@ubep.unipd.it, il referente della ",
+    "richiesta."
+  ), fixed = TRUE)
+  expect_match(corpo, paste0(
+    "Per qualunque problema scrivi prima a cinzia@ubep.unipd.it, che ha ",
+    "chiesto il tuo accesso e risponde del tuo primo accesso. Se non ",
+    "riesci a raggiungerlo, rispondi a questo messaggio: arriva a IT."
+  ), fixed = TRUE)
+  expect_match(corpo, paste0(
+    "For any problem write first to cinzia@ubep.unipd.it, who requested ",
+    "your access and is responsible for your first sign-in. If you ",
+    "cannot reach them, reply to this message: it goes to IT."
+  ), fixed = TRUE)
+  expect_match(corpo, "
+---
+", fixed = TRUE)
+  expect_false(grepl("[^\x01-\x7F]", corpo, perl = TRUE))
+})
+
+
+test_that("senza gruppo, scadenza o indirizzo le righe cambiano o mancano", {
+  corpo <- mail_access_message(riga_di_prova())[["body"]]
+  expect_no_match(corpo, "Gruppo:", fixed = TRUE)
+  expect_no_match(corpo, "REDCap si apre da", fixed = TRUE)
+  expect_match(
+    corpo, "Ultimo giorno di accesso: nessuno, l'accesso non scade.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "Last day of access: none, the access does not expire.",
+    fixed = TRUE
+  )
+})
+
+
+test_that("la mail di accesso non porta segreti", {
+  corpo <- mail_access_message(riga_di_prova())[["body"]]
+  expect_false(grepl(finti[["parola"]], corpo, fixed = TRUE))
+  expect_no_match(corpo, "Chiave", fixed = TRUE)
+})
+
+
+test_that("senza proprietario la mail di accesso non nomina nessuno", {
+  corpo <- mail_access_message(riga_di_prova(owner = ""))[["body"]]
+  expect_no_match(corpo, "Del progetto risponde", fixed = TRUE)
+  expect_no_match(corpo, "answers for the project", fixed = TRUE)
+  expect_match(corpo, paste0(
+    "Per qualunque problema scrivi prima al referente che ha chiesto il ",
+    "tuo accesso, che risponde del tuo primo accesso. Se non riesci a ",
+    "raggiungerlo, rispondi a questo messaggio: arriva a IT."
+  ), fixed = TRUE)
+  expect_match(corpo, paste0(
+    "For any problem write first to the referent who requested your ",
+    "access, who is responsible for your first sign-in. If you cannot ",
+    "reach them, reply to this message: it goes to IT."
+  ), fixed = TRUE)
+})
+
+
 test_that("l'indirizzo dell'istanza si compone dall'host dell'inventario", {
   # test
   expect_equal(
