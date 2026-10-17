@@ -200,7 +200,7 @@ provisioning_reconcile <- function(register_url,
     is.character(approvers),
     is.null(channel_account) ||
       (is.character(channel_account) && length(channel_account) == 1L &&
-         !is.na(channel_account) && nzchar(channel_account)),
+         !is.na(channel_account) && nzchar(trimws(channel_account))),
     is.character(at), length(at) == 1L
   )
 

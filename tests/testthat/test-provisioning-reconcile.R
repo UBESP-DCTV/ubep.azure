@@ -3871,3 +3871,21 @@ test_that("una riga cambiata senza proprietario stabilito non si trattiene", {
     mandate[[1L]][["body"]], "va al referente della riga", fixed = TRUE
   )
 })
+
+
+test_that("un account del canale vuoto, di soli spazi o mancante ferma il giro", { # nolint: line_length_linter.
+  # eval / test
+  # A blank name would make every row's channel nobody's: it is a missing
+  # configuration, and the round stops before it asks the register anything.
+  for (account in list("", "  ", NA, NA_character_)) {
+    expect_error(
+      giro(
+        registro_doppio(record_json(list())), istanza_che_scrive(),
+        channel_account = account
+      ),
+      "channel_account",
+      info = format(account)
+    )
+    expect_length(inviate, 0L)
+  }
+})

@@ -147,7 +147,7 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
       readLines(file.path(dev, nome), warn = FALSE), collapse = "\n"
     )
     expect_match(
-      testo, 'CANALE_UTENTE <- Sys.getenv("UBEP_CANALE_UTENTE")',
+      testo, 'CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))',
       fixed = TRUE, info = nome
     )
     expect_match(

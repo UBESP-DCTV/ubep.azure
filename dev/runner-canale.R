@@ -87,8 +87,9 @@ APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
 # 2026-10-17). Il giro crede alle scritture di owned_by di questa utenza e
 # di nessun'altra: riconoscerla da cio' che scrive lascerebbe passare per
 # canale chi importa owned_by su una riga nuova. Sta sulla macchina e non
-# qui, perche' il repository e' pubblico.
-CANALE_UTENTE <- Sys.getenv("UBEP_CANALE_UTENTE")
+# qui, perche' il repository e' pubblico. Gli spazi ai bordi si tolgono: una
+# variabile fatta di soli spazi e' una variabile che manca.
+CANALE_UTENTE <- trimws(Sys.getenv("UBEP_CANALE_UTENTE"))
 
 # Ci si ferma qui e non alla prima mail rifiutata. Senza mittente ogni
 # messaggio verrebbe respinto, quindi nessuna riga sarebbe scritta: il giro
