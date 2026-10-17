@@ -1167,11 +1167,36 @@ provisioning_reconcile <- function(register_url,
       })
     ))
 
+    # The rows that get the access message: a grant this round created and
+    # the read-back confirmed, and nothing else. The four cases of the design
+    # fall out of `acted()` and `written` without any memory of what was sent
+    # before. A bench switched back on finds the right in place, the pair is
+    # `noop` and never enters `to_apply`; a role changed by hand is
+    # `aggiornato`; a reactivation after a revoke finds the pair absent and is
+    # `creato`, so the person hears again; a write the read-back does not
+    # confirm is `transport_error`, and the next round, finding the right, is
+    # `noop`. A simulated round writes nothing and is never `applied`.
+    # Revokes are not in `to_apply` at all.
+    granted_here <- vapply(
+      Filter(function(e) identical(acted(e), "creato"), to_apply),
+      function(e) as.character(e[["record_id"]]), character(1)
+    )
+    concessi <- intersect(
+      granted_here,
+      as.character(written[["record_id"]])[
+        as.character(written[["outcome"]]) == "applied"
+      ]
+    )
+
     list(
       stato = data.frame(
         server = server, raggiunta = TRUE, ambito_leggibile = TRUE,
         errori = NA_character_, stringsAsFactors = FALSE
       ),
+      # Only `acted()` knows a creation from an update, and it stays here:
+      # what leaves the instance is the list of ids. The early returns above
+      # carry no such key, since an instance not reached granted nothing.
+      concessi = concessi,
       # The rows this instance was asked about and did not refuse. Only present
       # when the instance answered: the early returns above carry no such key,
       # and their silence is what keeps a creation from happening on a question
@@ -1223,6 +1248,12 @@ provisioning_reconcile <- function(register_url,
   # post on. Only when somebody was actually kept from being born, so that a
   # round with nobody to create does not fail on a switch it never needed.
   in_scope <- unlist(lapply(per_instance, function(a) a[["in_scope"]]))
+
+  # The rows whose right this round created and confirmed, which the post
+  # tells their person about (`mail_round()`).
+  granted <- as.character(
+    unlist(lapply(per_instance, function(a) a[["concessi"]]))
+  )
 
   # The withdrawals the gate did not free are held as if they had been held
   # before the instance was asked: same outcome, same seal state, same message.
@@ -1364,6 +1395,7 @@ provisioning_reconcile <- function(register_url,
   }, character(1))
   posta <- posted(
     changed, born,
+    granted = granted,
     identified = data.frame(
       record_id = as.character(record_ids),
       username = resolved_names,

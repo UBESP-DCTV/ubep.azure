@@ -1808,7 +1808,10 @@ test_that("una mail partita apre la strada alla scrittura della sua riga", {
     istanza_che_scrive(),
     dry_run = FALSE,
     mailer = function(to, cc, subject, body) {
-      mandate <<- mandate + 1L # nolint: assignment_linter.
+      # The grant also sends the access message, which has no row to open.
+      if (!startsWith(subject, "Accesso a REDCap")) {
+        mandate <<- mandate + 1L # nolint: assignment_linter.
+      }
       list(ok = TRUE, errors = character())
     }
   )
@@ -1828,7 +1831,10 @@ test_that("il messaggio nomina l'identita' che questo giro ha stabilito", {
     istanza_che_scrive(),
     dry_run = FALSE,
     mailer = function(to, cc, subject, body) {
-      corpo <<- body # nolint: assignment_linter.
+      # The outcome message, not the access message the grant also sends.
+      if (!startsWith(subject, "Accesso a REDCap")) {
+        corpo <<- body # nolint: assignment_linter.
+      }
       list(ok = TRUE, errors = character())
     }
   )
@@ -3750,9 +3756,14 @@ test_that("il valore di owned_by nel registro non si crede", {
 
   # test
   # The row is Anna's, read from the log: her change is carried out on her
-  # rights, and the outcome goes to her.
+  # rights, and the outcome goes to her. The access message the grant also
+  # sends goes to the person, and is left out here.
+  esiti_mandati <- Filter(
+    function(m) !startsWith(m[["subject"]], "Accesso a REDCap"),
+    posta[["mandate"]]()
+  )
   expect_length(scritture(), 1L)
-  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), anna)
+  expect_equal(vapply(esiti_mandati, `[[`, "", "to"), anna)
 })
 
 
@@ -4219,4 +4230,97 @@ test_that("una porta del proprietario rifiutata arriva al record del giro, e il 
   expect_equal(
     as.character(sigilli_scritti()[["applied_seal"]]), sigillo_cambiata()
   )
+})
+
+
+accessi <- function(posta) {
+  Filter(
+    function(m) grepl("Accesso a REDCap", m[["subject"]], fixed = TRUE),
+    posta[["mandate"]]()
+  )
+}
+
+
+test_that("la concessione confermata manda la mail di accesso", {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(list())), istanza_che_scrive(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(
+    vapply(accessi(posta), `[[`, "", "to"), "mario.rossi@example.org"
+  )
+  expect_identical(esito[["posta"]][["accessi_recapitati"]], 1L)
+})
+
+
+test_that("un banco riacceso o un accesso dato a mano non manda la mail", {
+  for (prima in c("transport_error", "")) {
+    posta <- posta_raccolta()
+    esito <- giro(
+      registro_doppio(record_json(list(outcome = prima))),
+      istanza_doppia(list(), list(
+        username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+        user_rights = 0L
+      )),
+      dry_run = FALSE, mailer = posta[["mailer"]]
+    )
+    expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+    expect_length(accessi(posta), 0L)
+  }
+})
+
+
+test_that("un ruolo cambiato non manda la mail", {
+  posta <- posta_raccolta()
+  giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list(), list(
+      username = "mario.rossi@ubep.unipd.it", role_name = "read only",
+      user_rights = 0L
+    )),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  expect_length(accessi(posta), 0L)
+})
+
+
+test_that("la riattivazione dopo una revoca manda la mail", {
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(anna, "request_status = 'active'")),
+    riga = riga_cambiata(role_name = "data entry", applied_as = "absent"),
+    mailer = posta[["mailer"]]
+  )
+  expect_length(accessi(posta), 1L)
+})
+
+
+# revisione 5
+test_that("una concessione che la rilettura non conferma non manda la mail", {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(list())), istanza_doppia(list()),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_SCRITTURA_NON_CONFERMATA"
+  )
+  expect_length(accessi(posta), 0L)
+})
+
+
+test_that("una revoca o un giro che simula non mandano la mail", {
+  posta <- posta_raccolta()
+  giro_cambiata(
+    list(cambio(anna, "request_status = 'revoked'")), riga = revocata(),
+    istanza = do.call(istanza_doppia, con_mario(list())),
+    mailer = posta[["mailer"]]
+  )
+  giro(
+    registro_doppio(record_json(list())), istanza_che_scrive(),
+    dry_run = TRUE, mailer = posta[["mailer"]]
+  )
+  expect_length(accessi(posta), 0L)
 })
