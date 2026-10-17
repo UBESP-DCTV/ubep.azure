@@ -49,10 +49,11 @@ be an author of every row whose username it settles. Its account is the one
 \code{log_channel_accounts()} names, and its events are dropped by account.
 
 Two cases make the answer unknown rather than short, and the caller holds
-the row on both. A second account writing what only the channel writes is
-nothing anybody planned -- a value that happens to read as a field
-assignment, an import right granted after all -- and taking it for the
-channel would drop its author from the change. And an intent write whose
+the row on both. A second account writing what only the channel is meant
+to write is a referent's import, since the import right is open to them
+and an import writes \verb{@READONLY} fields too, or a value that happens to
+read as a field assignment; taking it for the channel would drop its
+author from the change. And an intent write whose
 author is blank names nobody, which is not the same as naming the creator.
 }
 \keyword{internal}

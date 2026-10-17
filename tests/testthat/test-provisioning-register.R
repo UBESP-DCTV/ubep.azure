@@ -1274,6 +1274,20 @@ test_that("una owned_by scritta da un'altra utenza rende ignoto il proprietario"
     applicata
   )
   expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
+  # Without the account the ambiguity is read first, and it still holds.
+  expect_true(is.na(log_owner(eventi, "1", creatrice)))
+})
+
+
+test_that("una scrittura del canale senza autore rende ignoto il proprietario", { # nolint: line_length_linter.
+  for (chi in list("", NA_character_)) {
+    eventi <- eventi_finti(
+      list(username = chi, details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"),
+      applicata
+    )
+    expect_equal(log_channel_accounts(eventi, "1", canale), c(canale, chi))
+    expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
+  }
 })
 
 
@@ -1347,6 +1361,10 @@ test_that("il proprietario alla data legge solo cio' che viene prima", {
   expect_true(is.na(
     log_owner(storto, "1", creatrice, canale, before = "2026-11-01 00:00")
   ))
+  # With seconds, a write of that same minute would read as before it.
+  expect_error(
+    log_owner(eventi, "1", creatrice, canale, before = "2026-11-01 00:00:00")
+  )
 })
 
 

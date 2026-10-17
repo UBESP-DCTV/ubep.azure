@@ -409,7 +409,14 @@ log_wrote <- function(events, fields) {
 #' new row, before the round has written on it, would be the only "channel"
 #' of that row. Named by the configuration, the round's account answers first
 #' even on a row where it has not written yet, and that referent comes second,
-#' which makes the row ambiguous.
+#' which makes the row ambiguous. A write of a channel field whose author is
+#' blank or missing names nobody, and with the account configured it counts
+#' among the others too, as a blank author of an intent field does for
+#' `log_change_authors()`.
+#'
+#' One consequence is worth knowing: if the account that holds the token
+#' changes, every row whose current life carries writes of the old account
+#' becomes ambiguous, and the round holds it.
 #'
 #' The configured name is typed by hand on the machine, so it is compared
 #' without regard to case, and answered with the spelling the log carries
@@ -438,17 +445,17 @@ log_channel_accounts <- function(events, record, channel_account = NULL) {
 
   mine <- log_of_record(events, record)
   authors <- trimws(as.character(mine[["username"]]))
-  writers <- unique(
-    authors[log_wrote(mine, register_channel_fields()) & nzchar(authors)]
-  )
+  wrote <- log_wrote(mine, register_channel_fields())
   if (is.null(channel_account)) {
-    return(writers)
+    return(unique(authors[wrote & nzchar(authors)]))
   }
 
   configured <- trimws(channel_account)
   logged <- authors[which(tolower(authors) == tolower(configured))]
   own <- if (length(logged) > 0L) logged[[1L]] else configured
-  c(own, writers[!tolower(writers) %in% tolower(configured)])
+  # A blank or missing author is not the configured account either: it stays
+  # among the others, and the row is ambiguous.
+  c(own, unique(authors[wrote & !tolower(authors) %in% tolower(configured)]))
 }
 
 
@@ -564,8 +571,9 @@ log_stamp_reads <- function(stamps) {
 #' @param creator Who created the row, as `log_creators()` answers.
 #' @param channel_account The REDCap username that holds the round's token,
 #'   or `NULL` when it is not configured.
-#' @param before A moment, `"%Y-%m-%d %H:%M"` in Rome, or `NULL` to read the
-#'   whole log.
+#' @param before A moment, `"%Y-%m-%d %H:%M"` in Rome and exactly that long,
+#'   or `NULL` to read the whole log. A longer stamp, with seconds, would make
+#'   a write of that same minute count as before it.
 #'
 #' @return One username; `""` when no write of `owned_by` is believed and the
 #'   creator is not known; `NA_character_` when the log cannot say.
@@ -577,7 +585,7 @@ log_owner <- function(events, record, creator, channel_account = NULL,
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.null(before) ||
       (is.character(before) && length(before) == 1L &&
-         isTRUE(log_stamp_reads(before)))
+         nchar(before) == 16L && isTRUE(log_stamp_reads(before)))
   )
 
   fallback <- if (is.na(creator)) "" else trimws(creator)
@@ -632,10 +640,11 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' `log_channel_accounts()` names, and its events are dropped by account.
 #'
 #' Two cases make the answer unknown rather than short, and the caller holds
-#' the row on both. A second account writing what only the channel writes is
-#' nothing anybody planned -- a value that happens to read as a field
-#' assignment, an import right granted after all -- and taking it for the
-#' channel would drop its author from the change. And an intent write whose
+#' the row on both. A second account writing what only the channel is meant
+#' to write is a referent's import, since the import right is open to them
+#' and an import writes `@READONLY` fields too, or a value that happens to
+#' read as a field assignment; taking it for the channel would drop its
+#' author from the change. And an intent write whose
 #' author is blank names nobody, which is not the same as naming the creator.
 #'
 #' @param events The event log, as `register_log()` returns it.

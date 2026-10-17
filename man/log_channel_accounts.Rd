@@ -39,7 +39,14 @@ right is open to the referents: one who imports \code{owned_by} on a colleague's
 new row, before the round has written on it, would be the only "channel"
 of that row. Named by the configuration, the round's account answers first
 even on a row where it has not written yet, and that referent comes second,
-which makes the row ambiguous.
+which makes the row ambiguous. A write of a channel field whose author is
+blank or missing names nobody, and with the account configured it counts
+among the others too, as a blank author of an intent field does for
+\code{log_change_authors()}.
+
+One consequence is worth knowing: if the account that holds the token
+changes, every row whose current life carries writes of the old account
+becomes ambiguous, and the round holds it.
 
 The configured name is typed by hand on the machine, so it is compared
 without regard to case, and answered with the spelling the log carries

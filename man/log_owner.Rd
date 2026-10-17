@@ -16,8 +16,9 @@ log_owner(events, record, creator, channel_account = NULL, before = NULL)
 \item{channel_account}{The REDCap username that holds the round's token,
 or \code{NULL} when it is not configured.}
 
-\item{before}{A moment, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome, or \code{NULL} to read the
-whole log.}
+\item{before}{A moment, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome and exactly that long,
+or \code{NULL} to read the whole log. A longer stamp, with seconds, would make
+a write of that same minute count as before it.}
 }
 \value{
 One username; \code{""} when no write of \code{owned_by} is believed and the
