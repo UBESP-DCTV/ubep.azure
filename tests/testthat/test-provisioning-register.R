@@ -1868,6 +1868,39 @@ test_that("una revoca, libera o approvata, non passa la riga", {
   )
 })
 
+test_that("chi ha scritto solo la revoca non prende la riga di un altro", {
+  revoca <- list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "request_status = 'revoked'"
+  )
+  cinzia <- list(
+    username = "cinzia.rossi@ubep.unipd.it", details = "dag_name = 'b'"
+  )
+  ok <- list(username = creatrice, details = "approved_seal = 'x'")
+  # Bruno writes last, but only the withdrawal: the row goes to Cinzia.
+  expect_equal(
+    log_next_owner(
+      eventi_finti(ok, revoca, cinzia, applicata), "1", creatrice,
+      channel_account = canale
+    ),
+    "cinzia.rossi@ubep.unipd.it"
+  )
+  # Bruno also changed the role in the same stretch: not a withdrawal alone.
+  expect_equal(
+    log_next_owner(
+      eventi_finti(
+        ok, revoca, cinzia,
+        list(
+          username = "bruno.verdi@ubep.unipd.it", details = "role_name = 'a'"
+        ),
+        applicata
+      ),
+      "1", creatrice, channel_account = canale
+    ),
+    "bruno.verdi@ubep.unipd.it"
+  )
+})
+
 test_that("dopo un passaggio la riga passa ancora a chi scrive per ultimo", {
   eventi <- passata(
     list(
@@ -1885,6 +1918,8 @@ test_that("un log che non dice gli autori non stabilisce il proprietario", {
   eventi <- eventi_finti(
     list(username = "", details = "role_name = 'a'"), applicata
   )
+  # The owner is known: it is the authors the log cannot name.
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
   expect_true(
     is.na(log_next_owner(eventi, "1", creatrice, channel_account = canale))
   )

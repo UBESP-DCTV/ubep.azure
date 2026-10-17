@@ -1145,14 +1145,22 @@ log_revocation_only <- function(events, record, creator,
 #' after the gate has let it through: what this function reads is a version
 #' already approved, and it does not judge the approval again.
 #'
-#' The act is judged, not the path that led to it (choice of \[clc\] of
-#' 2026-10-17). A revocation does not move the row, whether it went through
-#' freely or was approved: when what the others wrote is a withdrawal and
-#' nothing else, `log_revocation_only()`, the owner stays who it was.
+#' The act is judged, not the path that led to it (decided on 2026-10-17). A
+#' revocation does not move the row, whether it went through freely or was
+#' approved: whoever wrote, since the round's last execution, only
+#' `request_status = 'revoked'` and no other intent field never becomes the
+#' owner, even when the version also holds somebody else's change. The row
+#' passes to the newest of the other authors who count, and stays with the
+#' owner of today when only withdrawals are left. What an author wrote is read
+#' from every write of theirs since the last execution, not only from the
+#' writes still in the row, as `log_revocation_only()` reads the others; an
+#' author who counts only for a change below the execution,
+#' `log_uncovered_authors()`, wrote no withdrawal there and is not one.
 #'
 #' Without the channel's account, `channel_account = NULL`, no write of
-#' `owned_by` is believed and no row passes: the answer is the owner of
-#' today, the creator.
+#' `owned_by` is believed and no row passes: the answer is the one of
+#' `log_owner()`, the creator, or unknown on a row whose channel the log
+#' cannot tell.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -1188,14 +1196,28 @@ log_next_owner <- function(events, record, creator,
   if (length(pending) == 0L) {
     return(owner)
   }
-  if (log_revocation_only(
-    events, record, creator, fields, approvers,
-    channel_account = channel_account
-  )) {
+
+  # Since the last execution, newest first; nothing above it when there is
+  # none, and then the whole life.
+  mine <- log_of_record(events, record)
+  executed <- which(log_wrote(mine, "applied_seal"))
+  if (length(executed) > 0L) {
+    mine <- mine[seq_len(executed[[1L]] - 1L), , drop = FALSE]
+  }
+  authors <- trimws(as.character(mine[["username"]]))
+  wrote <- log_wrote(mine, fields)
+  withdrew <- vapply(pending, function(who) {
+    theirs <- mine[which(wrote & authors == who), , drop = FALSE]
+    nrow(theirs) > 0L &&
+      all(log_value(theirs, "request_status") == "revoked") &&
+      !any(log_wrote(theirs, setdiff(fields, "request_status")))
+  }, logical(1), USE.NAMES = FALSE)
+  changed <- pending[!withdrew]
+  if (length(changed) == 0L) {
     return(owner)
   }
 
-  pending[[1L]]
+  changed[[1L]]
 }
 
 

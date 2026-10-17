@@ -47,13 +47,21 @@ The passage is decided once, by the round that carries the change out,
 after the gate has let it through: what this function reads is a version
 already approved, and it does not judge the approval again.
 
-The act is judged, not the path that led to it (choice of [clc] of
-2026-10-17). A revocation does not move the row, whether it went through
-freely or was approved: when what the others wrote is a withdrawal and
-nothing else, \code{log_revocation_only()}, the owner stays who it was.
+The act is judged, not the path that led to it (decided on 2026-10-17). A
+revocation does not move the row, whether it went through freely or was
+approved: whoever wrote, since the round's last execution, only
+\code{request_status = 'revoked'} and no other intent field never becomes the
+owner, even when the version also holds somebody else's change. The row
+passes to the newest of the other authors who count, and stays with the
+owner of today when only withdrawals are left. What an author wrote is read
+from every write of theirs since the last execution, not only from the
+writes still in the row, as \code{log_revocation_only()} reads the others; an
+author who counts only for a change below the execution,
+\code{log_uncovered_authors()}, wrote no withdrawal there and is not one.
 
 Without the channel's account, \code{channel_account = NULL}, no write of
-\code{owned_by} is believed and no row passes: the answer is the owner of
-today, the creator.
+\code{owned_by} is believed and no row passes: the answer is the one of
+\code{log_owner()}, the creator, or unknown on a row whose channel the log
+cannot tell.
 }
 \keyword{internal}
