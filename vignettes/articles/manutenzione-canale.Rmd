@@ -472,6 +472,23 @@ applicato: dodici caratteri sui campi di intento, e su nessun altro. Un
 sigillo che al giro dopo non corrisponde significa «modificata dopo
 l'applicazione».
 
+**Il sigillo con cui si confronta la riga viene dal log, come il
+proprietario** (deciso il 2026-10-17). Con l'utenza del canale configurata il
+giro non confronta la riga con il campo `applied_seal`, ma con l'ultimo
+`applied_seal` che il canale ha scritto nella vita attuale della riga, letto
+dal log dei proprietari che il giro chiede comunque (`log_channel_seal()`). Il
+campo si scrive per import come ogni altro: chi cambiasse la riga di un
+collega importando anche il sigillo della riga cambiata, che è un hash
+pubblico, la farebbe sembrare intatta, e la modifica si eseguirebbe con i
+diritti del proprietario senza approvazione. Una riga che il canale non ha mai
+sigillato è una riga mai eseguita, qualunque cosa porti il campo. Il campo
+riprende il sigillo del canale alla prossima esecuzione della riga; una riga
+trattenuta lo lascia com'è, perché un sigillo riscritto lì dal canale
+finirebbe nel log come un'esecuzione in più, sopra la modifica per cui la riga
+è ferma. Senza l'utenza, o quando il log dei proprietari non si legge, si
+confronta il campo come prima; nel secondo caso nessuna riga ha un
+proprietario, e nessuna si esegue.
+
 **Di chi è una riga, e chi la sblocca.** Una richiesta è del suo
 **proprietario**. All'inizio è chi l'ha creata; da quando passa all'ultimo
 (deciso il 2026-10-16), è l'autore dell'ultima modifica approvata ed eseguita,
@@ -595,8 +612,11 @@ con lo stesso messaggio; se un permesso non si legge, prende
 **Chi ha cambiato la riga.** Il giro legge il registro degli eventi della sola
 riga, tutta la sua storia, con una chiamata per riga cambiata o non ancora
 applicata: nessuna nella notte ordinaria. Contano le scritture dei campi di
-intento dopo l'ultima scrittura di `applied_seal`, che è il segno dell'ultima
-esecuzione, e solo quelle ancora presenti nella riga (sopra); ciò che viene
+intento dopo l'ultima scrittura di `applied_seal` del canale, che è il segno
+dell'ultima esecuzione (con l'utenza configurata un sigillo importato da un
+altro account non è un'esecuzione, `log_executions()`: ruolo e sigillo nello
+stesso evento restano una modifica di chi li ha scritti), e solo quelle ancora
+presenti nella riga (sopra); ciò che viene
 prima era già stato eseguito. Se quella scrittura non è più nel log conta tutta
 la storia, che può solo far chiedere un'approvazione più spesso.
 
@@ -645,27 +665,42 @@ sarebbe l'unico «canale» della riga, e il cancello guarderebbe i suoi diritti 
 la chiave di un account nuovo andrebbe a lui. Dalla 0.21.0 il canale è
 l'utenza REDCap che possiede il token del registro, nominata da
 `UBEP_CANALE_UTENTE` e passata al pacchetto come `channel_account`
-(`log_channel_accounts()`): risponde per prima anche su una riga dove non ha
-ancora scritto, e un altro account che scrive un campo del canale rende la
-riga **ambigua**. Solo le scritture di `owned_by` di quell'account si credono.
-Il nome è digitato a mano sulla macchina, quindi si confronta senza badare alle
+(`log_channel_accounts()`): è il canale anche su una riga dove non ha ancora
+scritto, e **le scritture di ogni altro account sui campi del canale si
+ignorano** (deciso il 2026-10-17): non rendono ambigua la riga e non
+diventano «canale». Fino a quella decisione la rendevano ambigua, e una riga
+ambigua restava ferma per sempre, perché il log non si cancella: bastava un CSV
+importato per errore con le colonne del canale. Solo le scritture di
+`owned_by` e di `applied_seal` dell'utenza configurata si credono. I nomi sono
+digitati a mano sulla macchina, quindi si confrontano senza badare alle
 maiuscole.
 
-- **Una riga ambigua non ha un proprietario stabilito.** Il giro la ferma su
-  `TRASPORTO_AUTORE_NON_LEGGIBILE`, non esegue niente, e l'esito va solo a IT
-  con la frase «referente della riga non stabilito»; la chiave non va a nessuno.
+- **Un solo caso lascia la riga senza proprietario stabilito**: una scrittura
+  di `owned_by` senza autore leggibile più recente di quella del canale (o, se
+  il canale non ne ha scritte, una qualunque). Non nomina nessuno, ma potrebbe
+  essere del canale. Il giro ferma la riga su `TRASPORTO_AUTORE_NON_LEGGIBILE`,
+  non esegue niente, e l'esito va solo a IT con la frase «referente della riga
+  non stabilito»; la chiave non va a nessuno.
+- **Una scrittura estranea di un campo di intento** (`username` compreso)
+  resta una modifica del suo autore, con le colonne del canale accanto o no: la
+  riga aspetta l'approvazione del proprietario come per ogni altra modifica.
 - **Senza l'utenza** (`channel_account = NULL`, il valore predefinito nel
   pacchetto) nessuna scrittura di `owned_by` si crede: il proprietario è il
   creatore, nessuna riga passa, e il giro non scrive `owned_by`, perché
-  scriverebbe il creatore sopra un passaggio deciso da un giro configurato. È il
-  comportamento sicuro per chi chiama il pacchetto senza configurarlo. Le due
-  lavorazioni, `dev/runner-canale.R` e `dev/runner-rapporto.R`, rifiutano di
-  partire senza la variabile (§8).
-- **Se l'account del token del canale cambia**, le righe che nella loro vita
-  attuale portano scritture del vecchio account diventano ambigue (due account
-  hanno scritto i campi del canale) e il giro le trattiene. Il cambio è un
-  evento da preparare, non una modifica di configurazione da fare in un
-  momento qualunque.
+  scriverebbe il creatore sopra un passaggio deciso da un giro configurato. Il
+  canale si indovina allora da chi ha scritto i suoi campi, due account che li
+  scrivono rendono la riga ambigua, e il sigillo si legge dal campo, come fino
+  alla 0.20.1. È il comportamento sicuro per chi chiama il pacchetto senza
+  configurarlo. Le due lavorazioni, `dev/runner-canale.R` e
+  `dev/runner-rapporto.R`, rifiutano di partire senza la variabile (§8).
+- **Se l'account del token del canale cambia**, `UBEP_CANALE_UTENTE` elenca la
+  nuova utenza e la vecchia, separate da virgole: le scritture della vecchia,
+  passaggi e sigilli, restano credute finché è nell'elenco. Un'utenza tolta
+  dall'elenco diventa un altro account: i suoi passaggi non valgono più, e le
+  righe che ha sigillato tornano mai eseguite, quindi una mano altrui nella
+  loro storia le ferma in attesa del proprietario. Il cambio è un evento da
+  preparare, non una modifica di configurazione da fare in un momento
+  qualunque.
 
 **Quando il registro degli eventi non basta.** Un autore che il log non
 stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è
@@ -673,9 +708,10 @@ stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato» non è
 la riga prende `held`, e il proprietario può approvarla.
 
 Diverso è il caso in cui il log **non si legge**, o il proprietario non è
-stabilito (il creatore non è nominato, o due account hanno scritto i campi del
-canale): lì non c'è un proprietario a cui chiedere né un'approvazione che si
-possa verificare. La riga non prende `held` ma
+stabilito (il creatore non è nominato, o una `owned_by` senza autore sta sopra
+quella del canale, o, senza l'utenza configurata, due account hanno scritto i
+campi del canale): lì non c'è un proprietario a cui chiedere né
+un'approvazione che si possa verificare. La riga non prende `held` ma
 `TRASPORTO_AUTORE_NON_LEGGIBILE`, lo stesso codice che il cancello dà a una
 riga senza autore: torna in coda da sola al giro dopo, non si esegue, e il
 messaggio dice che il guasto è nostro invece di chiedere un sigillo che non
@@ -1316,11 +1352,13 @@ Il foglio raccoglie otto famiglie:
 delle due la lavorazione non parte:
 
 - **`UBEP_CANALE_UTENTE`** è lo username REDCap che possiede il token del
-  registro, cioè l'utenza che scrive per conto del canale. Serve alle due
-  lavorazioni, il giro e il rapporto: è l'unico account a cui si crede quando
-  dice di chi è una riga (§4). Se manca, o è fatta di soli spazi, la
-  lavorazione si ferma con un errore che la nomina, prima di leggere qualunque
-  cosa; l'unità muore, non lascia record, e suona l'allarme sull'assenza. La
+  registro, cioè l'utenza che scrive per conto del canale, o più d'uno
+  separati da virgole mentre il token cambia di mano (spazi ai bordi di ogni
+  voce tolti, voci vuote scartate). Serve alle due lavorazioni, il giro e il
+  rapporto: sono gli unici account a cui si crede quando dicono di chi è una
+  riga e che cosa è stato eseguito (§4). Se manca, o è fatta di soli spazi e
+  virgole, la lavorazione si ferma con un errore che la nomina, prima di
+  leggere qualunque cosa; l'unità muore, non lascia record, e suona l'allarme sull'assenza. La
   legge la macchina e non si scrive nel repository, che è pubblico: il nome sta
   nel foglio dei parametri.
 - **`UBEP_POSTA_COPIA`** è l'indirizzo di IT in copia. Nel giro è obbligatoria
@@ -1393,16 +1431,17 @@ Ciò che non ha un referente a cui andare va **a IT, e a nessun altro**, in una
 mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
 
 - le righe il cui proprietario il log non stabilisce (nessuna creazione lo
-  nomina, o un account diverso da quello del canale ha scritto un campo del
-  canale), o ha l'account disabilitato, assente o non leggibile su Entra; il
+  nomina, o una `owned_by` senza autore sta sopra quella del canale), o ha
+  l'account disabilitato, assente o non leggibile su Entra; il
   proprietario disabilitato non riceve niente;
 - le persone il cui account non si sa giudicare: disabilitato, assente, senza
   data di creazione;
 - le righe applicate di cui il log non dice da quando: perché non porta la
-  scrittura del sigillo da parte del canale, oppure perché i campi del canale
-  li scrivono due account (l'utenza configurata e un altro) e non si sa quale
-  abbia eseguito la riga. La mail distingue i due casi, che mandano a cercare
-  cose diverse.
+  scrittura del sigillo da parte del canale, oppure, senza l'utenza
+  configurata, perché i campi del canale li scrivono due account e non si sa
+  quale abbia eseguito la riga. La mail distingue i due casi, che mandano a
+  cercare cose diverse. Con l'utenza configurata un sigillo scritto da un altro
+  account non data niente.
 
 La colonna `senza_creatore` di `UbepRapporto_CL` **non si è rinominata**, e
 dalla 0.21.0 vuol dire «senza proprietario stabilito»: rinominarla sarebbe un
