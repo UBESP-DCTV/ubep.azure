@@ -18,22 +18,25 @@ log_approval_stands(
 
 \item{record}{The record id to look at.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers.}
+\item{creator}{Who created the row, as \code{log_creators()} answers; the owner
+is read from the log with it.}
 
 \item{fields}{The intent fields.}
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
 
 \item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
+\code{log_owner()}.}
 }
 \value{
 \code{TRUE} when the approval stands.
 }
 \description{
 The log half of \code{seal_approved()}: the newest write of \code{approved_seal} is
-the creator's, or one of the IT accounts', and nothing it could not have
-seen stands above it.
+the owner's, \code{log_owner()}, or one of the IT accounts', and nothing it could
+not have seen stands above it. An owner the log cannot establish, or a
+blank one, approves nothing.
 }
 \details{
 \itemize{
@@ -41,14 +44,14 @@ seen stands above it.
 round's last execution, and an approval below it was the one that
 execution carried out, or one older still. Either way it is spent.
 \item \strong{No change by anybody else above it.} An intent field written by an
-account that is neither the creator nor the channel, or by a blank
+account that is neither the owner nor the channel, or by a blank
 account, after the approval, is a change the approval cannot have seen:
 written before the change, the approval is a seal computed in advance.
 }
 
-The creator's own edits above it do not withdraw it here. They move the
+The owner's own edits above it do not withdraw it here. They move the
 seal, and the value check in \code{seal_approved()} is what refuses an approval
-of a version the creator changed afterwards.
+of a version the owner changed afterwards.
 
 The order is REDCap's, newest first, as everywhere else in the log.
 }

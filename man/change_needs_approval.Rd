@@ -6,7 +6,7 @@
 \usage{
 change_needs_approval(
   authors,
-  creator,
+  owner,
   sealed = TRUE,
   revocation = FALSE,
   managers = character()
@@ -16,7 +16,8 @@ change_needs_approval(
 \item{authors}{Who has a hand in the version the round would carry out,
 as \code{log_pending_authors()} answers.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers.}
+\item{owner}{Who owns the row, as \code{log_owner()} answers, with \code{""} where it
+answers \code{NA}.}
 
 \item{sealed}{Whether the row carries the seal of an execution, whose
 mismatch is what says it changed.}
@@ -28,23 +29,26 @@ row asks for \code{revoked} and \code{log_revocation_only()} holds.}
 row names, as the instance reported it this round.}
 }
 \value{
-\code{TRUE} when the change has to wait for the creator's approval.
+\code{TRUE} when the change has to wait for the owner's approval.
 }
 \description{
 \strong{The one place the rule lives}, decided on 2026-10-14. A request belongs
-to whoever created it, and the creator answers for it: the scope gate asks
-the creator's rights on the project every round, and the credentials of an
-account it makes go to the creator. So:
+to whoever owns it, and the owner answers for it: the scope gate asks the
+owner's rights on the project every round, and the credentials of an
+account it makes go to the owner. The owner is whoever created the row
+until the round passes it on: since 2026-10-16 the row belongs to the last
+referent whose change was approved and carried out, \code{log_owner()}, and its
+approval comes from that referent or from IT. So:
 }
 \details{
 \itemize{
-\item a change made only by the creator is carried out on the next round, with
+\item a change made only by the owner is carried out on the next round, with
 nobody to ask;
-\item a change in which anybody else had a hand waits for the creator, even
-when the creator edited the row afterwards: a later edit does not say the
-creator saw the other one, and an approval is the act that does;
-\item a change whose authors or whose creator the log cannot establish waits
-too. "I could not establish who did this" is not "the creator did it".
+\item a change in which anybody else had a hand waits for the owner, even
+when the owner edited the row afterwards: a later edit does not say the
+owner saw the other one, and an approval is the act that does;
+\item a change whose authors or whose owner the log cannot establish waits
+too. "I could not establish who did this" is not "the owner did it".
 }
 
 It holds whether or not the round has applied the row yet. The one
@@ -55,7 +59,7 @@ log that names nobody says nobody changed it.
 
 \strong{A revocation is the one exception}, decided on 2026-10-15: somebody
 else's withdrawal of the request does not wait when everybody other than
-the creator who has a hand in it holds User Rights with Full Access on the
+the owner who has a hand in it holds User Rights with Full Access on the
 project. Taking an access away grants nothing, and whoever manages the
 users of a project could have removed that person by hand -- the rule the
 scope gate enforces, "nobody does through the channel what they could not

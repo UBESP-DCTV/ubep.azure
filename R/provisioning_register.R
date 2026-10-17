@@ -778,61 +778,70 @@ log_value <- function(events, field) {
 
 #' Whether each of these authors may approve a row
 #'
-#' The creator, or one of the IT accounts. The creator is compared as REDCap
-#' logs it, which is the same source on both sides. The IT list is typed by
-#' hand on the machine, so it is compared without regard to case: a capital
-#' letter must not void an approval by IT in silence. A blank name approves
-#' nothing, whatever the list holds.
+#' Whoever owns the row, `log_owner()`, or one of the IT accounts. The owner
+#' is compared as REDCap logs it, which is the same source on both sides. The
+#' IT list is typed by hand on the machine, so it is compared without regard
+#' to case: a capital letter must not void an approval by IT in silence. A
+#' blank name approves nothing, whatever the list holds.
 #'
 #' @param authors Usernames, as the log carries them.
-#' @param creator Who created the row.
+#' @param owner Who owns the row, as `log_owner()` answers.
 #' @param approvers The IT accounts whose approval counts on any row.
 #'
 #' @return A logical vector, one answer per author.
 #'
 #' @keywords internal
-log_approver <- function(authors, creator, approvers = character()) {
+log_approver <- function(authors, owner, approvers = character()) {
   authors <- trimws(as.character(authors))
   it <- tolower(setdiff(trimws(approvers), ""))
   nzchar(authors) &
-    (authors == trimws(creator) | tolower(authors) %in% it)
+    (authors == trimws(owner) | tolower(authors) %in% it)
 }
 
 
-#' Who changed a row before its last execution without the creator's leave
+#' Who changed a row before its last execution without the owner's leave
 #'
 #' `log_change_authors()` drops what stands below the round's newest seal as
 #' already carried out. That holds for what the round **read**, and the seal is
 #' written last: an edit somebody makes while the round sweeps the tenant and
 #' talks to the instances lands below the seal in the log and was never
-#' applied. Dropped with the rest, it would pass for the creator's as soon as
-#' the creator edits the row again.
+#' applied. Dropped with the rest, it would pass for the owner's as soon as
+#' the owner edits the row again.
 #'
 #' So the stretch between the newest seal and the one before it (or the start
 #' of the row's log, its creation when the log holds it) is read again, for
-#' changes by anybody other than the creator.
-#' The round applies such a change only once the creator has approved it, so
-#' one that the round did carry out has the creator's approval above it in
+#' changes by anybody other than whoever owned the row in that stretch.
+#' The round applies such a change only once the owner has approved it, so
+#' one that the round did carry out has the owner's approval above it in
 #' that stretch, carrying the very seal the execution wrote. A change with no
 #' such approval above it is one the execution did not cover, and it is still
 #' part of the change the round is being asked to carry out.
 #'
+#' **The stretch is read with the owner of then**, decided on 2026-10-17: the
+#' newest write of `owned_by` by the channel below the seal that opens the
+#' stretch, `log_owner()`, or the creator when there is none or only one seal.
+#' The round that writes a seal writes `owned_by` below it, so the passage it
+#' decided belongs to the stretch after it. Read with today's owner instead,
+#' the approval of the one before would be a stranger's after a passage, and
+#' the row would be held again with no new change in it.
+#'
 #' One stretch is enough. An uncovered change makes the next round hold the
 #' row, and a held row writes no seal: the stretch does not move until the
-#' creator approves, and that approval covers the version holding the change.
+#' owner approves, and that approval covers the version holding the change.
 #'
-#' Two kinds of leave besides the creator's, both from 2026-10-15. An approval
-#' by one of the IT accounts covers as the creator's does, since it is what
+#' Two kinds of leave besides the owner's, both from 2026-10-15. An approval
+#' by one of the IT accounts covers as the owner's does, since it is what
 #' carried the change out. And a revocation alone, `request_status =
 #' 'revoked'` and no other intent field, is never uncovered: it grants
 #' nothing, so whether or not the execution above it carried it out, nothing
-#' in it can reach anybody through the creator's next edit. Counted, it would
-#' make the creator approve the reactivation of their own request after a
+#' in it can reach anybody through the owner's next edit. Counted, it would
+#' make the owner approve the reactivation of their own request after a
 #' manager's free revocation.
 #'
-#' Unknown, `NA_character_`, when the creator is not known, when two accounts
-#' write the channel's fields, or when an uncovered change has a blank author:
-#' the caller holds the row on all three.
+#' Unknown, `NA_character_`, when the creator or the owner of the stretch is
+#' not known, when two accounts write the channel's fields, or when an
+#' uncovered change has a blank author: the caller holds the row on all of
+#' them.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -877,16 +886,25 @@ log_uncovered_authors <- function(events, record, creator,
   stretch <- mine[rows > executed[[1L]] & rows < last, , drop = FALSE]
   sealed <- log_value(mine[executed[[1L]], , drop = FALSE], "applied_seal")
 
+  # The owner of the stretch is read below the seal that opens it, where the
+  # round that wrote that seal wrote owned_by too; with one seal, nothing
+  # stands below the stretch and the row is its creator's.
+  older <- mine[rows > last, , drop = FALSE]
+  owner <- log_owner(older, record, creator, channel_account)
+  if (is.na(owner) || !nzchar(owner)) {
+    return(NA_character_)
+  }
+
   authors <- trimws(as.character(stretch[["username"]]))
   withdrawal <- log_value(stretch, "request_status") == "revoked" &
     !log_wrote(stretch, setdiff(fields, "request_status"))
   foreign <- which(
-    log_wrote(stretch, fields) & !authors %in% channel & authors != creator &
+    log_wrote(stretch, fields) & !authors %in% channel & authors != owner &
       !withdrawal
   )
   leave <- which(
     log_wrote(stretch, "approved_seal") &
-      log_approver(authors, creator, approvers) &
+      log_approver(authors, owner, approvers) &
       log_value(stretch, "approved_seal") == sealed & nzchar(sealed)
   )
   # Covered is below an approval; what stands above the newest one is not.
@@ -946,17 +964,20 @@ log_pending_authors <- function(events, record, creator,
 #' Whether a change to a request waits for an approval
 #'
 #' **The one place the rule lives**, decided on 2026-10-14. A request belongs
-#' to whoever created it, and the creator answers for it: the scope gate asks
-#' the creator's rights on the project every round, and the credentials of an
-#' account it makes go to the creator. So:
+#' to whoever owns it, and the owner answers for it: the scope gate asks the
+#' owner's rights on the project every round, and the credentials of an
+#' account it makes go to the owner. The owner is whoever created the row
+#' until the round passes it on: since 2026-10-16 the row belongs to the last
+#' referent whose change was approved and carried out, `log_owner()`, and its
+#' approval comes from that referent or from IT. So:
 #'
-#' - a change made only by the creator is carried out on the next round, with
+#' - a change made only by the owner is carried out on the next round, with
 #'   nobody to ask;
-#' - a change in which anybody else had a hand waits for the creator, even
-#'   when the creator edited the row afterwards: a later edit does not say the
-#'   creator saw the other one, and an approval is the act that does;
-#' - a change whose authors or whose creator the log cannot establish waits
-#'   too. "I could not establish who did this" is not "the creator did it".
+#' - a change in which anybody else had a hand waits for the owner, even
+#'   when the owner edited the row afterwards: a later edit does not say the
+#'   owner saw the other one, and an approval is the act that does;
+#' - a change whose authors or whose owner the log cannot establish waits
+#'   too. "I could not establish who did this" is not "the owner did it".
 #'
 #' It holds whether or not the round has applied the row yet. The one
 #' difference is what a log naming nobody means. On a row that carries a seal
@@ -966,7 +987,7 @@ log_pending_authors <- function(events, record, creator,
 #'
 #' **A revocation is the one exception**, decided on 2026-10-15: somebody
 #' else's withdrawal of the request does not wait when everybody other than
-#' the creator who has a hand in it holds User Rights with Full Access on the
+#' the owner who has a hand in it holds User Rights with Full Access on the
 #' project. Taking an access away grants nothing, and whoever manages the
 #' users of a project could have removed that person by hand -- the rule the
 #' scope gate enforces, "nobody does through the channel what they could not
@@ -982,7 +1003,8 @@ log_pending_authors <- function(events, record, creator,
 #'
 #' @param authors Who has a hand in the version the round would carry out,
 #'   as `log_pending_authors()` answers.
-#' @param creator Who created the row, as `log_creators()` answers.
+#' @param owner Who owns the row, as `log_owner()` answers, with `""` where it
+#'   answers `NA`.
 #' @param sealed Whether the row carries the seal of an execution, whose
 #'   mismatch is what says it changed.
 #' @param revocation Whether the change is a revocation and nothing else: the
@@ -990,21 +1012,21 @@ log_pending_authors <- function(events, record, creator,
 #' @param managers Who holds User Rights with Full Access on the project the
 #'   row names, as the instance reported it this round.
 #'
-#' @return `TRUE` when the change has to wait for the creator's approval.
+#' @return `TRUE` when the change has to wait for the owner's approval.
 #'
 #' @keywords internal
-change_needs_approval <- function(authors, creator, sealed = TRUE,
+change_needs_approval <- function(authors, owner, sealed = TRUE,
                                   revocation = FALSE,
                                   managers = character()) {
   stopifnot(
-    is.character(authors), is.character(creator), length(creator) == 1L,
+    is.character(authors), is.character(owner), length(owner) == 1L,
     is.logical(sealed), length(sealed) == 1L, !is.na(sealed),
     is.logical(revocation), length(revocation) == 1L, !is.na(revocation),
     is.character(managers)
   )
 
-  creator <- trimws(creator)
-  if (is.na(creator) || !nzchar(creator)) {
+  owner <- trimws(owner)
+  if (is.na(owner) || !nzchar(owner)) {
     return(TRUE)
   }
   if (anyNA(authors)) {
@@ -1013,7 +1035,7 @@ change_needs_approval <- function(authors, creator, sealed = TRUE,
   if (length(authors) == 0L) {
     return(sealed)
   }
-  others <- setdiff(trimws(authors), creator)
+  others <- setdiff(trimws(authors), owner)
   if (length(others) == 0L) {
     return(FALSE)
   }
@@ -1021,31 +1043,34 @@ change_needs_approval <- function(authors, creator, sealed = TRUE,
 }
 
 
-#' Whether what somebody other than the creator wrote is a revocation alone
+#' Whether what somebody other than the owner wrote is a revocation alone
 #'
 #' The half of the revocation exception that the log answers, for
 #' `change_needs_approval()`. Since the round's last execution, every write to
-#' an intent field by an account that is neither the creator nor the channel
+#' an intent field by an account that is neither the owner nor the channel
 #' wrote `request_status = 'revoked'` and no other intent field; and there is
 #' at least one such write, or there is no withdrawal by somebody else to
-#' free.
+#' free. The owner is the one the row has now, `log_owner()`: after a passage
+#' the creator's withdrawal is somebody else's.
 #'
 #' A change below the newest execution that the execution did not cover,
 #' `log_uncovered_authors()`, makes the answer `FALSE`. That stretch is the
 #' rare case of an edit made while a round ran, and reading it for its fields
-#' as well would buy nothing but code: the row waits for the creator, as it
+#' as well would buy nothing but code: the row waits for the owner, as it
 #' would have before the exception existed.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
-#' @param creator Who created the row, as `log_creators()` answers.
+#' @param creator Who created the row, as `log_creators()` answers; the owner
+#'   is read from the log with it.
 #' @param fields The intent fields.
-#'
 #' @param approvers The IT accounts whose approval counts on any row.
 #' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
+#'   `log_owner()`.
 #'
-#' @return `TRUE` when the others wrote a revocation and nothing else.
+#' @return `TRUE` when the others wrote a revocation and nothing else; `FALSE`
+#'   too when the owner is not known.
 #'
 #' @keywords internal
 log_revocation_only <- function(events, record, creator,
@@ -1057,8 +1082,8 @@ log_revocation_only <- function(events, record, creator,
     is.character(fields), is.character(approvers)
   )
 
-  creator <- trimws(creator)
-  if (is.na(creator) || !nzchar(creator)) {
+  owner <- log_owner(events, record, creator, channel_account)
+  if (is.na(owner) || !nzchar(owner)) {
     return(FALSE)
   }
   uncovered <- log_uncovered_authors(
@@ -1080,7 +1105,7 @@ log_revocation_only <- function(events, record, creator,
 
   authors <- trimws(as.character(mine[["username"]]))
   others <- log_wrote(mine, fields) & !authors %in% channel &
-    authors != creator
+    authors != owner
   if (!any(others)) {
     return(FALSE)
   }
@@ -1094,10 +1119,14 @@ log_revocation_only <- function(events, record, creator,
 #' Whether each changed row waits for an approval
 #'
 #' `change_needs_approval()` asked once per row, of the authors the row's log
-#' names, `log_pending_authors()`, and of the creator the creation log names.
-#' Whether the row carries a seal is read from its `applied_seal`.
+#' names, `log_pending_authors()`, and of whoever owns the row, `log_owner()`,
+#' read from the log with the creator the creation log names. Whether the row
+#' carries a seal is read from its `applied_seal`, and the authors are read
+#' against the row as it stands, so a field brought back to the value carried
+#' out names nobody.
 #'
-#' @param register The register as read, one row per request.
+#' @param register The register as read, one row per request, carrying every
+#'   intent field.
 #' @param events The event log of the rows that changed, as `register_log()`
 #'   returns it.
 #' @param creators Who created each row, as `log_creators()` answers, in the
@@ -1105,7 +1134,8 @@ log_revocation_only <- function(events, record, creator,
 #' @param approvers The IT accounts whose approval counts on any row: it
 #'   decides what an earlier execution covered.
 #' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
+#'   `log_owner()`.
 #'
 #' @return A logical vector, one answer per row. It answers about every row
 #'   it is handed, so the caller restricts it to the rows that changed.
@@ -1125,11 +1155,13 @@ seal_needs_approval <- function(register, events, creators,
   sealed[is.na(sealed)] <- ""
   intent <- register_intent_fields()
   vapply(seq_along(ids), function(i) {
+    owner <- log_owner(events, ids[[i]], creators[[i]], channel_account)
     change_needs_approval(
       log_pending_authors(
-        events, ids[[i]], creators[[i]], intent, approvers, channel_account
+        events, ids[[i]], creators[[i]], intent, approvers, channel_account,
+        current = register[i, , drop = FALSE]
       ),
-      creators[[i]],
+      if (is.na(owner)) "" else owner,
       sealed = nzchar(sealed[[i]])
     )
   }, logical(1))
@@ -1144,27 +1176,28 @@ seal_needs_approval <- function(register, events, creators,
 #' seal approves some other version of the row, and accepting it would make one
 #' approval stand for every change that came after it.
 #'
-#' It has to come from **whoever created the row**. Not merely from
-#' somebody other than the author of the change: the request is the creator's,
-#' the scope gate checks the creator's rights on the project every round and
-#' nobody else's, so an approval from a third referent would grant on the word
-#' of somebody whose rights on that project nobody has looked at. The seal
-#' detects that the row moved; only the log can say who approved it and who
-#' created the row, because it names whoever was authenticated rather than a
-#' value somebody typed -- which is the same reason `requested_by` cannot be
-#' trusted alone.
+#' It has to come from **whoever owns the row**, `log_owner()`: its creator
+#' until the round passes it on, then the last referent whose change was
+#' approved and carried out. Not merely from somebody other than the author of
+#' the change: the request is the owner's, so an approval from a third
+#' referent would grant on the word of somebody the row does not answer to.
+#' The seal detects that the row moved; only the log can say who approved it
+#' and who owns the row, because it names whoever was authenticated rather
+#' than a value somebody typed -- which is the same reason neither
+#' `requested_by` nor `owned_by` can be trusted alone. An owner the log cannot
+#' establish approves nothing.
 #'
 #' And it has to be **newer than what it approves**: above the round's last
-#' execution and above every change somebody other than the creator made, as
+#' execution and above every change somebody other than the owner made, as
 #' `log_approval_stands()` reads the log. The value alone cannot say so.
 #' `approved_seal` is never blanked, so an approval the round has already
 #' carried out would approve again any later change that brings the row back
 #' to it; and the seal is a public hash of the intent fields, so it can be
 #' pasted before the change it names exists.
 #'
-#' **IT approves as the creator does**, decided on 2026-10-15: the accounts
-#' named in `approvers` stand where the creator stands, under the same three
-#' conditions. It is what keeps a request whose creator has left UBEP from
+#' **IT approves as the owner does**, decided on 2026-10-15: the accounts
+#' named in `approvers` stand where the owner stands, under the same three
+#' conditions. It is what keeps a request whose owner has left UBEP from
 #' waiting for ever, without deleting the row and losing who filed it. The
 #' list lives on the machine that runs the round and never in this
 #' repository. One limit is worth knowing: the scope gate still asks the
@@ -1179,11 +1212,12 @@ seal_needs_approval <- function(register, events, creators,
 #' @param register The register as read, one row per request.
 #' @param events The event log, as `register_log()` returns it.
 #' @param creators Who created each row, as `log_creators()` answers, in the
-#'   order of `register`. `""` approves nothing.
+#'   order of `register`; the owner is read from the log with them.
 #' @param approvers The IT accounts whose approval counts on any row, as REDCap
 #'   usernames.
 #' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
+#'   `log_owner()`.
 #'
 #' @return A logical vector, one answer per row.
 #'
@@ -1208,9 +1242,6 @@ seal_approved <- function(register, events, creators,
     if (!nzchar(approved[[i]]) || !identical(approved[[i]], current[[i]])) {
       return(FALSE)
     }
-    if (is.na(creators[[i]]) || !nzchar(creators[[i]])) {
-      return(FALSE)
-    }
 
     log_approval_stands(
       events, ids[[i]], creators[[i]], intent, approvers, channel_account
@@ -1222,30 +1253,33 @@ seal_approved <- function(register, events, creators,
 #' Whether the newest approval in a row's log still stands
 #'
 #' The log half of `seal_approved()`: the newest write of `approved_seal` is
-#' the creator's, or one of the IT accounts', and nothing it could not have
-#' seen stands above it.
+#' the owner's, `log_owner()`, or one of the IT accounts', and nothing it could
+#' not have seen stands above it. An owner the log cannot establish, or a
+#' blank one, approves nothing.
 #'
 #' - **No execution above it.** The newest write of `applied_seal` is the
 #'   round's last execution, and an approval below it was the one that
 #'   execution carried out, or one older still. Either way it is spent.
 #' - **No change by anybody else above it.** An intent field written by an
-#'   account that is neither the creator nor the channel, or by a blank
+#'   account that is neither the owner nor the channel, or by a blank
 #'   account, after the approval, is a change the approval cannot have seen:
 #'   written before the change, the approval is a seal computed in advance.
 #'
-#' The creator's own edits above it do not withdraw it here. They move the
+#' The owner's own edits above it do not withdraw it here. They move the
 #' seal, and the value check in `seal_approved()` is what refuses an approval
-#' of a version the creator changed afterwards.
+#' of a version the owner changed afterwards.
 #'
 #' The order is REDCap's, newest first, as everywhere else in the log.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
-#' @param creator Who created the row, as `log_creators()` answers.
+#' @param creator Who created the row, as `log_creators()` answers; the owner
+#'   is read from the log with it.
 #' @param fields The intent fields.
 #' @param approvers The IT accounts whose approval counts on any row.
 #' @param channel_account The REDCap username that holds the round's token,
-#'   or `NULL` when it is not configured, for `log_channel_accounts()`.
+#'   or `NULL` when it is not configured, for `log_channel_accounts()` and
+#'   `log_owner()`.
 #'
 #' @return `TRUE` when the approval stands.
 #'
@@ -1259,6 +1293,10 @@ log_approval_stands <- function(events, record, creator,
     is.character(fields), is.character(approvers)
   )
 
+  owner <- log_owner(events, record, creator, channel_account)
+  if (is.na(owner) || !nzchar(owner)) {
+    return(FALSE)
+  }
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
   if (length(channel) > 1L) {
@@ -1268,15 +1306,14 @@ log_approval_stands <- function(events, record, creator,
   authors <- trimws(as.character(mine[["username"]]))
   approvals <- which(log_wrote(mine, "approved_seal"))
   if (length(approvals) == 0L ||
-        !log_approver(authors[[approvals[[1L]]]], creator, approvers)) {
+        !log_approver(authors[[approvals[[1L]]]], owner, approvers)) {
     return(FALSE)
   }
   newest <- approvals[[1L]]
 
   executed <- which(log_wrote(mine, "applied_seal"))
   foreign <- which(
-    log_wrote(mine, fields) & !authors %in% channel &
-      authors != trimws(creator)
+    log_wrote(mine, fields) & !authors %in% channel & authors != owner
   )
   !any(executed <= newest) && !any(foreign < newest)
 }

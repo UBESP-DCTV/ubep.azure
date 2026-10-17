@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_register.R
 \name{log_revocation_only}
 \alias{log_revocation_only}
-\title{Whether what somebody other than the creator wrote is a revocation alone}
+\title{Whether what somebody other than the owner wrote is a revocation alone}
 \usage{
 log_revocation_only(
   events,
@@ -18,31 +18,35 @@ log_revocation_only(
 
 \item{record}{The record id to look at.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers.}
+\item{creator}{Who created the row, as \code{log_creators()} answers; the owner
+is read from the log with it.}
 
 \item{fields}{The intent fields.}
 
 \item{approvers}{The IT accounts whose approval counts on any row.}
 
 \item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
+\code{log_owner()}.}
 }
 \value{
-\code{TRUE} when the others wrote a revocation and nothing else.
+\code{TRUE} when the others wrote a revocation and nothing else; \code{FALSE}
+too when the owner is not known.
 }
 \description{
 The half of the revocation exception that the log answers, for
 \code{change_needs_approval()}. Since the round's last execution, every write to
-an intent field by an account that is neither the creator nor the channel
+an intent field by an account that is neither the owner nor the channel
 wrote \code{request_status = 'revoked'} and no other intent field; and there is
 at least one such write, or there is no withdrawal by somebody else to
-free.
+free. The owner is the one the row has now, \code{log_owner()}: after a passage
+the creator's withdrawal is somebody else's.
 }
 \details{
 A change below the newest execution that the execution did not cover,
 \code{log_uncovered_authors()}, makes the answer \code{FALSE}. That stretch is the
 rare case of an edit made while a round ran, and reading it for its fields
-as well would buy nothing but code: the row waits for the creator, as it
+as well would buy nothing but code: the row waits for the owner, as it
 would have before the exception existed.
 }
 \keyword{internal}

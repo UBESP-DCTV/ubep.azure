@@ -13,7 +13,8 @@ seal_needs_approval(
 )
 }
 \arguments{
-\item{register}{The register as read, one row per request.}
+\item{register}{The register as read, one row per request, carrying every
+intent field.}
 
 \item{events}{The event log of the rows that changed, as \code{register_log()}
 returns it.}
@@ -25,7 +26,8 @@ order of \code{register}.}
 decides what an earlier execution covered.}
 
 \item{channel_account}{The REDCap username that holds the round's token,
-or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
+or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
+\code{log_owner()}.}
 }
 \value{
 A logical vector, one answer per row. It answers about every row
@@ -33,7 +35,10 @@ it is handed, so the caller restricts it to the rows that changed.
 }
 \description{
 \code{change_needs_approval()} asked once per row, of the authors the row's log
-names, \code{log_pending_authors()}, and of the creator the creation log names.
-Whether the row carries a seal is read from its \code{applied_seal}.
+names, \code{log_pending_authors()}, and of whoever owns the row, \code{log_owner()},
+read from the log with the creator the creation log names. Whether the row
+carries a seal is read from its \code{applied_seal}, and the authors are read
+against the row as it stands, so a field brought back to the value carried
+out names nobody.
 }
 \keyword{internal}

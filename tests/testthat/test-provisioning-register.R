@@ -1563,6 +1563,152 @@ test_that("il proprietario alla data legge solo cio' che viene prima", {
 })
 
 
+eseguita <- function(sigillo) {
+  list(
+    username = "svc-canale-ubep", action = "Update record (API) 1",
+    details = paste0(
+      "outcome = 'applied', applied_seal = '", sigillo,
+      "', seal_state = 'approved'"
+    )
+  )
+}
+
+# Newest first, below what each test adds on top: Bruno changed the role,
+# Anna approved 111111111111, the round passed the row to Bruno and then
+# sealed it, owned_by below the seal as the round writes them.
+passata <- function(...) {
+  eventi_finti(
+    ...,
+    eseguita("111111111111"),
+    passaggio("bruno.verdi@ubep.unipd.it"),
+    list(username = creatrice, details = "approved_seal = '111111111111'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    applicata
+  )
+}
+
+riga_passata <- function(...) {
+  register_row(
+    role_name = "read only", expiration = "2027-01-31",
+    applied_seal = "111111111111", ...
+  )
+}
+
+test_that("dopo il passaggio la modifica dell'ultimo non chiede approvazione", {
+  eventi <- passata(list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "expiration = '2027-01-31'"
+  ))
+  expect_false(seal_needs_approval(
+    riga_passata(), eventi, creatrice, channel_account = canale
+  ))
+})
+
+test_that("dopo il passaggio la modifica del creatore aspetta l'ultimo", {
+  riga <- riga_passata()
+  riga[["approved_seal"]] <- request_seal(riga)
+  sopra <- function(chi) {
+    passata(
+      list(username = chi, details = "approved_seal = 'x'"),
+      list(username = creatrice, details = "expiration = '2027-01-31'")
+    )
+  }
+  expect_true(seal_needs_approval(
+    riga, sopra(creatrice), creatrice, channel_account = canale
+  ))
+  expect_false(seal_approved(
+    riga, sopra(creatrice), creatrice, channel_account = canale
+  ))
+  expect_true(seal_approved(
+    riga, sopra("bruno.verdi@ubep.unipd.it"), creatrice,
+    channel_account = canale
+  ))
+  expect_true(seal_approved(
+    riga, sopra("it.prova@ubep.unipd.it"), creatrice,
+    approvers = "it.prova@ubep.unipd.it", channel_account = canale
+  ))
+  # Without the configured account no owned_by is believed: Anna owns it.
+  expect_false(seal_needs_approval(riga, sopra(creatrice), creatrice))
+})
+
+# revisione 2
+test_that("il tratto prima di un passaggio si legge col proprietario di allora", { # nolint: line_length_linter.
+  # Newest first. Bruno owns the row since the execution sealed
+  # 111111111111; Cinzia changed it, Bruno approved 222222222222, the round
+  # passed the row to Cinzia and sealed it, owned_by below the seal.
+  eventi <- eventi_finti(
+    eseguita("222222222222"),
+    passaggio("cinzia.rossi@ubep.unipd.it"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "approved_seal = '222222222222'"
+    ),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it",
+      details = "dag_name = 'centro-02'"
+    ),
+    eseguita("111111111111"),
+    passaggio("bruno.verdi@ubep.unipd.it"),
+    list(username = creatrice, details = "approved_seal = '111111111111'"),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "role_name = 'read only'"
+    ),
+    applicata
+  )
+  # Read with the creator, Bruno's approval would be a stranger's and
+  # Cinzia's change would come back uncovered, holding the row again.
+  expect_equal(
+    log_uncovered_authors(eventi, "1", creatrice, channel_account = canale),
+    character()
+  )
+  expect_equal(
+    log_uncovered_authors(passata(), "1", creatrice, channel_account = canale),
+    character()
+  )
+})
+
+test_that("dopo il passaggio la revoca del creatore e' una revoca d'altri", {
+  eventi <- passata(
+    list(username = creatrice, details = "request_status = 'revoked'")
+  )
+  expect_true(
+    log_revocation_only(eventi, "1", creatrice, channel_account = canale)
+  )
+})
+
+test_that("seal_approved inoltra l'account del canale al log", {
+  riga <- register_row()
+  riga[["approved_seal"]] <- request_seal(riga)
+  # Newest first. Anna filed the row and approved its seal; before the round
+  # ever wrote on it, Bruno imported owned_by alone.
+  eventi <- eventi_finti(
+    list(
+      username = creatrice,
+      details = paste0("approved_seal = '", riga[["approved_seal"]], "'")
+    ),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "owned_by = 'bruno.verdi@ubep.unipd.it'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  # Without the account Bruno passes for the channel and Anna's approval
+  # stands; with it the log is ambiguous and the approval does not.
+  expect_true(seal_approved(riga, eventi, creatrice))
+  expect_false(seal_approved(riga, eventi, creatrice, channel_account = canale))
+  expect_false(
+    log_approval_stands(eventi, "1", creatrice, channel_account = canale)
+  )
+})
+
+
 # A record id used twice, newest first as REDCap answers. Id 1 was a field
 # test: created, applied by the round, and changed by Bruno after its seal.
 # The register was emptied on 2026-09-01, and the id came back as a request
