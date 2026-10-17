@@ -945,7 +945,7 @@ test_that("un campo tornato al valore eseguito non conta", {
 })
 
 
-test_that("su una riga mai eseguita conta l'ultimo autore di ogni campo pieno", { # nolint: line_length_linter.
+test_that("su una riga mai eseguita conta l'ultimo autore di ogni campo scritto", { # nolint: line_length_linter.
   # eval
   # Newest first, and no execution: Anna created the row, Cinzia changed the
   # role, Bruno emptied the group.
@@ -964,16 +964,65 @@ test_that("su una riga mai eseguita conta l'ultimo autore di ogni campo pieno", 
   )
 
   # test
-  # Every field with a value is part of what the round would carry out, and
-  # it answers to whoever wrote it last. An empty field carries nothing.
+  # Every field written is part of what the round would carry out, and it
+  # answers to whoever wrote it last: Bruno for the emptied group, Cinzia for
+  # the role, Anna for `record_id`, which nobody wrote after her.
   expect_equal(
     log_change_authors(eventi, "1", current = register_row(dag_name = "")),
-    c("cinzia.rossi@ubep.unipd.it", creatrice)
+    c("bruno.verdi@ubep.unipd.it", "cinzia.rossi@ubep.unipd.it", creatrice)
   )
 })
 
 
-# revisione 4
+test_that("su una riga mai eseguita chi svuota un campo conta", {
+  # eval
+  # Newest first, and no execution: Anna created the row in a group, Bruno
+  # emptied it.
+  eventi <- eventi_finti(
+    list(username = "bruno.verdi@ubep.unipd.it", details = "dag_name = ''"),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', dag_name = 'centro-01'"
+    )
+  )
+
+  # test
+  # An empty group is a user in no group: it decides what is granted, and on
+  # a row never carried out there is no value to compare it with. Anna stays
+  # for `record_id`.
+  expect_equal(
+    log_change_authors(eventi, "1", current = register_row(dag_name = "")),
+    c("bruno.verdi@ubep.unipd.it", creatrice)
+  )
+})
+
+
+test_that("un campo senza valore eseguito nel log conta se scritto dopo il sigillo", { # nolint: line_length_linter.
+  # eval
+  # Newest first. The creation wrote only the record id, so the role the
+  # round carried out is not in the log; Bruno emptied it afterwards.
+  eventi <- eventi_finti(
+    list(username = "bruno.verdi@ubep.unipd.it", details = "role_name = ''"),
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1'"
+    )
+  )
+
+  # test
+  # An unknown value carried out is not taken for an empty one: the field
+  # counts because somebody wrote it since the execution.
+  expect_equal(
+    log_change_authors(eventi, "1", current = register_row(role_name = "")),
+    "bruno.verdi@ubep.unipd.it"
+  )
+})
+
+
+# The log cuts a value at its first apostrophe: compared with the log alone,
+# `D'Angelo` and `D'Amico` would both read `D`, and Bruno's change would pass
+# for no change.
 test_that("un valore con l'apostrofo si confronta col registro e l'autore conta", { # nolint: line_length_linter.
   # eval
   eventi <- eventi_finti(

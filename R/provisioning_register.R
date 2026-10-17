@@ -631,15 +631,20 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' Only the writes still in the row count, decided on 2026-10-17 (option (a)
 #' of three). For each intent field whose current value differs from the one
 #' carried out, the author is whoever wrote that field last; a write somebody
-#' then overwrote is not part of the change, and a field brought back to the
-#' value carried out is no change at all. On a row never carried out every
-#' field with a value counts. The value carried out is the newest write of the
-#' field below the seal, by anybody, the channel included; where the log holds
-#' none it is unknown, and the field counts if it was written above the seal.
-#' The current value comes from the register and not from the log, which
-#' cuts a value at its first apostrophe and would call `D'Angelo` and
-#' `D'Amico` equal. Without the row in hand, `current = NULL`, every field
-#' written since the last execution counts, with its last author.
+#' other than the channel then overwrote is not part of the change, and a
+#' field brought back to the value carried out is no change at all. The value
+#' carried out is the newest write of the field below the seal, by anybody,
+#' the channel included; where the log holds none it is unknown, and the
+#' field counts if it was written above the seal. The current value comes
+#' from the register and not from the log, which cuts a value at its first
+#' apostrophe and would call `D'Angelo` and `D'Amico` equal.
+#'
+#' On a row never carried out there is no value to compare with, and every
+#' intent field written in its life counts, with its last author, empty or
+#' not: an empty field decides what is granted too, an empty `dag_name` a user
+#' in no group, an empty `expiration` an access with no end. The same holds
+#' without the row in hand, `current = NULL`: every field written since the
+#' last execution counts, with its last author.
 #'
 #' This is also the way out of a write by somebody who could not have made
 #' it by hand: the owner writes that field again, and the other is no longer
@@ -675,7 +680,8 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' @param channel_account The REDCap username that holds the round's token,
 #'   or `NULL` when it is not configured, for `log_channel_accounts()`.
 #' @param current The row as the round will leave it, a data frame of one
-#'   row, or `NULL` when there is no row in hand.
+#'   row holding every field in `fields`, or `NULL` when there is no row in
+#'   hand. Read only on a row the round has carried out.
 #'
 #' @return A character vector of usernames, newest first (by the write that
 #'   counts) and each once; `character()` when no intent field changed, or
@@ -688,7 +694,9 @@ log_change_authors <- function(events, record,
                                channel_account = NULL, current = NULL) {
   stopifnot(
     is.data.frame(events), is.character(fields),
-    is.null(current) || (is.data.frame(current) && nrow(current) == 1L)
+    is.null(current) ||
+      (is.data.frame(current) && nrow(current) == 1L &&
+         all(fields %in% names(current)))
   )
 
   mine <- log_of_record(events, record)
@@ -710,16 +718,14 @@ log_change_authors <- function(events, record,
   theirs <- window & !authors %in% channel
 
   now <- function(field) {
-    value <- if (field %in% names(current)) current[[field]][[1L]] else NA
-    value <- trimws(as.character(value))
-    if (length(value) == 0L || is.na(value)) "" else value
+    value <- trimws(as.character(current[[field]][[1L]]))
+    if (is.na(value)) "" else value
   }
   counts <- function(field, wrote) {
-    if (is.null(current)) {
+    # A row never carried out has no value to compare with: what was written
+    # counts, an emptied field included, since it decides what is granted.
+    if (is.null(current) || !sealed) {
       return(any(wrote & window))
-    }
-    if (!sealed) {
-      return(nzchar(now(field)))
     }
     done <- which(wrote & below)
     if (length(done) == 0L) {

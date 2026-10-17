@@ -24,7 +24,8 @@ many rows, since deriving them reads the packaged dictionary.}
 or \code{NULL} when it is not configured, for \code{log_channel_accounts()}.}
 
 \item{current}{The row as the round will leave it, a data frame of one
-row, or \code{NULL} when there is no row in hand.}
+row holding every field in \code{fields}, or \code{NULL} when there is no row in
+hand. Read only on a row the round has carried out.}
 }
 \value{
 A character vector of usernames, newest first (by the write that
@@ -45,15 +46,20 @@ the whole history counts, which can only ask for an approval more often.
 Only the writes still in the row count, decided on 2026-10-17 (option (a)
 of three). For each intent field whose current value differs from the one
 carried out, the author is whoever wrote that field last; a write somebody
-then overwrote is not part of the change, and a field brought back to the
-value carried out is no change at all. On a row never carried out every
-field with a value counts. The value carried out is the newest write of the
-field below the seal, by anybody, the channel included; where the log holds
-none it is unknown, and the field counts if it was written above the seal.
-The current value comes from the register and not from the log, which
-cuts a value at its first apostrophe and would call \verb{D'Angelo} and
-\verb{D'Amico} equal. Without the row in hand, \code{current = NULL}, every field
-written since the last execution counts, with its last author.
+other than the channel then overwrote is not part of the change, and a
+field brought back to the value carried out is no change at all. The value
+carried out is the newest write of the field below the seal, by anybody,
+the channel included; where the log holds none it is unknown, and the
+field counts if it was written above the seal. The current value comes
+from the register and not from the log, which cuts a value at its first
+apostrophe and would call \verb{D'Angelo} and \verb{D'Amico} equal.
+
+On a row never carried out there is no value to compare with, and every
+intent field written in its life counts, with its last author, empty or
+not: an empty field decides what is granted too, an empty \code{dag_name} a user
+in no group, an empty \code{expiration} an access with no end. The same holds
+without the row in hand, \code{current = NULL}: every field written since the
+last execution counts, with its last author.
 
 This is also the way out of a write by somebody who could not have made
 it by hand: the owner writes that field again, and the other is no longer
