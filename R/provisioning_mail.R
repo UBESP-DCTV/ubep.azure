@@ -369,8 +369,8 @@ mail_outcome_message <- function(row) {
 #' happens on a sweep of the tenant that failed, which asks no log; on a
 #' creation log or an owners' log that could not be read; on a round with no
 #' row to judge, which asks neither; on a creation log that does not name the
-#' row; and on an owner the log leaves ambiguous, when an account other than
-#' the channel's wrote a field only the channel writes. No key reaches
+#' row; and on an owner the log cannot say, `log_owner()`, as when a write of
+#' `owned_by` with no author stands above the channel's. No key reaches
 #' anybody then: a row whose owner the log does not name stops at the gate
 #' on `TRASPORTO_AUTORE_NON_LEGGIBILE`, and nobody is made for it.
 #'

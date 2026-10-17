@@ -79,13 +79,15 @@ resolves it, and \code{username} is an intent field: counted, the channel would
 be an author of every row whose username it settles. Its account is the one
 \code{log_channel_accounts()} names, and its events are dropped by account: a
 field only the channel wrote since the last execution carries no author.
+Another account's write of a field of the channel is no change either, and
+with the account configured it is ignored; its write of an intent field,
+\code{username} included, is a change of its author like any other.
 
 Two cases make the answer unknown rather than short, and the caller holds
-the row on both. A second account writing what only the channel is meant
-to write is a referent's import, since the import right is open to them
-and an import writes \verb{@READONLY} fields too, or a value that happens to
-read as a field assignment; taking it for the channel would drop its
-author from the change. And a write that counts whose author is blank
-names nobody, which is not the same as naming the creator.
+the row on both. Without the configured account, a second account writing
+what only the channel is meant to write, \code{log_channel_unknown()}: the
+channel is guessed from those writes, and taking the wrong account for it
+would drop its author from the change. And a write that counts whose
+author is blank names nobody, which is not the same as naming the creator.
 }
 \keyword{internal}

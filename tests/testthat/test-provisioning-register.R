@@ -1460,28 +1460,64 @@ test_that("senza l'account del canale nessuna owned_by si crede", {
 })
 
 
-test_that("una owned_by scritta da un'altra utenza rende ignoto il proprietario", { # nolint: line_length_linter.
-  eventi <- eventi_finti(
-    list(
-      username = "bruno.verdi@ubep.unipd.it",
-      details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"
-    ),
-    applicata
+test_that("una owned_by scritta da un'altra utenza si ignora", {
+  altra <- list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"
   )
-  expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
-  # Without the account the ambiguity is read first, and it still holds.
-  expect_true(is.na(log_owner(eventi, "1", creatrice)))
+  # With the account configured the channel is that account and nobody else:
+  # another account's write names no owner and does not hide the channel's.
+  expect_equal(
+    log_owner(eventi_finti(altra, applicata), "1", creatrice, canale),
+    creatrice
+  )
+  expect_equal(
+    log_owner(
+      eventi_finti(altra, passaggio("davide.neri@ubep.unipd.it"), applicata),
+      "1", creatrice, canale
+    ),
+    "davide.neri@ubep.unipd.it"
+  )
+  # Without the account the channel is guessed from what it writes, and two
+  # accounts writing its fields leave the owner unknown.
+  expect_true(is.na(log_owner(eventi_finti(altra, applicata), "1", creatrice)))
 })
 
 
-test_that("una scrittura del canale senza autore rende ignoto il proprietario", { # nolint: line_length_linter.
+test_that("una owned_by senza autore sopra quella del canale rende ignoto il proprietario", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
   for (chi in list("", NA_character_)) {
-    eventi <- eventi_finti(
-      list(username = chi, details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"),
-      applicata
+    vuota <- list(
+      username = chi, details = "owned_by = 'cinzia.rossi@ubep.unipd.it'"
     )
-    expect_equal(log_channel_accounts(eventi, "1", canale), c(canale, chi))
-    expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
+    # It names nobody, and it is not another account: it could be the
+    # channel's. It is the one write of `owned_by` the channel's account does
+    # not settle.
+    expect_equal(
+      log_channel_accounts(eventi_finti(vuota, applicata), "1", canale), canale
+    )
+    expect_true(is.na(
+      log_owner(eventi_finti(vuota, applicata), "1", creatrice, canale)
+    ))
+    expect_true(is.na(log_owner(
+      eventi_finti(vuota, passaggio(bruno), applicata), "1", creatrice, canale
+    )))
+    # Below the channel's newest write it changes nothing.
+    expect_equal(
+      log_owner(
+        eventi_finti(passaggio(bruno), vuota, applicata), "1", creatrice, canale
+      ),
+      bruno
+    )
+    # Nor does a blank author of another field of the channel.
+    expect_equal(
+      log_owner(
+        eventi_finti(list(username = chi, details = "outcome = 'held'"),
+                     applicata),
+        "1", creatrice, canale
+      ),
+      creatrice
+    )
   }
 })
 
@@ -1503,14 +1539,15 @@ test_that("chi importa owned_by su una riga nuova non passa per il canale", {
   )
   # Recognized by what it writes, the channel would be Bruno.
   expect_equal(log_channel_accounts(eventi, "1"), "bruno.verdi@ubep.unipd.it")
+  # Named by the configuration, the channel is the round's account even
+  # where it has not written yet; Bruno's import is ignored, and the row
+  # stays with Anna.
+  expect_equal(log_channel_accounts(eventi, "1", canale), canale)
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
   expect_equal(
-    log_channel_accounts(eventi, "1", canale),
-    c(canale, "bruno.verdi@ubep.unipd.it")
+    log_pending_authors(eventi, "1", creatrice, channel_account = canale),
+    creatrice
   )
-  expect_true(is.na(log_owner(eventi, "1", creatrice, canale)))
-  expect_true(is.na(
-    log_pending_authors(eventi, "1", creatrice, channel_account = canale)
-  ))
 })
 
 
@@ -1729,13 +1766,26 @@ test_that("dopo il passaggio la revoca del creatore e' una revoca d'altri", {
 test_that("seal_approved inoltra l'account del canale al log", {
   riga <- register_row()
   riga[["approved_seal"]] <- request_seal(riga)
-  # Newest first. Anna filed the row and approved its seal; before the round
-  # ever wrote on it, Bruno imported owned_by alone.
-  eventi <- eventi_finti(
+  approva <- function(chi) {
     list(
-      username = creatrice,
+      username = chi,
       details = paste0("approved_seal = '", riga[["approved_seal"]], "'")
-    ),
+    )
+  }
+  # Newest first. The round passed the row to Bruno, who approves its seal.
+  eventi <- eventi_finti(
+    approva("bruno.verdi@ubep.unipd.it"),
+    passaggio("bruno.verdi@ubep.unipd.it"), applicata
+  )
+  # Only with the account is the passage believed and Bruno the owner.
+  expect_true(seal_approved(riga, eventi, creatrice, channel_account = canale))
+  expect_false(seal_approved(riga, eventi, creatrice))
+
+  # Anna filed the row and approved its seal; before the round ever wrote on
+  # it, Bruno imported owned_by alone. With the account his import is
+  # ignored and Anna's approval stands.
+  importata <- eventi_finti(
+    approva(creatrice),
     list(
       username = "bruno.verdi@ubep.unipd.it",
       details = "owned_by = 'bruno.verdi@ubep.unipd.it'"
@@ -1745,12 +1795,11 @@ test_that("seal_approved inoltra l'account del canale al log", {
       details = "record_id = '1', role_name = 'data entry'"
     )
   )
-  # Without the account Bruno passes for the channel and Anna's approval
-  # stands; with it the log is ambiguous and the approval does not.
-  expect_true(seal_approved(riga, eventi, creatrice))
-  expect_false(seal_approved(riga, eventi, creatrice, channel_account = canale))
-  expect_false(
-    log_approval_stands(eventi, "1", creatrice, channel_account = canale)
+  expect_true(
+    seal_approved(riga, importata, creatrice, channel_account = canale)
+  )
+  expect_true(
+    log_approval_stands(importata, "1", creatrice, channel_account = canale)
   )
 })
 
@@ -1993,6 +2042,50 @@ test_that("un log che non dice gli autori non stabilisce il proprietario", {
   expect_true(
     is.na(log_next_owner(eventi, "1", creatrice, channel_account = canale))
   )
+})
+
+test_that("con l'account configurato un altro che scrive i campi del canale e' solo un autore", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  eventi <- eventi_finti(
+    list(
+      username = bruno, details = "role_name = 'read only', outcome = 'applied'"
+    ),
+    list(username = creatrice, details = "expiration = '2027-01-31'"),
+    applicata
+  )
+  # Without the account two accounts write the channel's fields and nobody
+  # can be named; with it, Bruno's change of the role is his, as any other.
+  expect_true(is.na(log_change_authors(eventi, "1")))
+  expect_equal(
+    log_change_authors(eventi, "1", channel_account = canale),
+    c(bruno, creatrice)
+  )
+})
+
+test_that("un referente che importa outcome e owned_by su una riga eseguita non la ferma", { # nolint: line_length_linter.
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  # Newest first. A referent imports a CSV that carries the channel's
+  # columns, with values of its own, over a row the round applied.
+  eventi <- eventi_finti(
+    list(
+      username = bruno, timestamp = "2026-10-02 09:00",
+      details = paste0("outcome = 'held', owned_by = '", bruno, "'")
+    ),
+    applicata
+  )
+  # The owner stays, nobody changed what the row asks for, and the
+  # execution keeps its date.
+  expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+  expect_equal(
+    log_pending_authors(eventi, "1", creatrice, channel_account = canale),
+    character()
+  )
+  expect_equal(
+    log_next_owner(eventi, "1", creatrice, channel_account = canale), creatrice
+  )
+  expect_equal(report_executions(eventi, "1", canale), "2026-09-01 02:45")
+  # Without the account the channel cannot be told apart from the referent.
+  expect_true(is.na(log_owner(eventi, "1", creatrice)))
 })
 
 

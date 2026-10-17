@@ -39,12 +39,19 @@ the same principle that names the creator from the log and not from
 
 The round's account is configured, decided on 2026-10-17, and without it,
 \code{NULL}, no write of \code{owned_by} is believed and the row belongs to its
-creator. Recognizing the round by what it writes would hand the row to a
-referent who imports \code{owned_by} alone on a colleague's new row before the
-round has written on it; with the account configured, that referent makes
-the row ambiguous, \code{log_channel_accounts()}, and the answer is unknown.
-The ambiguity is read first, so a row whose log is ambiguous is unknown
-with or without the configured account.
+creator; a row whose log names two accounts writing the channel's fields
+is unknown then, \code{log_channel_unknown()}. Recognizing the round by what it
+writes would hand the row to a referent who imports \code{owned_by} alone on a
+colleague's new row before the round has written on it. With the account
+configured, a write of \code{owned_by} by any other account is ignored
+(decided on 2026-10-17): it names nobody, and the row stays with the
+owner the channel last wrote, or with its creator.
+
+One write of another author is not ignored: a write of \code{owned_by} whose
+author is blank or missing, above the channel's write the owner is read
+from, or anywhere when there is none. It names nobody either, but it is not
+known to be somebody else's: it could be the channel's, so the answer is
+unknown, the direction that holds the row.
 
 \code{before} asks who the row belonged to at a moment, and only what stands
 strictly before it counts. It is in the instance's civil time, which is

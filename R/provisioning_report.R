@@ -162,10 +162,11 @@ report_day_words <- function(date) {
 #'
 #' The author has to be the channel, the account `log_channel_accounts()`
 #' names: the configured `channel_account`, or, without it, whoever wrote the
-#' channel's fields. When two accounts write those fields the log cannot say
-#' which of them executed the row, and the answer is unknown rather than a
-#' guess. With the account configured, a referent who imported a channel
-#' field is the second of those two, and the row is undated.
+#' channel's fields. With the account configured, a write of the seal by any
+#' other account executed nothing and is ignored, a referent's import
+#' included. Without it, when two accounts write those fields the log cannot
+#' say which of them executed the row, `log_channel_unknown()`, and the
+#' answer is unknown rather than a guess.
 #'
 #' Only the row that stands now is read. The register reuses record ids: one
 #' made for a field test, deleted on 2026-09-01 with the rest and made again
@@ -197,7 +198,7 @@ report_executions <- function(events, record, channel_account = NULL) {
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
 
@@ -243,7 +244,7 @@ report_person_since <- function(events, record, channel_account = NULL) {
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
 
@@ -1860,10 +1861,11 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #'   the recipient of the report to IT.
 #' @param channel_account The REDCap username that holds the register's
 #'   token, the account the round writes with. With it, only its writes of
-#'   `owned_by` pass a row to another referent, and a row where somebody else
-#'   wrote a channel field is undated; with `NULL`, the default, every row
-#'   belongs to its creator, and the channel is whoever wrote its fields.
-#'   The runner reads it from `UBEP_CANALE_UTENTE`, which it requires.
+#'   `owned_by` pass a row to another referent and only its seals date a
+#'   row, and what any other account wrote in the channel's fields is
+#'   ignored; with `NULL`, the default, every row belongs to its creator, and
+#'   the channel is whoever wrote its fields. The runner reads it from
+#'   `UBEP_CANALE_UTENTE`, which it requires.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due, for whoever reads a single run.
@@ -1885,9 +1887,7 @@ provisioning_report <- function(register_url,
     is.character(graph_url), length(graph_url) == 1L,
     is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
     is.null(mailer) || is.function(mailer),
-    is.null(channel_account) ||
-      (is.character(channel_account) && length(channel_account) == 1L &&
-         !is.na(channel_account) && nzchar(trimws(channel_account)))
+    channel_account_valid(channel_account)
   )
 
   period <- report_month(now, month)
@@ -1975,10 +1975,10 @@ provisioning_report <- function(register_url,
           report_person_since(answer[["log"]], ids[[i]], channel_account)
         )
         # The owner is read on the log as it stood when the month ended:
-        # `before` cuts the writes of `owned_by` only, and a write of a
-        # channel field after it would still make the row ambiguous. A stamp
-        # that does not read stays, and the owner is unknown, as on the
-        # whole log.
+        # `before` cuts the writes of `owned_by` only, and without the
+        # channel's account a second account writing a channel field after
+        # it would still make the row ambiguous. A stamp that does not read
+        # stays, and the owner is unknown, as on the whole log.
         stamps <- trimws(as.character(answer[["log"]][["timestamp"]]))
         upto <- answer[["log"]][
           !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,

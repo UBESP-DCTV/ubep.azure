@@ -133,9 +133,11 @@ register_unsealed_fields <- function() {
 #' an import draws none: the import right is open to the referents, and an
 #' import writes these fields as it writes any other. So a write of one of
 #' them does not say by itself that the round made it. The account that holds
-#' the round's token is configured, `channel_account`, and
-#' `log_channel_accounts()` reads these fields to find any other account that
-#' wrote them, which makes the row's log ambiguous.
+#' the round's token is therefore configured, `channel_account`, and with it
+#' a write of one of these fields by any other account is ignored
+#' (`log_channel_accounts()`). Without it the channel is guessed from who
+#' wrote these fields, and two accounts writing them make the row's log
+#' ambiguous.
 #'
 #' @return A character vector of field names.
 #'
@@ -426,10 +428,12 @@ log_wrote <- function(events, fields) {
 #' Which accounts in a row's log are the channel
 #'
 #' The account that holds the round's token, as the machine that runs the
-#' round configures it, followed by every other account that wrote a field
-#' only the channel is meant to write, `register_channel_fields()`, in the
-#' row's current life. Callers read the answer one way: longer than one, and
-#' the log cannot say which writes are the round's, so the row is held.
+#' round configures it, and nobody else; or, where it is not configured,
+#' every account that wrote a field only the channel is meant to write,
+#' `register_channel_fields()`, in the row's current life. Callers drop the
+#' channel's events by account, and read the answer one more way through
+#' `log_channel_unknown()`: without the configuration, two accounts writing
+#' those fields leave the log unable to say which writes are the round's.
 #'
 #' It has to be recognized by the account and not by the event. REDCap logs
 #' only the fields an import changed, so when the round writes back a username
@@ -441,16 +445,17 @@ log_wrote <- function(events, fields) {
 #' writes alone, the channel is whoever wrote a channel field, and the import
 #' right is open to the referents: one who imports `owned_by` on a colleague's
 #' new row, before the round has written on it, would be the only "channel"
-#' of that row. Named by the configuration, the round's account answers first
-#' even on a row where it has not written yet, and that referent comes second,
-#' which makes the row ambiguous. A write of a channel field whose author is
-#' blank or missing names nobody, and with the account configured it counts
-#' among the others too, as a blank author of an intent field does for
-#' `log_change_authors()`.
-#'
-#' One consequence is worth knowing: if the account that holds the token
-#' changes, every row whose current life carries writes of the old account
-#' becomes ambiguous, and the round holds it.
+#' of that row. Named by the configuration, the channel is the round's
+#' account even on a row where it has not written yet, and **a write of a
+#' channel field by any other account is ignored** (decided on 2026-10-17,
+#' replacing the ambiguity this function used to answer). Such a write no
+#' longer makes the row ambiguous: the log never forgets it, so an ambiguous
+#' row was held for ever, even one whose referent imported by mistake a CSV
+#' carrying the channel's columns; and with the account named there is
+#' nothing to guess, since the owner comes only from that account's writes of
+#' `owned_by`, `log_owner()`. A write of an intent field by another account
+#' stays a change of its author, `log_change_authors()`, the channel's
+#' columns beside it or not.
 #'
 #' The configured name is typed by hand on the machine, so it is compared
 #' without regard to case, and answered with the spelling the log carries
@@ -464,32 +469,62 @@ log_wrote <- function(events, fields) {
 #' @param channel_account The REDCap username that holds the round's token,
 #'   or `NULL` when it is not configured.
 #'
-#' @return A character vector of usernames. With `channel_account`, it starts
-#'   with that account and is one long when nobody else wrote a channel field.
-#'   Without, it is empty when no event wrote one of those fields.
+#' @return A character vector of usernames. With `channel_account`, every
+#'   spelling of that account the row's log carries, or the configured name
+#'   when the log carries none; nobody else. Without, the authors of the
+#'   channel fields, empty when no event wrote one of them.
 #'
 #' @keywords internal
 log_channel_accounts <- function(events, record, channel_account = NULL) {
-  stopifnot(
-    is.data.frame(events),
-    is.null(channel_account) ||
-      (is.character(channel_account) && length(channel_account) == 1L &&
-         !is.na(channel_account) && nzchar(trimws(channel_account)))
-  )
+  stopifnot(is.data.frame(events), channel_account_valid(channel_account))
 
   mine <- log_of_record(events, record)
   authors <- trimws(as.character(mine[["username"]]))
-  wrote <- log_wrote(mine, register_channel_fields())
   if (is.null(channel_account)) {
+    wrote <- log_wrote(mine, register_channel_fields())
     return(unique(authors[wrote & nzchar(authors)]))
   }
 
-  configured <- trimws(channel_account)
-  logged <- authors[which(tolower(authors) == tolower(configured))]
-  own <- if (length(logged) > 0L) logged[[1L]] else configured
-  # A blank or missing author is not the configured account either: it stays
-  # among the others, and the row is ambiguous.
-  c(own, unique(authors[wrote & !tolower(authors) %in% tolower(configured)]))
+  configured <- unique(trimws(channel_account))
+  logged <- unique(authors[tolower(authors) %in% tolower(configured)])
+  c(logged, configured[!tolower(configured) %in% tolower(logged)])
+}
+
+
+#' Whether a row's log cannot say which account is the channel
+#'
+#' Only without the configured account, where the channel is guessed from
+#' who wrote its fields: two accounts that did leave the log unable to say
+#' which writes are the round's, and every caller holds the row. With the
+#' account configured there is nothing to guess, `log_channel_accounts()`.
+#'
+#' @param channel What `log_channel_accounts()` answered.
+#' @param channel_account What it was asked with.
+#'
+#' @return `TRUE` when the channel is not known.
+#'
+#' @keywords internal
+log_channel_unknown <- function(channel, channel_account) {
+  is.null(channel_account) && length(channel) > 1L
+}
+
+
+#' Whether a value can name the channel's account
+#'
+#' `NULL`, not configured, or one REDCap username, not blank or missing: a
+#' blank name would make the channel nobody, which is a configuration that
+#' is missing and not one that says something. The check every function
+#' taking `channel_account` makes on entry.
+#'
+#' @param channel_account The value a caller was handed.
+#'
+#' @return `TRUE` or `FALSE`.
+#'
+#' @keywords internal
+channel_account_valid <- function(channel_account) {
+  is.null(channel_account) ||
+    (is.character(channel_account) && length(channel_account) == 1L &&
+       !anyNA(channel_account) && all(nzchar(trimws(channel_account))))
 }
 
 
@@ -582,12 +617,19 @@ log_stamp_reads <- function(stamps) {
 #'
 #' The round's account is configured, decided on 2026-10-17, and without it,
 #' `NULL`, no write of `owned_by` is believed and the row belongs to its
-#' creator. Recognizing the round by what it writes would hand the row to a
-#' referent who imports `owned_by` alone on a colleague's new row before the
-#' round has written on it; with the account configured, that referent makes
-#' the row ambiguous, `log_channel_accounts()`, and the answer is unknown.
-#' The ambiguity is read first, so a row whose log is ambiguous is unknown
-#' with or without the configured account.
+#' creator; a row whose log names two accounts writing the channel's fields
+#' is unknown then, `log_channel_unknown()`. Recognizing the round by what it
+#' writes would hand the row to a referent who imports `owned_by` alone on a
+#' colleague's new row before the round has written on it. With the account
+#' configured, a write of `owned_by` by any other account is ignored
+#' (decided on 2026-10-17): it names nobody, and the row stays with the
+#' owner the channel last wrote, or with its creator.
+#'
+#' One write of another author is not ignored: a write of `owned_by` whose
+#' author is blank or missing, above the channel's write the owner is read
+#' from, or anywhere when there is none. It names nobody either, but it is not
+#' known to be somebody else's: it could be the channel's, so the answer is
+#' unknown, the direction that holds the row.
 #'
 #' `before` asks who the row belonged to at a moment, and only what stands
 #' strictly before it counts. It is in the instance's civil time, which is
@@ -639,7 +681,7 @@ log_owner <- function(events, record, creator, channel_account = NULL,
   fallback <- if (is.na(creator)) "" else trimws(creator)
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
   if (is.null(channel_account)) {
@@ -663,8 +705,14 @@ log_owner <- function(events, record, creator, channel_account = NULL,
   whole <- regmatches(
     details, regexec("^owned_by\\s*=\\s*'(.*)'$", details)
   )
-  written <- which(log_wrote(mine, "owned_by") & authors == channel[[1L]])
-  for (k in written) {
+  for (k in which(log_wrote(mine, "owned_by"))) {
+    # Nobody named is not somebody else: it could be the channel's write.
+    if (is.na(authors[[k]]) || !nzchar(authors[[k]])) {
+      return(NA_character_)
+    }
+    if (!authors[[k]] %in% channel) {
+      next
+    }
     hit <- whole[[k]]
     if (length(hit) < 2L ||
           grepl("'\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'", hit[[2L]])) {
@@ -725,14 +773,16 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 #' be an author of every row whose username it settles. Its account is the one
 #' `log_channel_accounts()` names, and its events are dropped by account: a
 #' field only the channel wrote since the last execution carries no author.
+#' Another account's write of a field of the channel is no change either, and
+#' with the account configured it is ignored; its write of an intent field,
+#' `username` included, is a change of its author like any other.
 #'
 #' Two cases make the answer unknown rather than short, and the caller holds
-#' the row on both. A second account writing what only the channel is meant
-#' to write is a referent's import, since the import right is open to them
-#' and an import writes `@READONLY` fields too, or a value that happens to
-#' read as a field assignment; taking it for the channel would drop its
-#' author from the change. And a write that counts whose author is blank
-#' names nobody, which is not the same as naming the creator.
+#' the row on both. Without the configured account, a second account writing
+#' what only the channel is meant to write, `log_channel_unknown()`: the
+#' channel is guessed from those writes, and taking the wrong account for it
+#' would drop its author from the change. And a write that counts whose
+#' author is blank names nobody, which is not the same as naming the creator.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -762,7 +812,7 @@ log_change_authors <- function(events, record,
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
 
@@ -908,8 +958,11 @@ log_approver <- function(authors, owner, approvers = character()) {
 #' manager's free revocation.
 #'
 #' Unknown, `NA_character_`, when the owner of the stretch is not known, when
-#' two accounts write the channel's fields, or when an uncovered change has a
-#' blank author: the caller holds the row on all three.
+#' the channel is not known, `log_channel_unknown()`, or when an uncovered
+#' change has a blank author: the caller holds the row on all three. With the
+#' channel's account configured, another account's write of a field of the
+#' channel is ignored, and its write of an intent field is a change like any
+#' other.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -937,7 +990,7 @@ log_uncovered_authors <- function(events, record, creator,
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(NA_character_)
   }
   executed <- which(log_wrote(mine, "applied_seal"))
@@ -1149,7 +1202,7 @@ change_needs_approval <- function(authors, owner, sealed = TRUE,
 #'   `log_owner()`.
 #'
 #' @return `TRUE` when the others wrote a revocation and nothing else; `FALSE`
-#'   too when the owner is not known.
+#'   too when the owner is not known, or the channel, `log_channel_unknown()`.
 #'
 #' @keywords internal
 log_revocation_only <- function(events, record, creator,
@@ -1174,7 +1227,7 @@ log_revocation_only <- function(events, record, creator,
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(FALSE)
   }
   executed <- which(log_wrote(mine, "applied_seal"))
@@ -1434,7 +1487,8 @@ seal_approved <- function(register, events, creators,
 #' The log half of `seal_approved()`: the newest write of `approved_seal` is
 #' the owner's, `log_owner()`, or one of the IT accounts', and nothing it could
 #' not have seen stands above it. An owner the log cannot establish, or a
-#' blank one, approves nothing.
+#' blank one, approves nothing, and no approval stands where the log cannot
+#' say which account is the channel, `log_channel_unknown()`.
 #'
 #' - **No execution above it.** The newest write of `applied_seal` is the
 #'   round's last execution, and an approval below it was the one that
@@ -1478,7 +1532,7 @@ log_approval_stands <- function(events, record, creator,
   }
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
-  if (length(channel) > 1L) {
+  if (log_channel_unknown(channel, channel_account)) {
     return(FALSE)
   }
 

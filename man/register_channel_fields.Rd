@@ -20,8 +20,10 @@ Meant, and not guaranteed. \verb{@READONLY} governs the form REDCap draws, and
 an import draws none: the import right is open to the referents, and an
 import writes these fields as it writes any other. So a write of one of
 them does not say by itself that the round made it. The account that holds
-the round's token is configured, \code{channel_account}, and
-\code{log_channel_accounts()} reads these fields to find any other account that
-wrote them, which makes the row's log ambiguous.
+the round's token is therefore configured, \code{channel_account}, and with it
+a write of one of these fields by any other account is ignored
+(\code{log_channel_accounts()}). Without it the channel is guessed from who
+wrote these fields, and two accounts writing them make the row's log
+ambiguous.
 }
 \keyword{internal}

@@ -249,6 +249,22 @@ test_that("two accounts writing the channel's fields leave the date unknown", {
 })
 
 
+test_that("with the channel's account configured, another account's seal is ignored", { # nolint: line_length_linter.
+  # eval
+  eventi <- rbind(
+    evento("2026-10-09 06:03", "qualcun.altro@ubep.unipd.it",
+           "applied_seal = 'cccccccccccc'"),
+    evento("2026-10-08 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'")
+  )
+
+  # test
+  # Nothing is left to guess: the channel is the configured account, and a
+  # write of the seal by anybody else executed nothing.
+  expect_equal(report_executions(eventi, "41", canale), "2026-10-08 23:03")
+  expect_equal(report_person_since(eventi, "41", canale), "2026-10-08 23:03")
+})
+
+
 # --- the first sign-in, from Entra ------------------------------------------
 
 # One directory account in the shape the sweep hands back, built through the
@@ -2225,11 +2241,10 @@ test_that("una riga senza proprietario stabilito va a IT, non a un referente", {
 })
 
 
-test_that("un'altra utenza che scrive owned_by manda la riga a IT", {
+test_that("un'altra utenza che scrive owned_by non sposta la riga", {
   # eval
   # With the channel's account configured, a referent who imports `owned_by`
-  # is a second writer of the channel's fields: the log is ambiguous, the row
-  # has neither an owner nor a date, and IT is told which.
+  # is ignored: the row stays with its creator, dated by the channel's seal.
   dati <- scenario()
   dati[["eventi"]] <- rbind(
     evento("2026-10-20 05:00", "bruno.fittizio@ubep.unipd.it",
@@ -2245,31 +2260,25 @@ test_that("un'altra utenza che scrive owned_by manda la riga a IT", {
   mail <- posta[["inviate"]][["mail"]]
   a <- vapply(mail, `[[`, "", "to")
   expect_setequal(a, c(referente, it_prova))
-  expect_no_match(
+  expect_match(
     mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
   )
-  expect_match(
-    mail[[match(it_prova, a)]][["body"]],
-    paste0(
-      "Richiesta 41: Carla Inventata, carla.inventata@ubep.unipd.it: ",
-      "edc10, progetto 9301. Nel registro degli eventi i campi del canale li ",
-      "scrive piu' di un account, e non si sa quale abbia eseguito la riga. ",
-      "Referente: non stabilito."
-    ),
-    fixed = TRUE
+  expect_no_match(
+    mail[[match(it_prova, a)]][["body"]], "Richiesta 41:", fixed = TRUE
   )
 })
 
 
 test_that("una scrittura dopo la fine del mese non cambia il proprietario", {
   # eval
-  # The channel passed the row to Bruno in October; on 2 November another
-  # account imports `owned_by`. On the whole log that write makes the row
-  # ambiguous; October's report, sent on the 3rd, must still read October.
+  # The channel passed the row to Bruno in October; on 2 November a write of
+  # `owned_by` with no author lands on it. On the whole log that write makes
+  # the owner unknown; October's report, sent on the 3rd, must still read
+  # October.
   bruno <- "bruno.fittizio@ubep.unipd.it"
   dati <- scenario()
   dati[["eventi"]] <- rbind(
-    evento("2026-11-02 10:00", "elena.supposta@ubep.unipd.it",
+    evento("2026-11-02 10:00", "",
            "owned_by = 'elena.supposta@ubep.unipd.it'", record = "41"),
     evento("2026-10-20 05:00", canale, paste0("owned_by = '", bruno, "'"),
            record = "41"),
@@ -2282,18 +2291,16 @@ test_that("una scrittura dopo la fine del mese non cambia il proprietario", {
          channel_account = canale)
 
   # test
+  expect_true(is.na(log_owner(dati[["eventi"]], "41", referente, canale)))
   mail <- posta[["inviate"]][["mail"]]
   a <- vapply(mail, `[[`, "", "to")
   expect_no_match(
     mail[[match(referente, a)]][["body"]], "carla.inventata", fixed = TRUE
   )
-  # The date is read on the whole log, and the November write leaves the row
-  # undated: it goes to IT, under the owner it had at the end of October.
-  expect_match(
-    mail[[match(it_prova, a)]][["body"]],
-    paste0("Referente: ", bruno, "."),
-    fixed = TRUE
-  )
+  # The row is still dated, and goes to the owner it had at the end of
+  # October.
+  expect_match(mail[[match(bruno, a)]][["body"]], "carla.inventata",
+               fixed = TRUE)
 })
 
 

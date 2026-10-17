@@ -34,9 +34,12 @@
   channel by what it writes would make a referent who imports `owned_by` on a
   colleague's new row the only "channel" of that row. With the package default,
   `NULL`, no write of `owned_by` is believed and no row passes. Both job
-  copies in `/opt` are to be replaced together with the package. If the
-  account that holds the token ever changes, the rows with writes of the old
-  account in their current life become ambiguous and are held.
+  copies in `/opt` are to be replaced together with the package. With the
+  account configured, what any other account writes in the channel's fields
+  is ignored (decided on 2026-10-17): a referent who imports a CSV carrying
+  the channel's columns neither stops the row nor takes it, and only a write
+  of `owned_by` with no author, above the channel's newest, leaves the owner
+  unknown.
 
 * **`UBEP_POSTA_COPIA` is required with the mail on.** The outcome of a row
   whose owner is not established goes to IT alone, and without the address it

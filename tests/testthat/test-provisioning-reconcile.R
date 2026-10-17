@@ -3859,31 +3859,34 @@ test_that("senza l'account del canale nessuna riga passa", {
 })
 
 
-test_that("chi importa owned_by su una riga nuova la ferma, e l'esito va a IT", { # nolint: line_length_linter.
+test_that("chi importa owned_by su una riga nuova non la prende", {
   # eval
   # Anna filed the row; before any round, Bruno imported owned_by alone.
   posta <- posta_raccolta()
   esito <- giro(
     registro_con_log(
-      record_json(list(record_id = "1")),
+      record_json(list(record_id = "1", owned_by = bruno)),
       storia = list(list(
         username = bruno, details = paste0("owned_by = '", bruno, "'")
       ))
     ),
-    istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
+    istanza_che_scrive(), dry_run = FALSE,
     mailer = posta[["mailer"]], copy_to = "it@example.org"
   )
 
   # test
-  # Two accounts write what only the channel writes, so the log cannot say
-  # whose the row is: neither Bruno's rights nor Anna's carry it, and the
-  # outcome goes to IT alone.
-  expect_equal(
-    as.character(esito[["esiti"]][["outcome_detail"]]),
-    "TRASPORTO_AUTORE_NON_LEGGIBILE"
+  # The channel is the configured account, and Bruno's import is ignored:
+  # the row is Anna's, carried out on her rights, its outcome goes to her,
+  # and the round writes her back into the field.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+  mandate <- posta[["mandate"]]()
+  di_accesso <- vapply(
+    mandate, function(m) startsWith(m[["subject"]], "Accesso a REDCap"), NA
   )
-  expect_length(scritture(), 0L)
-  expect_equal(vapply(posta[["mandate"]](), `[[`, "", "to"), "it@example.org")
+  expect_equal(unique(vapply(mandate[!di_accesso], `[[`, "", "to")), anna)
+  expect_false(bruno %in% vapply(mandate, `[[`, "", "to"))
 })
 
 
@@ -3916,13 +3919,14 @@ test_that("una spazzata fallita manda l'esito a IT, con il referente non stabili
 
 test_that("una riga cambiata senza proprietario stabilito non si trattiene", {
   # eval
-  # Bruno changes the role of Anna's applied row and imports owned_by with
-  # it: the log cannot say whose the row is.
+  # Bruno changes the role of Anna's applied row, and a write of owned_by
+  # with no author stands above it: the log cannot say whose the row is.
   posta <- posta_raccolta()
   esito <- giro_cambiata(
-    list(cambio(
-      bruno, paste0("role_name = 'read only', owned_by = '", bruno, "'")
-    )),
+    list(
+      cambio("", paste0("owned_by = '", bruno, "'")),
+      cambio(bruno)
+    ),
     istanza = istanza_che_scrive(richiedenti = c(anna, bruno)),
     mailer = posta[["mailer"]], copy_to = "it@example.org"
   )
@@ -4349,4 +4353,41 @@ test_that("una revoca o un giro che simula non mandano la mail", {
   expect_equal(as.character(revoca[["esiti"]][["outcome"]]), "applied")
   expect_equal(as.character(simulato[["esiti"]][["outcome"]]), "simulated")
   expect_length(accessi(posta), 0L)
+})
+
+
+test_that("un referente che importa outcome e owned_by su una riga eseguita non la ferma", { # nolint: line_length_linter.
+  # eval
+  # Anna's row, applied and untouched since; Bruno imports a CSV that
+  # carries the channel's columns, with values of his own. The seal does not
+  # cover them, so nothing the row asks for has moved.
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  righe <- record_json(list(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it",
+    identity = "existing", outcome = "held", applied_seal = fermo,
+    seal_state = "intact", owned_by = bruno
+  ))
+  storia <- list(
+    cambio(bruno, paste0("outcome = 'held', owned_by = '", bruno, "'")),
+    esecuzione(fermo)
+  )
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(righe, storia = storia), istanza_che_scrive(),
+    dry_run = FALSE, mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # The row does not stop on our code, and it stays Anna's: the round
+  # carries it out on her rights, rewrites its outcome, and writes her back
+  # into the field.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_false(
+    "TRASPORTO_AUTORE_NON_LEGGIBILE" %in% esito[["esiti"]][["outcome_detail"]]
+  )
+  expect_equal(proprietari_scritti()[["owned_by"]], anna)
+  mandate <- posta[["mandate"]]()
+  expect_false(bruno %in% vapply(mandate, `[[`, "", "to"))
 })

@@ -36,7 +36,8 @@ or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
 The log half of \code{seal_approved()}: the newest write of \code{approved_seal} is
 the owner's, \code{log_owner()}, or one of the IT accounts', and nothing it could
 not have seen stands above it. An owner the log cannot establish, or a
-blank one, approves nothing.
+blank one, approves nothing, and no approval stands where the log cannot
+say which account is the channel, \code{log_channel_unknown()}.
 }
 \details{
 \itemize{

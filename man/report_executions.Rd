@@ -35,10 +35,11 @@ back the whole log, where another row's execution would date this one.
 
 The author has to be the channel, the account \code{log_channel_accounts()}
 names: the configured \code{channel_account}, or, without it, whoever wrote the
-channel's fields. When two accounts write those fields the log cannot say
-which of them executed the row, and the answer is unknown rather than a
-guess. With the account configured, a referent who imported a channel
-field is the second of those two, and the row is undated.
+channel's fields. With the account configured, a write of the seal by any
+other account executed nothing and is ignored, a referent's import
+included. Without it, when two accounts write those fields the log cannot
+say which of them executed the row, \code{log_channel_unknown()}, and the
+answer is unknown rather than a guess.
 
 Only the row that stands now is read. The register reuses record ids: one
 made for a field test, deleted on 2026-09-01 with the rest and made again

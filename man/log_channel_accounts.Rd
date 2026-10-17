@@ -15,16 +15,19 @@ log_channel_accounts(events, record, channel_account = NULL)
 or \code{NULL} when it is not configured.}
 }
 \value{
-A character vector of usernames. With \code{channel_account}, it starts
-with that account and is one long when nobody else wrote a channel field.
-Without, it is empty when no event wrote one of those fields.
+A character vector of usernames. With \code{channel_account}, every
+spelling of that account the row's log carries, or the configured name
+when the log carries none; nobody else. Without, the authors of the
+channel fields, empty when no event wrote one of them.
 }
 \description{
 The account that holds the round's token, as the machine that runs the
-round configures it, followed by every other account that wrote a field
-only the channel is meant to write, \code{register_channel_fields()}, in the
-row's current life. Callers read the answer one way: longer than one, and
-the log cannot say which writes are the round's, so the row is held.
+round configures it, and nobody else; or, where it is not configured,
+every account that wrote a field only the channel is meant to write,
+\code{register_channel_fields()}, in the row's current life. Callers drop the
+channel's events by account, and read the answer one more way through
+\code{log_channel_unknown()}: without the configuration, two accounts writing
+those fields leave the log unable to say which writes are the round's.
 }
 \details{
 It has to be recognized by the account and not by the event. REDCap logs
@@ -37,16 +40,17 @@ The account is configured, decided on 2026-10-17. Recognized by what it
 writes alone, the channel is whoever wrote a channel field, and the import
 right is open to the referents: one who imports \code{owned_by} on a colleague's
 new row, before the round has written on it, would be the only "channel"
-of that row. Named by the configuration, the round's account answers first
-even on a row where it has not written yet, and that referent comes second,
-which makes the row ambiguous. A write of a channel field whose author is
-blank or missing names nobody, and with the account configured it counts
-among the others too, as a blank author of an intent field does for
-\code{log_change_authors()}.
-
-One consequence is worth knowing: if the account that holds the token
-changes, every row whose current life carries writes of the old account
-becomes ambiguous, and the round holds it.
+of that row. Named by the configuration, the channel is the round's
+account even on a row where it has not written yet, and \strong{a write of a
+channel field by any other account is ignored} (decided on 2026-10-17,
+replacing the ambiguity this function used to answer). Such a write no
+longer makes the row ambiguous: the log never forgets it, so an ambiguous
+row was held for ever, even one whose referent imported by mistake a CSV
+carrying the channel's columns; and with the account named there is
+nothing to guess, since the owner comes only from that account's writes of
+\code{owned_by}, \code{log_owner()}. A write of an intent field by another account
+stays a change of its author, \code{log_change_authors()}, the channel's
+columns beside it or not.
 
 The configured name is typed by hand on the machine, so it is compared
 without regard to case, and answered with the spelling the log carries

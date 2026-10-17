@@ -31,7 +31,7 @@ or \code{NULL} when it is not configured, for \code{log_channel_accounts()} and
 }
 \value{
 \code{TRUE} when the others wrote a revocation and nothing else; \code{FALSE}
-too when the owner is not known.
+too when the owner is not known, or the channel, \code{log_channel_unknown()}.
 }
 \description{
 The half of the revocation exception that the log answers, for

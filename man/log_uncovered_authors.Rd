@@ -81,7 +81,10 @@ make the owner approve the reactivation of their own request after a
 manager's free revocation.
 
 Unknown, \code{NA_character_}, when the owner of the stretch is not known, when
-two accounts write the channel's fields, or when an uncovered change has a
-blank author: the caller holds the row on all three.
+the channel is not known, \code{log_channel_unknown()}, or when an uncovered
+change has a blank author: the caller holds the row on all three. With the
+channel's account configured, another account's write of a field of the
+channel is ignored, and its write of an intent field is a change like any
+other.
 }
 \keyword{internal}
