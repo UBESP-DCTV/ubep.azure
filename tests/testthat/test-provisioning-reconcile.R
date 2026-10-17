@@ -4606,7 +4606,7 @@ giro_passaggio_anticipato <- function(registro = identity, ...) {
 }
 
 
-test_that("un passaggio che il campo mostra gia' si registra con due scritture", {
+test_that("un passaggio che il campo mostra gia' si registra con due scritture", { # nolint: line_length_linter.
   # eval
   esito <- giro_passaggio_anticipato()
 
@@ -4648,7 +4648,7 @@ test_that("un passaggio che non si registra lo dice nel record del giro", {
 })
 
 
-test_that("un sigillo che il log non puo' ricevere lo dice nel record del giro", {
+test_that("un sigillo che il log non puo' ricevere lo dice nel record del giro", { # nolint: line_length_linter.
   # eval
   # Bruno changed the role and imported the seal of the changed row; Anna
   # approved it, and the round carries it out on Bruno's rights. The seal it

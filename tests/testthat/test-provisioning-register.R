@@ -2253,7 +2253,7 @@ test_that("il sigillo creduto e' l'ultimo scritto dal canale", {
   expect_error(log_channel_seal(eventi, "1", NULL))
 })
 
-test_that("il canale configurato e' assente solo da un registro gia' sigillato", {
+test_that("il canale configurato e' assente solo da un registro gia' sigillato", { # nolint: line_length_linter.
   bruno <- "bruno.verdi@ubep.unipd.it"
   sigillato <- eventi_finti(
     list(username = bruno, details = "role_name = 'read only'"), applicata
