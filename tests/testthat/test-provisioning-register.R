@@ -1599,7 +1599,9 @@ test_that("una owned_by del canale scritta con altri campi non stabilisce il pro
       ),
       applicata
     )
-    expect_true(is.na(log_owner(eventi, "1", creatrice, canale)), info = details)
+    expect_true(
+      is.na(log_owner(eventi, "1", creatrice, canale)), info = details
+    )
   }
 })
 
