@@ -11,7 +11,7 @@ request from a new one.
 ## Usage
 
 ``` r
-report_executions(events, record)
+report_executions(events, record, channel_account = NULL)
 ```
 
 ## Arguments
@@ -26,6 +26,12 @@ report_executions(events, record)
 
   The record id.
 
+- channel_account:
+
+  The REDCap usernames that hold the register's token, one or more, or
+  `NULL` when they are not configured, for
+  [`log_channel_accounts()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.md).
+
 ## Value
 
 The stamps of the channel's seal writes, `"%Y-%m-%d %H:%M"` in Rome,
@@ -39,11 +45,15 @@ parameter. Measured on 2026-10-16 that `exportLogging` honors it; the
 filter stays, at no cost, because an instance that ignored it would hand
 back the whole log, where another row's execution would date this one.
 
-The author has to be the channel, which
+The author has to be the channel, the account
 [`log_channel_accounts()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.md)
-names without configuration. When two accounts write the channel's
-fields the log cannot say which of them executed the row, and the answer
-is unknown rather than a guess.
+names: the configured `channel_account`, or, without it, whoever wrote
+the channel's fields. With the account configured, a write of the seal
+by any other account executed nothing and is ignored, a referent's
+import included. Without it, when two accounts write those fields the
+log cannot say which of them executed the row,
+[`log_channel_unknown()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_unknown.md),
+and the answer is unknown rather than a guess.
 
 Only the row that stands now is read. The register reuses record ids:
 one made for a field test, deleted on 2026-09-01 with the rest and made

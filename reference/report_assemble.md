@@ -1,9 +1,15 @@
 # Put each row in the report it belongs to
 
-A row belongs to **whoever created it**, as the creation log says, and
-not to `requested_by`, which an import writes as it likes. The report
-goes to the same person the round asks to approve a change. A person
-asked for by two referents is in both reports, each with their own rows.
+A row belongs to **its owner**, as the log says, and not to
+`requested_by`, which an import writes as it likes: the creator, or the
+referent the round has since passed the row to by writing `owned_by`
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)).
+The column is still called `creator`, from before rows could pass. The
+owner is the one standing at the end of the month covered, which
+[`provisioning_report()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.md)
+settles before it gets here. The report goes to the same person the
+round asks to approve a change. A person asked for by two referents is
+in both reports, each with their own rows.
 
 ## Usage
 
@@ -57,7 +63,11 @@ and `non_giudicati` (a count); `it`, `NULL` when there is nothing for
 IT, otherwise a list of `senza_referente` (rows, with `motivo`),
 `non_giudicabili` (people, with `referente` and `motivo`) and
 `senza_data` (rows); and `senza_creatore`, how many rows have no
-referent to go to.
+referent to go to. Since rows can pass, that means without an
+established owner and not only without a creator; the name stays,
+because it is a column of `UbepRapporto_CL`, and a renamed column would
+keep the table's history under one name and the new records under
+another.
 
 ## Details
 
@@ -90,11 +100,13 @@ Three items, of which phase 1 fills two:
   was not checked.
 
 What has no referent to go to goes to IT, and to nobody else: a row
-whose creator the log does not name, or whose creator Entra holds
-disabled, or does not hold, or cannot say; a person whose account is
-disabled, missing, without a creation date or that cannot otherwise be
-judged; a row the log does not date. A disabled creator receives
-nothing.
+whose owner the log does not establish (no creation names it, or the log
+cannot say whom it belongs to,
+[`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)),
+or whose owner Entra holds disabled, or does not hold, or cannot say; a
+person whose account is disabled, missing, without a creation date or
+that cannot otherwise be judged; a row the log does not date. A disabled
+owner receives nothing.
 
 A referent whose people went to IT without being judged is told how
 many, in the report itself: the principle of the all-clear, which must

@@ -16,7 +16,9 @@ log_pending_authors(
   record,
   creator,
   fields = register_intent_fields(),
-  approvers = character()
+  approvers = character(),
+  channel_account = NULL,
+  current = NULL
 )
 ```
 
@@ -45,6 +47,18 @@ log_pending_authors(
 - approvers:
 
   The IT accounts whose approval counts on any row.
+
+- channel_account:
+
+  The REDCap usernames that hold the round's token, one or more, or
+  `NULL` when they are not configured, for
+  [`log_channel_accounts()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.md).
+
+- current:
+
+  The row as the round will leave it, a data frame of one row, or `NULL`
+  when there is no row in hand, for
+  [`log_change_authors()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_change_authors.md).
 
 ## Value
 

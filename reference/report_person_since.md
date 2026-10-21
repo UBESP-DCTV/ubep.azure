@@ -10,7 +10,7 @@ that person would count months of somebody else's.
 ## Usage
 
 ``` r
-report_person_since(events, record)
+report_person_since(events, record, channel_account = NULL)
 ```
 
 ## Arguments
@@ -24,6 +24,12 @@ report_person_since(events, record)
 - record:
 
   The record id.
+
+- channel_account:
+
+  The REDCap usernames that hold the register's token, one or more, or
+  `NULL` when they are not configured, for
+  [`log_channel_accounts()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.md).
 
 ## Value
 

@@ -14,3 +14,9 @@ register_readonly_fields()
 ## Value
 
 A character vector of field names.
+
+## Details
+
+`owned_by` is written by the channel alone, and its value is not
+believed as written: who owns a row is read from the event log
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)).

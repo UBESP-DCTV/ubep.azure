@@ -17,13 +17,13 @@
 ## Citation
 
 Lanera C, Papappicco C (2026). *ubep.azure: Ubep Utilities to Azure
-services*. R package version 0.20.1,
+services*. R package version 0.21.0,
 <https://ubesp-dctv.github.io/ubep.azure/>.
 
     @Manual{,
       title = {ubep.azure: Ubep Utilities to Azure services},
       author = {Corrado Lanera and Cinzia Anna Maria Papappicco},
       year = {2026},
-      note = {R package version 0.20.1},
+      note = {R package version 0.21.0},
       url = {https://ubesp-dctv.github.io/ubep.azure/},
     }

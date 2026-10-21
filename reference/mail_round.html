@@ -13,7 +13,7 @@ to keep aligned. The cost accepted in exchange is a duplicate, never a loss."></
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +61,8 @@ to keep aligned. The cost accepted in exchange is a duplicate, never a loss.</p>
 <span>  copy_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reply_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  identified <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  hosts <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  hosts <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  granted <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -97,7 +98,8 @@ writable – the round behaves as it did before this file existed.</p></dd>
 
 
 <dt id="arg-copy-to">copy_to<a class="anchor" aria-label="anchor" href="#arg-copy-to"></a></dt>
-<dd><p>Address in copy, on the outcome message only.</p></dd>
+<dd><p>Address in copy, on the outcome message only; and the one
+address the outcome goes to when the row has no established owner.</p></dd>
 
 
 <dt id="arg-reply-to">reply_to<a class="anchor" aria-label="anchor" href="#arg-reply-to"></a></dt>
@@ -107,9 +109,10 @@ mailer closure is what carries it to the transport.</p></dd>
 
 <dt id="arg-identified">identified<a class="anchor" aria-label="anchor" href="#arg-identified"></a></dt>
 <dd><p>What this round settled about each row, as a frame with
-<code>record_id</code> and the fields it settled: the identity; <code>creator</code>, who the
-creation log says made the row, where the outcome and the key go
-(<code><a href="mail_referent.html">mail_referent()</a></code>); <code>edited_by</code>, who changed a held row since
+<code>record_id</code> and the fields it settled: the identity; <code>owner</code>, who the
+log says the row belongs to, where the outcome and the key go
+(<code><a href="mail_referent.html">mail_referent()</a></code>); <code>passed</code>, whether the change applied this round
+handed the row over; <code>edited_by</code>, who changed a held row since
 it was applied, as the row's log says. <code>register</code> is the register as read,
 on purpose; this is how the message names what the round has just
 established rather than what the referent typed.</p></dd>
@@ -118,8 +121,15 @@ established rather than what the referent typed.</p></dd>
 <dt id="arg-hosts">hosts<a class="anchor" aria-label="anchor" href="#arg-hosts"></a></dt>
 <dd><p>Named character vector, instance name to host, as
 <code><a href="provisioning_reconcile.html">provisioning_reconcile()</a></code> receives it from the inventory. Only the
-welcome message reads it, to say where the row's instance opens; a row
-whose instance it does not name gets a welcome without that address.</p></dd>
+welcome and the access message read it, to say where the row's
+instance opens; a row whose instance it does not name gets its message
+without that address.</p></dd>
+
+
+<dt id="arg-granted">granted<a class="anchor" aria-label="anchor" href="#arg-granted"></a></dt>
+<dd><p>The <code>record_id</code>s of the rows whose right this round created
+and the read-back confirmed: each gets the access message
+(<code><a href="mail_access_message.html">mail_access_message()</a></code>).</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -137,9 +147,19 @@ can tell them apart from a message that will simply be retried. They are
 counted apart from the outcome messages for the same reason, and a welcome
 that did not leave holds no row back: holding it would not send the welcome
 again, it would only keep the outcome out of the register.</p>
-<p>The welcome goes to <code>contact_email</code>, the person. The outcome and the key go
-to the referent, <code><a href="mail_referent.html">mail_referent()</a></code>: the creator <code>identified</code> carries, and
-<code>requested_by</code> only for a row without one.</p>
+<p>The access message is the third case of the same asymmetry. It leaves for
+the rows in <code>granted</code>, whose right this round created and the read-back
+confirmed, and the right is there whether it leaves or not: the next round
+finds the row settled and does nothing, so nothing would send it again.
+Its failure goes out under <code>POSTA_ACCESSO_PERSA</code>, is counted apart in
+<code>accessi_recapitati</code> and <code>accessi_persi</code>, and holds no row back. It
+leaves after the welcome, so a person created and granted in the same
+round reads first that the account exists.</p>
+<p>The welcome and the access message go to <code>contact_email</code>, the person,
+with nobody in copy. The outcome and the key go
+to the referent, <code><a href="mail_referent.html">mail_referent()</a></code>: the owner <code>identified</code> carries. The
+outcome of a row without one goes to <code>copy_to</code> alone, with a line saying
+so; its key goes nowhere.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

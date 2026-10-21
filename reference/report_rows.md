@@ -1,4 +1,4 @@
-# The rows a month's report speaks about, with their creator and their date
+# The rows a month's report speaks about, with their owner and their date
 
 A row counts while it is an access: `request_status` is `active` and
 `outcome` is `applied`. The filter is on the request and not on the
@@ -9,7 +9,15 @@ own mail already.
 ## Usage
 
 ``` r
-report_rows(register, creators, executions, period, since = NULL, born = NULL)
+report_rows(
+  register,
+  creators,
+  executions,
+  period,
+  since = NULL,
+  born = NULL,
+  channel_known = FALSE
+)
 ```
 
 ## Arguments
@@ -20,9 +28,16 @@ report_rows(register, creators, executions, period, since = NULL, born = NULL)
 
 - creators:
 
-  Who created each row, as
+  Whom each row belongs to, in the register's order: its owner at the
+  end of the month covered, as
+  [`provisioning_report()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.md)
+  reads it with
+  [`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md),
+  which is the creator
   [`log_creators()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.md)
-  answers, in the register's order.
+  names when the round never passed the row on; `""` when that is not
+  established. The name and the `creator` column it fills predate the
+  owner, and stay.
 
 - executions:
 
@@ -48,6 +63,11 @@ report_rows(register, creators, executions, period, since = NULL, born = NULL)
   [`report_born()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_born.md)
   answers, in the register's order; `NULL` when unknown.
 
+- channel_known:
+
+  Whether the channel's account was configured when `executions` were
+  read: then no second account can blur the log.
+
 ## Value
 
 The kept rows of `register`, with `creator`, `attivata_il`, `nel_mese`,
@@ -63,9 +83,12 @@ to it: `attivata` when its first execution falls in the month,
 
 A row whose log was read and does not date it is kept with `senza_data`:
 it is applied and the log does not say since when, which is a question
-for IT. `data_motivo` says which of the two ways: `senza_sigillo`, no
-seal written by the channel; `log_ambiguo`, the channel's fields written
-by more than one account, so that which one executed the row is unknown.
-The two send IT to look for different things. A row whose log could not
-be read is left out, since it cannot be judged on a reading that did not
-happen; the caller sends nothing on such a day.
+for IT. `data_motivo` says which way: `senza_sigillo`, no seal written
+by the channel; `log_ambiguo`, without the channel's account configured,
+the channel's fields written by more than one account, so that which one
+executed the row is unknown; `orario_illeggibile`, with the account
+configured, a seal of the channel whose time does not read, the only way
+an execution leaves the row undated then. They send IT to look for
+different things. A row whose log could not be read is left out, since
+it cannot be judged on a reading that did not happen; the caller sends
+nothing on such a day.

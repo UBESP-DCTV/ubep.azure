@@ -17,7 +17,7 @@ is how the report tells a modified request from a new one."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,7 @@ is how the report tells a modified request from a new one.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">report_executions</span><span class="op">(</span><span class="va">events</span>, <span class="va">record</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">report_executions</span><span class="op">(</span><span class="va">events</span>, <span class="va">record</span>, channel_account <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -70,6 +70,12 @@ is how the report tells a modified request from a new one.</p>
 
 <dt id="arg-record">record<a class="anchor" aria-label="anchor" href="#arg-record"></a></dt>
 <dd><p>The record id.</p></dd>
+
+
+<dt id="arg-channel-account">channel_account<a class="anchor" aria-label="anchor" href="#arg-channel-account"></a></dt>
+<dd><p>The REDCap usernames that hold the register's
+token, one or more, or <code>NULL</code> when they are not configured, for
+<code><a href="log_channel_accounts.html">log_channel_accounts()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -84,10 +90,13 @@ when the log cannot say.</p>
 parameter. Measured on 2026-10-16 that <code>exportLogging</code> honors it; the
 filter stays, at no cost, because an instance that ignored it would hand
 back the whole log, where another row's execution would date this one.</p>
-<p>The author has to be the channel, which <code><a href="log_channel_accounts.html">log_channel_accounts()</a></code> names
-without configuration. When two accounts write the channel's fields the log
-cannot say which of them executed the row, and the answer is unknown rather
-than a guess.</p>
+<p>The author has to be the channel, the account <code><a href="log_channel_accounts.html">log_channel_accounts()</a></code>
+names: the configured <code>channel_account</code>, or, without it, whoever wrote the
+channel's fields. With the account configured, a write of the seal by any
+other account executed nothing and is ignored, a referent's import
+included. Without it, when two accounts write those fields the log cannot
+say which of them executed the row, <code><a href="log_channel_unknown.html">log_channel_unknown()</a></code>, and the
+answer is unknown rather than a guess.</p>
 <p>Only the row that stands now is read. The register reuses record ids: one
 made for a field test, deleted on 2026-09-01 with the rest and made again
 as a real request, has both lives in its log, and the old one's seal would

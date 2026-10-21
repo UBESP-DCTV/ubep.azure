@@ -19,7 +19,8 @@ provisioning_report(
   month = NULL,
   mailer = NULL,
   redirect_to = NULL,
-  copy_to = NULL
+  copy_to = NULL,
+  channel_account = NULL
 )
 ```
 
@@ -62,6 +63,17 @@ provisioning_report(
 
   The address of IT: in copy on the referents' reports, and the
   recipient of the report to IT.
+
+- channel_account:
+
+  The REDCap username that holds the register's token, the account the
+  round writes with, or more than one while the token changes hands.
+  With it, only their writes of `owned_by` pass a row to another
+  referent and only their seals date a row, and what any other account
+  wrote in the channel's fields is ignored; with `NULL`, the default,
+  every row belongs to its creator, and the channel is whoever wrote its
+  fields. The runner reads it from `UBEP_CANALE_UTENTE`, a list
+  separated by commas, which it requires.
 
 ## Value
 
@@ -111,5 +123,19 @@ run with a forced month writes nothing at all.
 The report to IT goes to `copy_to`, the address IT is in copy at on
 every outcome, under the name
 [`report_it_key()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_it_key.md);
-the referents' reports go to the creator's account, with `copy_to` in
+the referents' reports go to the owner's account, with `copy_to` in
 copy.
+
+A row goes to its owner as the month covered ended, at midnight in Rome
+between its last day and the next month's first, and not to its owner on
+the day of the run:
+[`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)
+reads the row's log cut at that moment, so a write after it, of
+`owned_by` or of any other field of the channel, changes nothing. The
+month's reports leave over several days, until each referent has had
+theirs, and who is due must not change from one attempt to the next
+(decided on 2026-10-17): read on the day, a row passed on the 3rd would
+move from one referent's report to the other referent's between two
+attempts, after one of the two had left. Without `channel_account`,
+`NULL`, no write of `owned_by` is believed and every row stays with its
+creator.

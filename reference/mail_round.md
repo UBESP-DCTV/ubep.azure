@@ -19,7 +19,8 @@ mail_round(
   copy_to = NULL,
   reply_to = NULL,
   identified = NULL,
-  hosts = NULL
+  hosts = NULL,
+  granted = character()
 )
 ```
 
@@ -54,7 +55,8 @@ mail_round(
 
 - copy_to:
 
-  Address in copy, on the outcome message only.
+  Address in copy, on the outcome message only; and the one address the
+  outcome goes to when the row has no established owner.
 
 - reply_to:
 
@@ -65,9 +67,10 @@ mail_round(
 - identified:
 
   What this round settled about each row, as a frame with `record_id`
-  and the fields it settled: the identity; `creator`, who the creation
-  log says made the row, where the outcome and the key go
+  and the fields it settled: the identity; `owner`, who the log says the
+  row belongs to, where the outcome and the key go
   ([`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md));
+  `passed`, whether the change applied this round handed the row over;
   `edited_by`, who changed a held row since it was applied, as the row's
   log says. `register` is the register as read, on purpose; this is how
   the message names what the round has just established rather than what
@@ -77,9 +80,15 @@ mail_round(
 
   Named character vector, instance name to host, as
   [`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md)
-  receives it from the inventory. Only the welcome message reads it, to
-  say where the row's instance opens; a row whose instance it does not
-  name gets a welcome without that address.
+  receives it from the inventory. Only the welcome and the access
+  message read it, to say where the row's instance opens; a row whose
+  instance it does not name gets its message without that address.
+
+- granted:
+
+  The `record_id`s of the rows whose right this round created and the
+  read-back confirmed: each gets the access message
+  ([`mail_access_message()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_message.md)).
 
 ## Value
 
@@ -98,8 +107,17 @@ outcome messages for the same reason, and a welcome that did not leave
 holds no row back: holding it would not send the welcome again, it would
 only keep the outcome out of the register.
 
-The welcome goes to `contact_email`, the person. The outcome and the key
-go to the referent,
+The access message is the third case of the same asymmetry. It leaves
+for the rows in `granted`, whose right this round created and the
+read-back confirmed, and the right is there whether it leaves or not:
+the next round finds the row settled and does nothing, so nothing would
+send it again. Its failure goes out under `POSTA_ACCESSO_PERSA`, is
+counted apart in `accessi_recapitati` and `accessi_persi`, and holds no
+row back. It leaves after the welcome, so a person created and granted
+in the same round reads first that the account exists.
+
+The welcome and the access message go to `contact_email`, the person,
+with nobody in copy. The outcome and the key go to the referent,
 [`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md):
-the creator `identified` carries, and `requested_by` only for a row
-without one.
+the owner `identified` carries. The outcome of a row without one goes to
+`copy_to` alone, with a line saying so; its key goes nowhere.

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,13 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">seal_approved</span><span class="op">(</span><span class="va">register</span>, <span class="va">events</span>, <span class="va">creators</span>, approvers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">seal_approved</span><span class="op">(</span></span>
+<span>  <span class="va">register</span>,</span>
+<span>  <span class="va">events</span>,</span>
+<span>  <span class="va">creators</span>,</span>
+<span>  approvers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  channel_account <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -59,12 +65,18 @@
 
 <dt id="arg-creators">creators<a class="anchor" aria-label="anchor" href="#arg-creators"></a></dt>
 <dd><p>Who created each row, as <code><a href="log_creators.html">log_creators()</a></code> answers, in the
-order of <code>register</code>. <code>""</code> approves nothing.</p></dd>
+order of <code>register</code>; the owner is read from the log with them.</p></dd>
 
 
 <dt id="arg-approvers">approvers<a class="anchor" aria-label="anchor" href="#arg-approvers"></a></dt>
 <dd><p>The IT accounts whose approval counts on any row, as REDCap
 usernames.</p></dd>
+
+
+<dt id="arg-channel-account">channel_account<a class="anchor" aria-label="anchor" href="#arg-channel-account"></a></dt>
+<dd><p>The REDCap usernames that hold the round's token,
+one or more, or <code>NULL</code> when they are not configured, for
+<code><a href="log_channel_accounts.html">log_channel_accounts()</a></code> and <code><a href="log_owner.html">log_owner()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -76,30 +88,32 @@ usernames.</p></dd>
     <p>The approval has to carry <strong>this</strong> row's seal. A value that is some other
 seal approves some other version of the row, and accepting it would make one
 approval stand for every change that came after it.</p>
-<p>It has to come from <strong>whoever created the row</strong>. Not merely from
-somebody other than the author of the change: the request is the creator's,
-the scope gate checks the creator's rights on the project every round and
-nobody else's, so an approval from a third referent would grant on the word
-of somebody whose rights on that project nobody has looked at. The seal
-detects that the row moved; only the log can say who approved it and who
-created the row, because it names whoever was authenticated rather than a
-value somebody typed – which is the same reason <code>requested_by</code> cannot be
-trusted alone.</p>
+<p>It has to come from <strong>whoever owns the row</strong>, <code><a href="log_owner.html">log_owner()</a></code>: its creator
+until the round passes it on, then the last referent whose change was
+approved and carried out. Not merely from somebody other than the author of
+the change: the request is the owner's, so an approval from a third
+referent would grant on the word of somebody the row does not answer to.
+The seal detects that the row moved; only the log can say who approved it
+and who owns the row, because it names whoever was authenticated rather
+than a value somebody typed – which is the same reason neither
+<code>requested_by</code> nor <code>owned_by</code> can be trusted alone. An owner the log cannot
+establish approves nothing.</p>
 <p>And it has to be <strong>newer than what it approves</strong>: above the round's last
-execution and above every change somebody other than the creator made, as
+execution and above every change somebody other than the owner made, as
 <code><a href="log_approval_stands.html">log_approval_stands()</a></code> reads the log. The value alone cannot say so.
 <code>approved_seal</code> is never blanked, so an approval the round has already
 carried out would approve again any later change that brings the row back
 to it; and the seal is a public hash of the intent fields, so it can be
 pasted before the change it names exists.</p>
-<p><strong>IT approves as the creator does</strong>, decided on 2026-10-15: the accounts
-named in <code>approvers</code> stand where the creator stands, under the same three
-conditions. It is what keeps a request whose creator has left UBEP from
+<p><strong>IT approves as the owner does</strong>, decided on 2026-10-15: the accounts
+named in <code>approvers</code> stand where the owner stands, under the same three
+conditions. It is what keeps a request whose owner has left UBEP from
 waiting for ever, without deleting the row and losing who filed it. The
 list lives on the machine that runs the round and never in this
-repository. One limit is worth knowing: the scope gate still asks the
-creator's rights on the project, so no approval, from IT or anybody else,
-carries a row whose creator no longer manages the project.</p>
+repository. Whoever approves has no rights checked: the scope gate asks
+the rights of whoever wrote the change the round carries out, so an
+approval carries a manager's change on a row whose owner no longer manages
+the project, and never a change by somebody who does not.</p>
 <p>An unreadable log is not this function's to decide. It answers about the
 events and the creators it was handed, and a caller holding neither gets
 <code>FALSE</code> on every changed row: the row waits, which is the direction that

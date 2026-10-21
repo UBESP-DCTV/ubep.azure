@@ -75,8 +75,9 @@ lavorazioni lascia un record in un workspace di Log Analytics,
 attraverso un punto di raccolta e una regola di raccolta. Le due
 lavorazioni **non condividono la tabella**, quindi non condividono
 nessuna regola: una regola del canale non può leggere un record
-dell’osservatore, e viceversa. Le regole attive sono **undici** — sei
-dell’osservatore, cinque del canale.
+dell’osservatore, e viceversa. Le regole attive sono **undici**: sei
+dell’osservatore, cinque del canale. Dopo il rilascio della 0.21.0, al
+passo 5 (§5), saranno dodici: la sesta del canale è sugli accessi persi.
 
          referenti                              chi mantiene
              |                                        |
@@ -111,7 +112,7 @@ dell’osservatore, cinque del canale.
            v                                  |
       +-----------------------------+         |
       | telemetria: due tabelle     |<--------+
-      | + undici regole d'allarme   |
+      | + regole d'allarme          |
       +-----------------------------+
 
 **La macchina del perimetro ospita due lavorazioni, non una**, ed è il
@@ -142,9 +143,11 @@ riga contro l’anagrafica, e **crea** l’utenza dove manca; (4) scrive
 identità e username nel registro, per una porta che non prende altro;
 (5) chiede a ogni istanza il cancello sull’ambito e confronta desiderato
 e reale per le sole coppie di cui qualcuno ha chiesto; (6) applica; (7)
-rilegge; (8) **manda la posta**; (9) scrive gli esiti. Le due scritture
-nel registro sono due porte distinte e restano tali: la prima porta i
-verbali del verdetto, la seconda l’esito.
+rilegge; (8) **manda la posta**, compresa la mail che dice alla persona
+che ora ha l’accesso; (9) scrive l’esito, poi il proprietario della riga
+(`owned_by`), poi il sigillo. Le scritture nel registro passano da porte
+distinte e restano tali (§4): la prima porta i verbali del verdetto, le
+altre l’esito, il proprietario e il sigillo.
 
 **«Manda prima, scrivi dopo» è un contratto, non un ordine di comodo.**
 Una riga entra nel registro **solo se la sua notizia è partita**: se
@@ -154,24 +157,52 @@ nessun secondo stato, niente da tenere allineato. Il costo accettato in
 cambio è che una notifica possa arrivare **due volte**, mai che si
 perda.
 
-**La posta del giro va a chi ha creato la riga.** Il benvenuto va alla
-persona, a `contact_email`. L’esito, qualunque sia, e la chiave di un
-account appena nato vanno al referente, e il referente è il **creatore**
-che il giro legge dal registro delle creazioni
-([`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md)),
-lo stesso che il cancello dell’ambito giudica: non `requested_by`. Dal
-modulo i due coincidono, perché `@USERNAME` riempie il campo; il *Data
-Import Tool* lo scrive com’è nel CSV (misurato il 2026-09-02 e di nuovo
-il 2026-10-16). Fino alla 0.20.0 un import con il campo vuoto perdeva la
-chiave (`POSTA_CREDENZIALE_PERSA`), e uno con un altro indirizzo mandava
-lì chiave ed esiti. Il giro non riscrive `requested_by`: il creatore
-viaggia in memoria, come per il cancello. `requested_by` resta il
-ripiego per una riga senza creatore. La chiave non ci arriva, perché una
-riga il cui creatore il log non nomina si ferma su
-`TRASPORTO_AUTORE_NON_LEGGIBILE` e nessuno nasce; un esito sì, in un
-giro che non ha un creatore da dare: anagrafica non letta, log delle
-creazioni illeggibile o che non nomina la riga, nessuna riga da
-giudicare.
+**La posta del giro va al proprietario della riga.** Il benvenuto e la
+mail di accesso vanno alla persona, a `contact_email`. L’esito,
+qualunque sia, e la chiave di un account appena nato vanno al referente,
+e il referente è il **proprietario** della riga, che il giro legge dal
+registro degli eventi
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md),
+§4): il creatore finché la riga non passa a un altro. Non `requested_by`
+e non il valore di `owned_by`: dal form `@USERNAME` riempie il primo, ma
+il *Data Import Tool* li scrive com’è nel CSV (`requested_by` misurato
+il 2026-09-02 e di nuovo il 2026-10-16), e il giro non li riscrive; il
+proprietario viaggia in memoria, come per il cancello. Fino alla 0.20.0
+un import con il campo vuoto perdeva la chiave
+(`POSTA_CREDENZIALE_PERSA`), e uno con un altro indirizzo mandava lì
+chiave ed esiti; dalla 0.20.1 la posta andava al creatore, dalla 0.21.0
+va al proprietario. Il cancello dell’ambito legge lo stesso
+proprietario, ma lo giudica solo quando nessuno ha cambiato la riga;
+altrimenti giudica chi ha scritto ciò che il giro esegue.
+
+**Dalla 0.21.0 il ripiego su `requested_by` non c’è più.** Una riga può
+cambiare mano, e il ripiego avrebbe scritto a un ex proprietario, la
+sola persona che non deve più sentirne parlare. Quando il proprietario
+non si stabilisce l’esito va **solo a IT**, all’indirizzo di
+`UBEP_POSTA_COPIA`, con la frase «referente della riga non stabilito».
+Succede in un giro che non ha un proprietario da dare: anagrafica non
+letta, log delle creazioni o log dei proprietari illeggibile, nessuna
+riga da giudicare, un log che non nomina la riga, una scrittura di
+`owned_by` senza autore sopra quella del canale (§4). La chiave non va a
+nessuno che non sia il proprietario stabilito: una riga il cui
+proprietario il log non nomina si ferma su
+`TRASPORTO_AUTORE_NON_LEGGIBILE` e nessuno nasce. Per la stessa ragione,
+con la posta accesa `UBEP_POSTA_COPIA` è obbligatoria (§8): senza IT in
+copia l’esito di quelle righe non parte.
+
+**Il benvenuto cambia due frasi con la 0.21.0.** La prima non promette
+più l’accesso da solo: «Quando l’accesso al progetto sara’ pronto
+riceverai un’altra mail, di norma entro quattro ore.», perché quella
+mail ora esiste (§4, «La mail di accesso»). Come prima, la frase c’è
+solo se l’indirizzo dell’istanza è noto: la promessa riguarda
+quell’istanza, e senza indirizzo sarebbe una promessa su un posto che il
+messaggio non nomina. La seconda manda le domande al proprietario prima
+che a IT: «Per qualunque problema scrivi prima a , che ha chiesto il tuo
+account e risponde del tuo primo accesso. Se non riesci a raggiungerlo,
+rispondi a questo messaggio: arriva a IT.» Senza proprietario stabilito
+il nome non c’è: «Per qualunque problema scrivi prima al referente che
+ha chiesto il tuo account, che risponde del tuo primo accesso.» e il
+resto uguale.
 
 **La posta è spenta di default**, e la ragione non è intuitiva: con
 «manda prima, scrivi dopo» una posta semplicemente spenta bloccherebbe
@@ -404,12 +435,60 @@ chi compila non può. Senza quella marca un referente potrebbe digitare
 «applicata» nel campo d’esito, e il registro porterebbe un successo che
 nessuno ha prodotto.
 
-### Il giro scrive da tre porte, e restano separate
+**`owned_by` lo scrive solo il canale, e il suo valore non si crede.**
+Dice di chi è la riga, e sul form si vede (`@READONLY`, etichetta *Row
+owner*) perché il referente sappia di chi è la riga senza chiederlo. Ma
+la marca governa il form, non l’API, e il *Data Import Tool* è aperto ai
+referenti: chiunque può importare un valore in `owned_by`, come in
+`requested_by`. Il proprietario è quindi il valore dell’**ultima
+scrittura di `owned_by` fatta dall’account del canale** (quale account
+sia lo dice il paragrafo «L’utenza del canale si configura», più sotto
+in questa sezione), letta nel registro degli eventi
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)),
+oppure il creatore
+([`log_creators()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.md))
+se il canale non ne ha mai scritta una. Il campo vuoto, come nelle righe
+di prima della 0.21.0, vuol dire «di chi l’ha creata». Si crede al log e
+non ai campi, per la ragione per cui oggi si crede al log per il
+creatore.
+
+Il proprietario si legge con **una sola chiamata per giro**,
+`logtype = "record"`, senza finestra di tempo: un passaggio può essere
+più vecchio di qualunque finestra, e la riga tornerebbe al suo creatore.
+Il costo è che quel log contiene creazioni, modifiche e cancellazioni di
+tutto il registro, e **cresce con il traffico**: più richieste, più
+modifiche, più risposta a ogni giro. Si chiede solo se una riga è da
+giudicare o è cambiata dopo l’applicazione, e solo dopo il log delle
+creazioni, da cui il proprietario ripiega; ma basta una riga attiva da
+giudicare, quindi in pratica a ogni giro.
+
+### Il giro scrive da quattro porte, e restano separate
 
 La prima porta deposita **identità e username** appena la risoluzione è
 fatta, e non prende altro. La seconda deposita **l’esito**, e avviene
 dopo l’invio della notifica. In mezzo c’è la posta. La terza deposita
-**il sigillo**, per ultima.
+**il proprietario**, `owned_by`
+([`register_owner_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_owner_import.md),
+che non prende altro campo). La quarta deposita **il sigillo**, per
+ultima.
+
+**`owned_by` va prima del sigillo, e l’ordine è ciò che regge il
+meccanismo.** Il proprietario di un tratto della vita della riga si
+legge sotto il sigillo che lo apre: l’approvazione e le modifiche di
+quel tratto si giudicano con chi era proprietario allora. Se `owned_by`
+stesse sopra il sigillo dello stesso giro, il tratto che segue vedrebbe
+ancora il vecchio proprietario. Il campo si scrive ogni volta che il
+proprietario è stabilito e il campo dice altro: alla prima esecuzione
+(il creatore), a tutte le righe di prima della 0.21.0 al primo giro dopo
+il rilascio, a ogni passaggio. Si scrive anche in un giro simulato, come
+l’identità, dove nessuno passa. Un passaggio non scritto si perde: il
+giro dopo legge dal log il vecchio proprietario e la riga chiede le
+approvazioni a lui. Il corpo rifiutato va negli `errori` del record, ed
+è lì che IT lo trova; l’esito è già partito, e il nuovo proprietario ha
+già letto che la riga è sua. Per i casi in cui un passaggio o un sigillo
+non entra nel log c’è un codice a parte (più sotto, «Tre codici del
+proprietario e del sigillo»). Senza l’account del canale configurato la
+porta non viene chiamata.
 
 Il sigillo ha una porta sua e non è una colonna dell’esito, e la ragione
 è che il corpo dell’esito si scrive a ogni esito: una colonna del
@@ -445,63 +524,141 @@ ha applicato: dodici caratteri sui campi di intento, e su nessun altro.
 Un sigillo che al giro dopo non corrisponde significa «modificata dopo
 l’applicazione».
 
-**Chi può cambiare una riga, e chi la sblocca.** Una richiesta è di chi
-l’ha creata, e la regola, decisa il 2026-10-14, segue da lì:
+**Il sigillo con cui si confronta la riga viene dal log, come il
+proprietario** (deciso il 2026-10-17). Con l’utenza del canale
+configurata il giro non confronta la riga con il campo `applied_seal`,
+ma con l’ultimo `applied_seal` che il canale ha scritto nella vita
+attuale della riga, letto dal log dei proprietari che il giro chiede
+comunque
+([`log_channel_seal()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_seal.md)).
+Il campo si scrive per import come ogni altro: chi cambiasse la riga di
+un collega importando anche il sigillo della riga cambiata, che è un
+hash pubblico, la farebbe sembrare intatta, e la modifica si eseguirebbe
+con i diritti del proprietario senza approvazione. Una riga che il
+canale non ha mai sigillato è una riga mai eseguita, qualunque cosa
+porti il campo. Il campo riprende il sigillo del canale alla prossima
+esecuzione della riga; una riga trattenuta lo lascia com’è, perché un
+sigillo riscritto lì dal canale finirebbe nel log come un’esecuzione in
+più, sopra la modifica per cui la riga è ferma. Senza l’utenza, o quando
+il log dei proprietari non si legge, si confronta il campo come prima;
+nel secondo caso nessuna riga ha un proprietario, e nessuna si esegue.
 
-- se la modifica l’ha fatta **solo il creatore**, il giro la esegue come
-  qualunque altra riga e la risigilla, senza chiedere niente a nessuno;
+**Di chi è una riga, e chi la sblocca.** Una richiesta è del suo
+**proprietario**. All’inizio è chi l’ha creata; da quando passa
+all’ultimo (deciso il 2026-10-16), è l’autore dell’ultima modifica
+approvata ed eseguita, IT compresa: se un account di IT modifica e la
+modifica viene approvata ed eseguita, la riga passa a IT. Approvare la
+modifica di un collega vuol dire cedergli la riga. La regola per le
+modifiche altrui, decisa il 2026-10-14 per il creatore, vale ora per il
+proprietario:
+
+- se la modifica l’ha fatta **solo il proprietario**, il giro la esegue
+  come qualunque altra riga e la risigilla, senza chiedere niente a
+  nessuno;
 - se nella modifica ha messo mano **qualcun altro**, la riga prende
   l’esito `held` e si ferma dove si ferma una revocata, prima che il
   piano si formi, quindi **nessuna istanza viene interrogata**. Resta
-  ferma finché il creatore non incolla il sigillo corrente in
+  ferma finché il proprietario non incolla il sigillo corrente in
   `approved_seal`; l’approvazione di chiunque altro, compreso chi ha
-  fatto la modifica, non vale. Una modifica successiva del creatore non
-  sblocca la riga: non dice che ha visto quella dell’altro, e
+  fatto la modifica, non vale. Una modifica successiva del proprietario
+  non sblocca la riga: non dice che ha visto quella dell’altro, e
   l’approvazione è l’atto che lo dice.
+
+**La riga passa all’ultimo.** Lo decide il giro che esegue, una volta,
+dopo che il cancello ha lasciato passare la modifica
+([`log_next_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_next_owner.md)):
+la riga passa al più recente fra gli autori che contano di quella
+esecuzione. Passa tutta: il cancello sui diritti, l’approvazione delle
+modifiche future, esito e chiave, il rapporto mensile. Ogni modifica
+approvata ed eseguita fa passare la riga, anche la sola correzione di un
+indirizzo. Non c’è una mail apposita: l’esito dell’esecuzione che
+trasferisce va al nuovo proprietario, con IT in copia, e dice «Da questa
+modifica la riga è tua». Il vecchio proprietario lo sa perché ha
+approvato; se ha approvato IT al suo posto, di solito il vecchio non c’è
+più. Nessuna riga si cancella, in nessun caso: «cancella e ricrea» non è
+una via per cambiare proprietario.
+
+**La revoca non sposta la riga, libera o approvata.** Si giudica l’atto
+e non il percorso: chi ha scritto solo `request_status = revoked` non
+diventa proprietario, anche quando il proprietario ha approvato la
+revoca, e anche quando la versione eseguita porta pure la modifica di un
+altro. In quel caso la riga passa al più recente fra gli altri autori
+che contano, e resta al proprietario quando restano solo revoche. Così
+il proprietario che approva per scrupolo una revoca conserva la
+possibilità di riattivare da solo. Una modifica scoperta (più sotto) non
+è mai una revoca, qualunque cosa il suo autore abbia scritto dopo.
+
+**Più autori dall’ultima esecuzione: contano le scritture rimaste nella
+riga** (scelta fra tre il 2026-10-17). Per ogni campo di intento il cui
+valore attuale differisce da quello eseguito, l’autore che conta è chi
+l’ha scritto per ultimo; una scrittura poi sovrascritta non conta, e un
+campo riportato al valore eseguito non è una modifica. In una riga mai
+eseguita non c’è un valore con cui confrontare e conta ogni campo
+scritto, anche se poi svuotato, perché un campo vuoto decide che cosa si
+concede (un accesso senza gruppo, senza scadenza). Il cancello giudica i
+diritti di **tutti** questi autori, e il proprietario nuovo è il più
+recente di loro. La regola di fondo è quella di sempre: chi ha scritto
+ciò che si esegue ha *Full Access* e potrebbe farlo a mano. I diritti di
+chi approva non si controllano, perché approvare non è scrivere e non
+aggiunge potere alla modifica; è il caso per cui serve il passaggio, un
+proprietario che ha perso i diritti e cede la riga.
+
+**La via d’uscita da una scrittura di chi non ha diritti.** Il
+proprietario riscrive quel campo, e l’altro smette di esserne l’autore.
+Va **cambiato il valore e poi rimesso**: REDCap non registra una
+scrittura che non cambia il valore, quindi riscrivere lo stesso valore
+lascerebbe l’altro come autore. Senza questa via, una riga toccata per
+errore da un referente senza diritti e mai eseguita resterebbe ferma per
+sempre, perché non si cancella niente. Vale anche per una scrittura
+fatta sotto il sigillo mentre un giro girava (più sotto, il tratto
+scoperto).
 
 **Anche prima dell’esecuzione.** Una riga che il giro non ha ancora
 applicato, appena depositata o rimasta in coda per un errore di
 trasporto o un dato da correggere, non ha un sigillo da confrontare, ma
-è del suo creatore lo stesso: cambiata da un altro, il giro la
-eseguirebbe con i diritti del creatore, che sono quelli che il cancello
-giudica, senza chiedergli niente. Per questo il giro legge il log anche
-di ogni riga non ancora applicata su cui potrebbe agire (il cancello
-dell’identità l’ha lasciata passare, o aspetta di essere creata, e il
-creatore è noto), e la regola è la stessa. Cambia una cosa sola: su una
-riga sigillata è il sigillo a dire che la riga è cambiata, quindi un log
-che non nomina nessuno la ferma; su una riga mai applicata un log che
-non nomina nessuno dice che nessuno l’ha cambiata. Il costo è una
-chiamata per ogni riga in coda, a ogni giro in cui resta in coda.
-Riportare i campi ai valori di prima non sblocca una riga mai applicata,
-perché la modifica dell’altro resta nel log: arriva il sigillo della
-versione ripristinata, e il creatore lo incolla.
+è del suo proprietario lo stesso: cambiata da un altro, il giro la
+eseguirebbe senza chiedere niente a chi ne risponde. Per questo il giro
+legge il log anche di ogni riga non ancora applicata su cui potrebbe
+agire (il cancello dell’identità l’ha lasciata passare, o aspetta di
+essere creata, e il proprietario è noto), e la regola è la stessa.
+Cambia una cosa sola: su una riga sigillata è il sigillo a dire che la
+riga è cambiata, quindi un log che non nomina nessuno la ferma; su una
+riga mai applicata un log che non nomina nessuno dice che nessuno l’ha
+cambiata. Il costo è una chiamata per ogni riga in coda, a ogni giro in
+cui resta in coda. Riportare i campi ai valori di prima non sblocca una
+riga mai applicata, perché la modifica dell’altro resta nel log: arriva
+il sigillo della versione ripristinata, e il proprietario lo incolla.
 
-Il creatore è quello del registro delle creazioni
+Il proprietario si legge dal registro degli eventi, come il creatore da
+cui parte
 ([`log_creators()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.md),
-con `logtype = "record_add"`), non `requested_by`: è la stessa utenza
-che il cancello dell’ambito giudica a ogni giro. Per questo chi approva
-non ha bisogno di un controllo dei diritti suo: l’unico referente che
-può approvare è anche l’unico i cui diritti sul progetto il giro
-controlla comunque.
+con `logtype = "record_add"`, non `requested_by`): è l’utenza che il
+cancello dell’ambito giudica quando nessuno ha cambiato la riga. Chi
+approva non ha bisogno di un controllo dei diritti suo, per la ragione
+detta sopra: il cancello giudica gli autori che contano, non chi
+approva.
 
-**IT approva come il creatore**, deciso il 2026-10-15. Le utenze
+**IT approva come il proprietario**, deciso il 2026-10-15. Le utenze
 elencate in `UBEP_APPROVATORI_IT` sulla macchina (nomi utente REDCap
-separati da virgole) stanno dove sta il creatore, alle stesse tre
-condizioni. Serve alla richiesta il cui creatore ha lasciato UBEP: non
-resta ferma per sempre, e non bisogna cancellare la riga e perdere chi
-l’aveva depositata. L’elenco non sta nel repository, che è pubblico;
-senza la variabile approva solo il creatore. Si confronta senza badare
-alle maiuscole, perché è scritto a mano sulla macchina, e
+separati da virgole) stanno dove sta il proprietario, alle stesse tre
+condizioni. Serve alla richiesta il cui proprietario ha lasciato UBEP:
+non resta ferma per sempre, e non bisogna cancellare la riga e perdere
+chi l’aveva depositata. L’elenco non sta nel repository, che è pubblico;
+senza la variabile approva solo il proprietario. Si confronta senza
+badare alle maiuscole, perché è scritto a mano sulla macchina, e
 un’approvazione di IT copre anche, sotto l’esecuzione che ha prodotto,
-la modifica che ha approvato, come quella del creatore. Un limite da
-sapere: il cancello dell’ambito continua a chiedere i diritti del
-creatore, quindi nessuna approvazione, nemmeno di IT, fa passare la riga
-di un creatore che non gestisce più il progetto.
+la modifica che ha approvato, come quella del proprietario. Un limite da
+sapere: il cancello dell’ambito giudica gli autori che contano, e il
+proprietario solo quando nessuno ha cambiato la riga. Una riga lasciata
+com’è da un proprietario che non gestisce più il progetto si ferma al
+cancello a ogni giro, anche con IT che approva; la modifica di un
+referente che ha i diritti, approvata da IT, passa, e fa passare la riga
+a lui.
 
 La regola sta in un punto solo,
 [`change_needs_approval()`](https://ubesp-dctv.github.io/ubep.azure/reference/change_needs_approval.md),
 e ha **una sola eccezione: la revoca**, decisa il 2026-10-15. La revoca
-della richiesta di un altro non aspetta il creatore quando chiunque
+della richiesta di un altro non aspetta il proprietario quando chiunque
 altro vi abbia messo mano ha *User Rights* con *Full Access* sul
 progetto: togliere un accesso non concede niente, e chi gestisce gli
 utenti del progetto potrebbe farlo a mano, che è la stessa regola del
@@ -512,42 +669,80 @@ e nient’altro. Una revoca che sposta anche il ruolo, la persona o il
 progetto è una modifica come le altre. E vale solo per una riga con una
 persona a cui togliere l’accesso: una riga revocata la cui persona il
 tenant non ha più si chiude prima di interrogare le istanze, nessuno ne
-leggerebbe i diritti, e aspetta il creatore come prima.
+leggerebbe i diritti, e aspetta il proprietario come prima.
 
 I diritti li dice l’istanza, e il giro li ha solo dopo averla
 interrogata. Quindi una revoca di un altro non si ferma prima del piano
 come le altre righe trattenute: resta in sospeso fino al cancello, che
 chiede i diritti di tutti quelli che l’hanno toccata
 ([`scope_withdrawal()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_withdrawal.md)).
-Se li hanno, la revoca va avanti e i diritti del creatore non contano, a
-meno che non abbia messo mano anche lui; se a uno manca, la riga torna
-alla regola comune e prende `held`, con lo stesso messaggio; se un
-permesso non si legge, prende `TRASPORTO_PERMESSO_NON_LEGGIBILE` come
-sul cancello ordinario.
+Se li hanno, la revoca va avanti e i diritti del proprietario non
+contano, a meno che non abbia messo mano anche lui; se a uno manca, la
+riga torna alla regola comune e prende `held`, con lo stesso messaggio;
+se un permesso non si legge, prende `TRASPORTO_PERMESSO_NON_LEGGIBILE`
+come sul cancello ordinario.
 
 **Chi ha cambiato la riga.** Il giro legge il registro degli eventi
 della sola riga, tutta la sua storia, con una chiamata per riga cambiata
-o non ancora applicata: nessuna nella notte ordinaria. Contano gli
-autori dei campi di intento dopo l’ultima scrittura di `applied_seal`,
-che è il segno dell’ultima esecuzione; ciò che viene prima era già stato
-eseguito. Se quella scrittura non è più nel log conta tutta la storia,
-che può solo far chiedere un’approvazione più spesso.
+o non ancora applicata: nessuna nella notte ordinaria. Contano le
+scritture dei campi di intento dopo l’ultima scrittura di `applied_seal`
+del canale, che è il segno dell’ultima esecuzione (con l’utenza
+configurata un sigillo importato da un altro account non è
+un’esecuzione,
+[`log_executions()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executions.md):
+ruolo e sigillo nello stesso evento restano una modifica di chi li ha
+scritti), e solo quelle ancora presenti nella riga (sopra); ciò che
+viene prima era già stato eseguito. Se quella scrittura non è più nel
+log conta tutta la storia, che può solo far chiedere un’approvazione più
+spesso.
 
 «Già eseguito» vale per ciò che il giro ha letto, e il giro scrive il
 sigillo per ultimo: una modifica fatta mentre il giro interroga il
 tenant e le istanze finisce sotto il sigillo senza essere stata
-eseguita, e passerebbe per del creatore alla sua prossima modifica. Per
-questo il giro rilegge anche il tratto fra l’ultima esecuzione e quella
-prima
+eseguita, e passerebbe per del proprietario alla sua prossima modifica.
+Per questo il giro rilegge anche il tratto fra l’ultima esecuzione e
+quella prima
 ([`log_uncovered_authors()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_uncovered_authors.md)):
 una modifica di un altro che sta lì conta, a meno che sopra di lei,
-nello stesso tratto, ci sia l’approvazione del creatore con il sigillo
-che quell’esecuzione ha scritto. Basta un tratto: una modifica scoperta
-ferma la riga, una riga ferma non scrive sigilli, e il confine non si
-sposta finché il creatore non approva. Copre anche l’approvazione di IT,
-e una revoca sola non è mai scoperta: non concede niente, e contata
-farebbe approvare al creatore la riattivazione della propria richiesta
-dopo una revoca libera di chi gestisce il progetto.
+nello stesso tratto, ci sia l’approvazione del proprietario con il
+sigillo che quell’esecuzione ha scritto. **Ogni tratto si giudica con il
+proprietario di allora**: quello che il log dà sotto il sigillo che apre
+il tratto
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)),
+cioè l’ultima scrittura di `owned_by` del canale precedente al tratto,
+oppure il creatore. Dopo un passaggio, giudicato con il proprietario di
+oggi, il tratto vedrebbe l’approvazione del vecchio proprietario come
+quella di un estraneo, e la riga tornerebbe trattenuta senza nessuna
+modifica nuova. Una scrittura sopra quell’approvazione conta anche
+quando è del proprietario di allora che oggi non lo è più: chi cede la
+riga e scrive mentre il giro la passa non è il nuovo proprietario, e
+nessun altro la nominerebbe. Leggere i valori che il canale ha scritto
+nel tempo è ammesso; ciò che non si fa è ricalcolare a posteriori
+decisioni già prese e registrate (autori, approvazioni, revoche).
+
+**Anche nel tratto contano solo le scritture rimaste nella riga**
+(deciso il 2026-10-17, dalla revisione finale): una scrittura scoperta
+conta per i campi di cui è ancora l’ultima scrittura non del canale
+nella vita attuale della riga, e smette di contare quando qualcuno, che
+non sia il canale, li riscrive. Contata per intero, una scrittura di chi
+non ha diritti fermava la riga per sempre: il proprietario che cambia il
+campo e lo rimette riporta la riga al sigillo, il giro la trova intatta
+e non la risigilla, il tratto non si sposta, e a ogni modifica
+successiva del proprietario, revoca compresa, il cancello avrebbe
+chiesto i diritti di quell’altro. Il valore che una scrittura scoperta
+ha lasciato sotto il sigillo non è quello eseguito, e il giro lo tratta
+come ignoto: chi lo riscrive sopra il sigillo, dopo averlo cambiato, è
+l’autore della modifica, e non passa per chi ha riportato il campo al
+valore eseguito.
+
+Basta un tratto: una modifica scoperta ferma la riga, una riga ferma non
+scrive sigilli, e il confine non si sposta finché il proprietario non
+approva. Riscrivere il campo non lo sposta: toglie la modifica dalla
+riga, e una riga tornata al sigillo non si risigilla. Copre anche
+l’approvazione di IT, e una revoca sola non è mai scoperta: non concede
+niente, e contata farebbe approvare al proprietario la riattivazione
+della propria richiesta dopo una revoca libera di chi gestisce il
+progetto.
 
 Il campo dell’approvazione e lo stato del sigillo si vedono nel modulo
 quando la riga porta un sigillo **o** ha l’esito `held`. Una riga mai
@@ -558,38 +753,140 @@ proprio lì.
 Le scritture del canale non contano. Il giro riscrive lo `username` che
 risolve prima di leggere il log, e `username` è un campo di intento:
 contata, quella scrittura farebbe del canale l’autore di ogni modifica,
-e di chiunque altro il suo approvatore. Il canale si riconosce senza
-configurazione come l’utenza che ha scritto i campi che scrive solo lui
-(esito, identità, sigillo), e si riconosce **per utenza e non per
-evento**: REDCap registra solo i campi che un import ha cambiato, quindi
-la riscrittura dello `username` arriva da sola, senza niente nell’evento
-che dica chi l’ha fatta.
+e di chiunque altro il suo approvatore. Il canale si riconosce **per
+utenza e non per evento**: REDCap registra solo i campi che un import ha
+cambiato, quindi la riscrittura dello `username` arriva da sola, senza
+niente nell’evento che dica chi l’ha fatta.
+
+**L’utenza del canale si configura** (deciso il 2026-10-17). Fino alla
+0.20.1 il canale era chiunque avesse scritto un campo che scrive solo
+lui (esito, identità, sigillo). Con l’import aperto ai referenti non
+regge: chi importa `owned_by` su una riga nuova di un collega, prima che
+il giro vi abbia scritto, sarebbe l’unico «canale» della riga, e il
+cancello guarderebbe i suoi diritti e la chiave di un account nuovo
+andrebbe a lui. Dalla 0.21.0 il canale è l’utenza REDCap che possiede il
+token del registro, nominata da `UBEP_CANALE_UTENTE` e passata al
+pacchetto come `channel_account`
+([`log_channel_accounts()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.md)):
+è il canale anche su una riga dove non ha ancora scritto, e **le
+scritture di ogni altro account sui campi del canale si ignorano**
+(deciso il 2026-10-17): non rendono ambigua la riga e non diventano
+«canale». Fino a quella decisione la rendevano ambigua, e una riga
+ambigua restava ferma per sempre, perché il log non si cancella: bastava
+un CSV importato per errore con le colonne del canale. Solo le scritture
+di `owned_by` e di `applied_seal` dell’utenza configurata si credono. I
+nomi sono digitati a mano sulla macchina, quindi si confrontano senza
+badare alle maiuscole.
+
+- **Tre casi lasciano la riga senza proprietario stabilito.** Una
+  scrittura di `owned_by` senza autore leggibile più recente di quella
+  del canale (o, se il canale non ne ha scritte, una qualunque): non
+  nomina nessuno, ma potrebbe essere del canale. Un creatore che il log
+  delle creazioni non nomina, su una riga in cui il canale non ha mai
+  scritto `owned_by`. E una scrittura di `owned_by` del canale che non
+  ha la forma della sua porta, `owned_by = '<valore>'` e nient’altro:
+  con altri campi accanto, dove finisce un valore e comincia il seguente
+  non si distingue da un apostrofo dentro un nome. Nei tre casi il giro
+  ferma la riga su `TRASPORTO_AUTORE_NON_LEGGIBILE`, non esegue niente,
+  e l’esito va solo a IT con la frase «referente della riga non
+  stabilito»; la chiave non va a nessuno. Il primo e il terzo non si
+  risolvono da soli: il log non dimentica, e il giro non scrive
+  `owned_by` su una riga di cui non conosce il proprietario. Come REDCap
+  registri nel log un apostrofo dentro un valore, con un escape o com’è,
+  non è misurato: il valore si legge intero fra il primo apostrofo e
+  l’ultimo, e con un escape il nome letto porterebbe anche il segno
+  dell’escape, quindi non sarebbe quello del referente. Va misurato
+  prima che la porta scriva un proprietario con l’apostrofo nel nome
+  utente.
+- **Una scrittura estranea di un campo di intento** (`username`
+  compreso) resta una modifica del suo autore, con le colonne del canale
+  accanto o no: la riga aspetta l’approvazione del proprietario come per
+  ogni altra modifica.
+- **Senza l’utenza** (`channel_account = NULL`, il valore predefinito
+  nel pacchetto) nessuna scrittura di `owned_by` si crede: il
+  proprietario è il creatore, o non è stabilito su una riga ambigua,
+  nessuna riga passa, e il giro non scrive `owned_by`, perché
+  scriverebbe il creatore sopra un passaggio deciso da un giro
+  configurato. Il canale si indovina allora da chi ha scritto i suoi
+  campi, due account che li scrivono rendono la riga ambigua, e il
+  sigillo si legge dal campo, come fino alla 0.20.1. È il comportamento
+  sicuro per chi chiama il pacchetto senza configurarlo. Le due
+  lavorazioni, `dev/runner-canale.R` e `dev/runner-rapporto.R`,
+  rifiutano di partire senza la variabile (§8).
+- **Se l’account del token del canale cambia**, `UBEP_CANALE_UTENTE`
+  elenca la nuova utenza e la vecchia, separate da virgole: le scritture
+  della vecchia, passaggi e sigilli, restano credute finché è
+  nell’elenco. Un’utenza tolta dall’elenco diventa un altro account: i
+  suoi passaggi non valgono più, e le righe che ha sigillato tornano mai
+  eseguite, quindi una mano altrui nella loro storia le ferma in attesa
+  del proprietario. Il cambio è un evento da preparare, non una modifica
+  di configurazione da fare in un momento qualunque. La vecchia utenza
+  resta nell’elenco ma perde il token e il diritto di import sul
+  registro: finché è elencata, ciò che scrive si crede come del canale.
+- **Nessuna persona usa un’utenza dell’elenco.** Le scritture delle
+  utenze di `UBEP_CANALE_UTENTE` sono del canale: non sono modifiche di
+  nessuno, quindi chi scrivesse da una di loro sarebbe invisibile come
+  autore, e i suoi `owned_by` e `applied_seal` si crederebbero come
+  passaggi ed esecuzioni. Sono utenze di servizio, e il loro token lo
+  usa solo la lavorazione.
+- **Un’utenza che il log non ha mai visto ferma il giro.** Se nel log
+  dei proprietari c’è almeno un sigillo e nessuna delle utenze elencate
+  vi ha mai scritto un campo del canale, il nome è sbagliato, o la
+  vecchia utenza è stata tolta prima che la nuova scrivesse: il giro si
+  ferma prima di giudicare qualunque riga, con
+  `TRASPORTO_REGISTRO_CANALE_ASSENTE` negli errori del record
+  ([`log_channel_absent()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.md)).
+  Il controllo conta un `applied_seal` scritto da chiunque: un registro
+  mai servito dal canale, ma con un sigillo importato da un referente,
+  fa fermare il giro finché il canale non ha scritto. Su un registro
+  senza nessun sigillo non si ferma: non c’è ancora un canale da aver
+  visto.
 
 **Quando il registro degli eventi non basta.** Un autore che il log non
 stabilisce lascia la riga ferma: «non ho potuto stabilire chi è stato»
-non è «è stato il creatore». Vale quando due utenze diverse risultano
-aver scritto i campi del canale, o quando una modifica di intento non ha
-autore: la riga prende `held`, e il creatore può approvarla.
+non è «è stato il proprietario». Vale quando una modifica di intento ha
+un autore vuoto, sopra l’ultima esecuzione o nel tratto scoperto: la
+riga prende `held`, ma l’approvazione del proprietario non la sblocca.
+Il cancello non ha di chi giudicare i diritti, e la riga approvata si
+ferma su `TRASPORTO_AUTORE_NON_LEGGIBILE`, il codice del caso seguente.
+Ne esce quando il proprietario riscrive quel campo, cambiandolo e
+rimettendolo (sopra, «La via d’uscita da una scrittura di chi non ha
+diritti»): l’ultima scrittura del campo è allora sua, e ha un autore.
+Una `owned_by` con l’autore vuoto sopra quella del canale ferma invece
+la riga senza uscita (sopra, i tre casi senza proprietario stabilito).
+Gli autori vuoti sono probabilmente irraggiungibili, perché REDCap
+registra in ogni evento l’utente autenticato; che nel log del registro
+non ci siano eventi con `username` vuoto va verificato prima del
+rilascio.
 
-Diverso è il caso in cui il log **non si legge**, o il creatore non è
-nominato: lì non c’è un creatore a cui chiedere né un’approvazione che
-si possa verificare. La riga non prende `held` ma
+Diverso è il caso in cui il log **non si legge**, o il proprietario non
+è stabilito (il creatore non è nominato, o una `owned_by` senza autore
+sta sopra quella del canale, o una `owned_by` del canale non ha la forma
+della sua porta, o, senza l’utenza configurata, due account hanno
+scritto i campi del canale): lì non c’è un proprietario a cui chiedere
+né un’approvazione che si possa verificare. La riga non prende `held` ma
 `TRASPORTO_AUTORE_NON_LEGGIBILE`, lo stesso codice che il cancello dà a
 una riga senza autore: torna in coda da sola al giro dopo, non si
 esegue, e il messaggio dice che il guasto è nostro invece di chiedere un
 sigillo che non approverebbe niente. Fino alla 0.18.0 prendeva `held`,
-con «Modificata da: non stabilito» e la mail a `requested_by`. Il codice
-del registro (per esempio `TRASPORTO_REGISTRO_RIFIUTATO`) va negli
-`errori` del record del giro: la riga dice che cosa non si è potuto
-stabilire, il record perché.
+con «Modificata da: non stabilito» e la mail a `requested_by`; dalla
+0.21.0 l’esito di queste righe va solo a IT. Il codice del registro (per
+esempio `TRASPORTO_REGISTRO_RIFIUTATO`) va negli `errori` del record del
+giro: la riga dice che cosa non si è potuto stabilire, il record perché.
 
-**Il messaggio.** Va al creatore, non a `requested_by`. Nomina chi ha
-cambiato la riga e porta il sigillo da incollare, e dice che può
-approvare chi l’ha creata oppure IT. Lo stesso sigillo sta nel dettaglio
+**Il messaggio.** Va al proprietario, non a `requested_by`. Nomina chi
+ha cambiato la riga e porta il sigillo da incollare, e dice che può
+approvare il referente della riga oppure IT. Dice anche che cosa fa
+l’approvazione: al giro dopo la modifica si esegue se chi l’ha scritta
+ha *User Rights* con *Full Access* sul progetto, altrimenti il giro la
+rifiuta con `DATO_AMBITO_NON_AUTORIZZATO`; e approvare la modifica di
+altri cede la riga a chi l’ha scritta per ultimo, salvo che sia solo una
+revoca. Fino alla 0.20.1 diceva soltanto che la modifica, approvata,
+diventava effettiva al giro dopo. Lo stesso sigillo sta nel dettaglio
 dell’esito, `SIGILLO_DIVERSO:<sigillo>`, ed è questo che porta il
-sigillo nuovo al creatore quando la riga cambia ancora mentre è ferma:
-il dettaglio cambia con lei, l’esito risulta cambiato e il messaggio
-riparte.
+sigillo nuovo al proprietario quando la riga cambia ancora mentre è
+ferma: il dettaglio cambia con lei, l’esito risulta cambiato e il
+messaggio riparte.
 
 Quattro cose da sapere quando si tocca questo meccanismo:
 
@@ -604,7 +901,7 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   stesso difetto di sopra, per mano del giro invece che dell’esito. Per
   la stessa ragione il sigillo che il messaggio chiede di incollare è
   quello della riga con lo `username` risolto: è su quella riga che il
-  creatore lo incolla;
+  proprietario lo incolla;
 - **il campo di approvazione sta fuori dal sigillo pur non essendo
   `@READONLY`.** Porta il sigillo che approva, quindi scriverlo non può
   spostare ciò che confronta. È il primo campo per cui «scritto dal
@@ -615,12 +912,14 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   impacchettato, e un campo in più entra nel sigillo di ogni riga: al
   primo giro dopo il rilascio ogni riga applicata risulta cambiata,
   nessuna ha un autore dopo l’ultima esecuzione, e tutte aspettano il
-  proprio creatore, con una chiamata al log per ciascuna a ogni giro.
+  proprio proprietario, con una chiamata al log per ciascuna a ogni
+  giro. `owned_by` non produce questo effetto: è un campo del canale e
+  sta fuori dal sigillo.
 
 L’approvazione vale a tre condizioni: porta il sigillo di **quella**
-versione della riga, viene da **chi l’ha creata** o da IT, ed è **più
-recente di ciò che approva**, cioè sta sopra l’ultima esecuzione e sopra
-ogni modifica di altri
+versione della riga, viene dal **proprietario di allora** o da IT, ed è
+**più recente di ciò che approva**, cioè sta sopra l’ultima esecuzione e
+sopra ogni modifica di altri
 ([`log_approval_stands()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_approval_stands.md)).
 La terza serve perché `approved_seal` non si azzera mai: senza,
 un’approvazione già eseguita tornerebbe a valere ogni volta che la riga
@@ -631,11 +930,12 @@ di REDCap, che dice chi era **autenticato** e non che cosa qualcuno ha
 scritto in un campo: la stessa ragione per cui `requested_by` non basta
 da solo il giorno in cui si concede il Data Import Tool.
 
-Il log della riga si chiede **senza finestra di tempo**. Fino alla
-0.18.0 si chiedevano le ultime 24 ore di tutto il registro: una modifica
-più vecchia restava fuori e l’approvazione dentro, la modifica risultava
-senza autore e l’approvazione di chi l’aveva fatta passava per quella di
-un altro.
+Il log della riga si chiede **senza finestra di tempo**, come il log dei
+proprietari (`logtype = "record"`, una chiamata per giro, di cui sopra).
+Fino alla 0.18.0 si chiedevano le ultime 24 ore di tutto il registro:
+una modifica più vecchia restava fuori e l’approvazione dentro, la
+modifica risultava senza autore e l’approvazione di chi l’aveva fatta
+passava per quella di un altro.
 
 Senza finestra, il log porta anche le **vite precedenti dell’id**.
 REDCap riusa gli id dei record cancellati, e dallo svuotamento del
@@ -651,6 +951,89 @@ creazione, che resta nella vita attuale; la cancellazione no, perché la
 sua dicitura non è misurata e un evento che le somigliasse dentro la
 vita attuale ne toglierebbe le modifiche, nella direzione che concede.
 Un log senza creazione si legge intero, come prima.
+
+### Tre codici del proprietario e del sigillo
+
+Stanno negli `errori` del record del giro, non sulla riga, e dicono che
+il registro degli eventi e i campi del registro non concordano. Nessuno
+concede niente: la direzione in cui sbagliano è quella che non concede.
+
+**Le azioni di IT che seguono sono dedotte dal codice e non sono state
+provate con un caso reale.** Sono una procedura da confermare al primo
+caso: chi la esegue la verifica e, se il fatto la smentisce, corregge
+qui.
+
+- **`TRASPORTO_REGISTRO_CANALE_ASSENTE`**: il giro si è fermato prima di
+  giudicare qualunque riga (il record porta `fermato`, un giro fermato
+  prima di agire come nel §5). Nel log dei proprietari c’è almeno un
+  sigillo e nessuna delle utenze di `UBEP_CANALE_UTENTE` vi ha mai
+  scritto un campo del canale: il nome è sbagliato, o in un cambio di
+  token la vecchia utenza è stata tolta dall’elenco prima che la nuova
+  scrivesse. Nel registro non c’è niente da riparare. IT confronta ogni
+  nome dell’elenco con l’utenza che possiede il token, come la vede
+  REDCap; se il token è cambiato di mano, rimette la vecchia utenza
+  nell’elenco e **ce la lascia**: tolta, i suoi passaggi e i suoi
+  sigilli non valgono più (vedi, sopra, «Se l’account del token del
+  canale cambia»). Il giro dopo riparte da solo. Come ogni giro fermato,
+  il record porta anche `registro_letto = FALSE`, e suona l’allarme del
+  giro fermato prima di agire: qui però il registro è stato letto e il
+  token funziona, e il guasto non va cercato lì.
+- **`TRASPORTO_PASSAGGIO_NON_REGISTRATO`**: il giro ha passato la riga a
+  un altro proprietario e il passaggio non è entrato nel log. Succede
+  quando il campo `owned_by` mostrava già il nuovo proprietario, perché
+  un import lo aveva scritto prima, e REDCap non registra una scrittura
+  che lascia il valore com’è: il giro scrive allora due volte, prima il
+  proprietario di oggi e poi il nuovo, e il codice dice che una delle
+  due è stata rifiutata. Nel log la riga resta del vecchio proprietario.
+  L’esito è già partito, quindi il nuovo proprietario ha letto che la
+  riga è sua, e il giro non ritenta: finché una modifica sua non viene
+  approvata ed eseguita, le approvazioni le dà il vecchio proprietario o
+  IT (§4, «IT approva come il proprietario»). Allo stesso modo restano
+  al vecchio proprietario l’esito, la chiave di un account nuovo e il
+  rapporto mensile, perché si leggono dal log, e il cancello: finché
+  nessuno cambia la riga, giudica il vecchio proprietario a ogni giro.
+  Se ha perso i diritti sul progetto, che è spesso la ragione del
+  passaggio, la riga va in `data_error` con
+  `DATO_AMBITO_NON_AUTORIZZATO`, e l’esito va a lui. IT avvisa il nuovo
+  proprietario. La riga ne esce con una modifica del nuovo che resti
+  nella riga: si ferma, perché nel log il nuovo non è il proprietario,
+  IT la approva al posto del vecchio, il cancello giudica i diritti del
+  nuovo, e il giro che la esegue scrive di nuovo il passaggio. Senza una
+  modifica del nuovo, l’approvazione di IT non ha niente da sbloccare.
+- **`TRASPORTO_SIGILLO_NON_REGISTRATO`**: una riga eseguita ha nel campo
+  `applied_seal` il sigillo che il giro scriverebbe, per un import,
+  mentre l’ultimo sigillo del canale nel log è un altro. La porta dei
+  sigilli non ha niente da cambiare e REDCap non registra nulla, quindi
+  al giro dopo la riga risulta mossa, si rilegge il suo log (una
+  chiamata) e si riesegue, a ogni giro e senza posta. Non fa danno, e va
+  visto. Per fermarla si cambia con un import il valore di
+  `applied_seal` di quella riga: al giro dopo il canale scrive il
+  sigillo giusto, la scrittura cambia il valore e il log la registra.
+
+**La stessa mossa sposta il tratto scoperto.** Una riga ferma sul tratto
+fra le due ultime esecuzioni (il proprietario di quel tratto non si
+stabilisce, o resta una scrittura scoperta che il proprietario non c’è
+più a riscrivere) si sblocca nello stesso modo. Riportata la riga al
+valore eseguito, IT importa in `applied_seal` un valore qualunque
+diverso da quello del campo. Al giro dopo la riga risulta intatta e si
+esegue con i diritti del proprietario, che quindi deve averli; la porta
+dei sigilli trova nel campo un altro valore e riscrive il sigillo,
+REDCap registra la scrittura come un’esecuzione del canale, e il tratto
+da rileggere diventa quello fra questa esecuzione e la precedente. Se a
+riportare la riga al valore eseguito è IT, le sue scritture cadono nel
+tratto nuovo e sarebbero scoperte: prima di importare il sigillo IT
+incolla in `approved_seal` il sigillo della riga riportata, di norma
+quello che il campo `applied_seal` porta ancora, e l’approvazione le
+copre. Anche questa procedura è da confermare al primo caso.
+
+I due codici che non fermano il giro,
+`TRASPORTO_PASSAGGIO_NON_REGISTRATO` e
+`TRASPORTO_SIGILLO_NON_REGISTRATO`, si vedono solo leggendo gli `errori`
+del record del giro. Nessuna delle regole del §5 li legge: se serve un
+allarme, è una regola nuova, che qui si propone e che va decisa e messa
+nel foglio dei parametri, con la sua gravità.
+`TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il giro, e lo si vede anche
+dal giro fermato prima di agire.
 
 ### Una persona da creare
 
@@ -679,6 +1062,70 @@ dopo.
   la posta. Con `UBEP_SCRITTURA=1` e `UBEP_POSTA` spenta il giro non
   crea nessuno: la riga resta in attesa, e nei giri in cui qualcuno
   sarebbe nato gli `errori` portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+
+### La mail di accesso
+
+Dalla 0.21.0 la persona sa quando ha l’accesso. Prima il canale le
+scriveva solo alla creazione dell’account, con un benvenuto che
+prometteva l’accesso «entro quattro ore» e poi niente; chi aveva già un
+account e veniva messo in un progetto nuovo non riceveva niente.
+
+**Parte quando il giro concede il diritto**, cioè per l’azione `creato`
+di
+[`provisioning_diff()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_diff.md):
+in REDCap il diritto prima non c’era e ora c’è, e la rilettura ha
+confermato la scrittura
+([`round_write_confirmed()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_write_confirmed.md),
+riga `applied`). Non c’è memoria di che cosa è già stato mandato: la
+regola basta a decidere, e i quattro casi che ne escono sono voluti:
+
+- un banco riacceso trova il diritto al suo posto, la coppia è `noop` e
+  **nessuna mail** parte, anche se la riga torna `applied`;
+- la riattivazione dopo una revoca è un `creato`: **la mail parte**;
+- se qualcuno toglie a mano l’utente da REDCap e il canale lo rimette,
+  la mail parte di nuovo;
+- chi aveva già l’accesso, dato a mano prima della riga: coppia `noop`,
+  nessuna mail.
+
+**Non parte** per un diritto aggiornato (`aggiornato`: ruolo, gruppo,
+scadenza), per le revoche, per `settled`, `already_gone` e `withdrawn`,
+in un giro simulato (che non scrive) e con la posta spenta.
+
+**Non parte mai per una concessione che la rilettura non conferma.** La
+riga prende `transport_error` con `TRASPORTO_SCRITTURA_NON_CONFERMATA` e
+la mail non parte; il giro dopo, se il diritto c’è, trova la coppia a
+posto (`noop`) e non ha niente da mandare. Non si conta in
+`accessi_persi`, perché nessun invio è fallito: la persona non viene
+avvisata, e lo dice solo quel codice sulla riga.
+
+**Va alla persona, a `contact_email`, e a nessun altro**: niente copia
+al referente, niente copia a IT. Con un indirizzo vuoto la mail è persa,
+come per il benvenuto. Il dirottamento e la prova a secco valgono come
+per gli altri messaggi. L’oggetto è
+`Accesso a REDCap / REDCap access: <istanza>, progetto <PID>`; il corpo,
+italiano sopra e inglese sotto, in testo semplice, dice:
+
+- su quale istanza e a quale indirizzo si apre REDCap (la riga manca se
+  l’indirizzo non si conosce, come nel benvenuto);
+- il numero del progetto, il ruolo, il gruppo se la riga ne ha uno; non
+  il titolo, che il canale non conosce;
+- l’**ultimo giorno di accesso**, preso da `expiration` del registro e
+  non da `applied_as`, perché in REDCap la scadenza è salvata il giorno
+  dopo; senza scadenza lo dice;
+- chi risponde del progetto, il proprietario della riga, e la frase dei
+  contatti del benvenuto (scrivere prima al referente, poi a IT);
+- nessun segreto.
+
+Una persona nuova riceve di norma due mail in due passi, il benvenuto e
+poi quella di accesso; se capitassero nello stesso giro partono tutte e
+due, prima il benvenuto.
+
+**Se non parte, non si ritenta**, come il benvenuto e la chiave: il
+diritto c’è comunque, il giro dopo trova la coppia a posto e non ha
+niente da rimandare. Il fallimento esce come `POSTA_ACCESSO_PERSA` negli
+`errori`, si conta in `accessi_persi` (i riusciti in
+`accessi_recapitati`) e non trattiene la riga. Che cosa fare quando
+suona è nel §6.
 
 ### Verificare che il progetto sia ancora quello che il canale si aspetta
 
@@ -729,9 +1176,11 @@ importarlo per sbaglio al posto del dizionario vero.
 
 **Undici regole attive, tutte con risoluzione automatica**, divise in
 due famiglie che non si parlano: **sei dell’osservatore** e **cinque del
-canale**. La divisione non è organizzativa ma tecnica — le due
-lavorazioni scrivono in **due tabelle diverse**, e una regola non può
-leggere la tabella dell’altra. Chi cerca il perché di una regola
+canale**. Con la regola sugli accessi persi della 0.21.0, che si
+aggiunge al passo 5 del suo rilascio (più sotto), le regole del canale
+sono sei e le attive dodici. La divisione non è organizzativa ma tecnica
+— le due lavorazioni scrivono in **due tabelle diverse**, e una regola
+non può leggere la tabella dell’altra. Chi cerca il perché di una regola
 mancante deve guardare prima di tutto quale tabella potrebbe leggerla.
 
 La **gravità** dice la famiglia del problema, non chi lo ha trovato:
@@ -745,7 +1194,9 @@ La **gravità** dice la famiglia del problema, non chi lo ha trovato:
   superficie di un’istanza è cambiata; le liste di indirizzi sono
   cambiate o divergono; gli esiti sono stati calcolati e non scritti;
   una notifica non è stata recapitata; un’utenza è nata e il benvenuto
-  non è arrivato alla persona.
+  non è arrivato alla persona; una persona ha l’accesso e la mail che lo
+  dice non è partita (la regola proposta con la 0.21.0, con questa
+  gravità da fissare nel foglio dei parametri).
 
 I nomi esatti, le gravità e le finestre stanno nel foglio dei parametri.
 
@@ -942,6 +1393,49 @@ l’approvazione. Al primo giro dopo l’installazione ogni riga trattenuta
 cambia dettaglio, che ora porta il sigillo, e il suo creatore riceve un
 messaggio.
 
+La 0.21.0 risponde **sì** a tutte e due le domande, e porta due colonne
+nuove nel record del giro. Il rilascio è in cinque passi, nell’ordine:
+
+1.  **Il campo `owned_by` sul registro.** Tocca lo schema con un campo
+    solo, quindi due tempi e non l’atto unico: il campo si aggiunge
+    **prima** del pacchetto. La 0.20.1 lo tollera
+    (`DIZIONARIO_CAMPO_IN_PIU`) e continua a girare; la 0.21.0 senza il
+    campo si ferma (`DIZIONARIO_CAMPO_ASSENTE`). La riga del dizionario
+    è quella impacchettata (`request_register`, sezione vuota dopo
+    `requested_by`, testo, etichetta *Row owner*, `@READONLY`, visibile
+    quando non è vuoto). Nello stesso momento si aggiornano sul registro
+    le note di `seal_state` e `approved_seal`, che ora parlano del
+    referente della riga e non del creatore:
+    [`compare_dictionary()`](https://ubesp-dctv.github.io/ubep.azure/reference/compare_dictionary.md)
+    non confronta le note, quindi non fermano il giro, ma restano a dire
+    una cosa non più vera.
+2.  **Le due colonne `accessi_recapitati` e `accessi_persi`** nella
+    tabella `UbepCanale_CL` e nella sua regola di raccolta, come nella
+    0.18.0 con `benvenuti_recapitati` e `benvenuti_persi`.
+3.  **L’ambiente e il pacchetto.** `UBEP_CANALE_UTENTE` nell’ambiente
+    delle unità del canale e del rapporto, e, con la posta accesa,
+    `UBEP_POSTA_COPIA` nel canale, che prima era facoltativa (§8); poi
+    il pacchetto, e le copie nuove di `dev/runner-canale.R` e
+    `dev/runner-rapporto.R` in `/opt`, insieme. Cambia la firma di ciò
+    che le lavorazioni chiamano: il giro e il rapporto ricevono l’utenza
+    del canale (`channel_account`). Una lavorazione nuova senza la
+    variabile non parte e lo dice. Una lavorazione vecchia col pacchetto
+    nuovo gira, ma senza utenza nessuna riga passa e il giro non scrive
+    `owned_by`.
+4.  **Il primo giro a mano**, per vedere che il campo si riempie sulle
+    righe esistenti, che il registro non si ferma, che il record porta
+    le colonne nuove. Al primo giro ogni riga riceve `owned_by`, con il
+    nome del suo creatore (§4), e nessuna riga risulta cambiata:
+    `owned_by` sta fuori dal sigillo.
+5.  **Per ultime**, dopo aver visto arrivare un record che porta le
+    colonne nuove con un valore, la regola d’allarme su
+    `accessi_persi > 0` e quella sul record incompleto, che elenca le
+    colonne per nome e deve guadagnare anche queste due. Le regole
+    attive diventano dodici. Aggiornate prima, la regola sul record
+    incompleto scatterebbe su ogni record sano, e quella su
+    `accessi_persi > 0` tacerebbe: su una colonna vuota il confronto è
+    falso, non un errore.
+
 ### La regola ritirata è disattivata, non cancellata
 
 La vecchia regola a quattro rami è ancora nella sottoscrizione,
@@ -1014,6 +1508,18 @@ l’indirizzo dell’istanza e i passi del primo accesso glieli manda IT, a
 mano. Per sapere perché non è partito, guardare la riga nel registro: un
 `contact_email` vuoto spiega il caso da solo; altrimenti il journal
 della lavorazione riporta la risposta del servizio di posta.
+
+**Accesso perso (gravità proposta 2, da fissare nel foglio dei
+parametri).** Una persona ha ricevuto il diritto su un progetto e la
+mail che glielo dice non è partita: `accessi_persi` è maggiore di zero,
+e fra gli errori del giro c’è `POSTA_ACCESSO_PERSA`. Il diritto c’è, e
+il giro non lo manda un’altra volta: la persona non sa di avere
+l’accesso, quindi IT le scrive, con l’istanza, l’indirizzo, il numero
+del progetto, il ruolo e l’ultimo giorno di accesso, che stanno sulla
+riga del registro. Per sapere perché non è partita, guardare la riga: un
+`contact_email` vuoto spiega il caso da solo; altrimenti il journal
+della lavorazione riporta la risposta del servizio di posta. Non
+trattiene niente, e la riga è `applied`.
 
 **Credenziale persa (gravità 1).** Un’utenza è nata e la sua chiave non
 è arrivata a nessuno: `credenziali_perse` è maggiore di zero. Dalla
@@ -1151,6 +1657,32 @@ Il foglio raccoglie otto famiglie:
 - la flotta osservata: quali istanze hanno il modulo, le due impronte
   correnti, il numero di coppie e quante hanno una scadenza.
 
+**Dalla 0.21.0 una variabile dell’unità è sempre obbligatoria e un’altra
+lo è con la posta accesa**, e senza la prima la lavorazione non parte:
+
+- **`UBEP_CANALE_UTENTE`** è lo username REDCap che possiede il token
+  del registro, cioè l’utenza che scrive per conto del canale, o più
+  d’uno separati da virgole quando il token è cambiato di mano: la
+  vecchia utenza resta nell’elenco, perché tolta i suoi passaggi e i
+  suoi sigilli non valgono più, ma perde il token e il diritto di import
+  sul registro (§4, «Se l’account del token del canale cambia»). Nessuna
+  persona usa un’utenza dell’elenco: le sue scritture si credono come
+  del canale, e chi la usasse non comparirebbe come autore di niente.
+  Spazi ai bordi di ogni voce tolti, voci vuote scartate. Serve alle due
+  lavorazioni, il giro e il rapporto: sono gli unici account a cui si
+  crede quando dicono di chi è una riga e che cosa è stato eseguito
+  (§4). Se manca, o è fatta di soli spazi e virgole, la lavorazione si
+  ferma con un errore che la nomina, prima di leggere qualunque cosa;
+  l’unità muore, non lascia record, e suona l’allarme sull’assenza. La
+  legge la macchina e non si scrive nel repository, che è pubblico: il
+  nome sta nel foglio dei parametri.
+- **`UBEP_POSTA_COPIA`** è l’indirizzo di IT in copia. Nel giro è
+  obbligatoria con la posta accesa (`UBEP_POSTA=1`): è anche l’unico
+  destinatario dell’esito di una riga senza proprietario stabilito, e
+  senza di lei quell’esito non partirebbe. Se manca, il giro si ferma
+  con un errore. Nel rapporto era già il destinatario del rapporto a IT
+  (§9).
+
 **Ogni riga del foglio porta la data in cui il valore è stato
 verificato**, e non quella in cui è stato scritto. Su servizi con
 consistenza eventuale «quando l’hai guardato» è parte del valore: una
@@ -1184,14 +1716,24 @@ seconda guardia legge la lavorazione.
 
 ### A chi va, e che cosa dice
 
-Una riga del registro è **di chi l’ha creata**, letto dal log delle
-creazioni come lo legge il cancello, e non `requested_by`, che un import
-scrive com’è. È la stessa persona che il giro chiama ad approvare una
-modifica altrui. Una persona chiesta da due referenti compare nel
-rapporto di ciascuno, con le sole righe sue. Contano le righe con
-`request_status = active` e `outcome = applied`; riceve il rapporto chi
-ne ha almeno una attivata entro la fine del mese coperto, e un «tutto in
-ordine» è un rapporto anche lui.
+Una riga del registro è **del suo proprietario**, letto dal log come lo
+legge il giro
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md),
+§4), e non di `requested_by` né del valore di `owned_by`, che un import
+scrive com’è. Fino alla 0.20.1 era il creatore; ora una riga può essere
+passata a un altro referente. È la stessa persona che il giro chiama ad
+approvare una modifica altrui. **Il rapporto del mese M attribuisce ogni
+riga al proprietario in carica alla fine di M**: l’ultima scrittura di
+`owned_by` del canale con data entro quel mese, oppure il creatore. Il
+rapporto si ritenta per più giorni, con l’elenco dei dovuti e il
+registro degli invii per destinatario, e con il proprietario «di oggi»
+l’elenco potrebbe cambiare fra un tentativo e l’altro: una riga passata
+il 3 si sposterebbe dal rapporto di un referente a quello di un altro
+dopo che uno dei due è già partito. Una persona chiesta da due referenti
+compare nel rapporto di ciascuno, con le sole righe sue. Contano le
+righe con `request_status = active` e `outcome = applied`; riceve il
+rapporto chi ne ha almeno una attivata entro la fine del mese coperto, e
+un «tutto in ordine» è un rapporto anche lui.
 
 Nella voce A una richiesta nuova dice se l’account era nuovo: lo è
 quando Entra l’ha creato non prima del minuto in cui è nata la riga,
@@ -1212,16 +1754,22 @@ inglese sotto, IT in copia all’indirizzo di `UBEP_POSTA_COPIA`.
 Ciò che non ha un referente a cui andare va **a IT, e a nessun altro**,
 in una mail sola e solo quando c’è qualcosa, allo stesso indirizzo:
 
-- le righe il cui creatore il log non nomina, o ha l’account
-  disabilitato, assente o non leggibile su Entra; il creatore
-  disabilitato non riceve niente;
+- le righe il cui proprietario il log non stabilisce (nessuna creazione
+  lo nomina, o una `owned_by` senza autore sta sopra quella del canale),
+  o ha l’account disabilitato, assente o non leggibile su Entra; il
+  proprietario disabilitato non riceve niente;
 - le persone il cui account non si sa giudicare: disabilitato, assente,
   senza data di creazione;
 - le righe applicate di cui il log non dice da quando: perché non porta
-  la scrittura del sigillo da parte del canale, oppure perché i campi
-  del canale li scrivono due account e non si sa quale abbia eseguito la
-  riga. La mail distingue i due casi, che mandano a cercare cose
-  diverse.
+  la scrittura del sigillo da parte del canale, oppure, senza l’utenza
+  configurata, perché i campi del canale li scrivono due account e non
+  si sa quale abbia eseguito la riga. La mail distingue i due casi, che
+  mandano a cercare cose diverse. Con l’utenza configurata un sigillo
+  scritto da un altro account non data niente.
+
+La colonna `senza_creatore` di `UbepRapporto_CL` **non si è
+rinominata**, e dalla 0.21.0 vuol dire «senza proprietario stabilito»:
+rinominarla sarebbe un cambio di schema senza beneficio.
 
 Il referente a cui appartengono persone mandate a IT senza giudizio lo
 legge nella sua mail, in una riga di conteggio («Persone non
@@ -1446,12 +1994,14 @@ raccolta impara le colonne prima che qualcuno le emetta):
 - **Il caricamento in batch delle richieste.** È aperto ai referenti dal
   2026-10-16, con il *Data Import Tool* sul ruolo `referente`, e non ha
   qui una procedura sua perché al canale non ne chiede una. Chi importa
-  risulta il creatore delle righe; il giro non si fida dei campi che
-  l’import scrive, ricalcola l’esito e trattiene una riga riscritta da
-  chi non l’ha creata («Una riga cambiata dopo essere stata applicata»,
-  §4); la posta va al creatore (§1). Che cosa fare per caricare lo
-  dicono le istruzioni per i referenti. IT non carica richieste per
-  conto dei referenti: il creatore risulterebbe IT.
+  risulta il creatore delle righe, e ne è il primo proprietario; il giro
+  non si fida dei campi che l’import scrive, `owned_by` compreso,
+  ricalcola l’esito e trattiene una riga riscritta da chi non ne è il
+  proprietario («Una riga cambiata dopo essere stata applicata», §4); la
+  posta va al proprietario (§1). Che cosa fare per caricare lo dicono le
+  istruzioni per i referenti. IT non carica richieste per conto dei
+  referenti: il creatore, e con lui il primo proprietario, risulterebbe
+  IT.
 
 - **Quando passare dalla simulazione alla scrittura vera.** Vedi §1: il
   giro del canale simula finché nessuno gli chiede di scrivere per

@@ -22,6 +22,7 @@ provisioning_reconcile(
   copy_to = NULL,
   reply_to = NULL,
   approvers = character(),
+  channel_account = NULL,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 ```
@@ -81,7 +82,8 @@ provisioning_reconcile(
 
 - copy_to:
 
-  Address in copy, on the outcome message only.
+  Address in copy, on the outcome message only; and the one address the
+  outcome goes to when the row has no established owner.
 
 - reply_to:
 
@@ -93,8 +95,17 @@ provisioning_reconcile(
 
   The IT accounts whose approval of a change counts on any row, as
   REDCap usernames. Read by the runner from the machine and empty by
-  default, so a runner that does not pass it leaves the creator as the
+  default, so a runner that does not pass it leaves the owner as the
   only one who approves.
+
+- channel_account:
+
+  The REDCap username that holds the register's token, the account the
+  round writes with, or more than one while the token changes hands.
+  Only their writes of `owned_by` are believed; with `NULL`, the
+  default, none is, every row belongs to its creator, and the round
+  writes no `owned_by`. The runner reads it from `UBEP_CANALE_UTENTE`, a
+  list separated by commas, which it requires.
 
 - at:
 
@@ -107,7 +118,16 @@ A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
 REDCap took and not the identities: they are two writes into two field
 families, and one counter for both would be a number nobody could read
 back into either. `credenziali` carries what the accounts created this
-round were born with, and it is the only road those take.
+round were born with, and it is the only road those take. `errori`
+carries the codes of every write and log that failed, and
+`TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage the field already
+showed could not be written into the log, and
+`TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
+held the seal the round writes and the channel's last seal in the log is
+another. A round that finds the register sealed and none of the accounts
+of `channel_account` in its log stops, `fermato`, with
+`TRASPORTO_REGISTRO_CANALE_ASSENTE`
+([`log_channel_absent()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.md)).
 
 ## Details
 
@@ -137,35 +157,74 @@ round were born with, and it is the only road those take.
 10. **create the accounts the gate allowed and the tenant does not
     hold**;
 
-11. write back the outcome, and only what changed.
+11. write back the outcome, then the owner, then the seal, and only what
+    changed.
 
-**The gate's subject is read from the log, not from the row.**
+**The gate's subjects are read from the log, not from the row.**
 `requested_by` says who filed a request only because `@USERNAME` filled
 it in, and an action tag governs the form REDCap draws rather than the
 layer that writes: measured on 2026-09-02, an import writes that field
 verbatim, so anyone holding the Data Import Tool could name a colleague
 who manages the project and have the gate check that colleague's rights.
-So between step 3 and step 4 the round asks REDCap who was authenticated
-when each row was created and puts that name in the column the gate
-reads. One call, `logtype = "record_add"` and no window: a record is
-created once, so the answer holds one row per record that ever existed
-rather than one per event, and it is asked only when a row is still
-standing to be judged or has changed since it was applied.
+`owned_by` is `@READONLY` and written verbatim by an import all the
+same. So between step 3 and step 4 the round asks REDCap who was
+authenticated when each row was created, one call with
+`logtype = "record_add"` and no window, and then who each row belongs to
+now, one call with `logtype = "record"` and no window: the newest write
+of `owned_by` signed by an account of `channel_account`, or the creator
+when none wrote one
+([`log_owner()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_owner.md)).
+Both are asked only when a row is still standing to be judged or has
+changed since it was applied, and the second only once the first has
+answered.
 
-**A row somebody other than its creator changed waits for its creator**,
-whether the round has applied it already or not yet. The same creator
-the gate judges is the one person who can approve somebody else's
-change, so whoever approves has already had their rights on the project
-checked, and will again on every round. Who made the change is read from
-that row's own log, whole, and without the round's own writes; the rule
-is
+**A row belongs to its owner, and a change somebody else had a hand in
+waits for the owner's approval**, whether the round has applied the row
+already or not yet. The owner is the creator until the round passes the
+row on to the last referent whose change was approved and carried out.
+Who made the change is read from that row's own log, whole, and without
+the round's own writes, and only the writes still in the row count; the
+rule is
 [`change_needs_approval()`](https://ubesp-dctv.github.io/ubep.azure/reference/change_needs_approval.md).
 The log is asked once per row that needs it: a row whose seal moved, and
 a row not applied yet that the round could act on. Two exceptions, both
 decided on 2026-10-15. A revocation and nothing else, made by somebody
 who manages the project, does not wait: it is judged at the gate, step
 6, because the rights come from the instance. And the IT accounts in
-`approvers` approve as the creator does.
+`approvers` approve as the owner does.
+
+**The seal, like the owner, comes from the channel's log** when
+`channel_account` is configured (decided on 2026-10-17). Whether a row
+moved is the row's seal against the last `applied_seal` the channel
+wrote in the row's current life, read from the owners' log
+([`log_channel_seal()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_seal.md)),
+and not against the field: an import writes the field as any other, and
+a referent who changed a row and imported the seal of the changed row
+would have it carried out on the owner's rights. A row the channel never
+sealed is one never carried out, whatever the field holds. The field
+gets the channel's seal back on the row's next execution; a held row
+keeps the field as it is, since a seal the channel rewrote there would
+read in the log as one more execution. Without the account, or when the
+owners' log cannot be read, the field is compared as before; in the
+second case no row has an owner, and none is carried out.
+
+**The gate judges whoever wrote what the round carries out**: every
+author of the change, and the owner when nobody changed the row. Each of
+them must have been able to do it by hand. Whoever approved is not
+asked, because approving is not writing and adds no power to the change:
+an approved change by a referent who does not manage the project stops
+at the gate, and an owner who lost the rights can still let a manager's
+change through. The gate asks on every round, so an owner who no longer
+manages the project stops the row even when nobody touched it.
+
+Without `channel_account` no write of `owned_by` is believed: every row
+belongs to its creator and none passes, which is the safe answer for a
+caller that does not configure it. Nor does the round write `owned_by`
+then: it would write the creator over a passage a configured round
+decided, and the next configured round would read that write as the
+channel's newest. Recognizing the channel by what it writes instead
+would hand a colleague's new row to a referent who imports `owned_by` on
+it before the round has written there.
 
 A row the log cannot name is **held and not refused**, which is the same
 distinction step 6 already makes between a permission that does not
@@ -173,10 +232,11 @@ grant and one that could not be read. "I could not establish who filed
 this" is our failure and not the referent's, and the code that carries
 it is a `TRASPORTO_` one so the row comes back next round and the mail
 comes to us. The same holds for a changed row whose own log could not be
-read, or whose creator the log does not name: it takes
+read, or whose owner the log does not establish, and for a change with
+an author the log does not name, approved or not: it takes
 `TRASPORTO_AUTORE_NON_LEGGIBILE` and not `held`, because a held message
-asks for an approval that nobody could give, from a creator nobody could
-name.
+asks for an approval that nobody could give, from an owner nobody could
+name, and the gate would have nobody whose rights to ask.
 
 **Step 3 is a step of this round and not a job of its own** — decision 2
 of the design — and the reason is latency: resolving and acting have the

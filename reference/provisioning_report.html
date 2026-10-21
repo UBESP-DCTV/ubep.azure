@@ -15,7 +15,7 @@ outside the channel's path, as a job of its own."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.20.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,8 @@ outside the channel's path, as a job of its own.</p>
 <span>  month <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mailer <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  redirect_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  copy_to <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  copy_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  channel_account <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -109,6 +110,17 @@ gives, for a run by hand; <code>NULL</code> otherwise.</p></dd>
 <dd><p>The address of IT: in copy on the referents' reports, and
 the recipient of the report to IT.</p></dd>
 
+
+<dt id="arg-channel-account">channel_account<a class="anchor" aria-label="anchor" href="#arg-channel-account"></a></dt>
+<dd><p>The REDCap username that holds the register's
+token, the account the round writes with, or more than one while the
+token changes hands. With it, only their writes of <code>owned_by</code> pass a row
+to another referent and only their seals date a row, and what any other
+account wrote in the channel's fields is ignored; with <code>NULL</code>, the
+default, every row belongs to its creator, and the channel is whoever
+wrote its fields. The runner reads it from <code>UBEP_CANALE_UTENTE</code>, a list
+separated by commas, which it requires.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -148,7 +160,19 @@ field test does not send everything again every day. A run with a forced
 month writes nothing at all.</p>
 <p>The report to IT goes to <code>copy_to</code>, the address IT is in copy at on every
 outcome, under the name <code><a href="report_it_key.html">report_it_key()</a></code>; the referents' reports go to the
-creator's account, with <code>copy_to</code> in copy.</p>
+owner's account, with <code>copy_to</code> in copy.</p>
+<p>A row goes to its owner as the month covered ended, at midnight in Rome
+between its last day and the next month's first, and not to its owner on
+the day of the run: <code><a href="log_owner.html">log_owner()</a></code> reads the row's log cut at that moment,
+so a write after it, of <code>owned_by</code> or of any other field of the channel,
+changes nothing. The month's reports
+leave over several days, until each referent has had theirs, and who is
+due must not change from one attempt to the next (decided on 2026-10-17):
+read on the day, a row passed on the 3rd would move from one referent's
+report to the other referent's between two attempts, after one of the two
+had left.
+Without <code>channel_account</code>, <code>NULL</code>, no write of <code>owned_by</code> is believed and
+every row stays with its creator.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
