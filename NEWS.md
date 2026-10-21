@@ -1,5 +1,18 @@
 # ubep.azure 0.21.0
 
+* **`build_ps1_from_xlsx()` is defunct.** Every instance is now linked to the
+  authorization channel, and `jobTitle` is no longer a channel, so the function
+  stops at once with an error that says so instead of building the `.ps1`
+  scripts. It stays exported, so that an old call fails with the explanation.
+  The internal helpers it called are untouched.
+
+* **The note of `approved_seal` in the register's dictionary says that
+  approving hands the row over.** Whoever approves a change hands the row to
+  whoever wrote it last, unless it is only a revocation: the change is carried
+  out with the rights of its author, and from then on the row is theirs. The
+  approval mail said so already. The note is to be updated on the live
+  project together with the one of `seal_state`.
+
 * **A row passes to the last referent whose change was approved and carried
   out.** Until now a row stayed with its creator for good, and a creator who
   lost *User Rights* on the project, or left UBEP, could not have a colleague's
