@@ -622,6 +622,14 @@ test_that("le note della protezione nominano chi possiede la riga", {
     nota[["approved_seal"]], "the event log says who owns the row",
     fixed = TRUE
   )
+  expect_match(
+    nota[["approved_seal"]], "Approving hands the row over to whoever wrote",
+    fixed = TRUE
+  )
+  expect_match(
+    nota[["approved_seal"]], "with the rights of whoever wrote it",
+    fixed = TRUE
+  )
   expect_no_match(nota[["seal_state"]], "created", fixed = TRUE)
   expect_no_match(nota[["approved_seal"]], "created", fixed = TRUE)
 })
