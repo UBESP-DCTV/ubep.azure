@@ -31,7 +31,7 @@ of their own second factor on an account created enabled and with none, which
 is the tenant's whole defense. \code{openssl} costs nothing to depend on: \code{httr2}
 already does.
 
-\code{generate_password()} is deliberately left alone. It feeds the deprecated
+\code{generate_password()} is deliberately left alone. It feeds the retired
 \code{.ps1} path, where the credential is written into a file that survives in a
 shared folder, and predictability is the least of that one's problems.
 }

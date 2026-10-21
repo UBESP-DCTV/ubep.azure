@@ -2,45 +2,35 @@
 % Please edit documentation in R/bild_ps1_from_xlsx.R
 \name{build_ps1_from_xlsx}
 \alias{build_ps1_from_xlsx}
-\title{Build ps1 files}
+\title{Build ps1 files (defunct)}
 \usage{
-build_ps1_from_xlsx(file = file.choose(), pwd)
+build_ps1_from_xlsx(...)
 }
 \arguments{
-\item{file}{(chr, default interactive selection windows) file path to
-the Excel file reporting the users to create (see details).}
-
-\item{pwd}{(chr, optional) initial password shared by every account in
-the batch. When omitted a strong random password is generated for the
-run. It is embedded in the generated \code{.ps1}; users are always forced
-to change it at first sign-in.}
+\item{...}{Ignored.}
+}
+\value{
+Never returns: it always signals an error.
 }
 \description{
-From a correctly formatted Excel file, generate the Microsoft Graph
-PowerShell (\code{New-MgUser}/\code{Remove-MgUser}) scripts to create and delete
-the users in bulk on Microsoft Entra ID, plus the CSV to add them to a
-group from the Azure portal.
+Calling this function always fails. It used to generate, from an Excel
+file of users, the Microsoft Graph PowerShell scripts
+(\code{New-MgUser}/\code{Remove-MgUser}) that created and deleted accounts in bulk
+on Microsoft Entra ID, carrying each user's project authorization in the
+\code{jobTitle} field of the account.
 }
 \details{
-The Excel file must have 9 column, named exactly (case sensitive) as:
-\verb{Nome, Cognome, Email, Prj1_ID, Prj1_role, Prj1_DAG, Prj2_ID, Prj2_role, Prj2_DAG}.
+It is retired because every instance is now linked to the authorization
+channel, and the \code{jobTitle} field is no longer a channel: a script that
+wrote it would put a second transport back on the same authorization.
+Accounts and rights are requested through the register, and the channel
+carries them out.
 
-Moreover:
-\itemize{
-\item no more than 2 projects can be added at the creation time using
-this script.
-\item At least information (all the three!) for one project must be
-provided for EDCxx servers
-\item For students on MSTxx servers no information should be provided
-about projects (i.e. the first three column should contain data
-only!)
-\item For template including a projects all the role and DAG for each
-of them must be provided!
-}
+The function stays exported so that a call from an old script stops with
+this explanation, instead of failing on a missing function.
 }
 \examples{
-\dontrun{
-  build_ps1_from_xlsx()
-}
+try(build_ps1_from_xlsx())
 
 }
+\keyword{internal}

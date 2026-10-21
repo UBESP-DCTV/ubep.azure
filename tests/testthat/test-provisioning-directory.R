@@ -528,7 +528,7 @@ test_that("the credential does not come from R's random number generator", {
   # factor enrolled yet, so whoever guesses this string enrols their own. R
   # seeds its generator from the clock and the process id, and this round runs
   # on a timer at six known times a day -- which is a search space, not a
-  # secret. `generate_password()` is left alone: it feeds the deprecated `.ps1`
+  # secret. `generate_password()` is left alone: it feeds the retired `.ps1`
   # path, where the credential is written into a file that survives the act,
   # and predictability is the least of that one's problems.
   expect_false(identical(first, second))

@@ -58,7 +58,7 @@ directory_fields <- function() {
 #' is the tenant's whole defense. `openssl` costs nothing to depend on: `httr2`
 #' already does.
 #'
-#' `generate_password()` is deliberately left alone. It feeds the deprecated
+#' `generate_password()` is deliberately left alone. It feeds the retired
 #' `.ps1` path, where the credential is written into a file that survives in a
 #' shared folder, and predictability is the least of that one's problems.
 #'

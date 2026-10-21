@@ -437,9 +437,10 @@ test_that("the creation path does not take over the carriers it replaces", {
       "address goes in the field that means contact address. The old carrier",
       "is read for as long as accounts carry it -- the sweep counts them, and",
       "the day the count is zero the fallback is dead -- and written never",
-      "again. `build_ps1_from_xlsx()` and `compose_jobtitle()` stay alive and",
-      "deprecated for edc01, mst01 and edc-redcap, where that field is still",
-      "the only channel there is."
+      "again. `build_ps1_from_xlsx()` is defunct, every instance being linked",
+      "to the channel; `compose_jobtitle()` is left in the package, reached",
+      "only by the internal `.ps1` helpers, and the creation path must not",
+      "reach it."
     )
   )
 })

@@ -1,75 +1,35 @@
-#' Build ps1 files
+#' Build ps1 files (defunct)
 #'
-#' From a correctly formatted Excel file, generate the Microsoft Graph
-#' PowerShell (`New-MgUser`/`Remove-MgUser`) scripts to create and delete
-#' the users in bulk on Microsoft Entra ID, plus the CSV to add them to a
-#' group from the Azure portal.
+#' Calling this function always fails. It used to generate, from an Excel
+#' file of users, the Microsoft Graph PowerShell scripts
+#' (`New-MgUser`/`Remove-MgUser`) that created and deleted accounts in bulk
+#' on Microsoft Entra ID, carrying each user's project authorization in the
+#' `jobTitle` field of the account.
 #'
-#' @details
-#' The Excel file must have 9 column, named exactly (case sensitive) as:
-#' `Nome, Cognome, Email, Prj1_ID, Prj1_role, Prj1_DAG, Prj2_ID,
-#'  Prj2_role, Prj2_DAG`.
+#' It is retired because every instance is now linked to the authorization
+#' channel, and the `jobTitle` field is no longer a channel: a script that
+#' wrote it would put a second transport back on the same authorization.
+#' Accounts and rights are requested through the register, and the channel
+#' carries them out.
 #'
-#' Moreover:
-#'   - no more than 2 projects can be added at the creation time using
-#'     this script.
-#'   - At least information (all the three!) for one project must be
-#'     provided for EDCxx servers
-#'   - For students on MSTxx servers no information should be provided
-#'     about projects (i.e. the first three column should contain data
-#'     only!)
-#'   - For template including a projects all the role and DAG for each
-#'     of them must be provided!
+#' The function stays exported so that a call from an old script stops with
+#' this explanation, instead of failing on a missing function.
 #'
-#' @param file (chr, default interactive selection windows) file path to
-#'   the Excel file reporting the users to create (see details).
-#' @param pwd (chr, optional) initial password shared by every account in
-#'   the batch. When omitted a strong random password is generated for the
-#'   run. It is embedded in the generated `.ps1`; users are always forced
-#'   to change it at first sign-in.
+#' @param ... Ignored.
+#'
+#' @return Never returns: it always signals an error.
 #'
 #' @export
+#' @keywords internal
 #'
 #' @examples
-#' \dontrun{
-#'   build_ps1_from_xlsx()
-#' }
+#' try(build_ps1_from_xlsx())
 #'
-build_ps1_from_xlsx <- function(file = file.choose(), pwd) {
-
-  if (missing(pwd) || is.null(pwd)) pwd <- generate_password()
-
-  ps_name <- stringr::str_remove(basename(file), "\\.[^\\.]+$")
-
-  out_dir <- dirname(file)
-  server <- basename(out_dir)
-  if (server == "toImport") {
-    out_dir <- dirname(out_dir)
-    usethis::ui_done(
-      "{usethis::ui_field('out_dir')} moved to {usethis::ui_value(out_dir)}."
-    )
-    server <- basename(out_dir)
-    usethis::ui_info("REDCap server is set to {usethis::ui_value(server)}")
-  }
-
-  stopifnot(
-    `file must start with "<yyyymmdd>_importUtenti"` =
-      stringr::str_detect(file, "importUtenti"),
-
-    `file must be an Excel file (.xls/.xlsx)` =
-      stringr::str_detect(file, "\\.xlsx?$"),
-
-    `file must be located inside "mst01", "edc", or an "edcXX" folder` =
-      server %in% c("mst01", "edc", paste0("edc0", 1:9), paste0("edc", 10:99))
-  )
-
-  excel2csv(file, out_dir)
-
-  ps1_create_bulk_users(ps_name, out_dir, pwd)
-
-  usethis::ui_done("PS scripts created.")
-
-  ps_file <- file.path(out_dir, paste0(ps_name, ".ps1"))
-
-  ps1_create_bulk_group(ps_file, out_dir)
+build_ps1_from_xlsx <- function(...) {
+  .Defunct(msg = paste(
+    "`build_ps1_from_xlsx()` is defunct.",
+    "Every instance is now linked to the authorization channel,",
+    "and the `jobTitle` field is no longer a channel:",
+    "request accounts and rights through the register of requests."
+  ))
 }
