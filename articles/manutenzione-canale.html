@@ -133,10 +133,12 @@ e non torna dentro il giro.</p>
 workspace di Log Analytics, attraverso un punto di raccolta e una regola
 di raccolta. Le due lavorazioni <strong>non condividono la
 tabella</strong>, quindi non condividono nessuna regola: una regola del
-canale non può leggere un record dell’osservatore, e viceversa. Le
-regole attive sono <strong>undici</strong>: sei dell’osservatore, cinque
-del canale. Dopo il rilascio della 0.21.0, al passo 5 (§5), saranno
-dodici: la sesta del canale è sugli accessi persi.</p>
+canale non può leggere un record dell’osservatore, e viceversa. L’elenco
+delle regole attive, con le gravità e le finestre, è nel foglio dei
+parametri di esercizio, e un numero scritto qui invecchierebbe a ogni
+rilascio che ne aggiunge una. La 0.21.0 ne aggiunge due al canale, una
+sugli accessi persi (passo 5 del suo rilascio, §5) e una sulle scritture
+non registrate.</p>
 <pre><code>     referenti                              chi mantiene
          |                                        |
          v                                        v
@@ -694,10 +696,15 @@ diritti.</strong> Il proprietario riscrive quel campo, e l’altro smette
 di esserne l’autore. Va <strong>cambiato il valore e poi
 rimesso</strong>: REDCap non registra una scrittura che non cambia il
 valore, quindi riscrivere lo stesso valore lascerebbe l’altro come
-autore. Senza questa via, una riga toccata per errore da un referente
-senza diritti e mai eseguita resterebbe ferma per sempre, perché non si
-cancella niente. Vale anche per una scrittura fatta sotto il sigillo
-mentre un giro girava (più sotto, il tratto scoperto).</p>
+autore. <strong>I due salvataggi vanno fatti uno dopo l’altro, lontano
+dal giro.</strong> Fra il primo e il secondo il registro porta il valore
+provvisorio, e un giro del canale (ogni quattro ore) che parta in mezzo
+lo legge e può eseguirlo: chi cambia e rimette deve salvare di seguito,
+e non avviare la procedura a ridosso di un giro. Senza questa via, una
+riga toccata per errore da un referente senza diritti e mai eseguita
+resterebbe ferma per sempre, perché non si cancella niente. Vale anche
+per una scrittura fatta sotto il sigillo mentre un giro girava (più
+sotto, il tratto scoperto).</p>
 <p><strong>Anche prima dell’esecuzione.</strong> Una riga che il giro
 non ha ancora applicato, appena depositata o rimasta in coda per un
 errore di trasporto o un dato da correggere, non ha un sigillo da
@@ -1122,12 +1129,23 @@ l’approvazione le copre. Anche questa procedura è da confermare al primo
 caso.</p>
 <p>I due codici che non fermano il giro,
 <code>TRASPORTO_PASSAGGIO_NON_REGISTRATO</code> e
-<code>TRASPORTO_SIGILLO_NON_REGISTRATO</code>, si vedono solo leggendo
-gli <code>errori</code> del record del giro. Nessuna delle regole del §5
-li legge: se serve un allarme, è una regola nuova, che qui si propone e
-che va decisa e messa nel foglio dei parametri, con la sua gravità.
+<code>TRASPORTO_SIGILLO_NON_REGISTRATO</code>, stanno negli
+<code>errori</code> del record del giro, e gli allarmi del §5 li vedono.
+La regola sugli esiti non scritti
+(<code>ubep-canale-esiti-non-scritti</code>: giro non fermato,
+<code>fermato == false</code>, con almeno un errore,
+<code>array_length(errori) &gt; 0</code>) scatta su qualunque codice
+negli <code>errori</code>, quindi anche su questi due. Dal rilascio
+della 0.21.0 c’è in più una regola dedicata alle scritture non
+registrate, <code>ubep-canale-scrittura-non-registrata</code>, a gravità
+2. Per questi due codici le notifiche sono quindi due, quella della
+regola sugli esiti non scritti e quella della regola dedicata: è voluto,
+e non è un errore della sottoscrizione.
 <code>TRASPORTO_REGISTRO_CANALE_ASSENTE</code> ferma il giro, e lo si
 vede anche dal giro fermato prima di agire.</p>
+<p>Sugli accessi persi la 0.21.0 porta
+<code>ubep-canale-accesso-perso</code>, sulla colonna
+<code>accessi_persi &gt; 0</code>, a gravità 2.</p>
 </div>
 <div class="section level3">
 <h3 id="una-persona-da-creare">Una persona da creare<a class="anchor" aria-label="anchor" href="#una-persona-da-creare"></a>
@@ -1322,16 +1340,19 @@ importarlo per sbaglio al posto del dizionario vero.</p>
 <div class="section level2">
 <h2 id="gli-allarmi">5. Gli allarmi<a class="anchor" aria-label="anchor" href="#gli-allarmi"></a>
 </h2>
-<p><strong>Undici regole attive, tutte con risoluzione
-automatica</strong>, divise in due famiglie che non si parlano:
-<strong>sei dell’osservatore</strong> e <strong>cinque del
-canale</strong>. Con la regola sugli accessi persi della 0.21.0, che si
-aggiunge al passo 5 del suo rilascio (più sotto), le regole del canale
-sono sei e le attive dodici. La divisione non è organizzativa ma tecnica
-— le due lavorazioni scrivono in <strong>due tabelle diverse</strong>, e
-una regola non può leggere la tabella dell’altra. Chi cerca il perché di
-una regola mancante deve guardare prima di tutto quale tabella potrebbe
-leggerla.</p>
+<p><strong>Le regole attive hanno tutte la risoluzione
+automatica</strong>, e sono divise in due famiglie che non si parlano:
+quelle <strong>dell’osservatore</strong> e quelle <strong>del
+canale</strong>. Il loro elenco, con nomi, gravità e finestre, è nel
+foglio dei parametri di esercizio, e il numero non si scrive qui perché
+cambia a ogni rilascio che ne aggiunge una. La 0.21.0 ne aggiunge due al
+canale, <code>ubep-canale-accesso-perso</code> e
+<code>ubep-canale-scrittura-non-registrata</code>; la prima si attiva al
+passo 5 del rilascio (più sotto). La divisione non è organizzativa ma
+tecnica — le due lavorazioni scrivono in <strong>due tabelle
+diverse</strong>, e una regola non può leggere la tabella dell’altra.
+Chi cerca il perché di una regola mancante deve guardare prima di tutto
+quale tabella potrebbe leggerla.</p>
 <p>La <strong>gravità</strong> dice la famiglia del problema, non chi lo
 ha trovato:</p>
 <ul>
@@ -1348,8 +1369,10 @@ collaudato; la superficie di un’istanza è cambiata; le liste di
 indirizzi sono cambiate o divergono; gli esiti sono stati calcolati e
 non scritti; una notifica non è stata recapitata; un’utenza è nata e il
 benvenuto non è arrivato alla persona; una persona ha l’accesso e la
-mail che lo dice non è partita (la regola proposta con la 0.21.0, con
-questa gravità da fissare nel foglio dei parametri).</li>
+mail che lo dice non è partita; un accesso perso
+(<code>ubep-canale-accesso-perso</code>, 0.21.0); una scrittura del giro
+che il log di REDCap non ha registrato
+(<code>ubep-canale-scrittura-non-registrata</code>, 0.21.0).</li>
 </ul>
 <p>I nomi esatti, le gravità e le finestre stanno nel foglio dei
 parametri.</p>
@@ -1606,11 +1629,10 @@ risulta cambiata: <code>owned_by</code> sta fuori dal sigillo.</li>
 <strong>Per ultime</strong>, dopo aver visto arrivare un record che
 porta le colonne nuove con un valore, la regola d’allarme su
 <code>accessi_persi &gt; 0</code> e quella sul record incompleto, che
-elenca le colonne per nome e deve guadagnare anche queste due. Le regole
-attive diventano dodici. Aggiornate prima, la regola sul record
-incompleto scatterebbe su ogni record sano, e quella su
-<code>accessi_persi &gt; 0</code> tacerebbe: su una colonna vuota il
-confronto è falso, non un errore.</li>
+elenca le colonne per nome e deve guadagnare anche queste due.
+Aggiornate prima, la regola sul record incompleto scatterebbe su ogni
+record sano, e quella su <code>accessi_persi &gt; 0</code> tacerebbe: su
+una colonna vuota il confronto è falso, non un errore.</li>
 </ol>
 </div>
 <div class="section level3">
