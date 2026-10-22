@@ -656,9 +656,9 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
         "",
         "- Dopo quella data la chiave d'ingresso non vale piu': chiedine una",
         "  nuova al tuo referente.",
-        "- Senza primo accesso l'account viene disattivato, non cancellato. Per",
-        "  riattivarlo scrivi al tuo referente; se non lo raggiungi, rispondi a",
-        "  questo messaggio (arriva a IT)."
+        "- Senza primo accesso l'account viene disattivato, non cancellato.",
+        "  Per riattivarlo scrivi al tuo referente; se non lo raggiungi,",
+        "  rispondi a questo messaggio (arriva a IT)."
       ),
       en = c(
         "",
