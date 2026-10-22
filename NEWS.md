@@ -1,3 +1,44 @@
+# ubep.azure (development version)
+
+* **The welcome and the message with the key give the date of the first
+  sign-in.** A key handed over is valid for at least 60 days from the creation
+  of the account, or from the last reset by IT, and an account nobody signs in
+  to is eventually deactivated, never deleted. The welcome says by when to
+  sign in for the first time, that after that date the key no longer works,
+  and that an account without a first sign-in is deactivated and how to have
+  it reactivated: through the referent first, then by replying to the
+  welcome. The message with the key tells the referent to hand it over at
+  once, by the same date, and to reply to it for a new key. The date is the
+  day the account was born in the calendar of Rome plus 59 days, written
+  `YYYY-MM-DD` like every other date in the messages
+  (`mail_first_signin_deadline()`). It is counted from the account's own
+  birth and not from the round: `directory_create_user()` now returns
+  `created_at`, Graph's `createdDateTime` when the answer to the creation
+  carries it, otherwise the moment read just before the request left, which
+  can only bring the date earlier. Whether the answer carries it is to be
+  seen on the first real creation.
+
+* **A new identity verdict, `disabled`.** One match on an account whose
+  `accountEnabled` is false was `existing`, and the round granted the right
+  and mailed the person an access they could not use. Now it is `disabled`,
+  with the account's UPN beside it: the row stops at the gate with
+  `TRASPORTO_ACCOUNT_DISATTIVATO`, stays in the queue, and its outcome goes
+  to the referent with IT in copy. When IT has enabled the account again the
+  next round finds it `existing` and goes on. A revocation is the exception
+  and still reaches the instance, since taking a right away needs nobody to
+  sign in. The channel never enables an account and asks for no new
+  permission: `accountEnabled` was already in the sweep.
+
+* **The `identity` field of the register gains the choice `disabled`, so this
+  release touches the schema.** The packaged dictionary and the live one have
+  to change together: either side without the other stops the round on
+  `DIZIONARIO_SCELTE_DIVERSE`. Import of the dictionary and installation in
+  the same window, with the round stopped in between.
+
+* **A test pins how an account is born.** The creation sends
+  `forceChangePasswordNextSignIn` true and no license, in a single call to
+  Graph; the test fails if either changes.
+
 # ubep.azure 0.21.0
 
 * **`build_ps1_from_xlsx()` is defunct.** Every instance is now linked to the
