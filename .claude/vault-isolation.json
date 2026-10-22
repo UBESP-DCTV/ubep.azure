@@ -1,4 +1,5 @@
 {
   "vault": "c:/Users/corra/github/cl/obsidian-vault",
-  "allowed_vault_paths": ["progetti/ubep-azure", "progetti/update-redcap"]
+  "allowed_vault_paths": ["progetti/ubep-azure", "progetti/update-redcap"],
+  "allowed_external_paths": ["C:/Users/corra/Nextcloud/30_accademia/39_admin/39.3_sop-wi"]
 }
