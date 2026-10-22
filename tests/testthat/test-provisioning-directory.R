@@ -657,6 +657,56 @@ test_that("an account is born with the key to change and with no license", {
 })
 
 
+test_that("a creation says when the account was born, as Graph wrote it", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(201L, paste0(
+      '{"id":"00000000-0000-0000-0000-00000000000a",',
+      '"createdDateTime":"2026-10-23T23:30:00Z"}'
+    ))
+  })
+
+  # test
+  # The messages promise a first sign-in by a date counted from this moment,
+  # so it has to be the account's own and not the round's.
+  expect_equal(answer[["created_at"]], "2026-10-23T23:30:00Z")
+})
+
+
+test_that("without the date from Graph the birth is never placed too late", {
+  # eval
+  before <- Sys.time()
+  answer <- crea(function(req) {
+    risposta(201L, '{"id":"00000000-0000-0000-0000-00000000000a"}')
+  })
+  after <- Sys.time()
+  moment <- as.POSIXct(
+    sub("Z$", "", answer[["created_at"]]),
+    tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+  )
+
+  # test
+  # Graph returns `createdDateTime` only when asked for by name, and the
+  # answer to a creation may well not carry it. The moment read just before
+  # the request leaves cannot be later than the birth, so a deadline counted
+  # from it can only come early, never late.
+  expect_false(is.na(moment))
+  expect_true(moment >= trunc(before, "secs") - 1)
+  expect_true(moment <= after)
+})
+
+
+test_that("a failed creation says no birth", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(403L, '{"error":{"code":"Authorization_RequestDenied"}}')
+  })
+
+  # test
+  expect_null(answer[["created_at"]])
+})
+
+
 test_that("the body carries the name, because the surname is the criterion", {
   # eval
   captured <- NULL

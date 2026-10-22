@@ -342,6 +342,13 @@ creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
 #'   return value and by no other road: not the register, not the telemetry
 #'   record, not standard output. `unconfirmed` is `TRUE` on a failure that
 #'   does not say whether the account was born, see `creation_failure()`.
+#'   `created_at`, on success only, is when the account was born, which the
+#'   messages count the first sign-in from (`mail_first_signin_deadline()`):
+#'   Graph's `createdDateTime` when the answer carries it, otherwise the
+#'   moment read just before the request left. Graph returns that field only
+#'   when a read names it, so the answer to a creation may not carry it; the
+#'   moment before the request cannot be later than the birth, so a deadline
+#'   counted from it can come early and never late.
 #'
 #' @keywords internal
 directory_create_user <- function(token, base_url, request, upn) {
@@ -370,6 +377,10 @@ directory_create_user <- function(token, base_url, request, upn) {
     otherMails = list(field("contact_email")),
     passwordProfile = profile
   )
+
+  # Read before the request leaves, so it cannot be later than the birth: see
+  # the return value.
+  leaving <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 
   response <- tryCatch(
     httr2::request(paste0(directory_endpoint(base_url), "/users")) |>
@@ -432,9 +443,15 @@ directory_create_user <- function(token, base_url, request, upn) {
     ))
   }
 
+  born <- payload[["createdDateTime"]]
+  if (!is.character(born) || length(born) != 1L || !nzchar(born)) {
+    born <- leaving
+  }
+
   list(
     ok = TRUE, errors = character(), payload = payload,
-    credential = credential, upn = upn, unconfirmed = FALSE
+    credential = credential, upn = upn, unconfirmed = FALSE,
+    created_at = born
   )
 }
 
