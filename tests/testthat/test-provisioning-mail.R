@@ -30,6 +30,74 @@ test_that("un `outcome_at` che non e' una data non diventa un'ora sbagliata", {
 })
 
 
+test_that("la data limite e' la creazione a Roma piu' 59 giorni", {
+  # test
+  # 59 and not 60: the person reads "entro il" as "up to that day included",
+  # while the key can stop working at any hour of the sixtieth day.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T10:00:00Z"), "2026-12-21"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2027-12-31T12:00:00Z"), "2028-02-28"
+  )
+})
+
+
+test_that("la data limite conta il giorno di Roma, non quello UTC", {
+  # test
+  # At 23:30 UTC it is already the next day in Rome, and the day the account
+  # was born is the one the person lives in. Counted from the UTC day the
+  # deadline would fall one day before; the opposite mistake, on an account
+  # born just after midnight in Rome, would promise a day the key may not have.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T23:30:00Z"), "2026-12-22"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T21:30:00Z"), "2026-12-21"
+  )
+})
+
+
+test_that("la data limite regge le due notti del cambio d'ora", {
+  # test
+  # Autumn 2026: the clocks go back at 01:00 UTC on 25 October. Before it Rome
+  # is two hours ahead, after it one, so 22:30 UTC is past midnight the night
+  # before and not the night after.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-24T22:30:00Z"), "2026-12-23"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-25T22:30:00Z"), "2026-12-23"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-25T23:30:00Z"), "2026-12-24"
+  )
+  # Spring 2027: the clocks go forward at 01:00 UTC on 28 March.
+  expect_equal(
+    mail_first_signin_deadline("2027-03-27T22:30:00Z"), "2027-05-25"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2027-03-28T22:30:00Z"), "2027-05-27"
+  )
+})
+
+
+test_that("la data limite legge le frazioni di secondo di Graph", {
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T10:00:00.1234567Z"), "2026-12-21"
+  )
+})
+
+
+test_that("un istante illeggibile non diventa una data limite sbagliata", {
+  # A wrong deadline is worse than a missing one: the person would plan on it.
+  expect_true(is.na(mail_first_signin_deadline("")))
+  expect_true(is.na(mail_first_signin_deadline("ieri")))
+  expect_true(is.na(mail_first_signin_deadline(NA_character_)))
+  expect_true(is.na(mail_first_signin_deadline(NULL)))
+})
+
+
 test_that("l'oggetto porta le due lingue e il numero della richiesta", {
   # eval
   detto <- mail_outcome_message(riga_di_prova())

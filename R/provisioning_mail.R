@@ -66,6 +66,49 @@ mail_local_time <- function(at) {
 }
 
 
+#' The last day a new account's first sign-in is promised
+#'
+#' A key handed over for a new account is valid for at least 60 days from the
+#' creation of the account, or from the last reset by IT; after that it may no
+#' longer work. The welcome and the message with the key tell a date, and this
+#' is the one place it is computed.
+#'
+#' The day the account was born in the calendar of Rome, plus 59. Rome because
+#' that is the day the person lives in: an account born at 23:30 UTC is born
+#' the next day for them. 59 and not 60 because "by" a date is read as "up to
+#' that day included", while the key can stop working at any hour of the
+#' sixtieth day. Written `YYYY-MM-DD`, like every other date the messages
+#' carry, which reads the same in both languages.
+#'
+#' It counts from the birth of the account and not from the round: the round
+#' reads its clock before it sweeps, and the account is born minutes later.
+#'
+#' @param created_at The moment the account was born, as Graph writes
+#'   `createdDateTime`: ISO 8601 in UTC, `2026-10-23T10:00:00Z`, with or
+#'   without fractions of a second.
+#'
+#' @return The date as `YYYY-MM-DD`, or `NA_character_` if `created_at` does
+#'   not parse: a wrong deadline is worse than a missing one.
+#'
+#' @keywords internal
+mail_first_signin_deadline <- function(created_at) {
+  if (is.null(created_at) || length(created_at) != 1L || is.na(created_at)) {
+    return(NA_character_)
+  }
+
+  moment <- as.POSIXct(
+    sub("Z$", "", as.character(created_at)),
+    tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+  )
+  if (is.na(moment)) {
+    return(NA_character_)
+  }
+
+  born <- as.Date(format(moment, "%Y-%m-%d", tz = "Europe/Rome"))
+  format(born + 59L, "%Y-%m-%d")
+}
+
+
 #' Say a value, or say why it is not there
 #'
 #' REDCap has no conditional piping, so the alert bodies gave every field a
