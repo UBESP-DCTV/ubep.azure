@@ -832,9 +832,11 @@ mail_access_message <- function(row, url = NULL) {
 
 #' Hand the way in to the person who asked for the account
 #'
-#' It carries the UPN, the key, and nothing else. No project, no role, no
-#' instance, nobody in copy: a message with a way in must not also carry the
-#' context that makes it spendable.
+#' It carries the UPN, the key, the date of the first sign-in, and nothing
+#' else. No project, no role, no instance, nobody in copy: a message with a
+#' way in must not also carry the context that makes it spendable. The date
+#' is not that context: it says until when the key is any use, which is what
+#' the referent needs to hand it over in time.
 #'
 #' What it asks of the referent is the rule decided for handing the key over:
 #' another channel if there is one, otherwise a new message with the key

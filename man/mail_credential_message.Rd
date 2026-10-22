@@ -21,9 +21,11 @@ out.}
 A list with \code{subject} and \code{body}.
 }
 \description{
-It carries the UPN, the key, and nothing else. No project, no role, no
-instance, nobody in copy: a message with a way in must not also carry the
-context that makes it spendable.
+It carries the UPN, the key, the date of the first sign-in, and nothing
+else. No project, no role, no instance, nobody in copy: a message with a
+way in must not also carry the context that makes it spendable. The date
+is not that context: it says until when the key is any use, which is what
+the referent needs to hand it over in time.
 }
 \details{
 What it asks of the referent is the rule decided for handing the key over:
