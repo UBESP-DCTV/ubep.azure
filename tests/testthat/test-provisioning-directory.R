@@ -622,6 +622,41 @@ test_that("a creation sends the minimum body and hands the credential back", {
 })
 
 
+test_that("an account is born with the key to change and with no license", {
+  # eval
+  captured <- list()
+  crea(function(req) {
+    captured[[length(captured) + 1L]] <<- req
+    risposta(201L, '{"id":"00000000-0000-0000-0000-00000000000a"}')
+  })
+  sent <- captured[[1L]][["body"]][["data"]]
+  keys <- function(x) {
+    if (!is.list(x)) {
+      return(character())
+    }
+    c(names(x), unlist(lapply(x, keys), use.names = FALSE))
+  }
+
+  # test
+  # Every account the round creates is one nobody has entered yet, and two
+  # properties of its birth are what the rest of UBEP relies on to recognize
+  # it: the key has to be changed at first sign-in, and no license is assigned
+  # directly. An account born without the first escapes the rule that makes
+  # an unused key stop working after 60 days; a license assigned here would be
+  # one the channel cannot take back. Both are asserted on the wire, together
+  # with the one call the creation makes, so that a license assigned by a
+  # second call cannot slip in beside a clean body.
+  expect_length(captured, 1L)
+  expect_equal(captured[[1L]][["method"]], "POST")
+  expect_match(captured[[1L]][["url"]], "/users$")
+  expect_identical(
+    sent[["passwordProfile"]][["forceChangePasswordNextSignIn"]], TRUE
+  )
+  expect_false(any(grepl("licen", keys(sent), ignore.case = TRUE)))
+  expect_false(grepl("licen", captured[[1L]][["url"]], ignore.case = TRUE))
+})
+
+
 test_that("the body carries the name, because the surname is the criterion", {
   # eval
   captured <- NULL
