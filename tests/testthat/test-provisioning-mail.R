@@ -546,6 +546,144 @@ test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
 })
 
 
+# The body with the wrapped lines of a list item joined, so a sentence can be
+# asserted whole wherever the text breaks it.
+disteso <- function(corpo) gsub("\n  ", " ", corpo, fixed = TRUE)
+
+
+test_that("il benvenuto dice entro quando entrare, nelle due lingue", {
+  # eval
+  detto <- disteso(mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    deadline = "2026-12-21"
+  )[["body"]])
+
+  # test
+  for (frase in c(
+    "Primo accesso entro il 2026-12-21.",
+    paste0(
+      "- Dopo quella data la chiave d'ingresso non vale piu': chiedine una ",
+      "nuova al tuo referente."
+    ),
+    paste0(
+      "- Senza primo accesso l'account viene disattivato, non cancellato. ",
+      "Per riattivarlo scrivi al tuo referente; se non lo raggiungi, ",
+      "rispondi a questo messaggio (arriva a IT)."
+    ),
+    "First sign-in by 2026-12-21.",
+    paste0(
+      "- After that date your sign-in key no longer works: ask your ",
+      "referent for a new one."
+    ),
+    paste0(
+      "- If you never sign in, your account is deactivated, not deleted. ",
+      "To reactivate it, write to your referent; if you cannot reach them, ",
+      "reply to this message (it goes to IT)."
+    )
+  )) {
+    expect_match(detto, frase, fixed = TRUE, info = frase)
+  }
+  expect_false(grepl("[^\\x01-\\x7F]", detto, perl = TRUE))
+  # One date and one thing to do: the deadline, once in each language, and no
+  # other date beside it.
+  expect_equal(
+    regmatches(detto, gregexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", detto))[[1]],
+    rep("2026-12-21", 2L)
+  )
+})
+
+
+test_that("la data limite sta fra la chiave e i passi del primo accesso", {
+  # eval
+  righe <- strsplit(mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    url = "https://edc10.example.org/", deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
+
+  # test
+  # After the user name and the word that the key comes from the referent,
+  # before the steps: the date is about the key, and the steps are what to do
+  # with it.
+  expect_true(dove("ti autentichi") < dove("Primo accesso entro"))
+  expect_true(dove("non e' in questo") < dove("Primo accesso entro"))
+  expect_true(dove("Primo accesso entro") < dove("Al primo accesso ti"))
+  expect_true(dove("sign in with") < dove("First sign-in by"))
+  expect_true(dove("The way in is not") < dove("First sign-in by"))
+  expect_true(dove("First sign-in by") < dove("At first sign-in you"))
+})
+
+
+test_that("senza data limite il benvenuto parte com'era", {
+  # eval
+  riga <- riga_di_prova()
+  upn <- "sara.collaudozeta@ubep.unipd.it"
+  com_era <- mail_welcome_message(riga, upn = upn)
+
+  # test
+  for (scadenza in list(NULL, NA_character_, "")) {
+    detto <- mail_welcome_message(riga, upn = upn, deadline = scadenza)
+    expect_identical(detto, com_era)
+    expect_no_match(detto[["body"]], "Primo accesso entro", fixed = TRUE)
+  }
+})
+
+
+test_that("il messaggio con la chiave dice al referente entro quando", {
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  it <- paste0(
+    "Consegnala subito: il primo accesso va fatto entro il 2026-12-21. ",
+    "Dopo quella data la chiave non vale piu': per una nuova rispondi a ",
+    "questo messaggio."
+  )
+  en <- paste0(
+    "Hand it over now: the first sign-in must happen by 2026-12-21. After ",
+    "that date the key no longer works: reply to this message for a new one."
+  )
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
+
+  # test
+  # Under the sentence on how to hand the key over, before the one on what
+  # happens at first sign-in.
+  expect_true(it %in% righe)
+  expect_true(en %in% righe)
+  expect_true(dove("Consegna la chiave alla persona") < dove(it))
+  expect_true(dove(it) < dove("Va cambiata al primo accesso"))
+  expect_true(dove("Hand the key to the person") < dove(en))
+  expect_true(dove(en) < dove("It must be changed at first sign-in"))
+  expect_false(any(grepl("[^\\x01-\\x7F]", righe, perl = TRUE)))
+  # One date: the deadline, once in each language, and no other beside it.
+  expect_equal(
+    unlist(regmatches(righe, gregexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", righe))),
+    rep("2026-12-21", 2L)
+  )
+})
+
+
+test_that("senza data limite il messaggio con la chiave parte com'era", {
+  # eval
+  riga <- riga_di_prova()
+  com_era <- mail_credential_message(
+    riga, upn = "sara@ubep.unipd.it", credential = finti[["parola"]]
+  )
+
+  # test
+  for (scadenza in list(NULL, NA_character_, "")) {
+    expect_identical(
+      mail_credential_message(
+        riga, upn = "sara@ubep.unipd.it", credential = finti[["parola"]],
+        deadline = scadenza
+      ),
+      com_era
+    )
+  }
+})
+
+
 test_that("manda al servizio di posta, col mittente e la chiave che riceve", {
   # eval
   catturata <- NULL
@@ -866,6 +1004,39 @@ test_that("una nascita produce due messaggi, a due destinatari diversi", {
     c("sara.esterna@example.org", "cinzia@ubep.unipd.it")
   )
   expect_equal(detto[["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("benvenuto e chiave portano la data limite contata dalla nascita", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  # Born at 23:30 UTC, which in Rome is already the next day: the deadline is
+  # counted from that day, and from nothing the round knows about itself.
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]], created_at = "2026-10-23T23:30:00Z"
+  ))
+
+  # eval
+  mail_round(
+    changed, registro, born = nati, mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+  mandate <- posta[["mandate"]]()
+  corpo_a <- function(chi) {
+    Filter(function(m) identical(m[["to"]], chi), mandate)[[1]][["body"]]
+  }
+
+  # test
+  expect_match(
+    corpo_a("sara.esterna@example.org"), "Primo accesso entro il 2026-12-22.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo_a("cinzia@ubep.unipd.it"), "entro il 2026-12-22.", fixed = TRUE
+  )
 })
 
 

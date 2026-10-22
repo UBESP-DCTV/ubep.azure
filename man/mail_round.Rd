@@ -24,8 +24,10 @@ mail_round(
 \item{register}{The register as read, carrying every field the messages
 name.}
 
-\item{born}{The accounts created this round: lists with \code{record_id}, \code{upn}
-and \code{credential}.}
+\item{born}{The accounts created this round: lists with \code{record_id}, \code{upn},
+\code{credential} and \code{created_at}, the moment the account was born, from
+which the welcome and the key count the first sign-in. Without it the
+two messages leave without the date.}
 
 \item{mailer}{\verb{function(to, cc, subject, body)} returning \code{ok} and \code{errors}.}
 

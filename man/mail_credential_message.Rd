@@ -4,7 +4,7 @@
 \alias{mail_credential_message}
 \title{Hand the way in to the person who asked for the account}
 \usage{
-mail_credential_message(row, upn, credential)
+mail_credential_message(row, upn, credential, deadline = NULL)
 }
 \arguments{
 \item{row}{One register row as a list.}
@@ -12,6 +12,10 @@ mail_credential_message(row, upn, credential)
 \item{upn}{The account's user principal name.}
 
 \item{credential}{What the account was born with.}
+
+\item{deadline}{The date of the first sign-in, from
+\code{mail_first_signin_deadline()}; \code{NULL}, \code{NA} or empty leaves the line
+out.}
 }
 \value{
 A list with \code{subject} and \code{body}.
@@ -39,5 +43,9 @@ into -- and the managed identity cannot repair that, because \code{User.Create}
 and \code{User.Read.All} do not touch an account that exists. \code{mail_round()}
 reports the failure under its own code, so an alarm can tell it apart from a
 message that will simply be retried.
+
+Under the sentence on how to hand the key over it gives the date the first
+sign-in has to happen by, the one the welcome gives the person, and where
+to ask for a new key after it: a reply to this message, which reaches IT.
 }
 \keyword{internal}

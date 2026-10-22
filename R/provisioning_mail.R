@@ -535,6 +535,19 @@ mail_first_contact <- function(referente, cosa) {
 }
 
 
+#' Whether a deadline was handed over, so that a message can say it
+#'
+#' @param deadline What `mail_first_signin_deadline()` returned, or `NULL`.
+#'
+#' @return `TRUE` when there is a date to print.
+#'
+#' @keywords internal
+mail_has_deadline <- function(deadline) {
+  !is.null(deadline) && length(deadline) == 1L && !is.na(deadline) &&
+    nzchar(deadline)
+}
+
+
 #' Tell a person an account now exists for them, and what stands in the way
 #'
 #' It carries no way in, and that is the decision rather than an omission:
@@ -556,18 +569,30 @@ mail_first_contact <- function(referente, cosa) {
 #' closes by sending the person to the referent first and to IT second, with
 #' `mail_first_contact()`.
 #'
+#' Between the key and the steps of the first sign-in it gives the date the
+#' first sign-in has to happen by: the key is valid for at least 60 days from
+#' the creation of the account, and the date is
+#' `mail_first_signin_deadline()`. Two lines say what happens after it, and
+#' to whom to write, in the order the closing sentence already gives: the key
+#' stops working, and an account nobody signed in to is deactivated, never
+#' deleted. No other date and no other way: one date, one thing to do.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name, as created.
 #' @param url The address the row's instance opens at, from
 #'   `mail_instance_url()`; `NULL`, `NA` or empty leaves it out.
+#' @param deadline The date of the first sign-in, from
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the lines
+#'   out.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_welcome_message <- function(row, upn, url = NULL) {
+mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
   stopifnot(
     is.list(row), is.character(upn), length(upn) == 1L, nzchar(upn),
-    is.null(url) || length(url) == 1L
+    is.null(url) || length(url) == 1L,
+    is.null(deadline) || length(deadline) == 1L
   )
 
   # The person the key goes to, so the owner and not the field an import
@@ -623,6 +648,33 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     )
   }
 
+  limite <- if (mail_has_deadline(deadline)) {
+    list(
+      it = c(
+        "",
+        paste0("Primo accesso entro il ", deadline, "."),
+        "",
+        "- Dopo quella data la chiave d'ingresso non vale piu': chiedine una",
+        "  nuova al tuo referente.",
+        "- Senza primo accesso l'account viene disattivato, non cancellato. Per",
+        "  riattivarlo scrivi al tuo referente; se non lo raggiungi, rispondi a",
+        "  questo messaggio (arriva a IT)."
+      ),
+      en = c(
+        "",
+        paste0("First sign-in by ", deadline, "."),
+        "",
+        "- After that date your sign-in key no longer works: ask your referent",
+        "  for a new one.",
+        "- If you never sign in, your account is deactivated, not deleted. To",
+        "  reactivate it, write to your referent; if you cannot reach them,",
+        "  reply to this message (it goes to IT)."
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
   it <- c(
     paste0("Ciao ", row[["first_name"]], ","),
     "",
@@ -635,6 +687,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     paste0(
       "La chiave d'ingresso non e' in questo messaggio: ", consegna[["it"]]
     ),
+    limite[["it"]],
     "",
     "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
     "",
@@ -658,6 +711,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     paste0(
       "The way in is not in this message: ", consegna[["en"]]
     ),
+    limite[["en"]],
     "",
     "At first sign-in you will be asked three things, in this order:",
     "",
@@ -800,19 +854,50 @@ mail_access_message <- function(row, url = NULL) {
 #' reports the failure under its own code, so an alarm can tell it apart from a
 #' message that will simply be retried.
 #'
+#' Under the sentence on how to hand the key over it gives the date the first
+#' sign-in has to happen by, the one the welcome gives the person, and where
+#' to ask for a new key after it: a reply to this message, which reaches IT.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name.
 #' @param credential What the account was born with.
+#' @param deadline The date of the first sign-in, from
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the line
+#'   out.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_credential_message <- function(row, upn, credential) {
+mail_credential_message <- function(row, upn, credential, deadline = NULL) {
   stopifnot(
     is.list(row),
     is.character(upn), length(upn) == 1L, nzchar(upn),
-    is.character(credential), length(credential) == 1L, nzchar(credential)
+    is.character(credential), length(credential) == 1L, nzchar(credential),
+    is.null(deadline) || length(deadline) == 1L
   )
+
+  limite <- if (mail_has_deadline(deadline)) {
+    list(
+      it = c(
+        "",
+        paste0(
+          "Consegnala subito: il primo accesso va fatto entro il ", deadline,
+          ". Dopo quella data la chiave non vale piu': per una nuova rispondi ",
+          "a questo messaggio."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "Hand it over now: the first sign-in must happen by ", deadline,
+          ". After that date the key no longer works: reply to this message ",
+          "for a new one."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
 
   it <- c(
     "Hai chiesto un account, ed e' stato creato. Ecco come entrarci.",
@@ -830,6 +915,7 @@ mail_credential_message <- function(row, upn, credential) {
       "(togli il testo citato): quel messaggio a parte e' andato ",
       "all'indirizzo della richiesta."
     ),
+    limite[["it"]],
     "",
     "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
   )
@@ -850,6 +936,7 @@ mail_credential_message <- function(row, upn, credential) {
       "the quoted text): that separate message went to the address in the ",
       "request."
     ),
+    limite[["en"]],
     "",
     paste0(
       "It must be changed at first sign-in, and whoever uses it first takes ",
@@ -1029,8 +1116,10 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
 #'   name.
-#' @param born The accounts created this round: lists with `record_id`, `upn`
-#'   and `credential`.
+#' @param born The accounts created this round: lists with `record_id`, `upn`,
+#'   `credential` and `created_at`, the moment the account was born, from
+#'   which the welcome and the key count the first sign-in. Without it the
+#'   two messages leave without the date.
 #' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
 #' @param dry_run When `TRUE` nothing is sent and every row comes back
 #'   writable -- the round behaves as it did before this file existed.
@@ -1189,6 +1278,9 @@ mail_round <- function(changed,
       conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
       next
     }
+    # The date of the first sign-in, counted from the birth the creation
+    # reported and the same in both messages.
+    scadenza <- mail_first_signin_deadline(nato[["created_at"]])
     # The welcome is not retried either, for the reason the key is not: the
     # account is born and nothing in the next round sends it again. A row
     # held back for it would not bring it back, so its failure is counted and
@@ -1196,7 +1288,8 @@ mail_round <- function(changed,
     benvenuto <- consegna(
       riga[["contact_email"]], NULL,
       mail_welcome_message(
-        riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]])
+        riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]]),
+        deadline = scadenza
       )
     )
     if (isTRUE(benvenuto[["ok"]])) {
@@ -1211,7 +1304,8 @@ mail_round <- function(changed,
     segreto <- consegna(
       mail_referent(riga), NULL,
       mail_credential_message(
-        riga, upn = nato[["upn"]], credential = nato[["credential"]]
+        riga, upn = nato[["upn"]], credential = nato[["credential"]],
+        deadline = scadenza
       )
     )
     if (isTRUE(segreto[["ok"]])) {

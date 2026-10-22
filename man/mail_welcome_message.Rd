@@ -4,7 +4,7 @@
 \alias{mail_welcome_message}
 \title{Tell a person an account now exists for them, and what stands in the way}
 \usage{
-mail_welcome_message(row, upn, url = NULL)
+mail_welcome_message(row, upn, url = NULL, deadline = NULL)
 }
 \arguments{
 \item{row}{One register row as a list.}
@@ -13,6 +13,10 @@ mail_welcome_message(row, upn, url = NULL)
 
 \item{url}{The address the row's instance opens at, from
 \code{mail_instance_url()}; \code{NULL}, \code{NA} or empty leaves it out.}
+
+\item{deadline}{The date of the first sign-in, from
+\code{mail_first_signin_deadline()}; \code{NULL}, \code{NA} or empty leaves the lines
+out.}
 }
 \value{
 A list with \code{subject} and \code{body}.
@@ -37,5 +41,13 @@ cadence of the round. Without an address the message still leaves, without
 that line and the address: a missing address is no reason to lose it. It
 closes by sending the person to the referent first and to IT second, with
 \code{mail_first_contact()}.
+
+Between the key and the steps of the first sign-in it gives the date the
+first sign-in has to happen by: the key is valid for at least 60 days from
+the creation of the account, and the date is
+\code{mail_first_signin_deadline()}. Two lines say what happens after it, and
+to whom to write, in the order the closing sentence already gives: the key
+stops working, and an account nobody signed in to is deactivated, never
+deleted. No other date and no other way: one date, one thing to do.
 }
 \keyword{internal}
