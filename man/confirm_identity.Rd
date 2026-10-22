@@ -26,6 +26,16 @@ address rather than a label: \code{DATO_} closes the row against whoever filed i
 and mails them, \code{TRASPORTO_} keeps it queued and mails us.
 }
 \details{
+A confirmed match on an account whose \code{accountEnabled} is false is
+\code{disabled} and not \code{existing}: the person is there and cannot sign in, so
+granting a right would mail them an access they cannot use. The UPN goes
+with the verdict, as a collision's proposal does, because it names the
+account IT has to enable. Only a false value counts: the sweep always asks
+for the field, and a missing one is an account this package cannot judge,
+not one somebody turned off, so it is judged as it was before the field was
+read. A row that was \code{absent} and finds its account disabled loses the
+memory of \code{created}; enabled again, it resolves \code{existing}.
+
 The two \code{TRASPORTO_} ones are fields the account does not carry, and neither
 is the filer's to fix. Telling the one person who cannot reach a directory
 attribute that they are not authorized sends them to go and argue — which is

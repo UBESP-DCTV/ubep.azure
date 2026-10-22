@@ -7,7 +7,7 @@
 identity_vocabulary()
 }
 \value{
-A character vector of the five verdicts.
+A character vector of the six verdicts.
 }
 \description{
 What the round observed about the person a request names, never what somebody
@@ -15,15 +15,16 @@ should do about it. The distinction is the same one \code{outcome} makes: a
 verdict, not an instruction.
 }
 \details{
-Five words, and they are exhaustive over the two questions the resolution
-asks — how many accounts match the contact address, and whether the composed
-UPN is taken:
+Six words, and they are exhaustive over the three questions the resolution
+asks (how many accounts match the contact address, whether the composed
+UPN is taken, and whether the one account matched can sign in):
 \itemize{
-\item one match — \code{existing}, or \code{created} when the account was not there when
+\item one match: \code{existing}, or \code{created} when the account was not there when
 the row was last looked at;
-\item no match, composed UPN free — \code{absent};
-\item no match, composed UPN taken — \code{collision};
-\item more than one match — \code{ambiguous}.
+\item one match on a deactivated account: \code{disabled};
+\item no match, composed UPN free: \code{absent};
+\item no match, composed UPN taken: \code{collision};
+\item more than one match: \code{ambiguous}.
 }
 
 \code{absent} is the one the four approved on 2026-08-07 were missing, and its
@@ -32,8 +33,14 @@ act, so the case became \code{created} at once. It does not, and a state that ca
 last needs a name — for a creation that failed, and for the row a person is
 still looking at.
 
+\code{disabled} is the sixth, and the last in the list so that the five the live
+dictionary already carried keep their order. The channel never enables an
+account, so the row waits for IT (\code{identity_stop_codes()}).
+
 Only the first two admit an action: the gate refuses a row whose verdict is
-any of the other three, which is why the vocabulary being closed matters more
-here than a vocabulary usually does.
+any of the other four, which is why the vocabulary being closed matters more
+here than a vocabulary usually does. A revocation on a \code{disabled} account is
+the one exception, and it is the round's (\code{provisioning_reconcile()}):
+taking a right away does not need anybody to sign in.
 }
 \keyword{internal}

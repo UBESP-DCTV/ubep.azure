@@ -7,7 +7,7 @@
 identity_verdict(identity, username = "", errors = character(), composed = "")
 }
 \arguments{
-\item{identity}{One of the five words, or \code{""} when the row could not be
+\item{identity}{One of the six words, or \code{""} when the row could not be
 resolved and has to stop.}
 
 \item{username}{The UPN, the proposal, or \code{""}.}

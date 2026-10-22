@@ -417,6 +417,18 @@ provisioning_reconcile <- function(register_url,
   # granted that project by hand must not be able to make the person to grant
   # it to either, and that question is answered by an instance.
   admitted <- identity_actionable(verdicts)
+
+  # A revocation on an account that cannot sign in is the one row the gate
+  # admits without a confirmed identity of the usual kind. Taking a right away
+  # does not need the person to sign in, and stopped here the right would stay
+  # in REDCap with nothing in the channel able to remove it -- which is not
+  # what happened while a deactivated account still read as `existing`. The
+  # UPN is the one the sweep found, so the pair is the right one; everything
+  # else about the row is judged as for any other.
+  admitted <- admitted | (
+    identity_normalize(verdicts) == "disabled" &
+      trimws(as.character(register[["request_status"]])) == "revoked"
+  )
   absent <- !admitted & identity_normalize(verdicts) == "absent"
 
   # A request revoked before it was ever served. Until now `request_status`

@@ -857,6 +857,62 @@ test_that("a collision stops the row and leaves the proposal where a person read
 })
 
 
+test_that("a deactivated account keeps the row away from the instance and passes it to IT", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(accountEnabled = FALSE))
+  )
+
+  # test
+  # The person exists and cannot sign in: no right is granted, so no access
+  # message leaves, and nobody is created in their place. The row waits under
+  # a `TRASPORTO_` code, which mails the referent with IT in copy and comes
+  # back by itself once IT has reactivated the account. The channel enables
+  # nothing: the only call to Graph is the sweep.
+  expect_length(interrogazioni(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_ACCOUNT_DISATTIVATO"
+  )
+  expect_equal(identita_scritte()[["identity"]], "disabled")
+  expect_equal(
+    identita_scritte()[["username"]], "mario.rossi@ubep.unipd.it"
+  )
+})
+
+
+test_that("a revocation still reaches the instance when the account is deactivated", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(request_status = "revoked"))),
+    istanza_doppia(
+      list(),
+      list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
+    ),
+    directory_doppia(graph_user(accountEnabled = FALSE))
+  )
+  revoche <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, interrogazioni())
+
+  # test
+  # Taking a right away does not need the person to sign in. Stopped at the
+  # gate, the revocation would leave the right in REDCap with nothing in the
+  # channel able to remove it, which is not what happened while a deactivated
+  # account still read as `existing`.
+  expect_equal(identita_scritte()[["identity"]], "disabled")
+  expect_length(revoche, 1L)
+  expect_equal(
+    revoche[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome"]], "simulated")
+})
+
+
 test_that("an absence leaves the row pending and mails nobody about it", {
   # eval
   esito <- giro(

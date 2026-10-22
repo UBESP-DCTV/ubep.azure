@@ -85,9 +85,14 @@ test_that("the identity vocabulary names the state nobody had named", {
   # between — and once a creation can fail — that state lasts, and a state that
   # lasts needs a name. `absent` is a verdict, not an instruction: it says what
   # was observed, the way `outcome` says what happened.
+  #
+  # `disabled` is the sixth, for the same reason: one match on an account that
+  # cannot sign in is neither `existing` nor anything the other four say.
+  # Appended last, so the five codes the live dictionary carries keep their
+  # order.
   expect_equal(
     identity_vocabulary(),
-    c("existing", "created", "absent", "collision", "ambiguous")
+    c("existing", "created", "absent", "collision", "ambiguous", "disabled")
   )
 })
 

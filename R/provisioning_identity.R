@@ -24,7 +24,7 @@ identity_normalize <- function(values) {
 #' verdict beside it — so a name somebody typed into a form is, as things
 #' stand, sufficient to be granted rights under.
 #'
-#' It admits two of the five words and refuses everything else, **including the
+#' It admits two of the six words and refuses everything else, **including the
 #' empty one**. That fourth case is the one that gets forgotten precisely
 #' because it is the current one: `identity` is empty on every row of the live
 #' register, so a gate that admitted it would admit everything on the day it is
@@ -75,6 +75,14 @@ identity_actionable <- function(identity) {
 #' `scope_errors()` uses it: it is what `round_outcome_kind()` reads to close
 #' the row against whoever filed it rather than keeping it in the queue for us.
 #'
+#' `disabled` is the other way round, and on purpose. The account is there and
+#' cannot sign in, and nothing in the register can change that: only IT
+#' enables an account, the channel never does. So the code is
+#' `TRASPORTO_ACCOUNT_DISATTIVATO`, which keeps the row in the queue and sends
+#' the outcome to the referent with IT in copy, the address the round already
+#' writes to for what is ours. Once IT has enabled the account the next round
+#' finds it `existing` and goes on without anybody refiling the row.
+#'
 #' @param identity The verdict the resolution has just computed.
 #' @param errors The codes the resolution itself produced, which win: a row
 #'   stopped before any verdict already knows exactly what is wrong with it,
@@ -93,6 +101,7 @@ identity_stop_codes <- function(identity, errors = character()) {
     identity_normalize(identity),
     ambiguous = "DATO_RECAPITO_NON_IDENTIFICA",
     collision = "DATO_IDENTITA_IN_COLLISIONE",
+    disabled = "TRASPORTO_ACCOUNT_DISATTIVATO",
     character()
   )
 }
@@ -253,7 +262,7 @@ upn_proposal <- function(composed, taken) {
 
 #' Say what the resolution decided about one row
 #'
-#' @param identity One of the five words, or `""` when the row could not be
+#' @param identity One of the six words, or `""` when the row could not be
 #'   resolved and has to stop.
 #' @param username The UPN, the proposal, or `""`.
 #' @param errors Codes, addressed by their prefix.
@@ -541,6 +550,16 @@ resolve_against_directory <- function(request,
 #' address rather than a label: `DATO_` closes the row against whoever filed it
 #' and mails them, `TRASPORTO_` keeps it queued and mails us.
 #'
+#' A confirmed match on an account whose `accountEnabled` is false is
+#' `disabled` and not `existing`: the person is there and cannot sign in, so
+#' granting a right would mail them an access they cannot use. The UPN goes
+#' with the verdict, as a collision's proposal does, because it names the
+#' account IT has to enable. Only a false value counts: the sweep always asks
+#' for the field, and a missing one is an account this package cannot judge,
+#' not one somebody turned off, so it is judged as it was before the field was
+#' read. A row that was `absent` and finds its account disabled loses the
+#' memory of `created`; enabled again, it resolves `existing`.
+#'
 #' The two `TRASPORTO_` ones are fields the account does not carry, and neither
 #' is the filer's to fix. Telling the one person who cannot reach a directory
 #' attribute that they are not authorized sends them to go and argue — which is
@@ -574,6 +593,11 @@ confirm_identity <- function(account, declared, previous) {
   # would refuse the ordinary case.
   if (nzchar(declared) && !(declared %in% directory_identifiers(account))) {
     return(identity_verdict("", errors = "DATO_UTENTE_DICHIARATO_DIVERSO"))
+  }
+
+  enabled <- account[["accountEnabled"]]
+  if (!is.null(enabled) && isFALSE(enabled[[1L]])) {
+    return(identity_verdict("disabled", account[["userPrincipalName"]][[1L]]))
   }
 
   identity_verdict(

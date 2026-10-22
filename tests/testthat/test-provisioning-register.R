@@ -367,7 +367,7 @@ test_that("identity_payload refuses a word outside the vocabulary", {
   # function identity_payload", which is to say before the function exists.
   expect_error(
     identity_payload("7", "", "resolved"),
-    "is not one of the five verdicts"
+    "is not one of the six verdicts"
   )
 })
 

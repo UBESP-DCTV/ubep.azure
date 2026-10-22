@@ -44,5 +44,13 @@ it into the register instead of leaving it inside an e-mail.
 The \code{DATO_} prefix on both is a delivery address and not a label, the way
 \code{scope_errors()} uses it: it is what \code{round_outcome_kind()} reads to close
 the row against whoever filed it rather than keeping it in the queue for us.
+
+\code{disabled} is the other way round, and on purpose. The account is there and
+cannot sign in, and nothing in the register can change that: only IT
+enables an account, the channel never does. So the code is
+\code{TRASPORTO_ACCOUNT_DISATTIVATO}, which keeps the row in the queue and sends
+the outcome to the referent with IT in copy, the address the round already
+writes to for what is ours. Once IT has enabled the account the next round
+finds it \code{existing} and goes on without anybody refiling the row.
 }
 \keyword{internal}

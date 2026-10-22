@@ -70,6 +70,77 @@ test_that("a match whose previous verdict was absent is created", {
 })
 
 
+test_that("one match on a deactivated account is disabled, not existing", {
+  # eval
+  answer <- resolve_identity(
+    a_request(), dir_frame(dir_user(accountEnabled = FALSE))
+  )
+
+  # test
+  # The person exists and cannot sign in. Called `existing`, the round would
+  # grant the right and mail the person an access they cannot use. The UPN
+  # travels beside the verdict, as a collision's proposal does: it is the
+  # account IT has to reactivate.
+  expect_equal(answer[["identity"]], "disabled")
+  expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(answer[["errors"]], character())
+})
+
+
+test_that("a deactivated account is disabled even right after the creation", {
+  # eval
+  answer <- resolve_identity(
+    a_request(identity = "absent"),
+    dir_frame(dir_user(accountEnabled = FALSE))
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "disabled")
+})
+
+
+test_that("a deactivated account found by an internal contact is disabled", {
+  # eval
+  answer <- resolve_identity(
+    a_request(contact_email = "mario.rossi@ubep.unipd.it"),
+    dir_frame(dir_user(accountEnabled = FALSE))
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "disabled")
+  expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
+})
+
+
+test_that("an account whose state was not read is not called disabled", {
+  # eval
+  answer <- resolve_identity(
+    a_request(), dir_frame(dir_user(accountEnabled = NULL))
+  )
+
+  # test
+  # The sweep always asks for `accountEnabled`, so a missing value is a
+  # record this package does not understand, not an account somebody turned
+  # off. It is judged as it was before the field was read.
+  expect_equal(answer[["identity"]], "existing")
+})
+
+
+test_that("a disabled account is not admitted, and the request goes to IT", {
+  # eval
+  codes <- identity_stop_codes("disabled")
+
+  # test
+  # Nothing the referent can correct in the register: the account has to be
+  # reactivated, and only IT does that. A `TRASPORTO_` code keeps the row in
+  # the queue, so it comes back by itself once the account is enabled, and
+  # the outcome message goes with IT in copy.
+  expect_false(identity_actionable("disabled"))
+  expect_equal(codes, "TRASPORTO_ACCOUNT_DISATTIVATO")
+  expect_equal(round_outcome_kind(codes, dry_run = FALSE), "transport_error")
+})
+
+
 test_that("no match and a free UPN is absent, with no username proposed", {
   # eval
   answer <- resolve_identity(

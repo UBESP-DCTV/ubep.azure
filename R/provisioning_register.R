@@ -2170,15 +2170,16 @@ register_to_desired <- function(register) {
 #' should do about it. The distinction is the same one `outcome` makes: a
 #' verdict, not an instruction.
 #'
-#' Five words, and they are exhaustive over the two questions the resolution
-#' asks — how many accounts match the contact address, and whether the composed
-#' UPN is taken:
+#' Six words, and they are exhaustive over the three questions the resolution
+#' asks (how many accounts match the contact address, whether the composed
+#' UPN is taken, and whether the one account matched can sign in):
 #'
-#' - one match — `existing`, or `created` when the account was not there when
+#' - one match: `existing`, or `created` when the account was not there when
 #'   the row was last looked at;
-#' - no match, composed UPN free — `absent`;
-#' - no match, composed UPN taken — `collision`;
-#' - more than one match — `ambiguous`.
+#' - one match on a deactivated account: `disabled`;
+#' - no match, composed UPN free: `absent`;
+#' - no match, composed UPN taken: `collision`;
+#' - more than one match: `ambiguous`.
 #'
 #' `absent` is the one the four approved on 2026-08-07 were missing, and its
 #' absence was not an oversight: they assume resolving and creating are a single
@@ -2186,15 +2187,21 @@ register_to_desired <- function(register) {
 #' last needs a name — for a creation that failed, and for the row a person is
 #' still looking at.
 #'
-#' Only the first two admit an action: the gate refuses a row whose verdict is
-#' any of the other three, which is why the vocabulary being closed matters more
-#' here than a vocabulary usually does.
+#' `disabled` is the sixth, and the last in the list so that the five the live
+#' dictionary already carried keep their order. The channel never enables an
+#' account, so the row waits for IT (`identity_stop_codes()`).
 #'
-#' @return A character vector of the five verdicts.
+#' Only the first two admit an action: the gate refuses a row whose verdict is
+#' any of the other four, which is why the vocabulary being closed matters more
+#' here than a vocabulary usually does. A revocation on a `disabled` account is
+#' the one exception, and it is the round's (`provisioning_reconcile()`):
+#' taking a right away does not need anybody to sign in.
+#'
+#' @return A character vector of the six verdicts.
 #'
 #' @keywords internal
 identity_vocabulary <- function() {
-  c("existing", "created", "absent", "collision", "ambiguous")
+  c("existing", "created", "absent", "collision", "ambiguous", "disabled")
 }
 
 
@@ -2218,13 +2225,14 @@ identity_vocabulary <- function() {
 #' It is conditional rather than absolute because a collision carries the
 #' proposal of decision 11 — there is a determined value to show, and it is the
 #' one a person has to act on, so keeping it out of the register would leave it
-#' living only inside an e-mail. On `absent` and `ambiguous` there is nothing
-#' to propose and the username is empty. What the referent had typed does not
+#' living only inside an e-mail. `disabled` carries the UPN of the account
+#' found, which is the account IT has to enable. On `absent` and `ambiguous`
+#' there is nothing to propose and the username is empty. What the referent had typed does not
 #' survive the resolution either way; REDCap's Logging keeps it.
 #'
 #' @param record_id The register record to write to.
 #' @param username The confirmed UPN, the proposal of a collision, or `""`.
-#' @param identity One of the five verdicts, or `""` for a row the resolution
+#' @param identity One of the six verdicts, or `""` for a row the resolution
 #'   stopped. The empty string is not a missing value here: it is the verdict
 #'   "not resolved", and it has to be writable, or a row that stops would keep
 #'   the username it earned when it still resolved — which is precisely the
@@ -2243,8 +2251,8 @@ identity_payload <- function(record_id, username, identity) {
   if (!(identity %in% c(identity_vocabulary(), ""))) {
     stop(
       "identity_payload(): \"", identity,
-      "\" is not one of the five verdicts, nor the empty one a stopped row ",
-      "carries. The five are ",
+      "\" is not one of the six verdicts, nor the empty one a stopped row ",
+      "carries. The six are ",
       paste(identity_vocabulary(), collapse = ", "), ".",
       call. = FALSE
     )

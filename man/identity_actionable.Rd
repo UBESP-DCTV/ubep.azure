@@ -19,7 +19,7 @@ verdict beside it — so a name somebody typed into a form is, as things
 stand, sufficient to be granted rights under.
 }
 \details{
-It admits two of the five words and refuses everything else, \strong{including the
+It admits two of the six words and refuses everything else, \strong{including the
 empty one}. That fourth case is the one that gets forgotten precisely
 because it is the current one: \code{identity} is empty on every row of the live
 register, so a gate that admitted it would admit everything on the day it is
