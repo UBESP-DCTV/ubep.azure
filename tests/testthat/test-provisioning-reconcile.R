@@ -3275,7 +3275,7 @@ posta_raccolta <- function() {
   list(
     mailer = function(to, cc, subject, body) {
       mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
-        to = to, subject = subject, body = body
+        to = to, cc = cc, subject = subject, body = body
       )
       list(ok = TRUE, errors = character())
     },
@@ -3978,6 +3978,89 @@ test_that("una spazzata fallita manda l'esito a IT, con il referente non stabili
   expect_match(
     mandate[[1L]][["body"]], "Whoever owns the row is not established",
     fixed = TRUE
+  )
+})
+
+
+test_that("l'esito di un account disattivato va al proprietario con IT in copia", { # nolint: line_length_linter.
+  # eval
+  # A second row, whose person is found and can sign in, is what makes the
+  # round read the log: with the deactivated row alone nothing would need it.
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1"),
+      list(
+        record_id = "2", first_name = "Luca", last_name = "Verdi",
+        contact_email = "luca.verdi@example.org"
+      )
+    )),
+    istanza_doppia(list()),
+    directory_doppia(
+      graph_user(accountEnabled = FALSE),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000002",
+        userPrincipalName = "luca.verdi@ubep.unipd.it",
+        givenName = "Luca", surname = "Verdi",
+        officeLocation = "luca.verdi@example.org"
+      )
+    ),
+    dry_run = FALSE, mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  mandate <- posta[["mandate"]]()
+  della_riga <- Filter(function(m) {
+    startsWith(m[["subject"]], "Richiesta 1:")
+  }, mandate)
+  di_accesso <- Filter(function(m) {
+    startsWith(m[["subject"]], "Accesso")
+  }, mandate)
+
+  # test
+  # The row's owner is its creator, Anna, who reads the outcome with IT in
+  # copy. Nothing reaches the person: no access was granted, so no message
+  # tells them they have one.
+  esiti <- esito[["esiti"]]
+  expect_equal(
+    as.character(esiti[["outcome_detail"]][esiti[["record_id"]] == "1"]),
+    "TRASPORTO_ACCOUNT_DISATTIVATO"
+  )
+  expect_length(della_riga, 1L)
+  expect_equal(della_riga[[1L]][["to"]], "anna.bianchi@ubep.unipd.it")
+  expect_equal(della_riga[[1L]][["cc"]], "it@example.org")
+  expect_no_match(
+    della_riga[[1L]][["body"]], "Referente della riga non stabilito",
+    fixed = TRUE
+  )
+  expect_false("mario.rossi@example.org" %in% vapply(mandate, `[[`, "", "to"))
+  expect_false(any(vapply(di_accesso, function(m) {
+    grepl("mario.rossi", m[["body"]], fixed = TRUE)
+  }, NA)))
+})
+
+
+test_that("senza il log l'esito di un account disattivato va solo a IT", {
+  # eval
+  posta <- posta_raccolta()
+  giro(
+    registro_doppio(record_json(list(record_id = "1"))),
+    istanza_doppia(list()),
+    directory_doppia(graph_user(accountEnabled = FALSE)),
+    dry_run = FALSE, mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  mandate <- posta[["mandate"]]()
+
+  # test
+  # No row of the round needs the log, so the row has no owner this round and
+  # the outcome goes to IT alone, saying so. No access message leaves.
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], "it@example.org")
+  expect_null(mandate[[1L]][["cc"]])
+  expect_match(
+    mandate[[1L]][["body"]], "Referente della riga non stabilito",
+    fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]], "TRASPORTO_ACCOUNT_DISATTIVATO", fixed = TRUE
   )
 })
 
