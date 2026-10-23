@@ -85,14 +85,23 @@ mail_local_time <- function(at) {
 #'
 #' @param created_at The moment the account was born, as Graph writes
 #'   `createdDateTime`: ISO 8601 in UTC, `2026-10-23T10:00:00Z`, with or
-#'   without fractions of a second.
+#'   without fractions of a second. Nothing may follow the final `Z`: an
+#'   offset read as UTC would move the birth by hours, and the date with it.
 #'
-#' @return The date as `YYYY-MM-DD`, or `NA_character_` if `created_at` does
-#'   not parse: a wrong deadline is worse than a missing one.
+#' @return The date as `YYYY-MM-DD`, or `NA_character_` if `created_at` is not
+#'   in that form: a wrong deadline is worse than a missing one.
 #'
 #' @keywords internal
 mail_first_signin_deadline <- function(created_at) {
   if (is.null(created_at) || length(created_at) != 1L || is.na(created_at)) {
+    return(NA_character_)
+  }
+
+  # Anchored at both ends: `as.POSIXct()` with a format ignores whatever
+  # follows the part it reads, so `+02:00` after the seconds would be read as
+  # UTC and the date could come one day late.
+  utc <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$"
+  if (!grepl(utc, as.character(created_at))) {
     return(NA_character_)
   }
 

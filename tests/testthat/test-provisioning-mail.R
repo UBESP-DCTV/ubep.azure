@@ -98,6 +98,18 @@ test_that("un istante illeggibile non diventa una data limite sbagliata", {
 })
 
 
+test_that("la data limite rifiuta un istante che non finisce con Z", {
+  # An offset read as if it were UTC moves the birth by hours: 23:30 at +02:00
+  # is 21:30 UTC, still the 23rd in Rome, and read as 23:30 UTC it would be
+  # the 24th, one day late. Graph writes UTC with a final Z, and anything else
+  # gets no date rather than a wrong one.
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T23:30:00+02:00")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T23:30:00")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T10:00:00Z ieri")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T10:00:00ZZ")))
+})
+
+
 test_that("l'oggetto porta le due lingue e il numero della richiesta", {
   # eval
   detto <- mail_outcome_message(riga_di_prova())

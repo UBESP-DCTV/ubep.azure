@@ -9,11 +9,12 @@ mail_first_signin_deadline(created_at)
 \arguments{
 \item{created_at}{The moment the account was born, as Graph writes
 \code{createdDateTime}: ISO 8601 in UTC, \verb{2026-10-23T10:00:00Z}, with or
-without fractions of a second.}
+without fractions of a second. Nothing may follow the final \code{Z}: an
+offset read as UTC would move the birth by hours, and the date with it.}
 }
 \value{
-The date as \code{YYYY-MM-DD}, or \code{NA_character_} if \code{created_at} does
-not parse: a wrong deadline is worse than a missing one.
+The date as \code{YYYY-MM-DD}, or \code{NA_character_} if \code{created_at} is not
+in that form: a wrong deadline is worse than a missing one.
 }
 \description{
 A key handed over for a new account is valid for at least 60 days from the
