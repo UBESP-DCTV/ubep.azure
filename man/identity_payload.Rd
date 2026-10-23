@@ -42,7 +42,8 @@ proposal of decision 11 — there is a determined value to show, and it is the
 one a person has to act on, so keeping it out of the register would leave it
 living only inside an e-mail. \code{disabled} carries the UPN of the account
 found, which is the account IT has to enable. On \code{absent} and \code{ambiguous}
-there is nothing to propose and the username is empty. What the referent had typed does not
-survive the resolution either way; REDCap's Logging keeps it.
+there is nothing to propose and the username is empty. What the referent
+had typed does not survive the resolution either way; REDCap's Logging
+keeps it.
 }
 \keyword{internal}
