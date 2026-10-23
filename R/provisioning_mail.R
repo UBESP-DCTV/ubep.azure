@@ -204,6 +204,16 @@ mail_outcome_message <- function(row) {
     list(it = NULL, en = NULL)
   }
 
+  # A deactivated account is the one transport code that does not clear by
+  # itself: the row stays in the queue until IT enables the account, and the
+  # generic line on TRASPORTO_ ("returns to the queue by itself") would tell the
+  # referent to wait for something that only a reply to IT brings about. The
+  # codes of a row are comma-separated in `outcome_detail`.
+  codici <- trimws(strsplit(
+    mail_said_or(row[["outcome_detail"]], ""), ",", fixed = TRUE
+  )[[1]])
+  disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% codici
+
   # With nobody established as the row's owner the message goes to IT alone,
   # and says so on its first lines: IT reads it without knowing which of the
   # rows it concerns would have gone elsewhere.
@@ -356,9 +366,20 @@ mail_outcome_message <- function(row) {
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
-      "compilato, e va corretto nel registro. Uno che comincia per ",
-      "TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve ",
-      "rifarla, ma se dura piu' di un giorno segnalalo a IT."
+      "compilato, e va corretto nel registro. ",
+      if (disattivato) {
+        paste0(
+          "L'account della persona e' disattivato, di solito perche' non ",
+          "e' mai entrata. Se l'accesso serve ancora, rispondi a questo ",
+          "messaggio: IT riattiva l'account e ti manda una chiave nuova."
+        )
+      } else {
+        paste0(
+          "Uno che comincia per TRASPORTO_ e' nostro: la riga torna in ",
+          "coda da sola e non serve rifarla, ma se dura piu' di un giorno ",
+          "segnalalo a IT."
+        )
+      }
     )
   )
 
@@ -390,9 +411,20 @@ mail_outcome_message <- function(row) {
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
-      "be corrected in the register. One starting with TRASPORTO_ is ours: ",
-      "the row returns to the queue by itself and does not need refiling, ",
-      "but if it lasts more than a day, report it to IT."
+      "be corrected in the register. ",
+      if (disattivato) {
+        paste0(
+          "The person's account is deactivated, usually because they never ",
+          "signed in. If the access is still needed, reply to this message: ",
+          "IT reactivates the account and sends you a new key."
+        )
+      } else {
+        paste0(
+          "One starting with TRASPORTO_ is ours: the row returns to the ",
+          "queue by itself and does not need refiling, but if it lasts more ",
+          "than a day, report it to IT."
+        )
+      }
     )
   )
 

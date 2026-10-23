@@ -121,6 +121,47 @@ test_that("il corpo porta le due lingue, separate", {
 })
 
 
+test_that("un account disattivato non e' detto tornare in coda da solo", {
+  # eval
+  disattivato <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO"
+  ))[["body"]]
+  altro <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_POSTA_RIFIUTATA"
+  ))[["body"]]
+
+  # test
+  expect_match(
+    disattivato,
+    paste0(
+      "L'account della persona e' disattivato, di solito perche' non e' ",
+      "mai entrata."
+    ),
+    fixed = TRUE
+  )
+  expect_match(disattivato, "rispondi a questo messaggio", fixed = TRUE)
+  expect_match(
+    disattivato,
+    paste0(
+      "The person's account is deactivated, usually because they never ",
+      "signed in."
+    ),
+    fixed = TRUE
+  )
+  expect_match(disattivato, "reply to this message", fixed = TRUE)
+  expect_false(grepl("torna in coda da sola", disattivato, fixed = TRUE))
+  expect_false(
+    grepl("returns to the queue by itself", disattivato, fixed = TRUE)
+  )
+  expect_match(disattivato, "DATO_ riguarda", fixed = TRUE)
+
+  expect_match(altro, "torna in coda da sola", fixed = TRUE)
+  expect_false(grepl("account della persona", altro, fixed = TRUE))
+})
+
+
 test_that("un campo vuoto cambia la frase invece di lasciare un buco", {
   # eval
   detto <- mail_outcome_message(
