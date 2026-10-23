@@ -23,11 +23,14 @@
   and mailed the person an access they could not use. Now it is `disabled`,
   with the account's UPN beside it: the row stops at the gate with
   `TRASPORTO_ACCOUNT_DISATTIVATO`, stays in the queue, and its outcome goes
-  to the referent with IT in copy. When IT has enabled the account again the
-  next round finds it `existing` and goes on. A revocation is the exception
-  and still reaches the instance, since taking a right away needs nobody to
-  sign in. The channel never enables an account and asks for no new
-  permission: `accountEnabled` was already in the sweep.
+  to the row's owner with IT in copy. When the round has no owner to give,
+  as when no row is admitted, waiting for its account or changed and the
+  log is not read, it goes to IT alone, like every outcome without an owner.
+  When IT has enabled the account again the next round finds it `existing`
+  and goes on. A revocation is the exception and still reaches the instance,
+  since taking a right away needs nobody to sign in. The channel never
+  enables an account and asks for no new permission: `accountEnabled` was
+  already in the sweep.
 
 * **The outcome of a row stopped on `TRASPORTO_ACCOUNT_DISATTIVATO` no longer
   says it returns to the queue by itself.** It does not: the account has to be
