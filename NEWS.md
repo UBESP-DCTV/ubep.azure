@@ -29,6 +29,13 @@
   sign in. The channel never enables an account and asks for no new
   permission: `accountEnabled` was already in the sweep.
 
+* **The outcome of a row stopped on `TRASPORTO_ACCOUNT_DISATTIVATO` no longer
+  says it returns to the queue by itself.** It does not: the account has to be
+  enabled again. The message says the account is deactivated, usually because
+  the person never signed in, and that a reply to it gets the account
+  reactivated by IT and a new key. The line on `TRASPORTO_` in general is
+  unchanged for every other code.
+
 * **The `identity` field of the register gains the choice `disabled`, so this
   release touches the schema.** The packaged dictionary and the live one have
   to change together: either side without the other stops the round on
