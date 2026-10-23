@@ -344,11 +344,12 @@ creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
 #'   does not say whether the account was born, see `creation_failure()`.
 #'   `created_at`, on success only, is when the account was born, which the
 #'   messages count the first sign-in from (`mail_first_signin_deadline()`):
-#'   Graph's `createdDateTime` when the answer carries it, otherwise the
-#'   moment read just before the request left. Graph returns that field only
-#'   when a read names it, so the answer to a creation may not carry it; the
-#'   moment before the request cannot be later than the birth, so a deadline
-#'   counted from it can come early and never late.
+#'   Graph's `createdDateTime` when the answer carries it in a form the
+#'   deadline can read, otherwise the moment read just before the request
+#'   left. Graph returns that field only when a read names it, so the answer
+#'   to a creation may not carry it; the moment before the request cannot be
+#'   later than the birth, so a deadline counted from it can come early and
+#'   never late.
 #'
 #' @keywords internal
 directory_create_user <- function(token, base_url, request, upn) {
@@ -443,8 +444,12 @@ directory_create_user <- function(token, base_url, request, upn) {
     ))
   }
 
+  # A `createdDateTime` the deadline cannot be counted from is treated as a
+  # missing one: the moment read before the request still bounds the birth,
+  # where an unreadable one would leave the messages without a date.
   born <- payload[["createdDateTime"]]
-  if (!is.character(born) || length(born) != 1L || !nzchar(born)) {
+  if (!is.character(born) || length(born) != 1L ||
+        is.na(mail_first_signin_deadline(born))) {
     born <- leaving
   }
 

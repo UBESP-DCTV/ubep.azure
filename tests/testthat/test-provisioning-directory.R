@@ -703,6 +703,37 @@ test_that("without the date from Graph the birth is never placed too late", {
 })
 
 
+test_that("an unreadable date from Graph falls back like a missing one", {
+  illeggibili <- c(
+    "ieri", "2026-10-23T23:30:00+02:00", "2026-13-45T10:00:00Z"
+  )
+  for (detto in illeggibili) {
+    # eval
+    before <- Sys.time()
+    answer <- crea(function(req) {
+      risposta(201L, paste0(
+        '{"id":"00000000-0000-0000-0000-00000000000a",',
+        '"createdDateTime":"', detto, '"}'
+      ))
+    })
+    after <- Sys.time()
+    moment <- as.POSIXct(
+      sub("Z$", "", answer[["created_at"]]),
+      tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+    )
+
+    # test
+    # A birth the deadline cannot be counted from is no birth at all: the
+    # moment read before the request stands in for it, as when Graph is
+    # silent, instead of a date the messages would have to leave out.
+    expect_false(is.na(mail_first_signin_deadline(answer[["created_at"]])),
+                 info = detto)
+    expect_true(moment >= trunc(before, "secs") - 1, info = detto)
+    expect_true(moment <= after, info = detto)
+  }
+})
+
+
 test_that("a failed creation says no birth", {
   # eval
   answer <- crea(function(req) {
