@@ -48,6 +48,7 @@ message that will simply be retried.
 
 Under the sentence on how to hand the key over it gives the date the first
 sign-in has to happen by, the one the welcome gives the person, and where
-to ask for a new key after it: a reply to this message, which reaches IT.
+to ask for a new key after it: a reply to this message, which reaches IT,
+again with the key left out of it.
 }
 \keyword{internal}

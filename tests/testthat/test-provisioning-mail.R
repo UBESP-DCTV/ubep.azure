@@ -691,11 +691,12 @@ test_that("il messaggio con la chiave dice al referente entro quando", {
   it <- paste0(
     "Consegnala subito: il primo accesso va fatto entro il 2026-12-21. ",
     "Dopo quella data la chiave non vale piu': per una nuova rispondi a ",
-    "questo messaggio."
+    "questo messaggio senza la chiave (togli il testo citato)."
   )
   en <- paste0(
     "Hand it over now: the first sign-in must happen by 2026-12-21. After ",
-    "that date the key no longer works: reply to this message for a new one."
+    "that date the key no longer works: reply to this message for a new one, ",
+    "without the key (delete the quoted text)."
   )
   dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
 

@@ -899,7 +899,8 @@ mail_access_message <- function(row, url = NULL) {
 #'
 #' Under the sentence on how to hand the key over it gives the date the first
 #' sign-in has to happen by, the one the welcome gives the person, and where
-#' to ask for a new key after it: a reply to this message, which reaches IT.
+#' to ask for a new key after it: a reply to this message, which reaches IT,
+#' again with the key left out of it.
 #'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name.
@@ -926,7 +927,7 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
         paste0(
           "Consegnala subito: il primo accesso va fatto entro il ", deadline,
           ". Dopo quella data la chiave non vale piu': per una nuova rispondi ",
-          "a questo messaggio."
+          "a questo messaggio senza la chiave (togli il testo citato)."
         )
       ),
       en = c(
@@ -934,7 +935,7 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
         paste0(
           "Hand it over now: the first sign-in must happen by ", deadline,
           ". After that date the key no longer works: reply to this message ",
-          "for a new one."
+          "for a new one, without the key (delete the quoted text)."
         )
       )
     )
