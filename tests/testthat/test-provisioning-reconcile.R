@@ -868,9 +868,10 @@ test_that("a deactivated account keeps the row away from the instance and passes
   # test
   # The person exists and cannot sign in: no right is granted, so no access
   # message leaves, and nobody is created in their place. The row waits under
-  # a `TRASPORTO_` code, which mails the referent with IT in copy and comes
-  # back by itself once IT has reactivated the account. The channel enables
-  # nothing: the only call to Graph is the sweep.
+  # a `TRASPORTO_` code and comes back by itself once IT has reactivated the
+  # account. Its outcome goes to the row's owner with IT in copy, or to IT
+  # alone when the round does not read the log, as here, where no other row
+  # needs it. The channel enables nothing: the only call to Graph is the sweep.
   expect_length(interrogazioni(), 0L)
   expect_length(creazioni(), 0L)
   expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
