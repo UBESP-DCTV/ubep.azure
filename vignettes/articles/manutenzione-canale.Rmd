@@ -1102,6 +1102,10 @@ e un valore che manca non è un account disattivato.
   coda da sola, come per gli altri `TRASPORTO_`: dice che l'account è
   disattivato, di solito perché la persona non è mai entrata, e che una
   risposta lo fa riattivare da IT con una chiave nuova.
+- **Una riga trattenuta resta `held`.** `identity` dice `disabled`, ma
+  l'esito resta quello che chiede al proprietario di approvare la modifica,
+  che è la prima cosa che deve sapere: la riga si ferma sull'account dopo
+  l'approvazione.
 - **Riattivato l'account**, il giro dopo lo trova `existing` e prosegue: se il
   diritto si crea, parte la mail di accesso.
 - **Una revoca passa.** Togliere un diritto non chiede che la persona entri:
@@ -1475,10 +1479,11 @@ due gli ordini il giro resta fermo finché le due cose non sono fatte, e non
 concede niente. Le lavorazioni chiamano il pacchetto come prima, e le copie in
 `/opt` restano come sono. Al primo giro dopo l'installazione:
 
-- ogni riga attiva il cui account è disattivato, comprese quelle `applied`,
-  diventa `disabled` e `transport_error` con `TRASPORTO_ACCOUNT_DISATTIVATO`, e
-  il suo esito parte una volta, al proprietario con IT in copia: IT va avvisata
-  prima del rilascio. Le revoche su quegli account passano;
+- ogni riga attiva il cui account è disattivato, comprese quelle `applied` e
+  salvo quelle `held`, diventa `disabled` e `transport_error` con
+  `TRASPORTO_ACCOUNT_DISATTIVATO`, e il suo esito parte una volta, al
+  proprietario con IT in copia: IT va avvisata prima del rilascio. Le revoche
+  su quegli account passano;
 - ogni riga ferma su una collisione cambia dettaglio, che ora porta la
   proposta, e il suo proprietario riceve di nuovo il messaggio, con le due
   risposte;

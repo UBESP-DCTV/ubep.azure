@@ -27,11 +27,13 @@
   to the row's owner with IT in copy. When the round has no owner to give,
   as when no row is admitted, waiting for its account or changed and the
   log is not read, it goes to IT alone, like every outcome without an owner.
-  When IT has enabled the account again the next round finds it `existing`
-  and goes on. A revocation is the exception and still reaches the instance,
-  since taking a right away needs nobody to sign in. The channel never
-  enables an account and asks for no new permission: `accountEnabled` was
-  already in the sweep.
+  A held row stays held: its `identity` reads `disabled`, but its outcome is
+  still the one that asks the owner to approve the change, and it stops on
+  the account once the owner has approved. When IT has enabled the account
+  again the next round finds it `existing` and goes on. A revocation is the
+  exception and still reaches the instance, since taking a right away needs
+  nobody to sign in. The channel never enables an account and asks for no new
+  permission: `accountEnabled` was already in the sweep.
 
 * **The outcome of a row stopped on `TRASPORTO_ACCOUNT_DISATTIVATO` no longer
   says it returns to the queue by itself.** It does not: the account has to be
@@ -120,12 +122,12 @@
   runners call the package as before, and the round record gains no column.
 
 * **The first round after the installation writes to some owners.** Every
-  active row whose account is deactivated, `applied` ones included, becomes
-  `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and its outcome leaves
-  once, to the owner with IT in copy: IT should hear of it before the
-  release. Every row stopped on a collision changes its detail, which now
-  carries the proposal, so its owner receives the message again, with the two
-  answers. No seal moves: the new field is empty everywhere.
+  active row whose account is deactivated, `applied` ones included and held
+  ones excepted, becomes `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and
+  its outcome leaves once, to the owner with IT in copy: IT should hear of it
+  before the release. Every row stopped on a collision changes its detail,
+  which now carries the proposal, so its owner receives the message again,
+  with the two answers. No seal moves: the new field is empty everywhere.
 
 * **Going back to 0.21.0 is a single act too**, with the old dictionary,
   since the old package stops on the new one. On 0.21.0 a deactivated account
