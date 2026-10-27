@@ -3837,6 +3837,94 @@ test_that("il valore di owned_by nel registro non si crede", {
 })
 
 
+# A row applied and untouched since, whose owner the log no longer says: the
+# newest write of `owned_by` has no author, or is the channel's with another
+# field beside it, as an import made by hand with the channel's token leaves
+# it. `sopra` is what stands above that write, newest first.
+riga_senza_proprietario <- function(storta, sopra = list()) {
+  fermo <- request_seal(riga_come_registro(
+    record_id = "1", username = "mario.rossi@ubep.unipd.it"
+  ))
+  registro_con_log(
+    record_json(list(
+      record_id = "1", username = "mario.rossi@ubep.unipd.it",
+      identity = "existing", outcome = "applied", applied_seal = fermo,
+      seal_state = "intact", owned_by = anna
+    )),
+    storia = c(sopra, list(storta, esecuzione(fermo), passaggio(anna)))
+  )
+}
+
+owned_by_storte <- list(
+  senza_autore = list(
+    username = "", details = paste0("owned_by = '", anna, "'")
+  ),
+  con_altri_campi = list(
+    username = "svc-canale-ubep", action = "Update record (API) 1",
+    details = paste0("owned_by = '", anna, "', seal_state = 'intact'")
+  )
+)
+
+
+test_that("una owned_by storta ferma la riga, e il giro non scrive nulla che la sblocchi", { # nolint: line_length_linter.
+  for (nome in names(owned_by_storte)) {
+    # eval
+    # The same register for two rounds: the first round's writes are in the
+    # log the second one reads.
+    registro <- riga_senza_proprietario(owned_by_storte[[nome]])
+    esiti <- lapply(1:2, function(volta) {
+      esito <- giro(registro, istanza_che_scrive(), dry_run = FALSE)
+      list(
+        dettaglio = as.character(esito[["esiti"]][["outcome_detail"]]),
+        proprietari = proprietari_scritti(),
+        scritture = length(scritture())
+      )
+    })
+
+    # test
+    # Nothing the round does on its own reaches the bad write: with no owner
+    # it writes no `owned_by`, and the row comes back on the same code.
+    for (esito in esiti) {
+      expect_equal(
+        esito[["dettaglio"]], "TRASPORTO_AUTORE_NON_LEGGIBILE", info = nome
+      )
+      expect_null(esito[["proprietari"]], info = nome)
+      expect_equal(esito[["scritture"]], 0L, info = nome)
+    }
+  }
+})
+
+
+test_that("una owned_by scritta da sola col token del canale sblocca la riga", {
+  for (nome in names(owned_by_storte)) {
+    # eval
+    # IT imports `owned_by` alone with the channel's token, above the bad
+    # write. REDCap logs no write that leaves a value as it was, so on a
+    # field already showing the owner it takes two imports, another value
+    # and then the owner; the newer is the one read.
+    esito <- giro(
+      riga_senza_proprietario(
+        owned_by_storte[[nome]],
+        sopra = list(
+          passaggio(anna, timestamp = "2026-08-13 10:01"),
+          passaggio(bruno, timestamp = "2026-08-13 10:00")
+        )
+      ),
+      istanza_che_scrive(),
+      dry_run = FALSE
+    )
+
+    # test
+    # The owner is read from the newest write of the channel, and the bad
+    # write below it is never reached.
+    expect_equal(
+      as.character(esito[["esiti"]][["outcome"]]), "applied", info = nome
+    )
+    expect_equal(length(scritture()), 1L, info = nome)
+  }
+})
+
+
 test_that("il giro chiede il log dei proprietari una volta, senza finestra", {
   # eval
   giro(registro_doppio(record_json(list())), istanza_che_scrive())

@@ -1680,6 +1680,85 @@ eseguita <- function(sigillo) {
   )
 }
 
+
+# The two writes of `owned_by` that leave the owner unknown: one with no
+# author, one of the channel with another field beside it, as an import made
+# by hand with the channel's token would leave it.
+owned_by_storte <- list(
+  senza_autore = list(
+    username = "", details = "owned_by = 'bruno.verdi@ubep.unipd.it'"
+  ),
+  con_altri_campi = list(
+    username = canale, action = "Update record (API) 1",
+    details = "owned_by = 'bruno.verdi@ubep.unipd.it', seal_state = 'intact'"
+  )
+)
+
+test_that("una owned_by del canale scritta da sola sopra una storta stabilisce il proprietario", { # nolint: line_length_linter.
+  # The log never forgets the bad write, but the owner is read from the
+  # newest write the channel made through the owner door: one written above
+  # it, by hand with the channel's token, is read first and the bad one is
+  # never reached. The way out the SOP did not describe (open point n. 4).
+  for (nome in names(owned_by_storte)) {
+    storta <- owned_by_storte[[nome]]
+    expect_true(
+      is.na(log_owner(eventi_finti(storta, applicata), "1", creatrice, canale)),
+      info = nome
+    )
+    eventi <- eventi_finti(passaggio(creatrice), storta, applicata)
+    expect_equal(
+      log_owner(eventi, "1", creatrice, canale), creatrice, info = nome
+    )
+    # A write that leaves the field blank names nobody, and does not hide it.
+    expect_true(
+      is.na(log_owner(
+        eventi_finti(passaggio(""), storta, applicata), "1", creatrice, canale
+      )),
+      info = nome
+    )
+  }
+})
+
+
+test_that("una owned_by storta sotto il penultimo sigillo non ferma la riga per sempre", { # nolint: line_length_linter.
+  skip(paste(
+    "Difetto riprodotto, uscita da scegliere: la owned_by del canale",
+    "scritta sopra il sigillo non arriva al tratto letto sotto di esso."
+  ))
+  # Newest first. A bad write of `owned_by` landed while a round ran, after
+  # it read the log and before it wrote its seal 111111111111; the round had
+  # no owner to write, so nothing of the channel stands between the two.
+  # The next round found the owner unknown, and IT wrote `owned_by` alone with
+  # the channel's token, above the seal. Anna then changed the role, the
+  # round carried it out under 222222222222, and now she changes the
+  # expiration. The owner of today is Anna; the owner of the stretch between
+  # the two seals is read below 111111111111, where the bad write is the
+  # newest, and no write that can still come lands there.
+  for (nome in names(owned_by_storte)) {
+    eventi <- eventi_finti(
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      eseguita("222222222222"),
+      list(username = creatrice, details = "role_name = 'read only'"),
+      passaggio(creatrice),
+      eseguita("111111111111"),
+      owned_by_storte[[nome]],
+      list(
+        username = creatrice, action = "Create record 1",
+        details = "record_id = '1', role_name = 'data entry'"
+      )
+    )
+    expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+    # Anna's own change, with no author but her: it needs nobody. Today the
+    # stretch's owner is unknown, so every change of the row has an unknown
+    # author, round after round, for as long as the log holds the bad write.
+    expect_equal(
+      log_pending_authors(eventi, "1", creatrice, channel_account = canale),
+      creatrice, info = nome
+    )
+  }
+})
+
+
 # Newest first, below what each test adds on top: Bruno changed the role,
 # Anna approved 111111111111, the round passed the row to Bruno and then
 # sealed it, owned_by below the seal as the round writes them.
