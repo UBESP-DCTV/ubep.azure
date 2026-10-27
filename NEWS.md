@@ -1,4 +1,4 @@
-# ubep.azure (development version)
+# ubep.azure 0.22.0
 
 * **The welcome and the message with the key give the date of the first
   sign-in.** A key handed over is valid for at least 60 days from the creation
