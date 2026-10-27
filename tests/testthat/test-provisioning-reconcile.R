@@ -1677,7 +1677,7 @@ graph_che_ricorda <- function() {
         headers = list(`Content-Type` = "application/json"),
         body = charToRaw(paste0(
           '{"error":{"code":"Request_BadRequest","message":"Another object ',
-          'with the same value for property userPrincipalName already ',
+          "with the same value for property userPrincipalName already ",
           'exists."}}'
         ))
       ))
