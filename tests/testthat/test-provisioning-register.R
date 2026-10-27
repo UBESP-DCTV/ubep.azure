@@ -7,6 +7,7 @@ register_row <- function(...) {
     first_name = "Mario",
     last_name = "Rossi",
     contact_email = "mario.rossi@example.org",
+    distinct_username = "",
     role_name = "data entry",
     dag_name = "centro-01",
     # Not a literal date. `validate_request()` refuses a last day in the past,
@@ -367,7 +368,7 @@ test_that("identity_payload refuses a word outside the vocabulary", {
   # function identity_payload", which is to say before the function exists.
   expect_error(
     identity_payload("7", "", "resolved"),
-    "is not one of the five verdicts"
+    "is not one of the six verdicts"
   )
 })
 
@@ -463,6 +464,128 @@ test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
   expect_false(identical(request_seal(base), ruolo))
   expect_false(identical(request_seal(base), revoca))
   expect_false(identical(request_seal(base), gruppo))
+})
+
+
+# A row the round sealed before `distinct_username` existed, with the value
+# `request_seal()` gave it then: computed at `aeab3b6`, on the dictionary of
+# twenty-one fields. A literal, so that it cannot follow the code it checks.
+riga_sigillata_prima <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "7", server = "edc10", project_id = "9003",
+      username = "mario.rossi@ubep.unipd.it", identity = "existing",
+      first_name = "Mario", last_name = "Rossi",
+      contact_email = "mario.rossi@example.org", role_name = "data entry",
+      dag_name = "centro-01", expiration = "2027-01-31",
+      requested_by = "anna.bianchi@ubep.unipd.it", request_status = "active"
+    ),
+    list(...)
+  )
+}
+sigillo_di_prima <- "dfe7cce0f4c7"
+
+
+test_that("il campo della risposta vuoto non muove il sigillo di prima", {
+  # eval
+  senza <- as.data.frame(riga_sigillata_prima(), stringsAsFactors = FALSE)
+  vuoto <- as.data.frame(
+    riga_sigillata_prima(distinct_username = ""), stringsAsFactors = FALSE
+  )
+  spazi <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "  "), stringsAsFactors = FALSE
+  )
+  mancante <- as.data.frame(
+    riga_sigillata_prima(distinct_username = NA_character_),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # The field reaches every row of the live register empty on the day the
+  # dictionary is imported. Had it moved the seal, every row the round ever
+  # sealed would read as changed with nobody on record for it, and every one
+  # would be held.
+  expect_true("distinct_username" %in% register_intent_fields())
+  expect_identical(request_seal(senza), sigillo_di_prima)
+  expect_identical(request_seal(vuoto), sigillo_di_prima)
+  expect_identical(request_seal(spazi), sigillo_di_prima)
+  expect_identical(request_seal(mancante), sigillo_di_prima)
+})
+
+
+test_that("il campo della risposta pieno muove il sigillo", {
+  # eval
+  risposta <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "mario.rossi.2@ubep.unipd.it"),
+    stringsAsFactors = FALSE
+  )
+  altra <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "mario.rossi.3@ubep.unipd.it"),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # Written, it is an intent field like the others: who writes or empties it
+  # changes the row.
+  expect_false(identical(request_seal(risposta), sigillo_di_prima))
+  expect_false(identical(request_seal(risposta), request_seal(altra)))
+})
+
+
+test_that("lo stesso valore in campi diversi da' sigilli diversi", {
+  # eval
+  # A second late field, which the dictionary does not have yet: the case
+  # the name in front of the value exists for.
+  local_mocked_bindings(
+    register_intent_fields = function() {
+      c(
+        "record_id", "server", "project_id", "username", "first_name",
+        "last_name", "contact_email", "distinct_username", "role_name",
+        "dag_name", "expiration", "request_status", "second_answer"
+      )
+    },
+    register_late_seal_fields = function() {
+      c("distinct_username", "second_answer")
+    }
+  )
+  primo <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "x", second_answer = ""),
+    stringsAsFactors = FALSE
+  )
+  secondo <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "", second_answer = "x"),
+    stringsAsFactors = FALSE
+  )
+  nessuno <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "", second_answer = ""),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # Appended as the bare value, both rows would join into the same string.
+  expect_false(identical(request_seal(primo), request_seal(secondo)))
+  expect_identical(request_seal(nessuno), sigillo_di_prima)
+})
+
+
+test_that("ogni campo d'intenzione e' fra quelli sigillati da sempre o fra i tardivi", { # nolint: line_length_linter.
+  # eval
+  # The fields the seal covered when the first seal was written, and every
+  # live seal is a hash of their values in this order.
+  da_sempre <- c(
+    "record_id", "server", "project_id", "username", "first_name",
+    "last_name", "contact_email", "role_name", "dag_name", "expiration",
+    "request_status"
+  )
+
+  # test
+  # An intent field added later and left out of the late list would enter
+  # the seal empty, and move every live seal with it: every executed row
+  # would be held on the first round after the dictionary is imported.
+  expect_setequal(
+    register_intent_fields(), c(da_sempre, register_late_seal_fields())
+  )
+  expect_length(intersect(da_sempre, register_late_seal_fields()), 0L)
 })
 
 
@@ -1680,6 +1803,88 @@ eseguita <- function(sigillo) {
   )
 }
 
+
+# The two writes of `owned_by` that leave the owner unknown: one with no
+# author, one of the channel with another field beside it, as an import made
+# by hand with the channel's token would leave it.
+owned_by_storte <- list(
+  senza_autore = list(
+    username = "", details = "owned_by = 'bruno.verdi@ubep.unipd.it'"
+  ),
+  con_altri_campi = list(
+    username = canale, action = "Update record (API) 1",
+    details = "owned_by = 'bruno.verdi@ubep.unipd.it', seal_state = 'intact'"
+  )
+)
+
+test_that("una owned_by del canale scritta da sola sopra una storta stabilisce il proprietario", { # nolint: line_length_linter.
+  # The log never forgets the bad write, but the owner is read from the
+  # newest write the channel made through the owner door: one written above
+  # it, by hand with the channel's token, is read first and the bad one is
+  # never reached. The way out the SOP did not describe (open point n. 4).
+  for (nome in names(owned_by_storte)) {
+    storta <- owned_by_storte[[nome]]
+    expect_true(
+      is.na(log_owner(eventi_finti(storta, applicata), "1", creatrice, canale)),
+      info = nome
+    )
+    eventi <- eventi_finti(passaggio(creatrice), storta, applicata)
+    expect_equal(
+      log_owner(eventi, "1", creatrice, canale), creatrice, info = nome
+    )
+    # A write that leaves the field blank names nobody, and does not hide it.
+    expect_true(
+      is.na(log_owner(
+        eventi_finti(passaggio(""), storta, applicata), "1", creatrice, canale
+      )),
+      info = nome
+    )
+  }
+})
+
+
+test_that("una owned_by storta sotto il penultimo sigillo ferma la riga, per disegno", { # nolint: line_length_linter.
+  # Newest first. A bad write of `owned_by` landed while a round ran, after
+  # it read the log and before it wrote its seal 111111111111; the round had
+  # no owner to write, so nothing of the channel stands between the two.
+  # The next round found the owner unknown, and IT wrote `owned_by` alone with
+  # the channel's token, above the seal. Anna then changed the role, the
+  # round carried it out under 222222222222, and now she changes the
+  # expiration. The owner of today is Anna; the owner of the stretch between
+  # the two seals is read below 111111111111, where the bad write is the
+  # newest, and no write that can still come lands there.
+  #
+  # Accepted on 2026-10-27: the case is rare, and the round does not guess
+  # an owner the log cannot establish. The row stays held, every change of
+  # it with an unknown author, for as long as the log holds the bad write.
+  # The way out is to delete the row and have a referent create it again.
+  for (nome in names(owned_by_storte)) {
+    eventi <- eventi_finti(
+      list(username = creatrice, details = "expiration = '2027-01-31'"),
+      eseguita("222222222222"),
+      list(username = creatrice, details = "role_name = 'read only'"),
+      passaggio(creatrice),
+      eseguita("111111111111"),
+      owned_by_storte[[nome]],
+      list(
+        username = creatrice, action = "Create record 1",
+        details = "record_id = '1', role_name = 'data entry'"
+      )
+    )
+    expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
+    # The owner of the stretch below 111111111111 stays unknown, and so the
+    # author of Anna's own change does too: it waits, and no later write
+    # reaches the stretch to release it.
+    expect_true(
+      is.na(log_pending_authors(
+        eventi, "1", creatrice, channel_account = canale
+      )),
+      info = nome
+    )
+  }
+})
+
+
 # Newest first, below what each test adds on top: Bruno changed the role,
 # Anna approved 111111111111, the round passed the row to Bruno and then
 # sealed it, owned_by below the seal as the round writes them.
@@ -2636,4 +2841,129 @@ test_that("owner_payload porta il proprietario e nient'altro", {
   expect_equal(names(corpo), c("record_id", "owned_by"))
   expect_error(owner_payload("1", ""))
   expect_error(owner_payload("1", NA_character_))
+})
+
+
+# The log of a row in collision, newest first: Anna filed it, and the round
+# wrote its verdict with the proposal it had made, signed by the account that
+# holds its token. `sopra` stands above the round's write, `sotto` between the
+# creation and the round's write.
+collisione <- function(sopra = list(), sotto = list(),
+                       proposta = "mario.rossi.2@ubep.unipd.it") {
+  do.call(eventi_finti, c(
+    sopra,
+    list(list(
+      username = "svc-canale-ubep", action = "Update record (API) 1",
+      details = paste0(
+        "username = '", proposta, "', identity = 'collision'"
+      )
+    )),
+    sotto,
+    list(list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', first_name = 'Mario', last_name = 'Rossi'"
+    ))
+  ))
+}
+
+
+risposta <- function(chi = creatrice,
+                     valore = "mario.rossi.2@ubep.unipd.it") {
+  list(username = chi, details = paste0("distinct_username = '", valore, "'"))
+}
+
+
+test_that("la risposta di un altro referente su una riga mai eseguita aspetta il proprietario", { # nolint: line_length_linter.
+  # eval
+  eventi <- collisione(sopra = list(risposta("bruno.verdi@ubep.unipd.it")))
+  autori <- log_pending_authors(
+    eventi, "1", creatrice, channel_account = "svc-canale-ubep",
+    current = register_row(
+      username = "mario.rossi.2@ubep.unipd.it",
+      distinct_username = "mario.rossi.2@ubep.unipd.it"
+    )
+  )
+
+  # test
+  # The answer is an intent field, and whoever writes it is an author of the
+  # row: an account would be made on the word of somebody the row does not
+  # answer to. Anna stays an author for the fields she wrote at the creation.
+  expect_equal(autori, c("bruno.verdi@ubep.unipd.it", creatrice))
+  expect_true(change_needs_approval(autori, creatrice, sealed = FALSE))
+})
+
+
+test_that("una risposta scritta prima della proposta non vale", {
+  # eval
+  # Filled in when the row was filed, before anybody knew the composed name
+  # was taken: whoever knows the convention of the suffixes can guess the
+  # proposal without having looked at who holds the name.
+  eventi <- collisione(sotto = list(risposta()))
+
+  # test
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_false(log_answer_stands(eventi, "1", "mario.rossi.2@ubep.unipd.it"))
+})
+
+
+test_that("una risposta scritta dopo la proposta vale", {
+  # eval
+  eventi <- collisione(sopra = list(risposta()))
+
+  # test
+  # Above the round's write of the proposal, folded as the proposal is folded.
+  # Without the configured account the channel is the account that wrote
+  # the verdict.
+  expect_true(log_answer_stands(
+    eventi, "1", " Mario.Rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_true(log_answer_stands(eventi, "1", "mario.rossi.2@ubep.unipd.it"))
+  # A proposal the channel never wrote, or written by somebody else, is no
+  # question the answer could have come after.
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "un-altro-canale"
+  ))
+  # Nor is a log that holds no answer at all.
+  expect_false(log_answer_stands(
+    collisione(), "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+})
+
+
+test_that("una risposta alla proposta di prima non vale per quella nuova", {
+  # eval
+  # The referent answered `.2`; then `.2` was taken, and the round wrote `.3`.
+  prima <- collisione(
+    sopra = list(
+      list(
+        username = "svc-canale-ubep", action = "Update record (API) 1",
+        details = "username = 'mario.rossi.3@ubep.unipd.it'"
+      ),
+      risposta()
+    )
+  )
+  # And then the referent pasted the new one.
+  dopo <- rbind(
+    eventi_finti(risposta(valore = "mario.rossi.3@ubep.unipd.it")), prima
+  )
+
+  # test
+  expect_false(log_answer_stands(
+    prima, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_true(log_answer_stands(
+    dopo, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
 })

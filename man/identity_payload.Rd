@@ -11,7 +11,7 @@ identity_payload(record_id, username, identity)
 
 \item{username}{The confirmed UPN, the proposal of a collision, or \code{""}.}
 
-\item{identity}{One of the five verdicts, or \code{""} for a row the resolution
+\item{identity}{One of the six verdicts, or \code{""} for a row the resolution
 stopped. The empty string is not a missing value here: it is the verdict
 "not resolved", and it has to be writable, or a row that stops would keep
 the username it earned when it still resolved — which is precisely the
@@ -40,8 +40,10 @@ condition the gate checks: \emph{a username is authoritative if and only if
 It is conditional rather than absolute because a collision carries the
 proposal of decision 11 — there is a determined value to show, and it is the
 one a person has to act on, so keeping it out of the register would leave it
-living only inside an e-mail. On \code{absent} and \code{ambiguous} there is nothing
-to propose and the username is empty. What the referent had typed does not
-survive the resolution either way; REDCap's Logging keeps it.
+living only inside an e-mail. \code{disabled} carries the UPN of the account
+found, which is the account IT has to enable. On \code{absent} and \code{ambiguous}
+there is nothing to propose and the username is empty. What the referent
+had typed does not survive the resolution either way; REDCap's Logging
+keeps it.
 }
 \keyword{internal}

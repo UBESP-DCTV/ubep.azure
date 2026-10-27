@@ -210,6 +210,18 @@ either. An instance that did not answer has neither allowed nor refused, and
 the row waits, under the instance's transport code as a pair on that
 instance does.
 
+\strong{A collision the referent answered is a person to create too}, decided on
+2026-10-27. The answer is the proposal pasted into \code{distinct_username}
+(\code{collision_answered()}), and it stands only when written after the round
+wrote that proposal (\code{log_answer_stands()}). From there the row goes the
+way of an \code{absent} one, under the proposal instead of the composed name:
+withdrawn when revoked, read in its log as a row waiting to be created,
+held when somebody other than its owner wrote the answer, judged at the
+gate on the rights of whoever wrote it, rehearsed on the instance, created
+with the post on and outside a simulation, one creation per name. An
+answer that does not stand leaves the row stopped on its collision. The
+field is never the name created, and no other verdict reads it.
+
 \strong{The person is validated as the pair they will become, before being
 made.} Step 4 hands the row to \code{register_to_desired()} under the name the
 round would create, for the same data errors and the same rule on repeated
@@ -223,10 +235,17 @@ arrives one round later and that no new round can take back.
 \strong{The row it creates stays \code{absent} for this pass} and becomes \code{created} at
 the next one, which is decision 4 working as written rather than a delay
 being tolerated: \code{created} is the row whose previous verdict was \code{absent} and
-that now matches, and that memory lives in the register. A round that wrote
+that now matches, and that memory lives in the register. An answered
+collision stays \code{collision} the same way, and becomes \code{created} when the
+account it finds is the one its answer named. A round that wrote
 \code{created} on the strength of having just made the account would be keeping a
 second source of truth beside the sweep, which is the thing decision 4 of the
 channel's design forbids.
+
+\strong{One creation per name in a round}, \code{creation_shares()}: the oldest row
+that waits for a name makes it. Another row of the same person shares that
+account, its key and its welcome, and becomes \code{created} with it; a row of
+somebody with the same name waits, and next round meets a namesake.
 
 Idempotent by construction: a round interrupted between applying and writing
 the outcome leaves the row as still to do, and the next round applies it

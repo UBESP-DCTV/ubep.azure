@@ -342,6 +342,15 @@ creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
 #'   return value and by no other road: not the register, not the telemetry
 #'   record, not standard output. `unconfirmed` is `TRUE` on a failure that
 #'   does not say whether the account was born, see `creation_failure()`.
+#'   `created_at`, on success only, is when the account was born, which the
+#'   messages count the first sign-in from (`mail_first_signin_deadline()`):
+#'   Graph's `createdDateTime` when the answer carries it in a form the
+#'   deadline can read, otherwise the moment read just before the request
+#'   left. Graph returns that field only when a read names it, so the answer
+#'   to a creation may not carry it; the moment before the request is not
+#'   later than the birth, so a deadline counted from it can come early. It
+#'   comes a day late only across midnight, with the machine's clock ahead of
+#'   Graph's, and that case is accepted.
 #'
 #' @keywords internal
 directory_create_user <- function(token, base_url, request, upn) {
@@ -370,6 +379,10 @@ directory_create_user <- function(token, base_url, request, upn) {
     otherMails = list(field("contact_email")),
     passwordProfile = profile
   )
+
+  # Read before the request leaves, so it is not later than the birth unless
+  # the machine's clock runs ahead of Graph's: see the return value.
+  leaving <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 
   response <- tryCatch(
     httr2::request(paste0(directory_endpoint(base_url), "/users")) |>
@@ -432,9 +445,19 @@ directory_create_user <- function(token, base_url, request, upn) {
     ))
   }
 
+  # A `createdDateTime` the deadline cannot be counted from is treated as a
+  # missing one: the moment read before the request still bounds the birth,
+  # where an unreadable one would leave the messages without a date.
+  born <- payload[["createdDateTime"]]
+  if (!is.character(born) || length(born) != 1L ||
+        is.na(mail_first_signin_deadline(born))) {
+    born <- leaving
+  }
+
   list(
     ok = TRUE, errors = character(), payload = payload,
-    credential = credential, upn = upn, unconfirmed = FALSE
+    credential = credential, upn = upn, unconfirmed = FALSE,
+    created_at = born
   )
 }
 

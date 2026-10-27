@@ -195,6 +195,27 @@ stabilito il nome non c'è: «Per qualunque problema scrivi prima al referente c
 ha chiesto il tuo account, che risponde del tuo primo accesso.» e il resto
 uguale.
 
+**Dalla 0.22.0 il benvenuto e la chiave dicono entro quando entrare.** Una
+chiave consegnata vale almeno 60 giorni dalla creazione dell'account o
+dall'ultimo reset di IT, e un account in cui nessuno entra prima o poi viene
+disattivato, mai cancellato. Il benvenuto dice «Primo accesso entro il
+<data>.», che dopo quella data la chiave non vale più, che senza primo accesso
+l'account viene disattivato, e come farlo riattivare: prima il referente, poi
+una risposta al benvenuto, che arriva a IT. La mail della chiave chiede al
+referente di consegnarla subito, entro la stessa data, e di rispondere al
+messaggio per averne una nuova, togliendo dalla risposta la chiave citata.
+La data è il giorno in cui l'account è nato, nel calendario di Roma, più 59
+giorni, scritta `AAAA-MM-GG` come ogni altra data dei messaggi
+(`mail_first_signin_deadline()`). Conta dalla nascita dell'account e non dal
+giro: `directory_create_user()` restituisce `created_at`, il `createdDateTime`
+della risposta di Graph quando c'è, altrimenti l'istante letto subito prima
+che la richiesta parta, che semmai anticipa la data: la posticipa di un giorno
+solo a cavallo della mezzanotte, con l'orologio della macchina in anticipo su
+quello di Graph, un caso accettato. Un
+`createdDateTime` che non si legge, o che non finisce con `Z`, prende lo
+stesso ripiego. Se la risposta di Graph lo porti si vedrà alla prima creazione
+vera.
+
 **La posta è spenta di default**, e la ragione non è intuitiva: con «manda
 prima, scrivi dopo» una posta semplicemente spenta bloccherebbe *ogni* scrittura
 nel registro. Quindi senza la variabile che la accende il giro fa esattamente
@@ -722,7 +743,20 @@ maiuscole.
   non esegue niente, e l'esito va solo a IT con la frase «referente della riga
   non stabilito»; la chiave non va a nessuno. Il primo e il terzo non si
   risolvono da soli: il log non dimentica, e il giro non scrive `owned_by` su
-  una riga di cui non conosce il proprietario. Come REDCap registri nel log un
+  una riga di cui non conosce il proprietario. Si risolvono a mano: IT importa
+  con il token del canale il solo `owned_by`, con il nome del proprietario,
+  nella forma della porta. È una scrittura del canale, sta sopra quella storta,
+  ed è lei che si legge. Se il campo mostra già quel nome gli import sono due,
+  il primo che lo svuota (con `overwriteBehavior = overwrite`: con `normal`
+  l'API ignora un valore vuoto) e il secondo che lo riscrive, perché REDCap non
+  registra un import che lascia il valore com'è; uno `owned_by` vuoto non nomina
+  nessuno, e non nasconde la scrittura storta. Resta senza uscita un caso raro,
+  accettato il 2026-10-27: la scrittura storta cade dentro un giro, fra la sua
+  lettura del log e il suo sigillo, e quando quel sigillo diventa il penultimo
+  il proprietario del tratto che apre si legge sotto di lui, dove nessuna
+  scrittura nuova arriva. Ogni modifica della riga ha allora un autore
+  non stabilito, e la riga resta ferma; l'uscita è cancellarla e farla
+  ricreare a un referente. Come REDCap registri nel log un
   apostrofo dentro un valore, con un escape o com'è, non è misurato: il valore
   si legge intero fra il primo apostrofo e l'ultimo, e con un escape il nome
   letto porterebbe anche il segno dell'escape, quindi non sarebbe quello del
@@ -777,11 +811,11 @@ giudicare i diritti, e la riga approvata si ferma su
 il proprietario riscrive quel campo, cambiandolo e rimettendolo (sopra, «La
 via d'uscita da una scrittura di chi non ha diritti»): l'ultima scrittura del
 campo è allora sua, e ha un autore. Una `owned_by` con l'autore vuoto sopra
-quella del canale ferma invece la riga senza uscita (sopra, i tre casi senza
-proprietario stabilito). Gli autori vuoti sono probabilmente irraggiungibili,
-perché REDCap registra in ogni evento l'utente autenticato; che nel log del
-registro non ci siano eventi con `username` vuoto va verificato prima del
-rilascio.
+quella del canale ferma invece la riga finché IT non riscrive `owned_by` con il
+token del canale (sopra, i tre casi senza proprietario stabilito). Gli autori
+vuoti sono probabilmente irraggiungibili, perché REDCap registra in ogni evento
+l'utente autenticato; che nel log del registro non ci siano eventi con
+`username` vuoto va verificato prima del rilascio.
 
 Diverso è il caso in cui il log **non si legge**, o il proprietario non è
 stabilito (il creatore non è nominato, o una `owned_by` senza autore sta sopra
@@ -828,12 +862,18 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   spostare ciò che confronta. È il primo campo per cui «scritto dal canale» e
   «fuori dal sigillo» smettono di essere lo stesso insieme, ed è per questo
   che sono due liste;
-- **un campo di intento aggiunto al dizionario sposta tutti i sigilli
+- **un campo di intento aggiunto al dizionario sposterebbe tutti i sigilli
   insieme.** I campi di intento si derivano dal dizionario impacchettato, e un
-  campo in più entra nel sigillo di ogni riga: al primo giro dopo il rilascio
-  ogni riga applicata risulta cambiata, nessuna ha un autore dopo l'ultima
-  esecuzione, e tutte aspettano il proprio proprietario, con una chiamata al
-  log per ciascuna a ogni giro. `owned_by` non produce questo effetto: è un
+  campo in più, anche vuoto, entrerebbe nel sigillo di ogni riga: al primo giro
+  dopo il rilascio ogni riga applicata risulterebbe cambiata, nessuna avrebbe
+  un autore dopo l'ultima esecuzione, e tutte aspetterebbero il proprio
+  proprietario, con una chiamata al log per ciascuna a ogni giro. Per questo,
+  dalla 0.22.0, un campo di intento aggiunto dopo i primi sigilli sta in un
+  elenco, `register_late_seal_fields()`, ed entra nel sigillo solo quando è
+  pieno, dopo gli altri, come `<nome>=<valore>`: vuoto, il sigillo è quello di
+  prima, bit per bit. Il primo è `distinct_username` (più sotto, «Una persona
+  da creare»). Un campo di intento aggiunto d'ora in poi va nell'elenco, e un
+  test fallisce finché non c'è. `owned_by` non produce questo effetto: è un
   campo del canale e sta fuori dal sigillo.
 
 L'approvazione vale a tre condizioni: porta il sigillo di **quella** versione
@@ -952,9 +992,11 @@ Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla colonna
 
 ### Una persona da creare
 
-Una riga il cui verdetto è `absent` è l'unica che il giro chiude creando, e
-creare è l'unico atto che un giro dopo non disfa: l'utenza esiste. Dalla 0.19.0
-tre controlli stanno prima della nascita, e non dopo.
+Il giro chiude creando due righe: quella il cui verdetto è `absent`, e dalla
+0.22.0 quella in collisione a cui il referente ha risposto che si tratta di
+un'altra persona (più sotto). Creare è l'unico atto che un giro dopo non disfa:
+l'utenza esiste. Dalla 0.19.0 tre controlli stanno prima della nascita, e non
+dopo.
 
 - **Validata prima di nascere.** La riga si giudica come la coppia che
   diventerà, con il nome che il giro sta per creare: una scadenza passata dà
@@ -973,6 +1015,104 @@ tre controlli stanno prima della nascita, e non dopo.
   posta. Con `UBEP_SCRITTURA=1` e `UBEP_POSTA` spenta il giro non crea nessuno:
   la riga resta in attesa, e nei giri in cui qualcuno sarebbe nato gli `errori`
   portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+
+L'account nasce sempre allo stesso modo: con il cambio della chiave
+obbligatorio al primo accesso e senza licenze, in una sola chiamata a Graph.
+Dalla 0.22.0 un test fallisce se una delle due cose cambia. Sul primo e sulla
+chiamata unica conta anche il rapporto (§9, «Il primo accesso, da Entra»).
+
+**Una creazione per nome, nello stesso giro.** Il nome è libero quando il giro
+legge l'anagrafica e occupato appena il primo `POST` ha fatto l'account. Fino
+alla 0.21.0 due righe che aspettavano lo stesso nome facevano due `POST`, e il
+secondo arrivava su un nome ormai preso. Dalla 0.22.0 il giro manda ogni nome
+una volta sola, per la riga più vecchia che lo aspetta (`creation_shares()`).
+L'età è il `record_id`, come per la coppia ripetuta, e non l'ordine in cui
+l'export dà le righe. Le altre righe che aspettano lo stesso nome sono una di
+due cose:
+
+- **la stessa persona**, chiesta su un altro progetto: stesso nome, stesso
+  cognome e stesso recapito, confrontati come li confronta la risoluzione.
+  Condivide la creazione: un account, una chiave, che va al referente della
+  riga più vecchia, e un benvenuto. Prende l'errore della creazione, se c'è, e
+  al giro dopo trova l'account e diventa `created` come la prima;
+- **un'altra persona con lo stesso nome**, o la stessa con un altro recapito,
+  che niente nel giro distingue: aspetta, e al giro dopo trova l'account nuovo
+  come omonimo, `ambiguous`, che decidono il referente e IT. Prendere subito il
+  nome libero seguente farebbe un secondo account a chi forse ne ha già uno.
+
+**La risposta a una collisione**, dalla 0.22.0. `collision` vuol dire che il
+nome utente composto è di un account con nome o cognome diversi da quelli della
+riga. Il giro scrive in `username` la proposta, il nome col primo suffisso
+libero, e ferma la riga su `DATO_IDENTITA_IN_COLLISIONE:<proposta>`; il
+messaggio al proprietario nomina il nome occupato, porta la proposta su una
+riga a sé e spiega le due risposte. Se l'account che c'è non è la persona della
+riga, il referente incolla la proposta nel campo `distinct_username` (*Another
+person: create this username*, visibile solo su una collisione o quando è
+pieno), e il giro dopo crea l'account con quel nome, come per una riga
+`absent`: la chiave al proprietario, il benvenuto alla persona, e al giro
+successivo, quando la riga diventa `created`, la mail di accesso. Se è la
+stessa persona il campo resta vuoto, e si corregge la riga, o IT corregge
+l'account. Il canale non lega mai una riga a un account esistente sulla parola
+del referente, e gli omonimi, `ambiguous`, restano alla posta a IT. Quattro
+regole tengono la risposta legata alla domanda:
+
+- **il valore è la proposta, non una spunta.** Il giro lo confronta, senza
+  maiuscole e senza spazi ai bordi, con la proposta che ha appena calcolato
+  (`collision_answered()`), e se non coincide non fa niente. Il nome creato è
+  sempre la proposta del giro, libera per costruzione, mai il valore del campo.
+  Se la proposta cambia, perché il nome è stato corretto o il suffisso è stato
+  preso nel frattempo, la risposta non vale più: il dettaglio porta la
+  proposta, quindi l'esito cambia e il messaggio riparte con quella nuova;
+- **vale solo se scritta dopo la domanda.** La sua scrittura più recente nel log
+  deve stare sopra quella della proposta in `username` da parte del canale
+  (`log_answer_stands()`). Una risposta compilata alla nascita della riga, o
+  importata già piena, non vale: per ridarla si svuota il campo, si salva e si
+  incolla di nuovo, perché REDCap non registra una scrittura che lascia il
+  valore com'è;
+- **è un campo di intento.** Chi lo scrive è un autore della riga: se non è il
+  proprietario, la riga aspetta l'approvazione del proprietario o di IT, il
+  cancello giudica i diritti di chi ha risposto, e approvata ed eseguita la
+  riga passa a lui, come per ogni modifica;
+- **si legge solo su `collision`.** Su ogni altro verdetto il campo è ignorato,
+  senza codice: dopo la creazione resta pieno, uguale allo UPN, come traccia
+  della risposta, e un codice lo segnalerebbe per sempre.
+
+Resta scoperto un caso, raro: il nome occupato passa a un'altra persona fra la
+domanda e la risposta, cancellato e riusato in poche ore, con la proposta
+invariata. La risposta vale allora per un account che il referente non ha
+guardato.
+
+### Un account disattivato
+
+Fino alla 0.21.0 una corrispondenza su un account con `accountEnabled` falso
+era `existing`: il giro concedeva il diritto e mandava alla persona la mail di
+un accesso che non poteva usare. Dalla 0.22.0 è `disabled`, con lo UPN
+dell'account in `username`, che è l'account da riattivare. Solo il falso: un
+`accountEnabled` assente resta `existing`, perché la spazzata lo chiede sempre
+e un valore che manca non è un account disattivato.
+
+- **La riga si ferma al cancello** su `TRASPORTO_ACCOUNT_DISATTIVATO`: nessuna
+  istanza la tocca, nessuna mail di accesso parte, nessuno nasce al suo posto.
+  È un codice `TRASPORTO_` perché niente nel registro può cambiare le cose: un
+  account lo riattiva solo IT, mai il canale. La riga resta in coda.
+- **L'esito va al proprietario con IT in copia**, a IT da solo quando il giro
+  non ha un proprietario da dare, come per ogni esito senza proprietario. Parte
+  una volta: nei giri dopo l'esito non cambia, e finché l'account resta
+  disattivato non riparte niente. Il messaggio non dice che la riga torna in
+  coda da sola, come per gli altri `TRASPORTO_`: dice che l'account è
+  disattivato, di solito perché la persona non è mai entrata, e che una
+  risposta lo fa riattivare da IT con una chiave nuova.
+- **Riattivato l'account**, il giro dopo lo trova `existing` e prosegue: se il
+  diritto si crea, parte la mail di accesso.
+- **Una revoca passa.** Togliere un diritto non chiede che la persona entri:
+  fermata, lascerebbe il diritto in REDCap senza che il canale possa toglierlo.
+
+Il canale non chiede permessi nuovi: `accountEnabled` era già nella spazzata
+(`directory_fields()`), e la creazione resta l'unica scrittura su Graph. Il
+verdetto viene da `accountEnabled` falso e da nient'altro, quindi non dice chi
+ha disattivato l'account, se la regola sugli account mai usati o IT a mano; e
+una riga `created` che diventa `disabled` perde quella memoria, e riattivata
+torna `existing`.
 
 ### La mail di accesso
 
@@ -1321,6 +1461,37 @@ nel record del giro. Il rilascio è in cinque passi, nell'ordine:
    `accessi_persi > 0` tacerebbe: su una colonna vuota il confronto è falso, non
    un errore.
 
+La 0.22.0 risponde **sì** alla prima e **no** alla seconda, e non porta colonne
+nuove nel record del giro. Tocca lo schema con una parola di un vocabolario,
+`disabled` fra le scelte di `identity`, e con un campo, `distinct_username`: il
+dizionario passa a 22 campi, e serve l'atto unico. La riga del campo è quella
+impacchettata (`request_register`, subito dopo `identity`, testo con la
+validazione `email`, etichetta *Another person: create this username*, senza
+`@READONLY` perché lo scrive il referente, visibile su una collisione o quando
+è pieno). Il pacchetto nuovo sul dizionario vecchio si ferma su
+`DIZIONARIO_CAMPO_ASSENTE` e `DIZIONARIO_SCELTE_DIVERSE`, il pacchetto vecchio
+sul dizionario nuovo su `DIZIONARIO_SCELTE_DIVERSE` per `identity`: in tutti e
+due gli ordini il giro resta fermo finché le due cose non sono fatte, e non
+concede niente. Le lavorazioni chiamano il pacchetto come prima, e le copie in
+`/opt` restano come sono. Al primo giro dopo l'installazione:
+
+- ogni riga attiva il cui account è disattivato, comprese quelle `applied`,
+  diventa `disabled` e `transport_error` con `TRASPORTO_ACCOUNT_DISATTIVATO`, e
+  il suo esito parte una volta, al proprietario con IT in copia: IT va avvisata
+  prima del rilascio. Le revoche su quegli account passano;
+- ogni riga ferma su una collisione cambia dettaglio, che ora porta la
+  proposta, e il suo proprietario riceve di nuovo il messaggio, con le due
+  risposte;
+- nessun sigillo si muove: il campo nuovo è vuoto dappertutto, e vuoto non
+  entra nel sigillo (§4).
+
+Il ritorno alla 0.21.0 è un atto unico anche lui, con il dizionario di prima.
+Sulla 0.21.0 un account disattivato torna `existing`: le righe ferme su
+`TRASPORTO_ACCOUNT_DISATTIVATO` vengono concesse, e le loro persone ricevono la
+mail di un accesso che non possono usare. Una riga nata da una collisione con
+la risposta è sigillata con la risposta dentro, e la 0.21.0 sigilla senza: la
+riga risulta cambiata senza autori, e aspetta il suo proprietario.
+
 ### La regola ritirata è disattivata, non cancellata
 
 La vecchia regola a quattro rami è ancora nella sottoscrizione, disattivata,
@@ -1386,9 +1557,12 @@ giro non crea due volte la stessa utenza, quindi non ha un'altra occasione di
 mandarlo. E il messaggio con la chiave dice al referente che il nome utente è
 già arrivato in un messaggio a parte, quindi la persona riceverebbe la sola
 chiave: il nome utente, l'indirizzo dell'istanza e i passi del primo accesso
-glieli manda IT, a mano. Per sapere perché non è partito, guardare la riga nel
-registro: un `contact_email` vuoto spiega il caso da solo; altrimenti il journal
-della lavorazione riporta la risposta del servizio di posta.
+glieli manda IT, a mano, e dalla 0.22.0 anche la data limite del primo
+accesso, la stessa che la chiave ha dato al referente: il giorno in cui
+l'account è nato più 59 giorni (§1). Per sapere perché non è partito,
+guardare la riga nel registro: un `contact_email` vuoto spiega il caso da solo;
+altrimenti il journal della lavorazione riporta la risposta del servizio di
+posta.
 
 **Accesso perso (gravità proposta 2, da fissare nel foglio dei parametri).**
 Una persona ha ricevuto il diritto su un progetto e la mail che glielo dice non
@@ -1413,7 +1587,10 @@ porta il codice:
 
 - se c'è, la procedura è una sola: reimpostare la chiave su Entra,
   mandarla da sola al referente, e scrivere alla persona nome utente,
-  indirizzo dell'istanza e istruzioni;
+  indirizzo dell'istanza e istruzioni. A tutti e due IT dà la data limite del
+  primo accesso, che dalla 0.22.0 il benvenuto e la chiave portano: qui è il
+  giorno del reset più 59 giorni, perché una chiave reimpostata vale almeno 60
+  giorni dal reset (§1);
 - se non c'è, non serve fare niente: la richiesta non era arrivata a Graph, il
   giro dopo crea l'utenza con chiave e benvenuto, e il record conta
   `credenziali_recapitate`. Guardarlo prima di reimpostare.

@@ -622,6 +622,129 @@ test_that("a creation sends the minimum body and hands the credential back", {
 })
 
 
+test_that("an account is born with the key to change and with no license", {
+  # eval
+  captured <- list()
+  crea(function(req) {
+    captured[[length(captured) + 1L]] <<- req
+    risposta(201L, '{"id":"00000000-0000-0000-0000-00000000000a"}')
+  })
+  sent <- captured[[1L]][["body"]][["data"]]
+  keys <- function(x) {
+    if (!is.list(x)) {
+      return(character())
+    }
+    c(names(x), unlist(lapply(x, keys), use.names = FALSE))
+  }
+
+  # test
+  # Every account the round creates is one nobody has entered yet, and two
+  # properties of its birth are what the rest of UBEP relies on to recognize
+  # it: the key has to be changed at first sign-in, and no license is assigned
+  # directly. An account born without the first escapes the rule that makes
+  # an unused key stop working after 60 days; a license assigned here would be
+  # one the channel cannot take back. Both are asserted on the wire, together
+  # with the one call the creation makes, so that a license assigned by a
+  # second call cannot slip in beside a clean body.
+  expect_length(captured, 1L)
+  expect_equal(captured[[1L]][["method"]], "POST")
+  expect_match(captured[[1L]][["url"]], "/users$")
+  expect_identical(
+    sent[["passwordProfile"]][["forceChangePasswordNextSignIn"]], TRUE
+  )
+  expect_false(any(grepl("licen", keys(sent), ignore.case = TRUE)))
+  expect_false(grepl("licen", captured[[1L]][["url"]], ignore.case = TRUE))
+})
+
+
+test_that("a creation says when the account was born, as Graph wrote it", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(201L, paste0(
+      '{"id":"00000000-0000-0000-0000-00000000000a",',
+      '"createdDateTime":"2026-10-23T23:30:00Z"}'
+    ))
+  })
+
+  # test
+  # The messages promise a first sign-in by a date counted from this moment,
+  # so it has to be the account's own and not the round's.
+  expect_equal(answer[["created_at"]], "2026-10-23T23:30:00Z")
+})
+
+
+test_that("without the date from Graph the birth is never placed too late", {
+  # eval
+  before <- Sys.time()
+  posted <- NULL
+  answer <- crea(function(req) {
+    # Into the next second before the request is taken in: the moment is
+    # written in whole seconds, and one read after this point would otherwise
+    # share its second with one read before it.
+    Sys.sleep(1.05 - as.numeric(Sys.time()) %% 1)
+    posted <<- Sys.time()
+    risposta(201L, '{"id":"00000000-0000-0000-0000-00000000000a"}')
+  })
+  moment <- as.POSIXct(
+    sub("Z$", "", answer[["created_at"]]),
+    tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+  )
+
+  # test
+  # Graph returns `createdDateTime` only when asked for by name, and the
+  # answer to a creation may well not carry it. The moment read just before
+  # the request leaves cannot be later than the birth, so a deadline counted
+  # from it can only come early, never late. The birth happens while Graph
+  # holds the request, here inside the mock: a moment read once the answer
+  # is back would fall in the second of `posted` or later.
+  expect_false(is.na(moment))
+  expect_true(moment >= trunc(before, "secs") - 1)
+  expect_true(moment < trunc(posted, "secs"))
+})
+
+
+test_that("an unreadable date from Graph falls back like a missing one", {
+  illeggibili <- c(
+    "ieri", "2026-10-23T23:30:00+02:00", "2026-13-45T10:00:00Z"
+  )
+  for (detto in illeggibili) {
+    # eval
+    before <- Sys.time()
+    answer <- crea(function(req) {
+      risposta(201L, paste0(
+        '{"id":"00000000-0000-0000-0000-00000000000a",',
+        '"createdDateTime":"', detto, '"}'
+      ))
+    })
+    after <- Sys.time()
+    moment <- as.POSIXct(
+      sub("Z$", "", answer[["created_at"]]),
+      tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+    )
+
+    # test
+    # A birth the deadline cannot be counted from is no birth at all: the
+    # moment read before the request stands in for it, as when Graph is
+    # silent, instead of a date the messages would have to leave out.
+    expect_false(is.na(mail_first_signin_deadline(answer[["created_at"]])),
+                 info = detto)
+    expect_true(moment >= trunc(before, "secs") - 1, info = detto)
+    expect_true(moment <= after, info = detto)
+  }
+})
+
+
+test_that("a failed creation says no birth", {
+  # eval
+  answer <- crea(function(req) {
+    risposta(403L, '{"error":{"code":"Authorization_RequestDenied"}}')
+  })
+
+  # test
+  expect_null(answer[["created_at"]])
+})
+
+
 test_that("the body carries the name, because the surname is the criterion", {
   # eval
   captured <- NULL

@@ -1,3 +1,140 @@
+# ubep.azure 0.22.0
+
+* **The welcome and the message with the key give the date of the first
+  sign-in.** A key handed over is valid for at least 60 days from the creation
+  of the account, or from the last reset by IT, and an account nobody signs in
+  to is eventually deactivated, never deleted. The welcome says by when to
+  sign in for the first time, that after that date the key no longer works,
+  and that an account without a first sign-in is deactivated and how to have
+  it reactivated: through the referent first, then by replying to the
+  welcome. The message with the key tells the referent to hand it over at
+  once, by the same date, and to reply to it for a new key. The date is the
+  day the account was born in the calendar of Rome plus 59 days, written
+  `YYYY-MM-DD` like every other date in the messages
+  (`mail_first_signin_deadline()`). It is counted from the account's own
+  birth and not from the round: `directory_create_user()` now returns
+  `created_at`, Graph's `createdDateTime` when the answer to the creation
+  carries it, otherwise the moment read just before the request left, which
+  brings the date earlier if anything: a day late only across midnight, with
+  the machine's clock ahead of Graph's, an accepted case. Whether the answer
+  carries it is to be seen on the first real creation.
+
+* **A new identity verdict, `disabled`.** One match on an account whose
+  `accountEnabled` is false was `existing`, and the round granted the right
+  and mailed the person an access they could not use. Now it is `disabled`,
+  with the account's UPN beside it: the row stops at the gate with
+  `TRASPORTO_ACCOUNT_DISATTIVATO`, stays in the queue, and its outcome goes
+  to the row's owner with IT in copy. When the round has no owner to give,
+  as when no row is admitted, waiting for its account or changed and the
+  log is not read, it goes to IT alone, like every outcome without an owner.
+  When IT has enabled the account again the next round finds it `existing`
+  and goes on. A revocation is the exception and still reaches the instance,
+  since taking a right away needs nobody to sign in. The channel never
+  enables an account and asks for no new permission: `accountEnabled` was
+  already in the sweep.
+
+* **The outcome of a row stopped on `TRASPORTO_ACCOUNT_DISATTIVATO` no longer
+  says it returns to the queue by itself.** It does not: the account has to be
+  enabled again. The message says the account is deactivated, usually because
+  the person never signed in, and that a reply to it gets the account
+  reactivated by IT and a new key. The line on `TRASPORTO_` in general is
+  unchanged for every other code.
+
+* **A new person asked for on several rows in the same round is created
+  once.** The name the resolution finds free is taken as soon as the first
+  POST has made the account, and until now a second row waiting for the same
+  name sent a second POST, on a name already taken. Now the round sends each
+  name once, for the oldest row that waits for it by `record_id`, as for a
+  repeated pair (`creation_shares()`). Another row of the same person, with the
+  same first name, last name and contact address, shares that account, its
+  key, which goes to the referent of the oldest row, and its welcome; it takes
+  the error of the creation if there is one, and next round finds the account
+  and becomes `created` like the first. A row of somebody else with the same
+  name, or of the same person with another address, waits: next round it
+  meets the new account as a namesake, `ambiguous`, as before. Taking the next
+  free name at once would make a second account for a person who may already
+  have one.
+
+* **A referent answers a collision from the register.** On `collision` the
+  composed username belongs to an account with a different first or last
+  name, and until now the answer went to IT by mail. The register gains the
+  field `distinct_username`, *Another person: create this username*: when the
+  account is not the person the row is for, the referent pastes into it the
+  proposal the row carries in `username`, and the next round creates the
+  account under that proposal as it creates an `absent` one, with the key to
+  the owner and the welcome to the person; the round after, the row becomes
+  `created` and the access message leaves. For the same person the field stays
+  blank, and the row is corrected, or IT corrects the account. The answer
+  holds only when it equals the proposal of that round, folded as addresses
+  are (`collision_answered()`), and only when written after the round wrote
+  the proposal (`log_answer_stands()`): an answer filled in when the row was
+  filed, or imported already filled, does not, and the message and the
+  field's note say to empty it, save, and paste it again. It is an intent
+  field, so whoever writes it is an author of the row: an answer by somebody
+  other than the owner waits for the owner or IT, and the gate judges the
+  rights of whoever wrote it. The field is read on `collision` alone and is
+  never the name created: the channel never ties a row to an existing account
+  on the referent's word. Namesakes, `ambiguous`, still go to IT by mail.
+
+* **The code of a collision carries the proposal**,
+  `DATO_IDENTITA_IN_COLLISIONE:<proposal>`, as `SIGILLO_DIVERSO:<seal>`
+  carries its seal. When the proposal moves, because the name was corrected or
+  the suffix was taken meanwhile, the outcome changes and the message leaves
+  again with the new one; with the bare code nobody would be told. The message
+  names the username that is taken, writes the proposal on a line of its own,
+  and explains the two answers.
+
+* **An intent field added after the first seals enters the seal only when it
+  holds a value** (`register_late_seal_fields()`). The seal is a hash of the
+  intent fields, and `distinct_username`, even empty, would have moved the
+  seal of every row: on the first round after the import every row ever
+  carried out would have read as changed with nobody on record, been held, and
+  had its owner mailed. Empty, the seal is the one written before the field
+  existed, bit for bit; filled, the field enters after the others as its name
+  and its value. A test fails while an intent field is neither among those
+  sealed from the start nor in the list.
+
+* **Tests pin the way out of a row stopped on a stray write of `owned_by`.**
+  A write of `owned_by` with no author, or one of the channel with another
+  field beside it, leaves the owner unknown, and the round writes nothing that
+  would release the row. A write of `owned_by` alone with the channel's token,
+  above the stray one, does: it is what IT does by hand, with two imports when
+  the field already shows the owner, since REDCap logs no import that leaves a
+  value as it was. One rare case stays stopped by design (decided on
+  2026-10-27): a stray write that lands inside a round, between its reading of
+  the log and its seal, and ends below the second-to-last seal. The way out is
+  to delete the row and have a referent create it again.
+
+* **A test pins how an account is born.** The creation sends
+  `forceChangePasswordNextSignIn` true and no license, in a single call to
+  Graph; the test fails if either changes.
+
+* **The register's dictionary changes, so this release touches the schema.**
+  The `identity` field gains the choice `disabled`, and `distinct_username`
+  follows it: 22 fields. The packaged dictionary and the live one have to
+  change together. The new package on the old dictionary stops the round on
+  `DIZIONARIO_CAMPO_ASSENTE` and `DIZIONARIO_SCELTE_DIVERSE`, the old package
+  on the new one on `DIZIONARIO_SCELTE_DIVERSE`, and in either order the round
+  grants nothing until both are done. Import of the dictionary and
+  installation in the same window, with the round stopped in between. The
+  runners call the package as before, and the round record gains no column.
+
+* **The first round after the installation writes to some owners.** Every
+  active row whose account is deactivated, `applied` ones included, becomes
+  `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and its outcome leaves
+  once, to the owner with IT in copy: IT should hear of it before the
+  release. Every row stopped on a collision changes its detail, which now
+  carries the proposal, so its owner receives the message again, with the two
+  answers. No seal moves: the new field is empty everywhere.
+
+* **Going back to 0.21.0 is a single act too**, with the old dictionary,
+  since the old package stops on the new one. On 0.21.0 a deactivated account
+  is `existing` again: the rows waiting on `TRASPORTO_ACCOUNT_DISATTIVATO` are
+  granted, and their people mailed an access they cannot use. A row created
+  from an answered collision was sealed with the answer inside, and 0.21.0
+  seals without it: the row reads as changed with nobody on record, and waits
+  for its owner.
+
 # ubep.azure 0.21.0
 
 * **`build_ps1_from_xlsx()` is defunct.** Every instance is now linked to the

@@ -24,8 +24,10 @@ mail_round(
 \item{register}{The register as read, carrying every field the messages
 name.}
 
-\item{born}{The accounts created this round: lists with \code{record_id}, \code{upn}
-and \code{credential}.}
+\item{born}{The accounts created this round: lists with \code{record_id}, \code{upn},
+\code{credential} and \code{created_at}, the moment the account was born, from
+which the welcome and the key count the first sign-in. Without it the
+two messages leave without the date.}
 
 \item{mailer}{\verb{function(to, cc, subject, body)} returning \code{ok} and \code{errors}.}
 
@@ -41,8 +43,9 @@ address the outcome goes to when the row has no established owner.}
 mailer closure is what carries it to the transport.}
 
 \item{identified}{What this round settled about each row, as a frame with
-\code{record_id} and the fields it settled: the identity; \code{owner}, who the
-log says the row belongs to, where the outcome and the key go
+\code{record_id} and the fields it settled: the identity; \code{composed}, the
+name the round composed, which a collision's message names; \code{owner}, who
+the log says the row belongs to, where the outcome and the key go
 (\code{mail_referent()}); \code{passed}, whether the change applied this round
 handed the row over; \code{edited_by}, who changed a held row since
 it was applied, as the row's log says. \code{register} is the register as read,

@@ -30,6 +30,86 @@ test_that("un `outcome_at` che non e' una data non diventa un'ora sbagliata", {
 })
 
 
+test_that("la data limite e' la creazione a Roma piu' 59 giorni", {
+  # test
+  # 59 and not 60: the person reads "entro il" as "up to that day included",
+  # while the key can stop working at any hour of the sixtieth day.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T10:00:00Z"), "2026-12-21"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2027-12-31T12:00:00Z"), "2028-02-28"
+  )
+})
+
+
+test_that("la data limite conta il giorno di Roma, non quello UTC", {
+  # test
+  # At 23:30 UTC it is already the next day in Rome, and the day the account
+  # was born is the one the person lives in. Counted from the UTC day the
+  # deadline would fall one day before; the opposite mistake, on an account
+  # born just after midnight in Rome, would promise a day the key may not have.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T23:30:00Z"), "2026-12-22"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T21:30:00Z"), "2026-12-21"
+  )
+})
+
+
+test_that("la data limite regge le due notti del cambio d'ora", {
+  # test
+  # Autumn 2026: the clocks go back at 01:00 UTC on 25 October. Before it Rome
+  # is two hours ahead, after it one, so 22:30 UTC is past midnight the night
+  # before and not the night after.
+  expect_equal(
+    mail_first_signin_deadline("2026-10-24T22:30:00Z"), "2026-12-23"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-25T22:30:00Z"), "2026-12-23"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2026-10-25T23:30:00Z"), "2026-12-24"
+  )
+  # Spring 2027: the clocks go forward at 01:00 UTC on 28 March.
+  expect_equal(
+    mail_first_signin_deadline("2027-03-27T22:30:00Z"), "2027-05-25"
+  )
+  expect_equal(
+    mail_first_signin_deadline("2027-03-28T22:30:00Z"), "2027-05-27"
+  )
+})
+
+
+test_that("la data limite legge le frazioni di secondo di Graph", {
+  expect_equal(
+    mail_first_signin_deadline("2026-10-23T10:00:00.1234567Z"), "2026-12-21"
+  )
+})
+
+
+test_that("un istante illeggibile non diventa una data limite sbagliata", {
+  # A wrong deadline is worse than a missing one: the person would plan on it.
+  expect_true(is.na(mail_first_signin_deadline("")))
+  expect_true(is.na(mail_first_signin_deadline("ieri")))
+  expect_true(is.na(mail_first_signin_deadline(NA_character_)))
+  expect_true(is.na(mail_first_signin_deadline(NULL)))
+})
+
+
+test_that("la data limite rifiuta un istante che non finisce con Z", {
+  # An offset read as if it were UTC moves the birth by hours: 23:30 at +02:00
+  # is 21:30 UTC, still the 23rd in Rome, and read as 23:30 UTC it would be
+  # the 24th, one day late. Graph writes UTC with a final Z, and anything else
+  # gets no date rather than a wrong one.
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T23:30:00+02:00")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T23:30:00")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T10:00:00Z ieri")))
+  expect_true(is.na(mail_first_signin_deadline("2026-10-23T10:00:00ZZ")))
+})
+
+
 test_that("l'oggetto porta le due lingue e il numero della richiesta", {
   # eval
   detto <- mail_outcome_message(riga_di_prova())
@@ -50,6 +130,180 @@ test_that("il corpo porta le due lingue, separate", {
   expect_match(detto, "La richiesta 16", fixed = TRUE)
   expect_match(detto, "Request 16", fixed = TRUE)
   expect_match(detto, "\n---\n", fixed = TRUE)
+})
+
+
+test_that("un account disattivato non e' detto tornare in coda da solo", {
+  # eval
+  disattivato <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO"
+  ))[["body"]]
+  altro <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_POSTA_RIFIUTATA"
+  ))[["body"]]
+
+  # test
+  expect_match(
+    disattivato,
+    paste0(
+      "L'account della persona e' disattivato, di solito perche' non e' ",
+      "mai entrata."
+    ),
+    fixed = TRUE
+  )
+  expect_match(disattivato, "rispondi a questo messaggio", fixed = TRUE)
+  expect_match(
+    disattivato,
+    paste0(
+      "The person's account is deactivated, usually because they never ",
+      "signed in."
+    ),
+    fixed = TRUE
+  )
+  expect_match(disattivato, "reply to this message", fixed = TRUE)
+  expect_false(grepl("torna in coda da sola", disattivato, fixed = TRUE))
+  expect_false(
+    grepl("returns to the queue by itself", disattivato, fixed = TRUE)
+  )
+  expect_match(disattivato, "DATO_ riguarda", fixed = TRUE)
+
+  expect_match(altro, "torna in coda da sola", fixed = TRUE)
+  expect_false(grepl("account della persona", altro, fixed = TRUE))
+})
+
+
+# The fields of a row stopped on a collision: `sara.collaudozeta` is
+# somebody else's account, and the round proposes `.2`.
+collisione_di_prova <- list(
+  username = "sara.collaudozeta.2@ubep.unipd.it", identity = "collision",
+  composed = "sara.collaudozeta@ubep.unipd.it",
+  outcome_detail =
+    "DATO_IDENTITA_IN_COLLISIONE:sara.collaudozeta.2@ubep.unipd.it"
+)
+
+
+test_that("il messaggio di una collisione spiega le due risposte e nomina il campo", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
+  altro <- mail_outcome_message(riga_di_prova())[["body"]]
+
+  # test
+  # The two answers, in both languages: another person, and the field to
+  # paste the proposal into, with what follows; the same person, and what
+  # to correct instead.
+  for (frase in c(
+    paste0(
+      "Se quell'account non e' la persona di questa riga, incolla il nome ",
+      "utente proposto"
+    ),
+    "\"Another person: create this username\" (distinct_username)",
+    paste0(
+      "al giro successivo il canale crea l'account con quel nome, manda a te ",
+      "la chiave e alla persona il benvenuto"
+    ),
+    "La risposta vale solo per questa proposta",
+    paste0(
+      "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
+      "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
+    ),
+    "aspetta l'approvazione del referente della riga, oppure di IT",
+    paste0(
+      "If that account is not the person this row is for, paste the ",
+      "proposed username"
+    ),
+    paste0(
+      "on the next round the channel creates the account with that name, ",
+      "and sends you the key and the person the welcome"
+    ),
+    "The answer holds for this proposal only",
+    paste0(
+      "If it is the same person, leave the field blank: correct the row's ",
+      "first or last name, or write to IT if the account is wrong."
+    ),
+    "waits for the approval of whoever owns the row, or of IT"
+  )) {
+    expect_match(detto, frase, fixed = TRUE)
+  }
+  expect_false(grepl("distinct_username", altro, fixed = TRUE))
+})
+
+
+test_that("il messaggio di una collisione dice di riscrivere una risposta data prima della proposta", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
+
+  # test
+  # An answer written before the round wrote the proposal does not count
+  # (`log_answer_stands()`), and the referent who filled it in early sees
+  # the proposal already in the field. REDCap logs no write that leaves a
+  # value as it was, so the message says to empty it first.
+  for (frase in c(
+    paste0(
+      "Se il campo porta gia' questo nome, scritto prima di questo ",
+      "messaggio, non vale: svuotalo, salva la riga e incollalo di nuovo."
+    ),
+    paste0(
+      "If the field already holds this name, written before this message, ",
+      "it does not count: empty it, save the row and paste it again."
+    )
+  )) {
+    expect_match(detto, frase, fixed = TRUE)
+  }
+})
+
+
+test_that("il messaggio di una collisione porta il nome occupato e la proposta", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
+  # A row stopped before the code carried the proposal, and a round that
+  # did not say which name it composed.
+  vecchia <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(collisione_di_prova, list(
+      outcome_detail = "DATO_IDENTITA_IN_COLLISIONE", composed = NULL
+    ))
+  ))[["body"]]
+
+  # test
+  # The name taken, which the referent looks up in the directory, and the
+  # proposal written out on a line of its own, to be pasted as it is.
+  expect_match(
+    detto,
+    paste0(
+      "Il nome utente composto da nome e cognome della riga, ",
+      "sara.collaudozeta@ubep.unipd.it, e' di un account con nome o cognome ",
+      "diversi."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    detto,
+    paste0(
+      "The username composed from the row's first and last name, ",
+      "sara.collaudozeta@ubep.unipd.it, belongs to an account with a ",
+      "different first or last name."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    detto, "\n    sara.collaudozeta.2@ubep.unipd.it\n", fixed = TRUE
+  )
+  expect_match(
+    vecchia,
+    "Il nome utente composto da nome e cognome della riga e' di un account",
+    fixed = TRUE
+  )
+  expect_match(
+    vecchia, "\n    sara.collaudozeta.2@ubep.unipd.it\n", fixed = TRUE
+  )
 })
 
 
@@ -478,6 +732,145 @@ test_that("nessun altro messaggio puo' nominare la chiave d'ingresso", {
 })
 
 
+# The body with the wrapped lines of a list item joined, so a sentence can be
+# asserted whole wherever the text breaks it.
+disteso <- function(corpo) gsub("\n  ", " ", corpo, fixed = TRUE)
+
+
+test_that("il benvenuto dice entro quando entrare, nelle due lingue", {
+  # eval
+  detto <- disteso(mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    deadline = "2026-12-21"
+  )[["body"]])
+
+  # test
+  for (frase in c(
+    "Primo accesso entro il 2026-12-21.",
+    paste0(
+      "- Dopo quella data la chiave d'ingresso non vale piu': chiedine una ",
+      "nuova al tuo referente."
+    ),
+    paste0(
+      "- Senza primo accesso l'account viene disattivato, non cancellato. ",
+      "Per riattivarlo scrivi al tuo referente; se non lo raggiungi, ",
+      "rispondi a questo messaggio (arriva a IT)."
+    ),
+    "First sign-in by 2026-12-21.",
+    paste0(
+      "- After that date your sign-in key no longer works: ask your ",
+      "referent for a new one."
+    ),
+    paste0(
+      "- If you never sign in, your account is deactivated, not deleted. ",
+      "To reactivate it, write to your referent; if you cannot reach them, ",
+      "reply to this message (it goes to IT)."
+    )
+  )) {
+    expect_match(detto, frase, fixed = TRUE, info = frase)
+  }
+  expect_false(grepl("[^\\x01-\\x7F]", detto, perl = TRUE))
+  # One date and one thing to do: the deadline, once in each language, and no
+  # other date beside it.
+  expect_equal(
+    regmatches(detto, gregexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", detto))[[1]],
+    rep("2026-12-21", 2L)
+  )
+})
+
+
+test_that("la data limite sta fra la chiave e i passi del primo accesso", {
+  # eval
+  righe <- strsplit(mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    url = "https://edc10.example.org/", deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
+
+  # test
+  # After the user name and the word that the key comes from the referent,
+  # before the steps: the date is about the key, and the steps are what to do
+  # with it.
+  expect_true(dove("ti autentichi") < dove("Primo accesso entro"))
+  expect_true(dove("non e' in questo") < dove("Primo accesso entro"))
+  expect_true(dove("Primo accesso entro") < dove("Al primo accesso ti"))
+  expect_true(dove("sign in with") < dove("First sign-in by"))
+  expect_true(dove("The way in is not") < dove("First sign-in by"))
+  expect_true(dove("First sign-in by") < dove("At first sign-in you"))
+})
+
+
+test_that("senza data limite il benvenuto parte com'era", {
+  # eval
+  riga <- riga_di_prova()
+  upn <- "sara.collaudozeta@ubep.unipd.it"
+  com_era <- mail_welcome_message(riga, upn = upn)
+
+  # test
+  for (scadenza in list(NULL, NA_character_, "")) {
+    detto <- mail_welcome_message(riga, upn = upn, deadline = scadenza)
+    expect_identical(detto, com_era)
+    expect_no_match(detto[["body"]], "Primo accesso entro", fixed = TRUE)
+  }
+})
+
+
+test_that("il messaggio con la chiave dice al referente entro quando", {
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  it <- paste0(
+    "Consegnala subito: il primo accesso va fatto entro il 2026-12-21. ",
+    "Dopo quella data la chiave non vale piu': per una nuova rispondi a ",
+    "questo messaggio senza la chiave (togli il testo citato)."
+  )
+  en <- paste0(
+    "Hand it over now: the first sign-in must happen by 2026-12-21. After ",
+    "that date the key no longer works: reply to this message for a new one, ",
+    "without the key (delete the quoted text)."
+  )
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
+
+  # test
+  # Under the sentence on how to hand the key over, before the one on what
+  # happens at first sign-in.
+  expect_true(it %in% righe)
+  expect_true(en %in% righe)
+  expect_true(dove("Consegna la chiave alla persona") < dove(it))
+  expect_true(dove(it) < dove("Va cambiata al primo accesso"))
+  expect_true(dove("Hand the key to the person") < dove(en))
+  expect_true(dove(en) < dove("It must be changed at first sign-in"))
+  expect_false(any(grepl("[^\\x01-\\x7F]", righe, perl = TRUE)))
+  # One date: the deadline, once in each language, and no other beside it.
+  expect_equal(
+    unlist(regmatches(righe, gregexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", righe))),
+    rep("2026-12-21", 2L)
+  )
+})
+
+
+test_that("senza data limite il messaggio con la chiave parte com'era", {
+  # eval
+  riga <- riga_di_prova()
+  com_era <- mail_credential_message(
+    riga, upn = "sara@ubep.unipd.it", credential = finti[["parola"]]
+  )
+
+  # test
+  for (scadenza in list(NULL, NA_character_, "")) {
+    expect_identical(
+      mail_credential_message(
+        riga, upn = "sara@ubep.unipd.it", credential = finti[["parola"]],
+        deadline = scadenza
+      ),
+      com_era
+    )
+  }
+})
+
+
 test_that("manda al servizio di posta, col mittente e la chiave che riceve", {
   # eval
   catturata <- NULL
@@ -798,6 +1191,39 @@ test_that("una nascita produce due messaggi, a due destinatari diversi", {
     c("sara.esterna@example.org", "cinzia@ubep.unipd.it")
   )
   expect_equal(detto[["contatori"]][["credenziali_recapitate"]], 1L)
+})
+
+
+test_that("benvenuto e chiave portano la data limite contata dalla nascita", {
+  # eval
+  registro <- registro_di_prova()
+  changed <- registro[0, colonne_cambiate, drop = FALSE]
+  posta <- raccoglitore()
+  # Born at 23:30 UTC, which in Rome is already the next day: the deadline is
+  # counted from that day, and from nothing the round knows about itself.
+  nati <- list(list(
+    record_id = "16", upn = "sara@ubep.unipd.it",
+    credential = finti[["parola"]], created_at = "2026-10-23T23:30:00Z"
+  ))
+
+  # eval
+  mail_round(
+    changed, registro, born = nati, mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+  mandate <- posta[["mandate"]]()
+  corpo_a <- function(chi) {
+    Filter(function(m) identical(m[["to"]], chi), mandate)[[1]][["body"]]
+  }
+
+  # test
+  expect_match(
+    corpo_a("sara.esterna@example.org"), "Primo accesso entro il 2026-12-22.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo_a("cinzia@ubep.unipd.it"), "entro il 2026-12-22.", fixed = TRUE
+  )
 })
 
 

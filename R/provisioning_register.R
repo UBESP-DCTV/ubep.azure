@@ -154,6 +154,13 @@ register_channel_fields <- function() {
 #' property that keeps the seal honest — a hand-picked list would silently
 #' stop covering the column somebody added last week.
 #'
+#' It joins the intent fields on its own, and the seal only by a rule of its
+#' own: a field added after the first seals were written is one of
+#' `register_late_seal_fields()`, and enters the seal only when it holds a
+#' value (`request_seal()`). Entered empty, it would move every seal already
+#' written. Its writes count as a change of the row all the same, from the
+#' day it exists.
+#'
 #' @return A character vector of field names, in dictionary order.
 #'
 #' @keywords internal
@@ -162,6 +169,32 @@ register_intent_fields <- function() {
     register_dictionary()[["Variable / Field Name"]],
     register_unsealed_fields()
   )
+}
+
+
+#' The intent fields added after the first seals were written
+#'
+#' Listed and not derived, decided on 2026-10-27. The seal is a hash of the
+#' intent fields joined in order, so a field added to them, even empty,
+#' changes the seal of every row: on the first round after the dictionary is
+#' imported every row the round ever carried out would read as changed with
+#' nobody on record for it, and `change_needs_approval()` holds a sealed row
+#' whose change has no author. Every executed row would be held, and every
+#' owner mailed.
+#'
+#' So a field in this list enters the seal only when it holds a value, after
+#' the others, as its name and its value (`request_seal()`): empty, the seal
+#' is the one written before the field existed, bit for bit. A rule on empty
+#' fields in general would change the seals already written, since the old
+#' fields are sealed empty too. An intent field added from now on goes in
+#' here, and a test fails while it is neither among the fields sealed from
+#' the start nor in this list.
+#'
+#' @return A character vector of field names.
+#'
+#' @keywords internal
+register_late_seal_fields <- function() {
+  "distinct_username"
 }
 
 
@@ -184,6 +217,13 @@ register_intent_fields <- function() {
 #' Twelve hex characters, like the surface fingerprint, and for the same
 #' reason: it goes in a text field a person may read aloud.
 #'
+#' The fields added after the first seals were written,
+#' `register_late_seal_fields()`, are the exception to "sealed as empty":
+#' each enters only when it holds a value, after the others, as
+#' `\r<name>=<value>`. Empty, the seal is the one the row had before the
+#' field existed. The name in front keeps two rows with the same value in
+#' two different late fields from joining into the same string.
+#'
 #' @param register The register as read, one row per request.
 #'
 #' @return A character vector, one seal per row.
@@ -193,7 +233,8 @@ request_seal <- function(register) {
   stopifnot(is.data.frame(register))
 
   fields <- register_intent_fields()
-  values <- lapply(fields, function(field) {
+  late <- intersect(register_late_seal_fields(), fields)
+  value_of <- function(field) {
     if (is.null(register[[field]])) {
       rep("", nrow(register))
     } else {
@@ -201,12 +242,19 @@ request_seal <- function(register) {
       value[is.na(value)] <- ""
       value
     }
-  })
+  }
+  values <- lapply(setdiff(fields, late), value_of)
 
   # `\r` and not a comma: the separator has to be a character no register value
   # can contain, or two different rows could join into the same string --
   # role_name "a" with dag "b,c" against role_name "a,b" with dag "c".
   joined <- do.call(paste, c(values, list(sep = "\r")))
+  for (field in late) {
+    value <- value_of(field)
+    joined <- paste0(
+      joined, ifelse(nzchar(value), paste0("\r", field, "=", value), "")
+    )
+  }
 
   substr(as.character(openssl::sha256(joined)), 1L, 12L)
 }
@@ -1808,6 +1856,68 @@ log_approval_stands <- function(events, record, creator,
 }
 
 
+#' Whether a referent's answer to a collision came after the question
+#'
+#' The log half of the answer, beside `collision_answered()`, which compares
+#' its value with the proposal: the newest write of `distinct_username` in the
+#' row's current life stands above the newest write of `username` carrying
+#' that proposal by the channel, the account `log_channel_accounts()` names.
+#' The round writes the proposal through the identity door, together with the
+#' verdict `collision`, the first time it finds it, so that write is the
+#' question; an answer below it was written before anybody was asked.
+#'
+#' Decided on 2026-10-27, and the case is the referent who knows the
+#' convention of the suffixes and fills the field in when the row is filed,
+#' or imports it already filled, without having looked at who holds the
+#' composed name. The answer has to be written again after the proposal;
+#' REDCap logs no write that leaves a value as it was, so writing again means
+#' emptying the field and pasting the proposal anew.
+#'
+#' Who wrote the answer is not asked here: it is an intent field, so its
+#' author is an author of the row, `log_change_authors()`, and the row waits
+#' for its owner when it is somebody else.
+#'
+#' The proposal and the value in the log are folded as addresses are, on
+#' both sides. The order is REDCap's, newest first, as everywhere else in the
+#' log. A log that cannot say which account is the channel,
+#' `log_channel_unknown()`, holds no answer.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param proposal The proposal the resolution has just made for the row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()`.
+#'
+#' @return `TRUE` when the answer stands.
+#'
+#' @keywords internal
+log_answer_stands <- function(events, record, proposal,
+                              channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events), is.character(proposal), length(proposal) == 1L
+  )
+
+  wanted <- identity_normalize(proposal)
+  if (is.na(wanted) || !nzchar(wanted)) {
+    return(FALSE)
+  }
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (log_channel_unknown(channel, channel_account)) {
+    return(FALSE)
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  answers <- which(log_wrote(mine, "distinct_username"))
+  asked <- which(
+    log_wrote(mine, "username") & authors %in% channel &
+      identity_normalize(log_value(mine, "username")) == wanted
+  )
+  length(answers) > 0L && length(asked) > 0L && answers[[1L]] < asked[[1L]]
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two
@@ -2170,15 +2280,16 @@ register_to_desired <- function(register) {
 #' should do about it. The distinction is the same one `outcome` makes: a
 #' verdict, not an instruction.
 #'
-#' Five words, and they are exhaustive over the two questions the resolution
-#' asks — how many accounts match the contact address, and whether the composed
-#' UPN is taken:
+#' Six words, and they are exhaustive over the three questions the resolution
+#' asks (how many accounts match the contact address, whether the composed
+#' UPN is taken, and whether the one account matched can sign in):
 #'
-#' - one match — `existing`, or `created` when the account was not there when
+#' - one match: `existing`, or `created` when the account was not there when
 #'   the row was last looked at;
-#' - no match, composed UPN free — `absent`;
-#' - no match, composed UPN taken — `collision`;
-#' - more than one match — `ambiguous`.
+#' - one match on a deactivated account: `disabled`;
+#' - no match, composed UPN free: `absent`;
+#' - no match, composed UPN taken: `collision`;
+#' - more than one match: `ambiguous`.
 #'
 #' `absent` is the one the four approved on 2026-08-07 were missing, and its
 #' absence was not an oversight: they assume resolving and creating are a single
@@ -2186,15 +2297,21 @@ register_to_desired <- function(register) {
 #' last needs a name — for a creation that failed, and for the row a person is
 #' still looking at.
 #'
-#' Only the first two admit an action: the gate refuses a row whose verdict is
-#' any of the other three, which is why the vocabulary being closed matters more
-#' here than a vocabulary usually does.
+#' `disabled` is the sixth, and the last in the list so that the five the live
+#' dictionary already carried keep their order. The channel never enables an
+#' account, so the row waits for IT (`identity_stop_codes()`).
 #'
-#' @return A character vector of the five verdicts.
+#' Only the first two admit an action: the gate refuses a row whose verdict is
+#' any of the other four, which is why the vocabulary being closed matters more
+#' here than a vocabulary usually does. A revocation on a `disabled` account is
+#' the one exception, and it is the round's (`provisioning_reconcile()`):
+#' taking a right away does not need anybody to sign in.
+#'
+#' @return A character vector of the six verdicts.
 #'
 #' @keywords internal
 identity_vocabulary <- function() {
-  c("existing", "created", "absent", "collision", "ambiguous")
+  c("existing", "created", "absent", "collision", "ambiguous", "disabled")
 }
 
 
@@ -2218,13 +2335,15 @@ identity_vocabulary <- function() {
 #' It is conditional rather than absolute because a collision carries the
 #' proposal of decision 11 — there is a determined value to show, and it is the
 #' one a person has to act on, so keeping it out of the register would leave it
-#' living only inside an e-mail. On `absent` and `ambiguous` there is nothing
-#' to propose and the username is empty. What the referent had typed does not
-#' survive the resolution either way; REDCap's Logging keeps it.
+#' living only inside an e-mail. `disabled` carries the UPN of the account
+#' found, which is the account IT has to enable. On `absent` and `ambiguous`
+#' there is nothing to propose and the username is empty. What the referent
+#' had typed does not survive the resolution either way; REDCap's Logging
+#' keeps it.
 #'
 #' @param record_id The register record to write to.
 #' @param username The confirmed UPN, the proposal of a collision, or `""`.
-#' @param identity One of the five verdicts, or `""` for a row the resolution
+#' @param identity One of the six verdicts, or `""` for a row the resolution
 #'   stopped. The empty string is not a missing value here: it is the verdict
 #'   "not resolved", and it has to be writable, or a row that stops would keep
 #'   the username it earned when it still resolved — which is precisely the
@@ -2243,8 +2362,8 @@ identity_payload <- function(record_id, username, identity) {
   if (!(identity %in% c(identity_vocabulary(), ""))) {
     stop(
       "identity_payload(): \"", identity,
-      "\" is not one of the five verdicts, nor the empty one a stopped row ",
-      "carries. The five are ",
+      "\" is not one of the six verdicts, nor the empty one a stopped row ",
+      "carries. The six are ",
       paste(identity_vocabulary(), collapse = ", "), ".",
       call. = FALSE
     )

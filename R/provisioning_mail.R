@@ -66,6 +66,58 @@ mail_local_time <- function(at) {
 }
 
 
+#' The last day a new account's first sign-in is promised
+#'
+#' A key handed over for a new account is valid for at least 60 days from the
+#' creation of the account, or from the last reset by IT; after that it may no
+#' longer work. The welcome and the message with the key tell a date, and this
+#' is the one place it is computed.
+#'
+#' The day the account was born in the calendar of Rome, plus 59. Rome because
+#' that is the day the person lives in: an account born at 23:30 UTC is born
+#' the next day for them. 59 and not 60 because "by" a date is read as "up to
+#' that day included", while the key can stop working at any hour of the
+#' sixtieth day. Written `YYYY-MM-DD`, like every other date the messages
+#' carry, which reads the same in both languages.
+#'
+#' It counts from the birth of the account and not from the round: the round
+#' reads its clock before it sweeps, and the account is born minutes later.
+#'
+#' @param created_at The moment the account was born, as Graph writes
+#'   `createdDateTime`: ISO 8601 in UTC, `2026-10-23T10:00:00Z`, with or
+#'   without fractions of a second. Nothing may follow the final `Z`: an
+#'   offset read as UTC would move the birth by hours, and the date with it.
+#'
+#' @return The date as `YYYY-MM-DD`, or `NA_character_` if `created_at` is not
+#'   in that form: a wrong deadline is worse than a missing one.
+#'
+#' @keywords internal
+mail_first_signin_deadline <- function(created_at) {
+  if (is.null(created_at) || length(created_at) != 1L || is.na(created_at)) {
+    return(NA_character_)
+  }
+
+  # Anchored at both ends: `as.POSIXct()` with a format ignores whatever
+  # follows the part it reads, so `+02:00` after the seconds would be read as
+  # UTC and the date could come one day late.
+  utc <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$"
+  if (!grepl(utc, as.character(created_at))) {
+    return(NA_character_)
+  }
+
+  moment <- as.POSIXct(
+    sub("Z$", "", as.character(created_at)),
+    tz = "UTC", format = "%Y-%m-%dT%H:%M:%OS"
+  )
+  if (is.na(moment)) {
+    return(NA_character_)
+  }
+
+  born <- as.Date(format(moment, "%Y-%m-%d", tz = "Europe/Rome"))
+  format(born + 59L, "%Y-%m-%d")
+}
+
+
 #' Say a value, or say why it is not there
 #'
 #' REDCap has no conditional piping, so the alert bodies gave every field a
@@ -155,6 +207,101 @@ mail_outcome_message <- function(row) {
             "referents wait for your approval, or IT's."
           )
         }
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
+  # A deactivated account is the one transport code that does not clear by
+  # itself: the row stays in the queue until IT enables the account, and the
+  # generic line on TRASPORTO_ ("returns to the queue by itself") would tell the
+  # referent to wait for something that only a reply to IT brings about. The
+  # codes of a row are comma-separated in `outcome_detail`, and some carry a
+  # value after a colon, `SIGILLO_DIVERSO:<seal>`: they are compared by name.
+  codici <- trimws(strsplit(
+    mail_said_or(row[["outcome_detail"]], ""), ",", fixed = TRUE
+  )[[1]])
+  nomi_codici <- sub(":.*$", "", codici)
+  disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% nomi_codici
+
+  # A collision is the one data error whose answer is not a correction:
+  # when the account that holds the composed name is somebody else, the
+  # referent answers by pasting the proposal into `distinct_username`, and
+  # the round creates the account (decided on 2026-10-27). The message says
+  # both answers, names the name taken, which the referent looks up in the
+  # directory, and writes the proposal out on a line of its own, to be
+  # pasted as it is. The proposal is the one the code carries, which is
+  # this round's; a code without it falls back on the row's username. An
+  # answer written before the proposal does not count (`log_answer_stands()`),
+  # and the referent who wrote it early finds the proposal already in the
+  # field: the message says to empty it and paste it again, since REDCap logs
+  # no write that leaves a value as it was.
+  collisione <- if ("DATO_IDENTITA_IN_COLLISIONE" %in% nomi_codici) {
+    codice <- codici[nomi_codici == "DATO_IDENTITA_IN_COLLISIONE"][[1L]]
+    proposta <- if (grepl(":", codice, fixed = TRUE)) {
+      sub("^[^:]*:", "", codice)
+    } else {
+      mail_said_or(row[["username"]], "")
+    }
+    occupato <- mail_said_or(row[["composed"]], "")
+    tra_virgole <- if (nzchar(occupato)) paste0(", ", occupato, ",") else ""
+    list(
+      it = c(
+        "",
+        paste0(
+          "Il nome utente composto da nome e cognome della riga",
+          tra_virgole, " e' di un account con nome o cognome diversi. Se ",
+          "quell'account non e' la persona di questa riga, incolla il nome ",
+          "utente proposto"
+        ),
+        "",
+        paste0("    ", proposta),
+        "",
+        paste0(
+          "nel campo \"Another person: create this username\" ",
+          "(distinct_username) della riga: al giro successivo il canale crea ",
+          "l'account con quel nome, manda a te la chiave e alla persona il ",
+          "benvenuto. La risposta vale solo per questa proposta: se la ",
+          "proposta cambia, arriva un messaggio con quella nuova. Se il ",
+          "campo porta gia' questo nome, scritto prima di questo messaggio, ",
+          "non vale: svuotalo, salva la riga e incollalo di nuovo. Scritta ",
+          "da un altro referente, aspetta l'approvazione del referente della ",
+          "riga, oppure di IT."
+        ),
+        "",
+        paste0(
+          "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
+          "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The username composed from the row's first and last name",
+          tra_virgole, " belongs to an account with a different first or ",
+          "last name. If that account is not the person this row is for, ",
+          "paste the proposed username"
+        ),
+        "",
+        paste0("    ", proposta),
+        "",
+        paste0(
+          "into the row's \"Another person: create this username\" field ",
+          "(distinct_username): on the next round the channel creates the ",
+          "account with that name, and sends you the key and the person the ",
+          "welcome. The answer holds for this proposal only: if the proposal ",
+          "changes, a message with the new one follows. If the field already ",
+          "holds this name, written before this message, it does not count: ",
+          "empty it, save the row and paste it again. Written by another ",
+          "referent, it waits for the approval of whoever owns the row, or ",
+          "of IT."
+        ),
+        "",
+        paste0(
+          "If it is the same person, leave the field blank: correct the ",
+          "row's first or last name, or write to IT if the account is wrong."
+        )
       )
     )
   } else {
@@ -310,12 +457,24 @@ mail_outcome_message <- function(row) {
       row[["applied_as"]], "l'istanza non ha risposto"
     )),
     trattenuta[["it"]],
+    collisione[["it"]],
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
-      "compilato, e va corretto nel registro. Uno che comincia per ",
-      "TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve ",
-      "rifarla, ma se dura piu' di un giorno segnalalo a IT."
+      "compilato, e va corretto nel registro. ",
+      if (disattivato) {
+        paste0(
+          "L'account della persona e' disattivato, di solito perche' non ",
+          "e' mai entrata. Se l'accesso serve ancora, rispondi a questo ",
+          "messaggio: IT riattiva l'account e ti manda una chiave nuova."
+        )
+      } else {
+        paste0(
+          "Uno che comincia per TRASPORTO_ e' nostro: la riga torna in ",
+          "coda da sola e non serve rifarla, ma se dura piu' di un giorno ",
+          "segnalalo a IT."
+        )
+      }
     )
   )
 
@@ -344,12 +503,24 @@ mail_outcome_message <- function(row) {
       row[["applied_as"]], "the instance did not answer"
     )),
     trattenuta[["en"]],
+    collisione[["en"]],
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
-      "be corrected in the register. One starting with TRASPORTO_ is ours: ",
-      "the row returns to the queue by itself and does not need refiling, ",
-      "but if it lasts more than a day, report it to IT."
+      "be corrected in the register. ",
+      if (disattivato) {
+        paste0(
+          "The person's account is deactivated, usually because they never ",
+          "signed in. If the access is still needed, reply to this message: ",
+          "IT reactivates the account and sends you a new key."
+        )
+      } else {
+        paste0(
+          "One starting with TRASPORTO_ is ours: the row returns to the ",
+          "queue by itself and does not need refiling, but if it lasts more ",
+          "than a day, report it to IT."
+        )
+      }
     )
   )
 
@@ -492,6 +663,19 @@ mail_first_contact <- function(referente, cosa) {
 }
 
 
+#' Whether a deadline was handed over, so that a message can say it
+#'
+#' @param deadline What `mail_first_signin_deadline()` returned, or `NULL`.
+#'
+#' @return `TRUE` when there is a date to print.
+#'
+#' @keywords internal
+mail_has_deadline <- function(deadline) {
+  !is.null(deadline) && length(deadline) == 1L && !is.na(deadline) &&
+    nzchar(deadline)
+}
+
+
 #' Tell a person an account now exists for them, and what stands in the way
 #'
 #' It carries no way in, and that is the decision rather than an omission:
@@ -513,18 +697,30 @@ mail_first_contact <- function(referente, cosa) {
 #' closes by sending the person to the referent first and to IT second, with
 #' `mail_first_contact()`.
 #'
+#' Between the key and the steps of the first sign-in it gives the date the
+#' first sign-in has to happen by: the key is valid for at least 60 days from
+#' the creation of the account, and the date is
+#' `mail_first_signin_deadline()`. Two lines say what happens after it, and
+#' to whom to write, in the order the closing sentence already gives: the key
+#' stops working, and an account nobody signed in to is deactivated, never
+#' deleted. No other date and no other way: one date, one thing to do.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name, as created.
 #' @param url The address the row's instance opens at, from
 #'   `mail_instance_url()`; `NULL`, `NA` or empty leaves it out.
+#' @param deadline The date of the first sign-in, from
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the lines
+#'   out.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_welcome_message <- function(row, upn, url = NULL) {
+mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
   stopifnot(
     is.list(row), is.character(upn), length(upn) == 1L, nzchar(upn),
-    is.null(url) || length(url) == 1L
+    is.null(url) || length(url) == 1L,
+    is.null(deadline) || length(deadline) == 1L
   )
 
   # The person the key goes to, so the owner and not the field an import
@@ -580,6 +776,33 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     )
   }
 
+  limite <- if (mail_has_deadline(deadline)) {
+    list(
+      it = c(
+        "",
+        paste0("Primo accesso entro il ", deadline, "."),
+        "",
+        "- Dopo quella data la chiave d'ingresso non vale piu': chiedine una",
+        "  nuova al tuo referente.",
+        "- Senza primo accesso l'account viene disattivato, non cancellato.",
+        "  Per riattivarlo scrivi al tuo referente; se non lo raggiungi,",
+        "  rispondi a questo messaggio (arriva a IT)."
+      ),
+      en = c(
+        "",
+        paste0("First sign-in by ", deadline, "."),
+        "",
+        "- After that date your sign-in key no longer works: ask your referent",
+        "  for a new one.",
+        "- If you never sign in, your account is deactivated, not deleted. To",
+        "  reactivate it, write to your referent; if you cannot reach them,",
+        "  reply to this message (it goes to IT)."
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
   it <- c(
     paste0("Ciao ", row[["first_name"]], ","),
     "",
@@ -592,6 +815,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     paste0(
       "La chiave d'ingresso non e' in questo messaggio: ", consegna[["it"]]
     ),
+    limite[["it"]],
     "",
     "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
     "",
@@ -615,6 +839,7 @@ mail_welcome_message <- function(row, upn, url = NULL) {
     paste0(
       "The way in is not in this message: ", consegna[["en"]]
     ),
+    limite[["en"]],
     "",
     "At first sign-in you will be asked three things, in this order:",
     "",
@@ -735,9 +960,11 @@ mail_access_message <- function(row, url = NULL) {
 
 #' Hand the way in to the person who asked for the account
 #'
-#' It carries the UPN, the key, and nothing else. No project, no role, no
-#' instance, nobody in copy: a message with a way in must not also carry the
-#' context that makes it spendable.
+#' It carries the UPN, the key, the date of the first sign-in, and nothing
+#' else. No project, no role, no instance, nobody in copy: a message with a
+#' way in must not also carry the context that makes it spendable. The date
+#' is not that context: it says until when the key is any use, which is what
+#' the referent needs to hand it over in time.
 #'
 #' What it asks of the referent is the rule decided for handing the key over:
 #' another channel if there is one, otherwise a new message with the key
@@ -757,19 +984,51 @@ mail_access_message <- function(row, url = NULL) {
 #' reports the failure under its own code, so an alarm can tell it apart from a
 #' message that will simply be retried.
 #'
+#' Under the sentence on how to hand the key over it gives the date the first
+#' sign-in has to happen by, the one the welcome gives the person, and where
+#' to ask for a new key after it: a reply to this message, which reaches IT,
+#' again with the key left out of it.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name.
 #' @param credential What the account was born with.
+#' @param deadline The date of the first sign-in, from
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the line
+#'   out.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_credential_message <- function(row, upn, credential) {
+mail_credential_message <- function(row, upn, credential, deadline = NULL) {
   stopifnot(
     is.list(row),
     is.character(upn), length(upn) == 1L, nzchar(upn),
-    is.character(credential), length(credential) == 1L, nzchar(credential)
+    is.character(credential), length(credential) == 1L, nzchar(credential),
+    is.null(deadline) || length(deadline) == 1L
   )
+
+  limite <- if (mail_has_deadline(deadline)) {
+    list(
+      it = c(
+        "",
+        paste0(
+          "Consegnala subito: il primo accesso va fatto entro il ", deadline,
+          ". Dopo quella data la chiave non vale piu': per una nuova rispondi ",
+          "a questo messaggio senza la chiave (togli il testo citato)."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "Hand it over now: the first sign-in must happen by ", deadline,
+          ". After that date the key no longer works: reply to this message ",
+          "for a new one, without the key (delete the quoted text)."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
 
   it <- c(
     "Hai chiesto un account, ed e' stato creato. Ecco come entrarci.",
@@ -787,6 +1046,7 @@ mail_credential_message <- function(row, upn, credential) {
       "(togli il testo citato): quel messaggio a parte e' andato ",
       "all'indirizzo della richiesta."
     ),
+    limite[["it"]],
     "",
     "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
   )
@@ -807,6 +1067,7 @@ mail_credential_message <- function(row, upn, credential) {
       "the quoted text): that separate message went to the address in the ",
       "request."
     ),
+    limite[["en"]],
     "",
     paste0(
       "It must be changed at first sign-in, and whoever uses it first takes ",
@@ -986,8 +1247,10 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
 #'   name.
-#' @param born The accounts created this round: lists with `record_id`, `upn`
-#'   and `credential`.
+#' @param born The accounts created this round: lists with `record_id`, `upn`,
+#'   `credential` and `created_at`, the moment the account was born, from
+#'   which the welcome and the key count the first sign-in. Without it the
+#'   two messages leave without the date.
 #' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
 #' @param dry_run When `TRUE` nothing is sent and every row comes back
 #'   writable -- the round behaves as it did before this file existed.
@@ -997,8 +1260,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
 #' @param identified What this round settled about each row, as a frame with
-#'   `record_id` and the fields it settled: the identity; `owner`, who the
-#'   log says the row belongs to, where the outcome and the key go
+#'   `record_id` and the fields it settled: the identity; `composed`, the
+#'   name the round composed, which a collision's message names; `owner`, who
+#'   the log says the row belongs to, where the outcome and the key go
 #'   (`mail_referent()`); `passed`, whether the change applied this round
 #'   handed the row over; `edited_by`, who changed a held row since
 #'   it was applied, as the row's log says. `register` is the register as read,
@@ -1146,6 +1410,9 @@ mail_round <- function(changed,
       conto[["credenziali_perse"]] <- conto[["credenziali_perse"]] + 1L
       next
     }
+    # The date of the first sign-in, counted from the birth the creation
+    # reported and the same in both messages.
+    scadenza <- mail_first_signin_deadline(nato[["created_at"]])
     # The welcome is not retried either, for the reason the key is not: the
     # account is born and nothing in the next round sends it again. A row
     # held back for it would not bring it back, so its failure is counted and
@@ -1153,7 +1420,8 @@ mail_round <- function(changed,
     benvenuto <- consegna(
       riga[["contact_email"]], NULL,
       mail_welcome_message(
-        riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]])
+        riga, upn = nato[["upn"]], url = indirizzo_di(riga[["server"]]),
+        deadline = scadenza
       )
     )
     if (isTRUE(benvenuto[["ok"]])) {
@@ -1168,7 +1436,8 @@ mail_round <- function(changed,
     segreto <- consegna(
       mail_referent(riga), NULL,
       mail_credential_message(
-        riga, upn = nato[["upn"]], credential = nato[["credential"]]
+        riga, upn = nato[["upn"]], credential = nato[["credential"]],
+        deadline = scadenza
       )
     )
     if (isTRUE(segreto[["ok"]])) {
