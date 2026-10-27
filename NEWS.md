@@ -69,12 +69,12 @@
   are (`collision_answered()`), and only when written after the round wrote
   the proposal (`log_answer_stands()`): an answer filled in when the row was
   filed, or imported already filled, does not, and the message and the
-  field's note say to empty it, save, and paste it again. It is an intent field, so
-  whoever writes it is an author of the row: an answer by somebody other than
-  the owner waits for the owner or IT, and the gate judges the rights of
-  whoever wrote it. The field is read on `collision` alone and is never the
-  name created: the channel never ties a row to an existing account on the
-  referent's word. Namesakes, `ambiguous`, still go to IT by mail.
+  field's note say to empty it, save, and paste it again. It is an intent
+  field, so whoever writes it is an author of the row: an answer by somebody
+  other than the owner waits for the owner or IT, and the gate judges the
+  rights of whoever wrote it. The field is read on `collision` alone and is
+  never the name created: the channel never ties a row to an existing account
+  on the referent's word. Namesakes, `ambiguous`, still go to IT by mail.
 
 * **The code of a collision carries the proposal**,
   `DATO_IDENTITA_IN_COLLISIONE:<proposal>`, as `SIGILLO_DIVERSO:<seal>`
