@@ -5231,7 +5231,9 @@ in_collisione <- function(...) {
     list(
       record_id = "1", username = "mario.rossi.2@ubep.unipd.it",
       identity = "collision", outcome = "data_error",
-      outcome_detail = "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it",
+      outcome_detail = paste0(
+        "DATO_IDENTITA_IN_COLLISIONE:", "mario.rossi.2@ubep.unipd.it"
+      ),
       distinct_username = "mario.rossi.2@ubep.unipd.it"
     ),
     list(...)

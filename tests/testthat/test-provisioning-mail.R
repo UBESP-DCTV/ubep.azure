@@ -174,25 +174,21 @@ test_that("un account disattivato non e' detto tornare in coda da solo", {
 })
 
 
-# A row stopped on a collision: `sara.collaudozeta` is somebody else's
-# account, and the round proposes `.2`.
-collisione_di_prova <- function(...) {
-  do.call(riga_di_prova, utils::modifyList(
-    list(
-      username = "sara.collaudozeta.2@ubep.unipd.it", identity = "collision",
-      composed = "sara.collaudozeta@ubep.unipd.it",
-      outcome_detail = paste0(
-        "DATO_IDENTITA_IN_COLLISIONE:sara.collaudozeta.2@ubep.unipd.it"
-      )
-    ),
-    list(...)
-  ))
-}
+# The fields of a row stopped on a collision: `sara.collaudozeta` is
+# somebody else's account, and the round proposes `.2`.
+collisione_di_prova <- list(
+  username = "sara.collaudozeta.2@ubep.unipd.it", identity = "collision",
+  composed = "sara.collaudozeta@ubep.unipd.it",
+  outcome_detail =
+    "DATO_IDENTITA_IN_COLLISIONE:sara.collaudozeta.2@ubep.unipd.it"
+)
 
 
 test_that("il messaggio di una collisione spiega le due risposte e nomina il campo", { # nolint: line_length_linter.
   # eval
-  detto <- mail_outcome_message(collisione_di_prova())[["body"]]
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
   altro <- mail_outcome_message(riga_di_prova())[["body"]]
 
   # test
@@ -238,11 +234,16 @@ test_that("il messaggio di una collisione spiega le due risposte e nomina il cam
 
 test_that("il messaggio di una collisione porta il nome occupato e la proposta", { # nolint: line_length_linter.
   # eval
-  detto <- mail_outcome_message(collisione_di_prova())[["body"]]
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
   # A row stopped before the code carried the proposal, and a round that
   # did not say which name it composed.
-  vecchia <- mail_outcome_message(collisione_di_prova(
-    outcome_detail = "DATO_IDENTITA_IN_COLLISIONE", composed = NULL
+  vecchia <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(collisione_di_prova, list(
+      outcome_detail = "DATO_IDENTITA_IN_COLLISIONE", composed = NULL
+    ))
   ))[["body"]]
 
   # test
