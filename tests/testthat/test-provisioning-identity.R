@@ -945,3 +945,30 @@ test_that("a declaration is still a declaration before the first verdict", {
   # write a username without writing it.
   expect_equal(answer[["errors"]], "DATO_RECAPITO_INTERNO_DIVERGENTE")
 })
+
+
+test_that("una creazione per nome: la stessa persona la condivide, un omonimo aspetta", { # nolint: line_length_linter.
+  # eval
+  righe <- data.frame(
+    first_name = c("Mario", "mario", "Mario", "Luca", "Mario"),
+    last_name = c("Rossi", "Rossì", "Rossi", "Bianchi", "Rossi"),
+    contact_email = c(
+      "mario.rossi@example.org", " Mario.Rossi@example.org",
+      "altro.rossi@example.org", "luca.bianchi@example.org",
+      "mario.rossi@example.org"
+    ),
+    stringsAsFactors = FALSE
+  )
+  nomi <- c(
+    "mario.rossi@ubep.unipd.it", "mario.rossi@ubep.unipd.it",
+    "mario.rossi@ubep.unipd.it", "luca.bianchi@ubep.unipd.it",
+    "mario.rossi.2@ubep.unipd.it"
+  )
+
+  # test
+  # The first row makes the name; the second is the same person, folded as
+  # the resolution folds a name and an address, and shares it; the third has
+  # another address and waits. A name of its own makes its own creation.
+  expect_identical(creation_shares(righe, nomi), c(1L, 1L, NA, 4L, 5L))
+  expect_identical(creation_shares(righe[0, ], character()), integer())
+})

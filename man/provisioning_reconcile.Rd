@@ -228,6 +228,11 @@ that now matches, and that memory lives in the register. A round that wrote
 second source of truth beside the sweep, which is the thing decision 4 of the
 channel's design forbids.
 
+\strong{One creation per name in a round}, \code{creation_shares()}: the oldest row
+that waits for a name makes it. Another row of the same person shares that
+account, its key and its welcome, and becomes \code{created} with it; a row of
+somebody with the same name waits, and next round meets a namesake.
+
 Idempotent by construction: a round interrupted between applying and writing
 the outcome leaves the row as still to do, and the next round applies it
 again. That is harmless because the diff finds it already conforming and

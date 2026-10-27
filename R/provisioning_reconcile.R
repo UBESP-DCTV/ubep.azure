@@ -130,6 +130,11 @@
 #' second source of truth beside the sweep, which is the thing decision 4 of the
 #' channel's design forbids.
 #'
+#' **One creation per name in a round**, `creation_shares()`: the oldest row
+#' that waits for a name makes it. Another row of the same person shares that
+#' account, its key and its welcome, and becomes `created` with it; a row of
+#' somebody with the same name waits, and next round meets a namesake.
+#'
 #' Idempotent by construction: a round interrupted between applying and writing
 #' the outcome leaves the row as still to do, and the next round applies it
 #' again. That is harmless because the diff finds it already conforming and
@@ -1336,10 +1341,27 @@ provisioning_reconcile <- function(register_url,
 
   creatable <- which(awaiting & record_ids %in% in_scope)
   unposted <- !dry_run && is.null(mailer) && length(creatable) > 0L
+
+  # One creation per name in a round, `creation_shares()`. The resolution
+  # found the name free for every row that waits for it, and a second POST of
+  # it would be refused once the first has made the account: one person asked
+  # for on two projects would draw two keys, and two namesakes would both be
+  # sent. The other rows of the same person share the creation and go on as
+  # its row does; a namesake waits, and meets the new account next round.
+  shares <- creation_shares(
+    register[creatable, , drop = FALSE],
+    vapply(
+      resolutions[creatable],
+      function(answer) as.character(answer[["composed"]] %||% ""),
+      character(1)
+    )
+  )
+  makers <- creatable[which(shares == seq_along(creatable))]
+
   creations <- if (dry_run || unposted) {
     list()
   } else {
-    lapply(creatable, function(i) {
+    lapply(makers, function(i) {
       c(
         directory_create_user(
           graph_token, graph_url,
@@ -1349,7 +1371,13 @@ provisioning_reconcile <- function(register_url,
           # the round check that one name is free and create another.
           resolutions[[i]][["composed"]]
         ),
-        list(record_id = record_ids[[i]])
+        list(
+          record_id = record_ids[[i]],
+          # The rows of the same person, which take its failure too.
+          shared = record_ids[creatable[
+            which(shares == match(i, creatable) & creatable != i)
+          ]]
+        )
       )
     })
   }
@@ -1389,13 +1417,14 @@ provisioning_reconcile <- function(register_url,
 
   created_outcomes <- do.call(rbind, c(
     list(empty_outcomes),
-    lapply(refused_creations, function(answer) {
-      outcome_payload(
-        answer[["record_id"]],
-        round_outcome_kind(answer[["errors"]], dry_run),
-        detail = paste(answer[["errors"]], collapse = ","), at = at
-      )
-    })
+    unlist(lapply(refused_creations, function(answer) {
+      lapply(c(answer[["record_id"]], answer[["shared"]]), function(id) {
+        outcome_payload(
+          id, round_outcome_kind(answer[["errors"]], dry_run),
+          detail = paste(answer[["errors"]], collapse = ","), at = at
+        )
+      })
+    }), recursive = FALSE)
   ))
 
   # The default for a row that is waiting to be created and has nothing more

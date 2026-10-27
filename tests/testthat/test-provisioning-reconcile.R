@@ -1665,6 +1665,187 @@ test_that("a person asked for twice on one project is created once", {
 })
 
 
+# Graph as it answers a creation: a name it already holds is refused, which
+# is what a second POST of the same name in one round meets.
+graph_che_ricorda <- function() {
+  nati <- character()
+  function(req) {
+    upn <- req[["body"]][["data"]][["userPrincipalName"]]
+    if (upn %in% nati) {
+      return(httr2::response(
+        status_code = 400L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw(paste0(
+          '{"error":{"code":"Request_BadRequest","message":"Another object ',
+          'with the same value for property userPrincipalName already ',
+          'exists."}}'
+        ))
+      ))
+    }
+    nati <<- c(nati, upn) # nolint: assignment_linter.
+    creazione_riuscita()(req)
+  }
+}
+
+
+# The messages a round sent, `to` and `subject`, for a test that has to tell
+# them apart before `posta_raccolta()` is defined.
+posta_contata <- function() {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject
+      )
+      list(ok = TRUE, errors = character())
+    },
+    mandate = function() mandate
+  )
+}
+
+
+# Two rows waiting for an account on two projects, which the gate lets
+# through on Anna's rights on both: the default person on 9003, and on 9004
+# the same person, with what `...` changes.
+due_righe_nuove <- function(...) {
+  registro_doppio(record_json(
+    list(record_id = "1"),
+    utils::modifyList(list(record_id = "2", project_id = "9004"), list(...))
+  ))
+}
+
+
+test_that("la stessa persona nuova su due progetti nasce una volta sola", {
+  # eval
+  posta <- posta_contata()
+  esito <- giro(
+    due_righe_nuove(),
+    istanza_doppia(list(), list(project_id = 9004L)),
+    directory_vuota(),
+    graph_che_ricorda(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+  esiti <- esito[["esiti"]]
+  oggetti <- vapply(posta[["mandate"]](), `[[`, "", "subject")
+
+  # test
+  # One person, one account: one POST, one welcome, one key. The second row
+  # waits as the first does, with no creation of its own to fail.
+  expect_length(creazioni(), 1L)
+  expect_equal(esito[["posta"]][["benvenuti_recapitati"]], 1L)
+  expect_equal(esito[["posta"]][["credenziali_recapitate"]], 1L)
+  expect_equal(sum(startsWith(oggetti, "Il tuo account UBEP")), 1L)
+  expect_equal(esiti[["outcome"]], c("pending", "pending"))
+  expect_equal(esiti[["outcome_detail"]], c("", ""))
+  expect_equal(identita_scritte()[["identity"]], c("absent", "absent"))
+
+  # eval
+  # The next round, with the account in the tenant.
+  giro(
+    registro_doppio(record_json(
+      list(record_id = "1", identity = "absent"),
+      list(record_id = "2", project_id = "9004", identity = "absent")
+    )),
+    istanza_doppia(list(), list(project_id = 9004L)),
+    directory_doppia(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Both rows find the account the round made for the person, as rows whose
+  # account was created.
+  expect_equal(identita_scritte()[["identity"]], c("created", "created"))
+  expect_length(creazioni(), 0L)
+})
+
+
+test_that("una creazione condivisa che fallisce ferma tutte le righe della persona", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    due_righe_nuove(),
+    istanza_doppia(list(), list(project_id = 9004L)),
+    directory_vuota(),
+    function(req) stop("Operation timed out"),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  esiti <- esito[["esiti"]]
+
+  # test
+  # One POST, so one key that may be lost; both rows carry the creation's
+  # code, since the creation was theirs too, and both retry next round.
+  expect_length(creazioni(), 1L)
+  expect_equal(esito[["posta"]][["credenziali_perse"]], 1L)
+  expect_equal(esito[["posta"]][["benvenuti_persi"]], 1L)
+  expect_setequal(esiti[["record_id"]], c("1", "2"))
+  expect_equal(
+    esiti[["outcome_detail"]], rep("TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE", 2L)
+  )
+})
+
+
+test_that("due persone nuove con lo stesso nome non fanno due POST dello stesso nome", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_contata()
+  esito <- giro(
+    due_righe_nuove(contact_email = "altro.rossi@example.org"),
+    istanza_doppia(list(), list(project_id = 9004L)),
+    directory_vuota(),
+    graph_che_ricorda(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+  esiti <- esito[["esiti"]]
+  benvenuti <- Filter(
+    function(m) startsWith(m[["subject"]], "Il tuo account UBEP"),
+    posta[["mandate"]]()
+  )
+
+  # test
+  # Both names are free and they are the same name. The first row makes it;
+  # the second waits, with no creation of its own and no error: whether it is
+  # the same person with another address or a namesake is not the round's to
+  # say.
+  expect_length(creazioni(), 1L)
+  expect_equal(
+    creazioni()[[1]][["body"]][["data"]][["otherMails"]][[1]],
+    "mario.rossi@example.org"
+  )
+  expect_equal(vapply(benvenuti, `[[`, "", "to"), "mario.rossi@example.org")
+  expect_equal(esito[["posta"]][["credenziali_recapitate"]], 1L)
+  expect_equal(esiti[["outcome"]], c("pending", "pending"))
+  expect_equal(esiti[["outcome_detail"]], c("", ""))
+
+  # eval
+  # The next round, with the first person's account in the tenant.
+  seguente <- giro(
+    registro_doppio(record_json(
+      list(record_id = "1", identity = "absent"),
+      list(
+        record_id = "2", project_id = "9004", identity = "absent",
+        contact_email = "altro.rossi@example.org"
+      )
+    )),
+    istanza_doppia(list(), list(project_id = 9004L)),
+    directory_doppia(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+  esiti <- seguente[["esiti"]]
+
+  # test
+  # The second row now meets a namesake with another address, the case the
+  # referent and IT settle.
+  expect_length(creazioni(), 0L)
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_RECAPITO_NON_IDENTIFICA"
+  )
+})
+
+
 # An instance that knows only some roles and refuses the others the way the
 # module does. `Applier::resolveNames()` runs on a simulation too, so a dry-run
 # apply already names a role the project does not have.

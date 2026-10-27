@@ -605,3 +605,54 @@ confirm_identity <- function(account, declared, previous) {
     account[["userPrincipalName"]][[1L]]
   )
 }
+
+
+#' Which creation each row waiting for an account shares
+#'
+#' The rows `absent` that a round is about to create, and the name the
+#' resolution found free for each. The name is free when the round sweeps and
+#' taken once the first POST of it has made the account, so the round sends
+#' each name once, for the oldest row that waits for it, in the order of the
+#' register, as the oldest row of a repeated pair keeps it.
+#'
+#' The other rows that wait for the same name are one of two things. The same
+#' person asked for again, on another project: the same name and surname, as
+#' `directory_named()` folds them, and the same contact address. That row
+#' shares the creation, one account, one key and one welcome, and next round
+#' finds the account by the criterion the resolution uses and is `created`
+#' like the first. Or somebody else with the same name, or the same person
+#' with another address, which nothing in the round can tell apart: that row
+#' waits, and next round meets the new account as a namesake, `ambiguous`,
+#' which the referent and IT settle. Taking the next free name at once would
+#' make a second account for a person who may already have one.
+#'
+#' @param rows The register rows, carrying `first_name`, `last_name` and
+#'   `contact_email`.
+#' @param upns The name each row would be created under, as the resolution
+#'   composed it.
+#'
+#' @return An integer vector, one per row: the position of the row whose
+#'   creation it shares, its own when it makes one, and `NA` when it waits for
+#'   the next round.
+#'
+#' @keywords internal
+creation_shares <- function(rows, upns) {
+  stopifnot(
+    is.data.frame(rows), is.character(upns), length(upns) == nrow(rows)
+  )
+
+  field <- function(name) {
+    values <- as.character(rows[[name]] %||% rep("", nrow(rows)))
+    values[is.na(values)] <- ""
+    values
+  }
+  person <- paste(
+    clean_string(field("first_name")), clean_string(field("last_name")),
+    identity_normalize(field("contact_email")),
+    sep = "\n"
+  )
+  wanted <- identity_normalize(upns)
+  shares <- match(wanted, wanted)
+  shares[person != person[shares]] <- NA_integer_
+  shares
+}
