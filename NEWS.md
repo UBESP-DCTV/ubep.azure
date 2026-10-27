@@ -39,6 +39,21 @@
   reactivated by IT and a new key. The line on `TRASPORTO_` in general is
   unchanged for every other code.
 
+* **A new person asked for on several rows in the same round is created
+  once.** The name the resolution finds free is taken as soon as the first
+  POST has made the account, and until now a second row waiting for the same
+  name sent a second POST, on a name already taken. Now the round sends each
+  name once, for the oldest row that waits for it, in the order of the
+  register (`creation_shares()`). Another row of the same person, with the
+  same first name, last name and contact address, shares that account, its
+  key, which goes to the referent of the oldest row, and its welcome; it takes
+  the error of the creation if there is one, and next round finds the account
+  and becomes `created` like the first. A row of somebody else with the same
+  name, or of the same person with another address, waits: next round it
+  meets the new account as a namesake, `ambiguous`, as before. Taking the next
+  free name at once would make a second account for a person who may already
+  have one.
+
 * **The `identity` field of the register gains the choice `disabled`, so this
   release touches the schema.** The packaged dictionary and the live one have
   to change together: either side without the other stops the round on
