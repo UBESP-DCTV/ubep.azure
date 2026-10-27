@@ -15,8 +15,9 @@
   birth and not from the round: `directory_create_user()` now returns
   `created_at`, Graph's `createdDateTime` when the answer to the creation
   carries it, otherwise the moment read just before the request left, which
-  can only bring the date earlier. Whether the answer carries it is to be
-  seen on the first real creation.
+  brings the date earlier if anything: a day late only across midnight, with
+  the machine's clock ahead of Graph's, an accepted case. Whether the answer
+  carries it is to be seen on the first real creation.
 
 * **A new identity verdict, `disabled`.** One match on an account whose
   `accountEnabled` is false was `existing`, and the round granted the right

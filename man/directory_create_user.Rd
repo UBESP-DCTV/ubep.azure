@@ -34,9 +34,10 @@ messages count the first sign-in from (\code{mail_first_signin_deadline()}):
 Graph's \code{createdDateTime} when the answer carries it in a form the
 deadline can read, otherwise the moment read just before the request
 left. Graph returns that field only when a read names it, so the answer
-to a creation may not carry it; the moment before the request cannot be
-later than the birth, so a deadline counted from it can come early and
-never late.
+to a creation may not carry it; the moment before the request is not
+later than the birth, so a deadline counted from it can come early. It
+comes a day late only across midnight, with the machine's clock ahead of
+Graph's, and that case is accepted.
 }
 \description{
 The second and last thing this package does on Microsoft Graph, and it does

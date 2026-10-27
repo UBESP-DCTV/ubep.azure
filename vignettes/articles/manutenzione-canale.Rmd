@@ -209,7 +209,9 @@ giorni, scritta `AAAA-MM-GG` come ogni altra data dei messaggi
 (`mail_first_signin_deadline()`). Conta dalla nascita dell'account e non dal
 giro: `directory_create_user()` restituisce `created_at`, il `createdDateTime`
 della risposta di Graph quando c'è, altrimenti l'istante letto subito prima
-che la richiesta parta, che può solo anticipare la data, mai posticiparla. Un
+che la richiesta parta, che semmai anticipa la data: la posticipa di un giorno
+solo a cavallo della mezzanotte, con l'orologio della macchina in anticipo su
+quello di Graph, un caso accettato. Un
 `createdDateTime` che non si legge, o che non finisce con `Z`, prende lo
 stesso ripiego. Se la risposta di Graph lo porti si vedrà alla prima creazione
 vera.

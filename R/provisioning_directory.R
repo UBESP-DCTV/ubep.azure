@@ -347,9 +347,10 @@ creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
 #'   Graph's `createdDateTime` when the answer carries it in a form the
 #'   deadline can read, otherwise the moment read just before the request
 #'   left. Graph returns that field only when a read names it, so the answer
-#'   to a creation may not carry it; the moment before the request cannot be
-#'   later than the birth, so a deadline counted from it can come early and
-#'   never late.
+#'   to a creation may not carry it; the moment before the request is not
+#'   later than the birth, so a deadline counted from it can come early. It
+#'   comes a day late only across midnight, with the machine's clock ahead of
+#'   Graph's, and that case is accepted.
 #'
 #' @keywords internal
 directory_create_user <- function(token, base_url, request, upn) {
@@ -379,8 +380,8 @@ directory_create_user <- function(token, base_url, request, upn) {
     passwordProfile = profile
   )
 
-  # Read before the request leaves, so it cannot be later than the birth: see
-  # the return value.
+  # Read before the request leaves, so it is not later than the birth unless
+  # the machine's clock runs ahead of Graph's: see the return value.
   leaving <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 
   response <- tryCatch(
