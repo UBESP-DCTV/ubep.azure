@@ -847,12 +847,18 @@ Quattro cose da sapere quando si tocca questo meccanismo:
   spostare ciò che confronta. È il primo campo per cui «scritto dal canale» e
   «fuori dal sigillo» smettono di essere lo stesso insieme, ed è per questo
   che sono due liste;
-- **un campo di intento aggiunto al dizionario sposta tutti i sigilli
+- **un campo di intento aggiunto al dizionario sposterebbe tutti i sigilli
   insieme.** I campi di intento si derivano dal dizionario impacchettato, e un
-  campo in più entra nel sigillo di ogni riga: al primo giro dopo il rilascio
-  ogni riga applicata risulta cambiata, nessuna ha un autore dopo l'ultima
-  esecuzione, e tutte aspettano il proprio proprietario, con una chiamata al
-  log per ciascuna a ogni giro. `owned_by` non produce questo effetto: è un
+  campo in più, anche vuoto, entrerebbe nel sigillo di ogni riga: al primo giro
+  dopo il rilascio ogni riga applicata risulterebbe cambiata, nessuna avrebbe
+  un autore dopo l'ultima esecuzione, e tutte aspetterebbero il proprio
+  proprietario, con una chiamata al log per ciascuna a ogni giro. Per questo,
+  dalla 0.22.0, un campo di intento aggiunto dopo i primi sigilli sta in un
+  elenco, `register_late_seal_fields()`, ed entra nel sigillo solo quando è
+  pieno, dopo gli altri, come `<nome>=<valore>`: vuoto, il sigillo è quello di
+  prima, bit per bit. Il primo è `distinct_username` (più sotto, «Una persona
+  da creare»). Un campo di intento aggiunto d'ora in poi va nell'elenco, e un
+  test fallisce finché non c'è. `owned_by` non produce questo effetto: è un
   campo del canale e sta fuori dal sigillo.
 
 L'approvazione vale a tre condizioni: porta il sigillo di **quella** versione
@@ -971,9 +977,11 @@ Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla colonna
 
 ### Una persona da creare
 
-Una riga il cui verdetto è `absent` è l'unica che il giro chiude creando, e
-creare è l'unico atto che un giro dopo non disfa: l'utenza esiste. Dalla 0.19.0
-tre controlli stanno prima della nascita, e non dopo.
+Il giro chiude creando due righe: quella il cui verdetto è `absent`, e dalla
+0.22.0 quella in collisione a cui il referente ha risposto che si tratta di
+un'altra persona (più sotto). Creare è l'unico atto che un giro dopo non disfa:
+l'utenza esiste. Dalla 0.19.0 tre controlli stanno prima della nascita, e non
+dopo.
 
 - **Validata prima di nascere.** La riga si giudica come la coppia che
   diventerà, con il nome che il giro sta per creare: una scadenza passata dà
@@ -1010,6 +1018,48 @@ sono una di due cose:
   che niente nel giro distingue: aspetta, e al giro dopo trova l'account nuovo
   come omonimo, `ambiguous`, che decidono il referente e IT. Prendere subito il
   nome libero seguente farebbe un secondo account a chi forse ne ha già uno.
+
+**La risposta a una collisione**, dalla 0.22.0. `collision` vuol dire che il
+nome utente composto è di un account con nome o cognome diversi da quelli della
+riga. Il giro scrive in `username` la proposta, il nome col primo suffisso
+libero, e ferma la riga su `DATO_IDENTITA_IN_COLLISIONE:<proposta>`; il
+messaggio al proprietario nomina il nome occupato, porta la proposta su una
+riga a sé e spiega le due risposte. Se l'account che c'è non è la persona della
+riga, il referente incolla la proposta nel campo `distinct_username` (*Another
+person: create this username*, visibile solo su una collisione o quando è
+pieno), e il giro dopo crea l'account con quel nome, come per una riga
+`absent`: la chiave al proprietario, il benvenuto alla persona, e al giro
+successivo, quando la riga diventa `created`, la mail di accesso. Se è la
+stessa persona il campo resta vuoto, e si corregge la riga, o IT corregge
+l'account. Il canale non lega mai una riga a un account esistente sulla parola
+del referente, e gli omonimi, `ambiguous`, restano alla posta a IT. Quattro
+regole tengono la risposta legata alla domanda:
+
+- **il valore è la proposta, non una spunta.** Il giro lo confronta, senza
+  maiuscole e senza spazi ai bordi, con la proposta che ha appena calcolato
+  (`collision_answered()`), e se non coincide non fa niente. Il nome creato è
+  sempre la proposta del giro, libera per costruzione, mai il valore del campo.
+  Se la proposta cambia, perché il nome è stato corretto o il suffisso è stato
+  preso nel frattempo, la risposta non vale più: il dettaglio porta la
+  proposta, quindi l'esito cambia e il messaggio riparte con quella nuova;
+- **vale solo se scritta dopo la domanda.** La sua scrittura più recente nel log
+  deve stare sopra quella della proposta in `username` da parte del canale
+  (`log_answer_stands()`). Una risposta compilata alla nascita della riga, o
+  importata già piena, non vale: per ridarla si svuota il campo, si salva e si
+  incolla di nuovo, perché REDCap non registra una scrittura che lascia il
+  valore com'è;
+- **è un campo di intento.** Chi lo scrive è un autore della riga: se non è il
+  proprietario, la riga aspetta l'approvazione del proprietario o di IT, il
+  cancello giudica i diritti di chi ha risposto, e approvata ed eseguita la
+  riga passa a lui, come per ogni modifica;
+- **si legge solo su `collision`.** Su ogni altro verdetto il campo è ignorato,
+  senza codice: dopo la creazione resta pieno, uguale allo UPN, come traccia
+  della risposta, e un codice lo segnalerebbe per sempre.
+
+Resta scoperto un caso, raro: il nome occupato passa a un'altra persona fra la
+domanda e la risposta, cancellato e riusato in poche ore, con la proposta
+invariata. La risposta vale allora per un account che il referente non ha
+guardato.
 
 ### La mail di accesso
 
