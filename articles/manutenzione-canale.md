@@ -1224,6 +1224,10 @@ account disattivato.
   `TRASPORTO_`: dice che l’account è disattivato, di solito perché la
   persona non è mai entrata, e che una risposta lo fa riattivare da IT
   con una chiave nuova.
+- **Una riga trattenuta resta `held`.** `identity` dice `disabled`, ma
+  l’esito resta quello che chiede al proprietario di approvare la
+  modifica, che è la prima cosa che deve sapere: la riga si ferma
+  sull’account dopo l’approvazione.
 - **Riattivato l’account**, il giro dopo lo trova `existing` e prosegue:
   se il diritto si crea, parte la mail di accesso.
 - **Una revoca passa.** Togliere un diritto non chiede che la persona
@@ -1632,10 +1636,10 @@ pacchetto come prima, e le copie in `/opt` restano come sono. Al primo
 giro dopo l’installazione:
 
 - ogni riga attiva il cui account è disattivato, comprese quelle
-  `applied`, diventa `disabled` e `transport_error` con
-  `TRASPORTO_ACCOUNT_DISATTIVATO`, e il suo esito parte una volta, al
-  proprietario con IT in copia: IT va avvisata prima del rilascio. Le
-  revoche su quegli account passano;
+  `applied` e salvo quelle `held`, diventa `disabled` e
+  `transport_error` con `TRASPORTO_ACCOUNT_DISATTIVATO`, e il suo esito
+  parte una volta, al proprietario con IT in copia: IT va avvisata prima
+  del rilascio. Le revoche su quegli account passano;
 - ogni riga ferma su una collisione cambia dettaglio, che ora porta la
   proposta, e il suo proprietario riceve di nuovo il messaggio, con le
   due risposte;
@@ -1648,7 +1652,10 @@ ferme su `TRASPORTO_ACCOUNT_DISATTIVATO` vengono concesse, e le loro
 persone ricevono la mail di un accesso che non possono usare. Una riga
 nata da una collisione con la risposta è sigillata con la risposta
 dentro, e la 0.21.0 sigilla senza: la riga risulta cambiata senza
-autori, e aspetta il suo proprietario.
+autori, e aspetta il suo proprietario. Il dizionario di prima toglie
+`distinct_username` e la scelta `disabled` alle righe che li portano: la
+0.21.0 riscrive il verdetto da sé al primo giro, e una risposta a una
+collisione va data di nuovo se si torna alla 0.22.0.
 
 ### La regola ritirata è disattivata, non cancellata
 

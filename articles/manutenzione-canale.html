@@ -1341,6 +1341,12 @@ dice che la riga torna in coda da sola, come per gli altri
 perché la persona non è mai entrata, e che una risposta lo fa riattivare
 da IT con una chiave nuova.</li>
 <li>
+<strong>Una riga trattenuta resta <code>held</code>.</strong>
+<code>identity</code> dice <code>disabled</code>, ma l’esito resta
+quello che chiede al proprietario di approvare la modifica, che è la
+prima cosa che deve sapere: la riga si ferma sull’account dopo
+l’approvazione.</li>
+<li>
 <strong>Riattivato l’account</strong>, il giro dopo lo trova
 <code>existing</code> e prosegue: se il diritto si crea, parte la mail
 di accesso.</li>
@@ -1828,8 +1834,8 @@ chiamano il pacchetto come prima, e le copie in <code>/opt</code>
 restano come sono. Al primo giro dopo l’installazione:</p>
 <ul>
 <li>ogni riga attiva il cui account è disattivato, comprese quelle
-<code>applied</code>, diventa <code>disabled</code> e
-<code>transport_error</code> con
+<code>applied</code> e salvo quelle <code>held</code>, diventa
+<code>disabled</code> e <code>transport_error</code> con
 <code>TRASPORTO_ACCOUNT_DISATTIVATO</code>, e il suo esito parte una
 volta, al proprietario con IT in copia: IT va avvisata prima del
 rilascio. Le revoche su quegli account passano;</li>
@@ -1846,7 +1852,11 @@ di prima. Sulla 0.21.0 un account disattivato torna
 persone ricevono la mail di un accesso che non possono usare. Una riga
 nata da una collisione con la risposta è sigillata con la risposta
 dentro, e la 0.21.0 sigilla senza: la riga risulta cambiata senza
-autori, e aspetta il suo proprietario.</p>
+autori, e aspetta il suo proprietario. Il dizionario di prima toglie
+<code>distinct_username</code> e la scelta <code>disabled</code> alle
+righe che li portano: la 0.21.0 riscrive il verdetto da sé al primo
+giro, e una risposta a una collisione va data di nuovo se si torna alla
+0.22.0.</p>
 </div>
 <div class="section level3">
 <h3 id="la-regola-ritirata-è-disattivata-non-cancellata">La regola ritirata è disattivata, non cancellata<a class="anchor" aria-label="anchor" href="#la-regola-ritirata-%C3%A8-disattivata-non-cancellata"></a>
