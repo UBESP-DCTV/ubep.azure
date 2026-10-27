@@ -318,7 +318,7 @@ test_that("the packaged dictionary is a template with no fleet in it", {
   # release of this package to every movement of the fleet, and published the
   # list in a public repository. The other coded fields are the contract's own
   # vocabulary and stay.
-  expect_equal(nrow(dictionary), 21L)
+  expect_equal(nrow(dictionary), 22L)
   expect_true(is.na(choices) || !nzchar(choices))
   for (name in c("identity", "request_status", "outcome")) {
     kept <- dictionary[["Choices, Calculations, OR Slider Labels"]][
@@ -343,7 +343,7 @@ test_that("an instance list fills the template's choices", {
   # shift that map in silence.
   expect_equal(parsed[["code"]], c("srvA", "srvB"))
   expect_equal(parsed[["label"]], c("srvA", "srvB"))
-  expect_equal(nrow(dictionary), 21L)
+  expect_equal(nrow(dictionary), 22L)
 })
 
 
@@ -648,5 +648,83 @@ test_that("senza owned_by sul progetto il pacchetto nuovo ferma il giro", {
 
   # test
   expect_true("DIZIONARIO_CAMPO_ASSENTE:owned_by" %in% detto[["differences"]])
+  expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
+})
+
+
+test_that("il dizionario porta il campo della risposta, scrivibile dal referente", { # nolint: line_length_linter.
+  # eval
+  dizionario <- register_dictionary()
+  campi <- dizionario[["Variable / Field Name"]]
+  riga <- dizionario[campi == "distinct_username", , drop = FALSE]
+  vuoto <- function(colonna) {
+    is.na(riga[[colonna]]) || !nzchar(riga[[colonna]])
+  }
+
+  # test
+  # In the section of the person, right after the verdict it answers. Not
+  # `@READONLY`: the referent writes it, and so it is an intent field, whose
+  # author is an author of the row.
+  expect_equal(nrow(riga), 1L)
+  expect_equal(match("distinct_username", campi), match("identity", campi) + 1L)
+  expect_equal(riga[["Form Name"]], "request_register")
+  expect_true(vuoto("Section Header"))
+  expect_equal(riga[["Field Type"]], "text")
+  expect_equal(
+    riga[["Field Label"]], "Another person: create this username"
+  )
+  expect_equal(riga[["Field Note"]], paste(
+    "Only when Identity resolution is collision: the username we composed",
+    "belongs to an account with a different first or last name. If that",
+    "account is not the person this row is for, paste here the username",
+    "proposed in Username (UPN), and the channel creates a new account with",
+    "it. If it is the same person, leave this blank: correct the row, or",
+    "write to IT to correct the account. It answers for that proposal only:",
+    "if the proposal changes, paste the new one."
+  ))
+  expect_equal(
+    riga[["Text Validation Type OR Show Slider Number"]], "email"
+  )
+  expect_true(vuoto("Required Field?"))
+  expect_true(vuoto("Field Annotation"))
+  expect_false("distinct_username" %in% register_readonly_fields())
+  expect_false("distinct_username" %in% register_unsealed_fields())
+  expect_true("distinct_username" %in% register_intent_fields())
+  expect_true("distinct_username" %in% register_late_seal_fields())
+})
+
+
+test_that("il campo della risposta si vede su una collisione o quando e' pieno", { # nolint: line_length_linter.
+  # eval
+  dizionario <- register_dictionary()
+  logica <- stats::setNames(
+    dizionario[["Branching Logic (Show field only if...)"]],
+    dizionario[["Variable / Field Name"]]
+  )
+
+  # test
+  # Hidden on every other row, where it would be a question nobody is asked;
+  # shown while it holds an answer, so that one left on a row whose verdict
+  # moved on can still be read and emptied.
+  expect_equal(
+    logica[["distinct_username"]],
+    '[identity] = "collision" or [distinct_username] <> ""'
+  )
+})
+
+
+test_that("senza il campo della risposta sul progetto il pacchetto nuovo ferma il giro", { # nolint: line_length_linter.
+  # eval
+  vivo <- register_dictionary(c("edc10", "edc12"))
+  vivo <- vivo[
+    vivo[["Variable / Field Name"]] != "distinct_username", ,
+    drop = FALSE
+  ]
+  detto <- compare_dictionary(vivo, c("edc10", "edc12"))
+
+  # test
+  expect_true(
+    "DIZIONARIO_CAMPO_ASSENTE:distinct_username" %in% detto[["differences"]]
+  )
   expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
 })

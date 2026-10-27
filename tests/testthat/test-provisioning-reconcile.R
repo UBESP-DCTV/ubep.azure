@@ -284,7 +284,7 @@ record_default <- function(row) {
     record_id = "1", server = "edc10", project_id = "9003",
     username = "", identity = "",
     first_name = "Mario", last_name = "Rossi",
-    contact_email = "mario.rossi@example.org",
+    contact_email = "mario.rossi@example.org", distinct_username = "",
     role_name = "data entry", dag_name = "", expiration = "",
     requested_by = "anna.bianchi@ubep.unipd.it", owned_by = "",
     request_status = "active",
@@ -2595,6 +2595,41 @@ test_that("la riscrittura dello username da parte del canale non sblocca chi ha 
     as.character(identita_scritte()[["username"]]), "mario.rossi@ubep.unipd.it"
   )
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("con il campo nuovo vuoto nessuna riga sigillata diventa held", {
+  # eval
+  # A row the round carried out before `distinct_username` existed, sealed
+  # then with the value `request_seal()` gave it: computed at `aeab3b6`, a
+  # literal so that it cannot follow the code it checks. The register exports
+  # the new field empty, as it will on every row on the day of the import.
+  prima <- "ae079ddd2c78"
+  esito <- giro(
+    registro_con_log(
+      record_json(list(
+        record_id = "1", username = "mario.rossi@ubep.unipd.it",
+        identity = "existing", outcome = "applied", applied_seal = prima,
+        seal_state = "intact", distinct_username = ""
+      )),
+      storia = list(esecuzione(prima))
+    ),
+    istanza_doppia(
+      list(),
+      list(
+        username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    dry_run = FALSE
+  )
+
+  # test
+  # The seal has not moved, so the row is not held and its seal is not
+  # written again: the round finds the right in place and settles it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_null(sigilli_scritti())
   expect_length(scritture(), 0L)
 })
 

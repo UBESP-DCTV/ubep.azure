@@ -15,4 +15,12 @@ A field added to the dictionary joins this set on its own, which is the
 property that keeps the seal honest — a hand-picked list would silently
 stop covering the column somebody added last week.
 }
+\details{
+It joins the intent fields on its own, and the seal only by a rule of its
+own: a field added after the first seals were written is one of
+\code{register_late_seal_fields()}, and enters the seal only when it holds a
+value (\code{request_seal()}). Entered empty, it would move every seal already
+written. Its writes count as a change of the row all the same, from the
+day it exists.
+}
 \keyword{internal}

@@ -154,6 +154,13 @@ register_channel_fields <- function() {
 #' property that keeps the seal honest — a hand-picked list would silently
 #' stop covering the column somebody added last week.
 #'
+#' It joins the intent fields on its own, and the seal only by a rule of its
+#' own: a field added after the first seals were written is one of
+#' `register_late_seal_fields()`, and enters the seal only when it holds a
+#' value (`request_seal()`). Entered empty, it would move every seal already
+#' written. Its writes count as a change of the row all the same, from the
+#' day it exists.
+#'
 #' @return A character vector of field names, in dictionary order.
 #'
 #' @keywords internal
@@ -162,6 +169,32 @@ register_intent_fields <- function() {
     register_dictionary()[["Variable / Field Name"]],
     register_unsealed_fields()
   )
+}
+
+
+#' The intent fields added after the first seals were written
+#'
+#' Listed and not derived, decided on 2026-10-27. The seal is a hash of the
+#' intent fields joined in order, so a field added to them, even empty,
+#' changes the seal of every row: on the first round after the dictionary is
+#' imported every row the round ever carried out would read as changed with
+#' nobody on record for it, and `change_needs_approval()` holds a sealed row
+#' whose change has no author. Every executed row would be held, and every
+#' owner mailed.
+#'
+#' So a field in this list enters the seal only when it holds a value, after
+#' the others, as its name and its value (`request_seal()`): empty, the seal
+#' is the one written before the field existed, bit for bit. A rule on empty
+#' fields in general would change the seals already written, since the old
+#' fields are sealed empty too. An intent field added from now on goes in
+#' here, and a test fails while it is neither among the fields sealed from
+#' the start nor in this list.
+#'
+#' @return A character vector of field names.
+#'
+#' @keywords internal
+register_late_seal_fields <- function() {
+  "distinct_username"
 }
 
 
@@ -184,6 +217,13 @@ register_intent_fields <- function() {
 #' Twelve hex characters, like the surface fingerprint, and for the same
 #' reason: it goes in a text field a person may read aloud.
 #'
+#' The fields added after the first seals were written,
+#' `register_late_seal_fields()`, are the exception to "sealed as empty":
+#' each enters only when it holds a value, after the others, as
+#' `\r<name>=<value>`. Empty, the seal is the one the row had before the
+#' field existed. The name in front keeps two rows with the same value in
+#' two different late fields from joining into the same string.
+#'
 #' @param register The register as read, one row per request.
 #'
 #' @return A character vector, one seal per row.
@@ -193,7 +233,8 @@ request_seal <- function(register) {
   stopifnot(is.data.frame(register))
 
   fields <- register_intent_fields()
-  values <- lapply(fields, function(field) {
+  late <- intersect(register_late_seal_fields(), fields)
+  value_of <- function(field) {
     if (is.null(register[[field]])) {
       rep("", nrow(register))
     } else {
@@ -201,12 +242,19 @@ request_seal <- function(register) {
       value[is.na(value)] <- ""
       value
     }
-  })
+  }
+  values <- lapply(setdiff(fields, late), value_of)
 
   # `\r` and not a comma: the separator has to be a character no register value
   # can contain, or two different rows could join into the same string --
   # role_name "a" with dag "b,c" against role_name "a,b" with dag "c".
   joined <- do.call(paste, c(values, list(sep = "\r")))
+  for (field in late) {
+    value <- value_of(field)
+    joined <- paste0(
+      joined, ifelse(nzchar(value), paste0("\r", field, "=", value), "")
+    )
+  }
 
   substr(as.character(openssl::sha256(joined)), 1L, 12L)
 }

@@ -7,6 +7,7 @@ register_row <- function(...) {
     first_name = "Mario",
     last_name = "Rossi",
     contact_email = "mario.rossi@example.org",
+    distinct_username = "",
     role_name = "data entry",
     dag_name = "centro-01",
     # Not a literal date. `validate_request()` refuses a last day in the past,
@@ -463,6 +464,128 @@ test_that("il sigillo cambia se cambia cio' che e' stato chiesto", {
   expect_false(identical(request_seal(base), ruolo))
   expect_false(identical(request_seal(base), revoca))
   expect_false(identical(request_seal(base), gruppo))
+})
+
+
+# A row the round sealed before `distinct_username` existed, with the value
+# `request_seal()` gave it then: computed at `aeab3b6`, on the dictionary of
+# twenty-one fields. A literal, so that it cannot follow the code it checks.
+riga_sigillata_prima <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "7", server = "edc10", project_id = "9003",
+      username = "mario.rossi@ubep.unipd.it", identity = "existing",
+      first_name = "Mario", last_name = "Rossi",
+      contact_email = "mario.rossi@example.org", role_name = "data entry",
+      dag_name = "centro-01", expiration = "2027-01-31",
+      requested_by = "anna.bianchi@ubep.unipd.it", request_status = "active"
+    ),
+    list(...)
+  )
+}
+sigillo_di_prima <- "dfe7cce0f4c7"
+
+
+test_that("il campo della risposta vuoto non muove il sigillo di prima", {
+  # eval
+  senza <- as.data.frame(riga_sigillata_prima(), stringsAsFactors = FALSE)
+  vuoto <- as.data.frame(
+    riga_sigillata_prima(distinct_username = ""), stringsAsFactors = FALSE
+  )
+  spazi <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "  "), stringsAsFactors = FALSE
+  )
+  mancante <- as.data.frame(
+    riga_sigillata_prima(distinct_username = NA_character_),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # The field reaches every row of the live register empty on the day the
+  # dictionary is imported. Had it moved the seal, every row the round ever
+  # sealed would read as changed with nobody on record for it, and every one
+  # would be held.
+  expect_true("distinct_username" %in% register_intent_fields())
+  expect_identical(request_seal(senza), sigillo_di_prima)
+  expect_identical(request_seal(vuoto), sigillo_di_prima)
+  expect_identical(request_seal(spazi), sigillo_di_prima)
+  expect_identical(request_seal(mancante), sigillo_di_prima)
+})
+
+
+test_that("il campo della risposta pieno muove il sigillo", {
+  # eval
+  risposta <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "mario.rossi.2@ubep.unipd.it"),
+    stringsAsFactors = FALSE
+  )
+  altra <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "mario.rossi.3@ubep.unipd.it"),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # Written, it is an intent field like the others: who writes or empties it
+  # changes the row.
+  expect_false(identical(request_seal(risposta), sigillo_di_prima))
+  expect_false(identical(request_seal(risposta), request_seal(altra)))
+})
+
+
+test_that("lo stesso valore in campi diversi da' sigilli diversi", {
+  # eval
+  # A second late field, which the dictionary does not have yet: the case
+  # the name in front of the value exists for.
+  local_mocked_bindings(
+    register_intent_fields = function() {
+      c(
+        "record_id", "server", "project_id", "username", "first_name",
+        "last_name", "contact_email", "distinct_username", "role_name",
+        "dag_name", "expiration", "request_status", "second_answer"
+      )
+    },
+    register_late_seal_fields = function() {
+      c("distinct_username", "second_answer")
+    }
+  )
+  primo <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "x", second_answer = ""),
+    stringsAsFactors = FALSE
+  )
+  secondo <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "", second_answer = "x"),
+    stringsAsFactors = FALSE
+  )
+  nessuno <- as.data.frame(
+    riga_sigillata_prima(distinct_username = "", second_answer = ""),
+    stringsAsFactors = FALSE
+  )
+
+  # test
+  # Appended as the bare value, both rows would join into the same string.
+  expect_false(identical(request_seal(primo), request_seal(secondo)))
+  expect_identical(request_seal(nessuno), sigillo_di_prima)
+})
+
+
+test_that("ogni campo d'intenzione e' fra quelli sigillati da sempre o fra i tardivi", { # nolint: line_length_linter.
+  # eval
+  # The fields the seal covered when the first seal was written, and every
+  # live seal is a hash of their values in this order.
+  da_sempre <- c(
+    "record_id", "server", "project_id", "username", "first_name",
+    "last_name", "contact_email", "role_name", "dag_name", "expiration",
+    "request_status"
+  )
+
+  # test
+  # An intent field added later and left out of the late list would enter
+  # the seal empty, and move every live seal with it: every executed row
+  # would be held on the first round after the dictionary is imported.
+  expect_setequal(
+    register_intent_fields(), c(da_sempre, register_late_seal_fields())
+  )
+  expect_length(intersect(da_sempre, register_late_seal_fields()), 0L)
 })
 
 
