@@ -83,24 +83,40 @@ identity_actionable <- function(identity) {
 #' writes to for what is ours. Once IT has enabled the account the next round
 #' finds it `existing` and goes on without anybody refiling the row.
 #'
+#' The collision's code carries the proposal, `DATO_IDENTITA_IN_COLLISIONE:`
+#' followed by it, decided on 2026-10-27 as `SIGILLO_DIVERSO:<seal>` carries
+#' its seal. The referent answers by pasting that proposal, and the answer
+#' holds for it alone (`collision_answered()`): a proposal that moves, because
+#' the name changed or the suffix was taken meanwhile, changes the outcome,
+#' so the message leaves again with the new one. With the bare code the
+#' outcome would stay the same and nobody would be told.
+#'
 #' @param identity The verdict the resolution has just computed.
 #' @param errors The codes the resolution itself produced, which win: a row
 #'   stopped before any verdict already knows exactly what is wrong with it,
 #'   and the generic summary would cost the referent the sentence they can act
 #'   on.
+#' @param proposal The UPN the resolution proposes for a collision, `""`
+#'   elsewhere. Read only on `collision`.
 #'
 #' @return A character vector of codes, empty when there is nothing to report.
 #'
 #' @keywords internal
-identity_stop_codes <- function(identity, errors = character()) {
+identity_stop_codes <- function(identity, errors = character(),
+                                proposal = "") {
   if (length(errors) > 0L) {
     return(as.character(errors))
+  }
+
+  collision <- "DATO_IDENTITA_IN_COLLISIONE"
+  if (length(proposal) == 1L && !is.na(proposal) && nzchar(proposal)) {
+    collision <- paste0(collision, ":", proposal)
   }
 
   switch(
     identity_normalize(identity),
     ambiguous = "DATO_RECAPITO_NON_IDENTIFICA",
-    collision = "DATO_IDENTITA_IN_COLLISIONE",
+    collision = collision,
     disabled = "TRASPORTO_ACCOUNT_DISATTIVATO",
     character()
   )

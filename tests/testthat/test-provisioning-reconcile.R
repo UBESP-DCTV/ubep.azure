@@ -844,11 +844,13 @@ test_that("a collision stops the row and leaves the proposal where a person read
   # The proposal goes into the register beside the verdict, which is decision
   # 11: without it the row hands a person two questions and no material. The
   # gate still stops it — a proposal is not a confirmation — and the code is
-  # the one sub-project 5 will write the message from.
+  # the one sub-project 5 will write the message from. It carries the
+  # proposal, so a proposal that moves sends the message again.
   expect_length(interrogazioni(), 0L)
   expect_equal(esito[["esiti"]][["outcome"]], "data_error")
   expect_equal(
-    esito[["esiti"]][["outcome_detail"]], "DATO_IDENTITA_IN_COLLISIONE"
+    esito[["esiti"]][["outcome_detail"]],
+    "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it"
   )
   expect_equal(identita_scritte()[["identity"]], "collision")
   expect_equal(

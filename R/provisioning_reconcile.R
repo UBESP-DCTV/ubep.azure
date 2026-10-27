@@ -727,7 +727,10 @@ provisioning_reconcile <- function(register_url,
         ))
       }
 
-      codes <- identity_stop_codes(verdicts[[i]], resolutions[[i]][["errors"]])
+      codes <- identity_stop_codes(
+        verdicts[[i]], resolutions[[i]][["errors"]],
+        resolutions[[i]][["username"]]
+      )
       if (length(codes) == 0L) {
         # A verdict that is neither actionable nor `absent` and has nothing to
         # say about why is a word this function was never taught. `pending`
