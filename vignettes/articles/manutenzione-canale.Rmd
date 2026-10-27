@@ -741,7 +741,20 @@ maiuscole.
   non esegue niente, e l'esito va solo a IT con la frase «referente della riga
   non stabilito»; la chiave non va a nessuno. Il primo e il terzo non si
   risolvono da soli: il log non dimentica, e il giro non scrive `owned_by` su
-  una riga di cui non conosce il proprietario. Come REDCap registri nel log un
+  una riga di cui non conosce il proprietario. Si risolvono a mano: IT importa
+  con il token del canale il solo `owned_by`, con il nome del proprietario,
+  nella forma della porta. È una scrittura del canale, sta sopra quella storta,
+  ed è lei che si legge. Se il campo mostra già quel nome gli import sono due,
+  il primo che lo svuota (con `overwriteBehavior = overwrite`: con `normal`
+  l'API ignora un valore vuoto) e il secondo che lo riscrive, perché REDCap non
+  registra un import che lascia il valore com'è; uno `owned_by` vuoto non nomina
+  nessuno, e non nasconde la scrittura storta. Resta senza uscita un caso raro,
+  accettato il 2026-10-27: la scrittura storta cade dentro un giro, fra la sua
+  lettura del log e il suo sigillo, e quando quel sigillo diventa il penultimo
+  il proprietario del tratto che apre si legge sotto di lui, dove nessuna
+  scrittura nuova arriva. Ogni modifica della riga ha allora un autore
+  non stabilito, e la riga resta ferma; l'uscita è cancellarla e farla
+  ricreare a un referente. Come REDCap registri nel log un
   apostrofo dentro un valore, con un escape o com'è, non è misurato: il valore
   si legge intero fra il primo apostrofo e l'ultimo, e con un escape il nome
   letto porterebbe anche il segno dell'escape, quindi non sarebbe quello del
@@ -796,11 +809,11 @@ giudicare i diritti, e la riga approvata si ferma su
 il proprietario riscrive quel campo, cambiandolo e rimettendolo (sopra, «La
 via d'uscita da una scrittura di chi non ha diritti»): l'ultima scrittura del
 campo è allora sua, e ha un autore. Una `owned_by` con l'autore vuoto sopra
-quella del canale ferma invece la riga senza uscita (sopra, i tre casi senza
-proprietario stabilito). Gli autori vuoti sono probabilmente irraggiungibili,
-perché REDCap registra in ogni evento l'utente autenticato; che nel log del
-registro non ci siano eventi con `username` vuoto va verificato prima del
-rilascio.
+quella del canale ferma invece la riga finché IT non riscrive `owned_by` con il
+token del canale (sopra, i tre casi senza proprietario stabilito). Gli autori
+vuoti sono probabilmente irraggiungibili, perché REDCap registra in ogni evento
+l'utente autenticato; che nel log del registro non ci siano eventi con
+`username` vuoto va verificato prima del rilascio.
 
 Diverso è il caso in cui il log **non si legge**, o il proprietario non è
 stabilito (il creatore non è nominato, o una `owned_by` senza autore sta sopra
