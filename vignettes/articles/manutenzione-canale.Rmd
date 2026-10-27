@@ -1495,7 +1495,10 @@ Sulla 0.21.0 un account disattivato torna `existing`: le righe ferme su
 `TRASPORTO_ACCOUNT_DISATTIVATO` vengono concesse, e le loro persone ricevono la
 mail di un accesso che non possono usare. Una riga nata da una collisione con
 la risposta è sigillata con la risposta dentro, e la 0.21.0 sigilla senza: la
-riga risulta cambiata senza autori, e aspetta il suo proprietario.
+riga risulta cambiata senza autori, e aspetta il suo proprietario. Il
+dizionario di prima toglie `distinct_username` e la scelta `disabled` alle
+righe che li portano: la 0.21.0 riscrive il verdetto da sé al primo giro, e una
+risposta a una collisione va data di nuovo se si torna alla 0.22.0.
 
 ### La regola ritirata è disattivata, non cancellata
 

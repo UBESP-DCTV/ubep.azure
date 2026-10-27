@@ -135,7 +135,10 @@
   granted, and their people mailed an access they cannot use. A row created
   from an answered collision was sealed with the answer inside, and 0.21.0
   seals without it: the row reads as changed with nobody on record, and waits
-  for its owner.
+  for its owner. The old dictionary takes `distinct_username` and the choice
+  `disabled` away from the rows that carry them: 0.21.0 writes the verdict
+  again by itself on its first round, and an answer to a collision has to be
+  given again if 0.22.0 comes back.
 
 # ubep.azure 0.21.0
 
