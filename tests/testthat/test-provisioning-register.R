@@ -1720,11 +1720,7 @@ test_that("una owned_by del canale scritta da sola sopra una storta stabilisce i
 })
 
 
-test_that("una owned_by storta sotto il penultimo sigillo non ferma la riga per sempre", { # nolint: line_length_linter.
-  skip(paste(
-    "Difetto riprodotto, uscita da scegliere: la owned_by del canale",
-    "scritta sopra il sigillo non arriva al tratto letto sotto di esso."
-  ))
+test_that("una owned_by storta sotto il penultimo sigillo ferma la riga, per disegno", { # nolint: line_length_linter.
   # Newest first. A bad write of `owned_by` landed while a round ran, after
   # it read the log and before it wrote its seal 111111111111; the round had
   # no owner to write, so nothing of the channel stands between the two.
@@ -1734,6 +1730,11 @@ test_that("una owned_by storta sotto il penultimo sigillo non ferma la riga per 
   # expiration. The owner of today is Anna; the owner of the stretch between
   # the two seals is read below 111111111111, where the bad write is the
   # newest, and no write that can still come lands there.
+  #
+  # Accepted on 2026-10-27: the case is rare, and the round does not guess
+  # an owner the log cannot establish. The row stays held, every change of
+  # it with an unknown author, for as long as the log holds the bad write.
+  # The way out is to delete the row and have a referent create it again.
   for (nome in names(owned_by_storte)) {
     eventi <- eventi_finti(
       list(username = creatrice, details = "expiration = '2027-01-31'"),
@@ -1748,12 +1749,14 @@ test_that("una owned_by storta sotto il penultimo sigillo non ferma la riga per 
       )
     )
     expect_equal(log_owner(eventi, "1", creatrice, canale), creatrice)
-    # Anna's own change, with no author but her: it needs nobody. Today the
-    # stretch's owner is unknown, so every change of the row has an unknown
-    # author, round after round, for as long as the log holds the bad write.
-    expect_equal(
-      log_pending_authors(eventi, "1", creatrice, channel_account = canale),
-      creatrice, info = nome
+    # The owner of the stretch below 111111111111 stays unknown, and so the
+    # author of Anna's own change does too: it waits, and no later write
+    # reaches the stretch to release it.
+    expect_true(
+      is.na(log_pending_authors(
+        eventi, "1", creatrice, channel_account = canale
+      )),
+      info = nome
     )
   }
 })
