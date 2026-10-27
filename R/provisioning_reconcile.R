@@ -1553,6 +1553,11 @@ provisioning_reconcile <- function(register_url,
       record_id = as.character(record_ids),
       username = resolved_names,
       identity = verdicts,
+      # The name the round composed, which the register does not hold: the
+      # message of a collision names it, since it is the name taken.
+      composed = vapply(resolutions, function(answer) {
+        as.character(answer[["composed"]] %||% "")
+      }, character(1)),
       owner = owner_after,
       passed = passed,
       edited_by = edited_by,

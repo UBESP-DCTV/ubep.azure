@@ -174,6 +174,112 @@ test_that("un account disattivato non e' detto tornare in coda da solo", {
 })
 
 
+# A row stopped on a collision: `sara.collaudozeta` is somebody else's
+# account, and the round proposes `.2`.
+collisione_di_prova <- function(...) {
+  do.call(riga_di_prova, utils::modifyList(
+    list(
+      username = "sara.collaudozeta.2@ubep.unipd.it", identity = "collision",
+      composed = "sara.collaudozeta@ubep.unipd.it",
+      outcome_detail = paste0(
+        "DATO_IDENTITA_IN_COLLISIONE:sara.collaudozeta.2@ubep.unipd.it"
+      )
+    ),
+    list(...)
+  ))
+}
+
+
+test_that("il messaggio di una collisione spiega le due risposte e nomina il campo", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(collisione_di_prova())[["body"]]
+  altro <- mail_outcome_message(riga_di_prova())[["body"]]
+
+  # test
+  # The two answers, in both languages: another person, and the field to
+  # paste the proposal into, with what follows; the same person, and what
+  # to correct instead.
+  for (frase in c(
+    paste0(
+      "Se quell'account non e' la persona di questa riga, incolla il nome ",
+      "utente proposto"
+    ),
+    "\"Another person: create this username\" (distinct_username)",
+    paste0(
+      "al giro successivo il canale crea l'account con quel nome, manda a te ",
+      "la chiave e alla persona il benvenuto"
+    ),
+    "La risposta vale solo per questa proposta",
+    paste0(
+      "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
+      "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
+    ),
+    "aspetta l'approvazione del referente della riga, oppure di IT",
+    paste0(
+      "If that account is not the person this row is for, paste the ",
+      "proposed username"
+    ),
+    paste0(
+      "on the next round the channel creates the account with that name, ",
+      "and sends you the key and the person the welcome"
+    ),
+    "The answer holds for this proposal only",
+    paste0(
+      "If it is the same person, leave the field blank: correct the row's ",
+      "first or last name, or write to IT if the account is wrong."
+    ),
+    "waits for the approval of whoever owns the row, or of IT"
+  )) {
+    expect_match(detto, frase, fixed = TRUE)
+  }
+  expect_false(grepl("distinct_username", altro, fixed = TRUE))
+})
+
+
+test_that("il messaggio di una collisione porta il nome occupato e la proposta", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(collisione_di_prova())[["body"]]
+  # A row stopped before the code carried the proposal, and a round that
+  # did not say which name it composed.
+  vecchia <- mail_outcome_message(collisione_di_prova(
+    outcome_detail = "DATO_IDENTITA_IN_COLLISIONE", composed = NULL
+  ))[["body"]]
+
+  # test
+  # The name taken, which the referent looks up in the directory, and the
+  # proposal written out on a line of its own, to be pasted as it is.
+  expect_match(
+    detto,
+    paste0(
+      "Il nome utente composto da nome e cognome della riga, ",
+      "sara.collaudozeta@ubep.unipd.it, e' di un account con nome o cognome ",
+      "diversi."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    detto,
+    paste0(
+      "The username composed from the row's first and last name, ",
+      "sara.collaudozeta@ubep.unipd.it, belongs to an account with a ",
+      "different first or last name."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    detto, "\n    sara.collaudozeta.2@ubep.unipd.it\n", fixed = TRUE
+  )
+  expect_match(
+    vecchia,
+    "Il nome utente composto da nome e cognome della riga e' di un account",
+    fixed = TRUE
+  )
+  expect_match(
+    vecchia, "\n    sara.collaudozeta.2@ubep.unipd.it\n", fixed = TRUE
+  )
+})
+
+
 test_that("un campo vuoto cambia la frase invece di lasciare un buco", {
   # eval
   detto <- mail_outcome_message(

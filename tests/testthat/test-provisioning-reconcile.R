@@ -5620,3 +5620,31 @@ test_that("una risposta scritta prima della proposta lascia la riga in collision
     )
   }
 })
+
+
+test_that("il messaggio di una collisione dal giro nomina il nome occupato", {
+  # eval
+  posta <- posta_raccolta()
+  giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    occupata(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]],
+    copy_to = "it@example.org"
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+
+  # test
+  # The round tells the message the name it composed, which the register
+  # does not hold: only the proposal is written there.
+  expect_match(
+    corpo,
+    paste0(
+      "Il nome utente composto da nome e cognome della riga, ",
+      "mario.rossi@ubep.unipd.it, e' di un account"
+    ),
+    fixed = TRUE
+  )
+  expect_match(corpo, "\n    mario.rossi.2@ubep.unipd.it\n", fixed = TRUE)
+})

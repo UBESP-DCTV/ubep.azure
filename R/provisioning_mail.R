@@ -217,11 +217,88 @@ mail_outcome_message <- function(row) {
   # itself: the row stays in the queue until IT enables the account, and the
   # generic line on TRASPORTO_ ("returns to the queue by itself") would tell the
   # referent to wait for something that only a reply to IT brings about. The
-  # codes of a row are comma-separated in `outcome_detail`.
+  # codes of a row are comma-separated in `outcome_detail`, and some carry a
+  # value after a colon, `SIGILLO_DIVERSO:<seal>`: they are compared by name.
   codici <- trimws(strsplit(
     mail_said_or(row[["outcome_detail"]], ""), ",", fixed = TRUE
   )[[1]])
-  disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% codici
+  nomi_codici <- sub(":.*$", "", codici)
+  disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% nomi_codici
+
+  # A collision is the one data error whose answer is not a correction:
+  # when the account that holds the composed name is somebody else, the
+  # referent answers by pasting the proposal into `distinct_username`, and
+  # the round creates the account (decided on 2026-10-27). The message says
+  # both answers, names the name taken, which the referent looks up in the
+  # directory, and writes the proposal out on a line of its own, to be
+  # pasted as it is. The proposal is the one the code carries, which is
+  # this round's; a code without it falls back on the row's username.
+  collisione <- if ("DATO_IDENTITA_IN_COLLISIONE" %in% nomi_codici) {
+    codice <- codici[nomi_codici == "DATO_IDENTITA_IN_COLLISIONE"][[1L]]
+    proposta <- if (grepl(":", codice, fixed = TRUE)) {
+      sub("^[^:]*:", "", codice)
+    } else {
+      mail_said_or(row[["username"]], "")
+    }
+    occupato <- mail_said_or(row[["composed"]], "")
+    tra_virgole <- if (nzchar(occupato)) paste0(", ", occupato, ",") else ""
+    list(
+      it = c(
+        "",
+        paste0(
+          "Il nome utente composto da nome e cognome della riga",
+          tra_virgole, " e' di un account con nome o cognome diversi. Se ",
+          "quell'account non e' la persona di questa riga, incolla il nome ",
+          "utente proposto"
+        ),
+        "",
+        paste0("    ", proposta),
+        "",
+        paste0(
+          "nel campo \"Another person: create this username\" ",
+          "(distinct_username) della riga: al giro successivo il canale crea ",
+          "l'account con quel nome, manda a te la chiave e alla persona il ",
+          "benvenuto. La risposta vale solo per questa proposta: se la ",
+          "proposta cambia, arriva un messaggio con quella nuova. Scritta da ",
+          "un altro referente, aspetta l'approvazione del referente della ",
+          "riga, oppure di IT."
+        ),
+        "",
+        paste0(
+          "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
+          "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The username composed from the row's first and last name",
+          tra_virgole, " belongs to an account with a different first or ",
+          "last name. If that account is not the person this row is for, ",
+          "paste the proposed username"
+        ),
+        "",
+        paste0("    ", proposta),
+        "",
+        paste0(
+          "into the row's \"Another person: create this username\" field ",
+          "(distinct_username): on the next round the channel creates the ",
+          "account with that name, and sends you the key and the person the ",
+          "welcome. The answer holds for this proposal only: if the proposal ",
+          "changes, a message with the new one follows. Written by another ",
+          "referent, it waits for the approval of whoever owns the row, or ",
+          "of IT."
+        ),
+        "",
+        paste0(
+          "If it is the same person, leave the field blank: correct the ",
+          "row's first or last name, or write to IT if the account is wrong."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
 
   # With nobody established as the row's owner the message goes to IT alone,
   # and says so on its first lines: IT reads it without knowing which of the
@@ -372,6 +449,7 @@ mail_outcome_message <- function(row) {
       row[["applied_as"]], "l'istanza non ha risposto"
     )),
     trattenuta[["it"]],
+    collisione[["it"]],
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
@@ -417,6 +495,7 @@ mail_outcome_message <- function(row) {
       row[["applied_as"]], "the instance did not answer"
     )),
     trattenuta[["en"]],
+    collisione[["en"]],
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
@@ -1173,8 +1252,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' @param reply_to Kept for the caller's symmetry with `mail_send()`; the
 #'   mailer closure is what carries it to the transport.
 #' @param identified What this round settled about each row, as a frame with
-#'   `record_id` and the fields it settled: the identity; `owner`, who the
-#'   log says the row belongs to, where the outcome and the key go
+#'   `record_id` and the fields it settled: the identity; `composed`, the
+#'   name the round composed, which a collision's message names; `owner`, who
+#'   the log says the row belongs to, where the outcome and the key go
 #'   (`mail_referent()`); `passed`, whether the change applied this round
 #'   handed the row over; `edited_by`, who changed a held row since
 #'   it was applied, as the row's log says. `register` is the register as read,
