@@ -1458,6 +1458,37 @@ nel record del giro. Il rilascio è in cinque passi, nell'ordine:
    `accessi_persi > 0` tacerebbe: su una colonna vuota il confronto è falso, non
    un errore.
 
+La 0.22.0 risponde **sì** alla prima e **no** alla seconda, e non porta colonne
+nuove nel record del giro. Tocca lo schema con una parola di un vocabolario,
+`disabled` fra le scelte di `identity`, e con un campo, `distinct_username`: il
+dizionario passa a 22 campi, e serve l'atto unico. La riga del campo è quella
+impacchettata (`request_register`, subito dopo `identity`, testo con la
+validazione `email`, etichetta *Another person: create this username*, senza
+`@READONLY` perché lo scrive il referente, visibile su una collisione o quando
+è pieno). Il pacchetto nuovo sul dizionario vecchio si ferma su
+`DIZIONARIO_CAMPO_ASSENTE` e `DIZIONARIO_SCELTE_DIVERSE`, il pacchetto vecchio
+sul dizionario nuovo su `DIZIONARIO_SCELTE_DIVERSE` per `identity`: in tutti e
+due gli ordini il giro resta fermo finché le due cose non sono fatte, e non
+concede niente. Le lavorazioni chiamano il pacchetto come prima, e le copie in
+`/opt` restano come sono. Al primo giro dopo l'installazione:
+
+- ogni riga attiva il cui account è disattivato, comprese quelle `applied`,
+  diventa `disabled` e `transport_error` con `TRASPORTO_ACCOUNT_DISATTIVATO`, e
+  il suo esito parte una volta, al proprietario con IT in copia: IT va avvisata
+  prima del rilascio. Le revoche su quegli account passano;
+- ogni riga ferma su una collisione cambia dettaglio, che ora porta la
+  proposta, e il suo proprietario riceve di nuovo il messaggio, con le due
+  risposte;
+- nessun sigillo si muove: il campo nuovo è vuoto dappertutto, e vuoto non
+  entra nel sigillo (§4).
+
+Il ritorno alla 0.21.0 è un atto unico anche lui, con il dizionario di prima.
+Sulla 0.21.0 un account disattivato torna `existing`: le righe ferme su
+`TRASPORTO_ACCOUNT_DISATTIVATO` vengono concesse, e le loro persone ricevono la
+mail di un accesso che non possono usare. Una riga nata da una collisione con
+la risposta è sigillata con la risposta dentro, e la 0.21.0 sigilla senza: la
+riga risulta cambiata senza autori, e aspetta il suo proprietario.
+
 ### La regola ritirata è disattivata, non cancellata
 
 La vecchia regola a quattro rami è ancora nella sottoscrizione, disattivata,
