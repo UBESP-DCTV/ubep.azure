@@ -5220,3 +5220,403 @@ test_that("chi riporta sopra il sigillo il valore di una scrittura scoperta ferm
   expect_match(mandate[[1L]][["body"]], paste0("Modificata da: ", bruno),
                fixed = TRUE)
 })
+
+
+# A row the round found in collision on an earlier pass: the name it
+# composes, `mario.rossi`, is held by an account that does not answer to it,
+# and the round wrote its proposal beside the verdict. The answer is in
+# `distinct_username`.
+in_collisione <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "1", username = "mario.rossi.2@ubep.unipd.it",
+      identity = "collision", outcome = "data_error",
+      outcome_detail = "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it",
+      distinct_username = "mario.rossi.2@ubep.unipd.it"
+    ),
+    list(...)
+  )
+}
+
+
+# The round's write of the proposal, the question the answer replies to.
+proposta_scritta <- function(record = "1",
+                             proposta = "mario.rossi.2@ubep.unipd.it") {
+  list(
+    timestamp = "2026-08-14 01:30", username = "svc-canale-ubep",
+    action = paste0("Update record (API) ", record),
+    details = paste0("username = '", proposta, "', identity = 'collision'"),
+    record = record
+  )
+}
+
+
+risposta_data <- function(chi = anna, record = "1",
+                          valore = "mario.rossi.2@ubep.unipd.it") {
+  list(
+    timestamp = "2026-08-14 02:00", username = chi,
+    action = paste0("Update record ", record),
+    details = paste0("distinct_username = '", valore, "'"), record = record
+  )
+}
+
+
+# The tenant of the collision: `mario.rossi` is Anna Bianchi's UPN.
+occupata <- function(...) {
+  directory_doppia(
+    graph_user(
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "anna.bianchi@example.org"
+    ),
+    ...
+  )
+}
+
+
+# The account an answer brought into being, as the next sweep finds it.
+nata <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-00000000000a",
+    userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+  )
+}
+
+
+# `storia` is the row's log above its creation, newest first: by default
+# Anna's answer above the round's proposal.
+giro_collisione <- function(righe = list(in_collisione()),
+                            storia = list(risposta_data(), proposta_scritta()),
+                            istanza = istanza_doppia(list()),
+                            directory = occupata(),
+                            ...) {
+  giro(
+    registro_con_log(do.call(record_json, righe), storia = storia),
+    istanza, directory, ...
+  )
+}
+
+
+# The `to` of every message whose subject carries `oggetto`.
+destinatari <- function(mandate, oggetto) {
+  vapply(
+    Filter(function(m) grepl(oggetto, m[["subject"]], fixed = TRUE), mandate),
+    function(m) m[["to"]], character(1)
+  )
+}
+
+
+test_that("una collisione con la risposta crea l'account col nome proposto", {
+  # eval
+  esito <- giro_collisione(dry_run = FALSE, mailer = posta_accesa)
+  nome <- if (length(creazioni()) > 0L) {
+    creazioni()[[1]][["body"]][["data"]][["userPrincipalName"]]
+  }
+
+  # test
+  # The proposal the round found free in this sweep, not the value of the
+  # field, which only says yes to it. The row waits as a row `absent` does:
+  # nothing written in the register but the outcome, and no grant to a
+  # person who did not exist when the instance was asked.
+  expect_length(creazioni(), 1L)
+  expect_equal(nome, "mario.rossi.2@ubep.unipd.it")
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["credenziali"]][["username"]], nome)
+  expect_equal(esito[["esiti"]][["outcome"]], "pending")
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "")
+  expect_null(identita_scritte())
+
+  # eval
+  # The next round, with the account in the tenant.
+  seguente <- giro_collisione(
+    righe = list(in_collisione(outcome = "pending", outcome_detail = "")),
+    directory = occupata(nata())
+  )
+
+  # test
+  # Found by name and contact address, as a row `absent` finds its account,
+  # and named `created`: it came into being because of this request.
+  expect_equal(identita_scritte()[["identity"]], "created")
+  expect_equal(
+    identita_scritte()[["username"]], "mario.rossi.2@ubep.unipd.it"
+  )
+  expect_equal(seguente[["esiti"]][["outcome"]], "simulated")
+  expect_length(creazioni(), 0L)
+})
+
+
+test_that("la chiave va al proprietario e il benvenuto al recapito", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_collisione(dry_run = FALSE, mailer = posta[["mailer"]])
+  mandate <- posta[["mandate"]]()
+  benvenuto <- Filter(
+    function(m) startsWith(m[["subject"]], "Il tuo account UBEP"), mandate
+  )
+
+  # test
+  # As for a person `absent`: the outcome and the key to whoever owns the
+  # row, the welcome to the person, under the name created.
+  expect_equal(destinatari(mandate, "Accesso al nuovo account"), anna)
+  expect_equal(destinatari(mandate, "Richiesta 1"), anna)
+  expect_equal(
+    destinatari(mandate, "Il tuo account UBEP"), "mario.rossi@example.org"
+  )
+  expect_match(
+    benvenuto[[1]][["body"]], "mario.rossi.2@ubep.unipd.it", fixed = TRUE
+  )
+  expect_identical(esito[["posta"]][["credenziali_recapitate"]], 1L)
+  expect_identical(esito[["posta"]][["benvenuti_recapitati"]], 1L)
+})
+
+
+test_that("una collisione con la risposta di un altro referente resta held", {
+  # eval
+  esito <- giro_collisione(
+    storia = list(risposta_data(bruno), proposta_scritta()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  # Bruno answered on Anna's row: an account would be made on the word of
+  # somebody the row does not answer to. It waits for Anna, or IT, with the
+  # seal to paste, and nobody is asked anything meanwhile.
+  expect_length(creazioni(), 0L)
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "held")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]],
+    paste0(
+      "SIGILLO_DIVERSO:",
+      request_seal(do.call(riga_come_registro, in_collisione()))
+    )
+  )
+})
+
+
+test_that("approvata, la risposta di un altro passa il cancello coi diritti di chi l'ha scritta", { # nolint: line_length_linter.
+  # eval
+  approvato <- request_seal(do.call(riga_come_registro, in_collisione()))
+  approvata <- function(istanza) {
+    giro_collisione(
+      righe = list(in_collisione(approved_seal = approvato)),
+      storia = list(
+        list(
+          timestamp = "2026-08-14 02:30", username = anna,
+          details = paste0("approved_seal = '", approvato, "'")
+        ),
+        risposta_data(bruno),
+        proposta_scritta()
+      ),
+      istanza = istanza,
+      dry_run = FALSE, mailer = posta_accesa
+    )
+  }
+  con_diritti <- approvata(istanza_doppia(
+    list(), list(username = bruno, user_rights = 1L)
+  ))
+  nati_con <- length(creazioni())
+  senza_diritti <- approvata(istanza_doppia(
+    list(), list(username = bruno, user_rights = 0L)
+  ))
+  nati_senza <- length(creazioni())
+
+  # test
+  # Anna's approval lets Bruno's answer through to the gate, which asks
+  # Bruno's rights: nobody makes through the channel an account they could
+  # not have asked for by hand.
+  expect_equal(nati_con, 1L)
+  expect_equal(con_diritti[["esiti"]][["outcome"]], "pending")
+  expect_equal(nati_senza, 0L)
+  expect_equal(senza_diritti[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    senza_diritti[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
+test_that("una collisione con la risposta revocata non crea nessuno", {
+  # eval
+  esito <- giro_collisione(
+    righe = list(in_collisione(request_status = "revoked")),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  # Settled as a revocation of a request never served: nothing to take away
+  # and nobody to make.
+  expect_length(creazioni(), 0L)
+  expect_length(interrogazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_equal(esito[["esiti"]][["applied_as"]], "absent")
+})
+
+
+test_that("una collisione con la risposta passa dalla prova sull'istanza", {
+  # eval
+  esito <- giro_collisione(
+    righe = list(in_collisione(role_name = "ruolo che non c'e'")),
+    istanza = istanza_con_ruoli("data entry", list()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+  prove <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+
+  # test
+  # Rehearsed under the proposal, the name it is about to create, as a
+  # person `absent` is rehearsed under the composed one.
+  expect_length(creazioni(), 0L)
+  expect_length(prove, 1L)
+  expect_equal(
+    prove[[1]][["body"]][["data"]][["requests"]][[1]][["username"]],
+    "mario.rossi.2@ubep.unipd.it"
+  )
+  expect_equal(esito[["esiti"]][["outcome_detail"]], "DATO_RUOLO_INESISTENTE")
+})
+
+
+test_that("una collisione con la risposta su un'istanza muta aspetta col codice dell'istanza", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_collisione(
+    istanza = istanza_muta(), dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "transport_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "TRASPORTO_NON_RAGGIUNGIBILE"
+  )
+})
+
+
+test_that("senza posta, o in simulazione, una collisione con la risposta non crea nessuno", { # nolint: line_length_linter.
+  # eval
+  senza_posta <- giro_collisione(dry_run = FALSE)
+  nati_senza_posta <- length(creazioni())
+  simulata <- giro_collisione(mailer = posta_accesa)
+  nati_in_simulazione <- length(creazioni())
+
+  # test
+  # The same two lines a person `absent` stops at: the key has no road out
+  # without the post, and a simulated round makes nobody exist.
+  expect_equal(nati_senza_posta, 0L)
+  expect_true("TRASPORTO_CREAZIONE_SENZA_POSTA" %in% senza_posta[["errori"]])
+  expect_equal(senza_posta[["esiti"]][["outcome"]], "pending")
+  expect_equal(nati_in_simulazione, 0L)
+  expect_equal(simulata[["esiti"]][["outcome"]], "pending")
+})
+
+
+test_that("due righe della stessa persona con la risposta condividono una creazione", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_collisione(
+    righe = list(
+      in_collisione(),
+      in_collisione(record_id = "2", project_id = "9004")
+    ),
+    storia = list(
+      risposta_data(record = "2"), proposta_scritta(record = "2"),
+      risposta_data(), proposta_scritta()
+    ),
+    istanza = istanza_doppia(list(), list(project_id = 9004L)),
+    creazione = graph_che_ricorda(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+  benvenuti <- destinatari(posta[["mandate"]](), "Il tuo account UBEP")
+
+  # test
+  # The same proposal, the same person: one account, one key, one welcome.
+  expect_length(creazioni(), 1L)
+  expect_equal(benvenuti, "mario.rossi@example.org")
+  expect_equal(esito[["posta"]][["credenziali_recapitate"]], 1L)
+  expect_equal(esito[["esiti"]][["outcome"]], c("pending", "pending"))
+})
+
+
+test_that("due omonimi in collisione con la risposta: il secondo aspetta e poi e' ambiguous", { # nolint: line_length_linter.
+  # eval
+  righe <- list(
+    in_collisione(),
+    in_collisione(
+      record_id = "2", project_id = "9004",
+      contact_email = "altro.rossi@example.org"
+    )
+  )
+  storia <- list(
+    risposta_data(record = "2"), proposta_scritta(record = "2"),
+    risposta_data(), proposta_scritta()
+  )
+  esito <- giro_collisione(
+    righe = righe, storia = storia,
+    istanza = istanza_doppia(list(), list(project_id = 9004L)),
+    creazione = graph_che_ricorda(),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+  esiti <- esito[["esiti"]]
+  recapiti <- vapply(
+    creazioni(),
+    function(req) req[["body"]][["data"]][["otherMails"]][[1]],
+    character(1)
+  )
+
+  # test
+  # The same proposal for two people: the first makes it, the second waits.
+  expect_equal(recapiti, "mario.rossi@example.org")
+  expect_equal(esiti[["outcome"]], c("pending", "pending"))
+  expect_equal(esiti[["outcome_detail"]], c("", ""))
+
+  # eval
+  # The next round, with the first person's account in the tenant.
+  seguente <- giro_collisione(
+    righe = righe, storia = storia,
+    istanza = istanza_doppia(list(), list(project_id = 9004L)),
+    directory = occupata(nata()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+  esiti <- seguente[["esiti"]]
+  scritte <- identita_scritte()
+
+  # test
+  # The second row meets the new account as a namesake with another
+  # address. Its answer now names somebody else's account, and nobody reads
+  # it: the verdict is not `collision`, and an ambiguity goes to IT.
+  expect_length(creazioni(), 0L)
+  expect_equal(
+    scritte[["identity"]][scritte[["record_id"]] == "2"], "ambiguous"
+  )
+  expect_equal(
+    esiti[["outcome_detail"]][esiti[["record_id"]] == "2"],
+    "DATO_RECAPITO_NON_IDENTIFICA"
+  )
+})
+
+
+test_that("una risposta scritta prima della proposta lascia la riga in collisione", { # nolint: line_length_linter.
+  # eval
+  prima <- function(chi) {
+    giro_collisione(
+      storia = list(proposta_scritta(), risposta_data(chi)),
+      dry_run = FALSE, mailer = posta_accesa
+    )
+  }
+  di_anna <- prima(anna)
+  nati_anna <- length(creazioni())
+  di_bruno <- prima(bruno)
+  nati_bruno <- length(creazioni())
+
+  # test
+  # Written before anybody asked, the answer does not stand, whoever wrote
+  # it: the row stays where it was, and the message is the one it had.
+  expect_equal(nati_anna, 0L)
+  expect_equal(nati_bruno, 0L)
+  for (esito in list(di_anna, di_bruno)) {
+    expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+    expect_equal(
+      esito[["esiti"]][["outcome_detail"]],
+      "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it"
+    )
+  }
+})

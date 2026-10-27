@@ -112,6 +112,18 @@
 #' the row waits, under the instance's transport code as a pair on that
 #' instance does.
 #'
+#' **A collision the referent answered is a person to create too**, decided on
+#' 2026-10-27. The answer is the proposal pasted into `distinct_username`
+#' (`collision_answered()`), and it stands only when written after the round
+#' wrote that proposal (`log_answer_stands()`). From there the row goes the
+#' way of an `absent` one, under the proposal instead of the composed name:
+#' withdrawn when revoked, read in its log as a row waiting to be created,
+#' held when somebody other than its owner wrote the answer, judged at the
+#' gate on the rights of whoever wrote it, rehearsed on the instance, created
+#' with the post on and outside a simulation, one creation per name. An
+#' answer that does not stand leaves the row stopped on its collision. The
+#' field is never the name created, and no other verdict reads it.
+#'
 #' **The person is validated as the pair they will become, before being
 #' made.** Step 4 hands the row to `register_to_desired()` under the name the
 #' round would create, for the same data errors and the same rule on repeated
@@ -125,7 +137,9 @@
 #' **The row it creates stays `absent` for this pass** and becomes `created` at
 #' the next one, which is decision 4 working as written rather than a delay
 #' being tolerated: `created` is the row whose previous verdict was `absent` and
-#' that now matches, and that memory lives in the register. A round that wrote
+#' that now matches, and that memory lives in the register. An answered
+#' collision stays `collision` the same way, and becomes `created` when the
+#' account it finds is the one its answer named. A round that wrote
 #' `created` on the strength of having just made the account would be keeping a
 #' second source of truth beside the sweep, which is the thing decision 4 of the
 #' channel's design forbids.
@@ -436,6 +450,26 @@ provisioning_reconcile <- function(register_url,
   )
   absent <- !admitted & identity_normalize(verdicts) == "absent"
 
+  # A collision the referent answered, decided on 2026-10-27: the account
+  # that holds the composed name is somebody else, and the row asks for a new
+  # one under the proposal, the answer being that proposal pasted into
+  # `distinct_username` (`collision_answered()`). From here on such a row is
+  # what an `absent` one is, a person to create, under one name each:
+  # `creation_names`, the composed name for `absent` and the proposal for an
+  # answered collision. Both were found free by this sweep, and the field is
+  # compared with the proposal and never used as a name.
+  answered <- !admitted & identity_normalize(verdicts) == "collision" &
+    collision_answered(register, resolutions)
+  creating <- absent | answered
+  creation_names <- vapply(seq_along(resolutions), function(i) {
+    field <- if (absent[[i]]) "composed" else "username"
+    if (creating[[i]]) {
+      as.character(resolutions[[i]][[field]] %||% "")
+    } else {
+      ""
+    }
+  }, character(1))
+
   # A request revoked before it was ever served. Until now `request_status`
   # reached only `register_to_desired()`, so the creation branch hung off the
   # verdict alone and a row somebody had revoked still made the person exist.
@@ -444,10 +478,10 @@ provisioning_reconcile <- function(register_url,
   # request expects an account to come of it. The only other answer available
   # was to tell people to delete the record instead, and that contradicts what
   # the form itself promises: absence is not a request.
-  withdrawn <- absent &
+  withdrawn <- creating &
     trimws(as.character(register[["request_status"]])) == "revoked"
 
-  awaiting <- absent & !withdrawn
+  awaiting <- creating & !withdrawn
 
   # A row somebody edited after the round applied it. REDCap has no per-row
   # ownership -- rights are per instrument, and the only thing that partitions
@@ -591,6 +625,26 @@ provisioning_reconcile <- function(register_url,
       log_errors <- c(log_errors, reading_log[["errors"]])
     }
   }
+
+  # An answer to a collision stands only when it was written after the round
+  # asked, `log_answer_stands()`: above the channel's write of the proposal
+  # in the row's log, which the round has just read. One that does not, or
+  # whose log the round did not read although it knows the owner, goes back
+  # where it was: no person to create, and the row stops on its collision as
+  # if nobody had answered. A log the round could not read keeps the row
+  # where it is, and it stops on the code of that failure; an owner the log
+  # does not name stops it at the gate, on the same kind of code.
+  heard <- answered & awaiting
+  stands <- heard & checked & !unread
+  stands[stands] <- vapply(which(stands), function(i) {
+    log_answer_stands(
+      events, record_ids[[i]], resolved_names[[i]],
+      channel_account = channel_account
+    )
+  }, logical(1))
+  unheard <- heard & !stands & !unread & nzchar(owners_now)
+  awaiting <- awaiting & !unheard
+  checked <- checked & !(unheard & !tampered)
 
   # The register as this round will have left it, and not as it read it. The
   # round resolves `username` and writes it back in this same pass, so sealing
@@ -753,6 +807,10 @@ provisioning_reconcile <- function(register_url,
   # `requested_by` carries the owner the log named, and not what the row says.
   resolved <- register
   resolved[["username"]] <- resolved_names
+  # A collision carries its proposal as its username, and the proposal is
+  # nobody yet: a person still to be created travels with none, so that it
+  # is never a pair.
+  resolved[["username"]][creating] <- ""
   resolved[["identity"]] <- verdicts
   resolved[["requested_by"]] <- owners_now
   resolved <- resolved[standing, , drop = FALSE]
@@ -809,15 +867,12 @@ provisioning_reconcile <- function(register_url,
   # person exists, and only their errors and their entries travel on, the
   # entries for the rehearsal on the instance below.
   #
-  # Among themselves only. A name `absent` was found free in the tenant, so it
-  # cannot be the username of a row that resolved to an account.
-  arriving <- identity_normalize(resolved[["identity"]]) == "absent"
+  # Among themselves only. A name to create, composed or proposed, was found
+  # free in the tenant, so it cannot be the username of a row that resolved
+  # to an account.
+  arriving <- creating[standing]
   arrivals <- resolved[arriving, , drop = FALSE]
-  arrivals[["username"]] <- vapply(
-    resolutions[standing][arriving],
-    function(answer) as.character(answer[["composed"]] %||% ""),
-    character(1)
-  )
+  arrivals[["username"]] <- creation_names[standing][arriving]
   arrivals <- register_to_desired(arrivals)
 
   # A project_id the register accepted but that is not a number is a data
@@ -935,9 +990,9 @@ provisioning_reconcile <- function(register_url,
     # the first message and nothing after it, and nothing reached us -- while
     # a pair on the same instance came back with the instance's code. It
     # waits the same way now.
-    newcomers <- as.character(rows[["record_id"]])[
-      identity_normalize(rows[["identity"]]) == "absent"
-    ]
+    newcomers <- intersect(
+      as.character(rows[["record_id"]]), record_ids[creating]
+    )
     asked_for <- unique(c(
       vapply(
         wanted, function(e) as.character(e[["record_id"]]), character(1)
@@ -1352,12 +1407,7 @@ provisioning_reconcile <- function(register_url,
   # sent. The other rows of the same person share the creation and go on as
   # its row does; a namesake waits, and meets the new account next round.
   shares <- creation_shares(
-    register[creatable, , drop = FALSE],
-    vapply(
-      resolutions[creatable],
-      function(answer) as.character(answer[["composed"]] %||% ""),
-      character(1)
-    )
+    register[creatable, , drop = FALSE], creation_names[creatable]
   )
   makers <- creatable[which(shares == seq_along(creatable))]
 
@@ -1371,8 +1421,9 @@ provisioning_reconcile <- function(register_url,
           as.list(register[i, , drop = FALSE]),
           # The name the resolution found free, carried out of the verdict
           # rather than composed a second time here. Two compositions would let
-          # the round check that one name is free and create another.
-          resolutions[[i]][["composed"]]
+          # the round check that one name is free and create another. The
+          # proposal of an answered collision, never the answer itself.
+          creation_names[[i]]
         ),
         list(
           record_id = record_ids[[i]],
