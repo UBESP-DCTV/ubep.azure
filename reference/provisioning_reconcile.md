@@ -256,6 +256,21 @@ person to grant it to either. An instance that did not answer has
 neither allowed nor refused, and the row waits, under the instance's
 transport code as a pair on that instance does.
 
+**A collision the referent answered is a person to create too**, decided
+on 2026-10-27. The answer is the proposal pasted into
+`distinct_username`
+([`collision_answered()`](https://ubesp-dctv.github.io/ubep.azure/reference/collision_answered.md)),
+and it stands only when written after the round wrote that proposal
+([`log_answer_stands()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_answer_stands.md)).
+From there the row goes the way of an `absent` one, under the proposal
+instead of the composed name: withdrawn when revoked, read in its log as
+a row waiting to be created, held when somebody other than its owner
+wrote the answer, judged at the gate on the rights of whoever wrote it,
+rehearsed on the instance, created with the post on and outside a
+simulation, one creation per name. An answer that does not stand leaves
+the row stopped on its collision. The field is never the name created,
+and no other verdict reads it.
+
 **The person is validated as the pair they will become, before being
 made.** Step 4 hands the row to
 [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md)
@@ -272,9 +287,18 @@ and that no new round can take back.
 `created` at the next one, which is decision 4 working as written rather
 than a delay being tolerated: `created` is the row whose previous
 verdict was `absent` and that now matches, and that memory lives in the
-register. A round that wrote `created` on the strength of having just
-made the account would be keeping a second source of truth beside the
-sweep, which is the thing decision 4 of the channel's design forbids.
+register. An answered collision stays `collision` the same way, and
+becomes `created` when the account it finds is the one its answer named.
+A round that wrote `created` on the strength of having just made the
+account would be keeping a second source of truth beside the sweep,
+which is the thing decision 4 of the channel's design forbids.
+
+**One creation per name in a round**,
+[`creation_shares()`](https://ubesp-dctv.github.io/ubep.azure/reference/creation_shares.md):
+the oldest row that waits for a name makes it. Another row of the same
+person shares that account, its key and its welcome, and becomes
+`created` with it; a row of somebody with the same name waits, and next
+round meets a namesake.
 
 Idempotent by construction: a round interrupted between applying and
 writing the outcome leaves the row as still to do, and the next round

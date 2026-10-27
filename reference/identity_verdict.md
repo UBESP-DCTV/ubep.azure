@@ -12,7 +12,7 @@ identity_verdict(identity, username = "", errors = character(), composed = "")
 
 - identity:
 
-  One of the five words, or `""` when the row could not be resolved and
+  One of the six words, or `""` when the row could not be resolved and
   has to stop.
 
 - username:

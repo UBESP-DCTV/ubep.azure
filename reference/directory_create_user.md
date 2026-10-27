@@ -46,6 +46,16 @@ return value and by no other road: not the register, not the telemetry
 record, not standard output. `unconfirmed` is `TRUE` on a failure that
 does not say whether the account was born, see
 [`creation_failure()`](https://ubesp-dctv.github.io/ubep.azure/reference/creation_failure.md).
+`created_at`, on success only, is when the account was born, which the
+messages count the first sign-in from
+([`mail_first_signin_deadline()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.md)):
+Graph's `createdDateTime` when the answer carries it in a form the
+deadline can read, otherwise the moment read just before the request
+left. Graph returns that field only when a read names it, so the answer
+to a creation may not carry it; the moment before the request is not
+later than the birth, so a deadline counted from it can come early. It
+comes a day late only across midnight, with the machine's clock ahead of
+Graph's, and that case is accepted.
 
 ## Details
 

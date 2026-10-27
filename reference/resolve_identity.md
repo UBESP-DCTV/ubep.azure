@@ -22,7 +22,9 @@ resolve_identity(request, directory, domain = "ubep.unipd.it")
   where this project keeps memory. It also says what `username` is: a
   claim by whoever filed the row while the verdict is empty, and this
   round's own earlier answer once one sits beside it, because the two
-  are never written apart.
+  are never written apart. `distinct_username`, when the row carries it,
+  is read only to tell `created` from `existing` after a collision
+  ([`confirm_identity()`](https://ubesp-dctv.github.io/ubep.azure/reference/confirm_identity.md)).
 
 - directory:
 

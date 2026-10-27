@@ -13,7 +13,7 @@ delete — which is why the round can hold it without holding everything else.">
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -88,7 +88,16 @@ sending a bearer token in clear.</p></dd>
 one the account was born with, present only on success. It leaves by the
 return value and by no other road: not the register, not the telemetry
 record, not standard output. <code>unconfirmed</code> is <code>TRUE</code> on a failure that
-does not say whether the account was born, see <code><a href="creation_failure.html">creation_failure()</a></code>.</p>
+does not say whether the account was born, see <code><a href="creation_failure.html">creation_failure()</a></code>.
+<code>created_at</code>, on success only, is when the account was born, which the
+messages count the first sign-in from (<code><a href="mail_first_signin_deadline.html">mail_first_signin_deadline()</a></code>):
+Graph's <code>createdDateTime</code> when the answer carries it in a form the
+deadline can read, otherwise the moment read just before the request
+left. Graph returns that field only when a read names it, so the answer
+to a creation may not carry it; the moment before the request is not
+later than the birth, so a deadline counted from it can come early. It
+comes a day late only across midnight, with the machine's clock ahead of
+Graph's, and that case is accepted.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

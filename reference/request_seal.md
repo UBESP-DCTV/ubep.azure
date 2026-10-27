@@ -35,3 +35,11 @@ reports it as `DIZIONARIO_CAMPO_ASSENTE`, which is where it belongs.
 
 Twelve hex characters, like the surface fingerprint, and for the same
 reason: it goes in a text field a person may read aloud.
+
+The fields added after the first seals were written,
+[`register_late_seal_fields()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_late_seal_fields.md),
+are the exception to "sealed as empty": each enters only when it holds a
+value, after the others, as `\r<name>=<value>`. Empty, the seal is the
+one the row had before the field existed. The name in front keeps two
+rows with the same value in two different late fields from joining into
+the same string.

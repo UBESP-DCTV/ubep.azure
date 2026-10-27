@@ -17,6 +17,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/change_needs_approval.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/channel_account_valid.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/check_fingerprint.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/collision_answered.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/columns_frame.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/compare_dictionary.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/compare_readback.html</loc></url>
@@ -25,6 +26,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/conformance_cases.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/conformance_passed.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/creation_failure.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/creation_shares.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_choices.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_contacts.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_create_user.html</loc></url>
@@ -46,6 +48,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_vocabulary.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/index.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/intake_request.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_answer_stands.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_approval_stands.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_approver.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_change_authors.html</loc></url>
@@ -72,6 +75,8 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_contact.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_has_deadline.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_instance_url.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_local_time.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_outcome_message.html</loc></url>
@@ -106,6 +111,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_identity_import.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_import.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_intent_fields.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_late_seal_fields.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_log.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_metadata.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_owner_import.html</loc></url>

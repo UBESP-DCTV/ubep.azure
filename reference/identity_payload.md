@@ -28,8 +28,8 @@ identity_payload(record_id, username, identity)
 
 - identity:
 
-  One of the five verdicts, or `""` for a row the resolution stopped.
-  The empty string is not a missing value here: it is the verdict "not
+  One of the six verdicts, or `""` for a row the resolution stopped. The
+  empty string is not a missing value here: it is the verdict "not
   resolved", and it has to be writable, or a row that stops would keep
   the username it earned when it still resolved — which is precisely the
   value that has become false.
@@ -53,7 +53,8 @@ condition the gate checks: *a username is authoritative if and only if
 It is conditional rather than absolute because a collision carries the
 proposal of decision 11 — there is a determined value to show, and it is
 the one a person has to act on, so keeping it out of the register would
-leave it living only inside an e-mail. On `absent` and `ambiguous` there
-is nothing to propose and the username is empty. What the referent had
-typed does not survive the resolution either way; REDCap's Logging keeps
-it.
+leave it living only inside an e-mail. `disabled` carries the UPN of the
+account found, which is the account IT has to enable. On `absent` and
+`ambiguous` there is nothing to propose and the username is empty. What
+the referent had typed does not survive the resolution either way;
+REDCap's Logging keeps it.

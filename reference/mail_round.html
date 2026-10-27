@@ -13,7 +13,7 @@ to keep aligned. The cost accepted in exchange is a duplicate, never a loss."></
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,8 +80,10 @@ name.</p></dd>
 
 
 <dt id="arg-born">born<a class="anchor" aria-label="anchor" href="#arg-born"></a></dt>
-<dd><p>The accounts created this round: lists with <code>record_id</code>, <code>upn</code>
-and <code>credential</code>.</p></dd>
+<dd><p>The accounts created this round: lists with <code>record_id</code>, <code>upn</code>,
+<code>credential</code> and <code>created_at</code>, the moment the account was born, from
+which the welcome and the key count the first sign-in. Without it the
+two messages leave without the date.</p></dd>
 
 
 <dt id="arg-mailer">mailer<a class="anchor" aria-label="anchor" href="#arg-mailer"></a></dt>
@@ -109,8 +111,9 @@ mailer closure is what carries it to the transport.</p></dd>
 
 <dt id="arg-identified">identified<a class="anchor" aria-label="anchor" href="#arg-identified"></a></dt>
 <dd><p>What this round settled about each row, as a frame with
-<code>record_id</code> and the fields it settled: the identity; <code>owner</code>, who the
-log says the row belongs to, where the outcome and the key go
+<code>record_id</code> and the fields it settled: the identity; <code>composed</code>, the
+name the round composed, which a collision's message names; <code>owner</code>, who
+the log says the row belongs to, where the outcome and the key go
 (<code><a href="mail_referent.html">mail_referent()</a></code>); <code>passed</code>, whether the change applied this round
 handed the row over; <code>edited_by</code>, who changed a held row since
 it was applied, as the row's log says. <code>register</code> is the register as read,

@@ -1,13 +1,15 @@
 # Hand the way in to the person who asked for the account
 
-It carries the UPN, the key, and nothing else. No project, no role, no
-instance, nobody in copy: a message with a way in must not also carry
-the context that makes it spendable.
+It carries the UPN, the key, the date of the first sign-in, and nothing
+else. No project, no role, no instance, nobody in copy: a message with a
+way in must not also carry the context that makes it spendable. The date
+is not that context: it says until when the key is any use, which is
+what the referent needs to hand it over in time.
 
 ## Usage
 
 ``` r
-mail_credential_message(row, upn, credential)
+mail_credential_message(row, upn, credential, deadline = NULL)
 ```
 
 ## Arguments
@@ -23,6 +25,12 @@ mail_credential_message(row, upn, credential)
 - credential:
 
   What the account was born with.
+
+- deadline:
+
+  The date of the first sign-in, from
+  [`mail_first_signin_deadline()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.md);
+  `NULL`, `NA` or empty leaves the line out.
 
 ## Value
 
@@ -49,3 +57,8 @@ exists.
 [`mail_round()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_round.md)
 reports the failure under its own code, so an alarm can tell it apart
 from a message that will simply be retried.
+
+Under the sentence on how to hand the key over it gives the date the
+first sign-in has to happen by, the one the welcome gives the person,
+and where to ask for a new key after it: a reply to this message, which
+reaches IT, again with the key left out of it.

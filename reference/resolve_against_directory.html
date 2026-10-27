@@ -11,7 +11,7 @@ nothing, and knows the register only as a row."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,8 @@ because of this request. The memory lives in the register, which is where
 this project keeps memory. It also says what <code>username</code> is: a claim by
 whoever filed the row while the verdict is empty, and this round's own
 earlier answer once one sits beside it, because the two are never written
-apart.</p></dd>
+apart. <code>distinct_username</code>, when the row carries it, is read only to tell
+<code>created</code> from <code>existing</code> after a collision (<code><a href="confirm_identity.html">confirm_identity()</a></code>).</p></dd>
 
 
 <dt id="arg-directory">directory<a class="anchor" aria-label="anchor" href="#arg-directory"></a></dt>

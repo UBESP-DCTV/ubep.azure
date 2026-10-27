@@ -37,8 +37,10 @@ mail_round(
 
 - born:
 
-  The accounts created this round: lists with `record_id`, `upn` and
-  `credential`.
+  The accounts created this round: lists with `record_id`, `upn`,
+  `credential` and `created_at`, the moment the account was born, from
+  which the welcome and the key count the first sign-in. Without it the
+  two messages leave without the date.
 
 - mailer:
 
@@ -67,8 +69,9 @@ mail_round(
 - identified:
 
   What this round settled about each row, as a frame with `record_id`
-  and the fields it settled: the identity; `owner`, who the log says the
-  row belongs to, where the outcome and the key go
+  and the fields it settled: the identity; `composed`, the name the
+  round composed, which a collision's message names; `owner`, who the
+  log says the row belongs to, where the outcome and the key go
   ([`mail_referent()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_referent.md));
   `passed`, whether the change applied this round handed the row over;
   `edited_by`, who changed a held row since it was applied, as the row's

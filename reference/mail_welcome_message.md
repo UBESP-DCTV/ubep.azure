@@ -13,7 +13,7 @@ does: the owner the log settled, who receives the key, and not
 ## Usage
 
 ``` r
-mail_welcome_message(row, upn, url = NULL)
+mail_welcome_message(row, upn, url = NULL, deadline = NULL)
 ```
 
 ## Arguments
@@ -32,6 +32,12 @@ mail_welcome_message(row, upn, url = NULL)
   [`mail_instance_url()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_instance_url.md);
   `NULL`, `NA` or empty leaves it out.
 
+- deadline:
+
+  The date of the first sign-in, from
+  [`mail_first_signin_deadline()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.md);
+  `NULL`, `NA` or empty leaves the lines out.
+
 ## Value
 
 A list with `subject` and `body`.
@@ -49,3 +55,12 @@ still leaves, without that line and the address: a missing address is no
 reason to lose it. It closes by sending the person to the referent first
 and to IT second, with
 [`mail_first_contact()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_contact.md).
+
+Between the key and the steps of the first sign-in it gives the date the
+first sign-in has to happen by: the key is valid for at least 60 days
+from the creation of the account, and the date is
+[`mail_first_signin_deadline()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.md).
+Two lines say what happens after it, and to whom to write, in the order
+the closing sentence already gives: the key stops working, and an
+account nobody signed in to is deactivated, never deleted. No other date
+and no other way: one date, one thing to do.

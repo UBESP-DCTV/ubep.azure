@@ -9,7 +9,7 @@ us.
 ## Usage
 
 ``` r
-confirm_identity(account, declared, previous)
+confirm_identity(account, declared, previous, answer = "")
 ```
 
 ## Arguments
@@ -29,11 +29,27 @@ confirm_identity(account, declared, previous)
 
   The previous verdict, normalized.
 
+- answer:
+
+  The row's `distinct_username`, normalized: the referent's answer to a
+  collision, `""` when there is none.
+
 ## Value
 
 A list with `identity`, `username` and `errors`.
 
 ## Details
+
+A confirmed match on an account whose `accountEnabled` is false is
+`disabled` and not `existing`: the person is there and cannot sign in,
+so granting a right would mail them an access they cannot use. The UPN
+goes with the verdict, as a collision's proposal does, because it names
+the account IT has to enable. Only a false value counts: the sweep
+always asks for the field, and a missing one is an account this package
+cannot judge, not one somebody turned off, so it is judged as it was
+before the field was read. A row that was `absent` and finds its account
+disabled loses the memory of `created`; enabled again, it resolves
+`existing`.
 
 The two `TRASPORTO_` ones are fields the account does not carry, and
 neither is the filer's to fix. Telling the one person who cannot reach a
@@ -41,3 +57,9 @@ directory attribute that they are not authorized sends them to go and
 argue — which is the same reasoning
 [`scope_errors()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_errors.md)
 gives for its fourth case.
+
+`created` has a second road, decided on 2026-10-27: a row that was
+`collision` and finds the account its referent's answer asked for, the
+answer equal to the UPN found. That account too came into being because
+of this request. Nothing the round does tells `created` from `existing`,
+so the difference is only in the minutes.

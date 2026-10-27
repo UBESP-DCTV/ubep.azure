@@ -11,7 +11,7 @@ stops being read.
 ## Usage
 
 ``` r
-identity_stop_codes(identity, errors = character())
+identity_stop_codes(identity, errors = character(), proposal = "")
 ```
 
 ## Arguments
@@ -26,6 +26,11 @@ identity_stop_codes(identity, errors = character())
   before any verdict already knows exactly what is wrong with it, and
   the generic summary would cost the referent the sentence they can act
   on.
+
+- proposal:
+
+  The UPN the resolution proposes for a collision, `""` elsewhere. Read
+  only on `collision`.
 
 ## Value
 
@@ -56,3 +61,22 @@ uses it: it is what
 [`round_outcome_kind()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_outcome_kind.md)
 reads to close the row against whoever filed it rather than keeping it
 in the queue for us.
+
+`disabled` is the other way round, and on purpose. The account is there
+and cannot sign in, and nothing in the register can change that: only IT
+enables an account, the channel never does. So the code is
+`TRASPORTO_ACCOUNT_DISATTIVATO`, which keeps the row in the queue and
+sends the outcome to the referent with IT in copy, the address the round
+already writes to for what is ours. Once IT has enabled the account the
+next round finds it `existing` and goes on without anybody refiling the
+row.
+
+The collision's code carries the proposal,
+`DATO_IDENTITA_IN_COLLISIONE:` followed by it, decided on 2026-10-27 as
+`SIGILLO_DIVERSO:<seal>` carries its seal. The referent answers by
+pasting that proposal, and the answer holds for it alone
+([`collision_answered()`](https://ubesp-dctv.github.io/ubep.azure/reference/collision_answered.md)):
+a proposal that moves, because the name changed or the suffix was taken
+meanwhile, changes the outcome, so the message leaves again with the new
+one. With the bare code the outcome would stay the same and nobody would
+be told.

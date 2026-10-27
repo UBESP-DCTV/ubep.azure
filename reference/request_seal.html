@@ -11,7 +11,7 @@ modified after it was applied."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,6 +75,12 @@ blank seal alike. The absence itself is not lost: <code><a href="compare_diction
 reports it as <code>DIZIONARIO_CAMPO_ASSENTE</code>, which is where it belongs.</p>
 <p>Twelve hex characters, like the surface fingerprint, and for the same
 reason: it goes in a text field a person may read aloud.</p>
+<p>The fields added after the first seals were written,
+<code><a href="register_late_seal_fields.html">register_late_seal_fields()</a></code>, are the exception to "sealed as empty":
+each enters only when it holds a value, after the others, as
+<code>\r&lt;name&gt;=&lt;value&gt;</code>. Empty, the seal is the one the row had before the
+field existed. The name in front keeps two rows with the same value in
+two different late fields from joining into the same string.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

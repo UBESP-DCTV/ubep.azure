@@ -23,7 +23,7 @@ A logical vector, one per value.
 
 ## Details
 
-It admits two of the five words and refuses everything else, **including
+It admits two of the six words and refuses everything else, **including
 the empty one**. That fourth case is the one that gets forgotten
 precisely because it is the current one: `identity` is empty on every
 row of the live register, so a gate that admitted it would admit

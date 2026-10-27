@@ -19,7 +19,7 @@ log settled, who receives the key, and not requested_by."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.21.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,7 @@ log settled, who receives the key, and not <code>requested_by</code>.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_welcome_message</span><span class="op">(</span><span class="va">row</span>, <span class="va">upn</span>, url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_welcome_message</span><span class="op">(</span><span class="va">row</span>, <span class="va">upn</span>, url <span class="op">=</span> <span class="cn">NULL</span>, deadline <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -79,6 +79,12 @@ log settled, who receives the key, and not <code>requested_by</code>.</p>
 <dd><p>The address the row's instance opens at, from
 <code><a href="mail_instance_url.html">mail_instance_url()</a></code>; <code>NULL</code>, <code>NA</code> or empty leaves it out.</p></dd>
 
+
+<dt id="arg-deadline">deadline<a class="anchor" aria-label="anchor" href="#arg-deadline"></a></dt>
+<dd><p>The date of the first sign-in, from
+<code><a href="mail_first_signin_deadline.html">mail_first_signin_deadline()</a></code>; <code>NULL</code>, <code>NA</code> or empty leaves the lines
+out.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -96,6 +102,13 @@ cadence of the round. Without an address the message still leaves, without
 that line and the address: a missing address is no reason to lose it. It
 closes by sending the person to the referent first and to IT second, with
 <code><a href="mail_first_contact.html">mail_first_contact()</a></code>.</p>
+<p>Between the key and the steps of the first sign-in it gives the date the
+first sign-in has to happen by: the key is valid for at least 60 days from
+the creation of the account, and the date is
+<code><a href="mail_first_signin_deadline.html">mail_first_signin_deadline()</a></code>. Two lines say what happens after it, and
+to whom to write, in the order the closing sentence already gives: the key
+stops working, and an account nobody signed in to is deactivated, never
+deleted. No other date and no other way: one date, one thing to do.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
