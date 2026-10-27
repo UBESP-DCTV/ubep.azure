@@ -195,6 +195,25 @@ stabilito il nome non c'è: «Per qualunque problema scrivi prima al referente c
 ha chiesto il tuo account, che risponde del tuo primo accesso.» e il resto
 uguale.
 
+**Dalla 0.22.0 il benvenuto e la chiave dicono entro quando entrare.** Una
+chiave consegnata vale almeno 60 giorni dalla creazione dell'account o
+dall'ultimo reset di IT, e un account in cui nessuno entra prima o poi viene
+disattivato, mai cancellato. Il benvenuto dice «Primo accesso entro il
+<data>.», che dopo quella data la chiave non vale più, che senza primo accesso
+l'account viene disattivato, e come farlo riattivare: prima il referente, poi
+una risposta al benvenuto, che arriva a IT. La mail della chiave chiede al
+referente di consegnarla subito, entro la stessa data, e di rispondere al
+messaggio per averne una nuova, togliendo dalla risposta la chiave citata.
+La data è il giorno in cui l'account è nato, nel calendario di Roma, più 59
+giorni, scritta `AAAA-MM-GG` come ogni altra data dei messaggi
+(`mail_first_signin_deadline()`). Conta dalla nascita dell'account e non dal
+giro: `directory_create_user()` restituisce `created_at`, il `createdDateTime`
+della risposta di Graph quando c'è, altrimenti l'istante letto subito prima
+che la richiesta parta, che può solo anticipare la data, mai posticiparla. Un
+`createdDateTime` che non si legge, o che non finisce con `Z`, prende lo
+stesso ripiego. Se la risposta di Graph lo porti si vedrà alla prima creazione
+vera.
+
 **La posta è spenta di default**, e la ragione non è intuitiva: con «manda
 prima, scrivi dopo» una posta semplicemente spenta bloccherebbe *ogni* scrittura
 nel registro. Quindi senza la variabile che la accende il giro fa esattamente
@@ -1386,9 +1405,12 @@ giro non crea due volte la stessa utenza, quindi non ha un'altra occasione di
 mandarlo. E il messaggio con la chiave dice al referente che il nome utente è
 già arrivato in un messaggio a parte, quindi la persona riceverebbe la sola
 chiave: il nome utente, l'indirizzo dell'istanza e i passi del primo accesso
-glieli manda IT, a mano. Per sapere perché non è partito, guardare la riga nel
-registro: un `contact_email` vuoto spiega il caso da solo; altrimenti il journal
-della lavorazione riporta la risposta del servizio di posta.
+glieli manda IT, a mano, e dalla 0.22.0 anche la data limite del primo
+accesso, la stessa che la chiave ha dato al referente: il giorno in cui
+l'account è nato più 59 giorni (§1). Per sapere perché non è partito,
+guardare la riga nel registro: un `contact_email` vuoto spiega il caso da solo;
+altrimenti il journal della lavorazione riporta la risposta del servizio di
+posta.
 
 **Accesso perso (gravità proposta 2, da fissare nel foglio dei parametri).**
 Una persona ha ricevuto il diritto su un progetto e la mail che glielo dice non
@@ -1413,7 +1435,10 @@ porta il codice:
 
 - se c'è, la procedura è una sola: reimpostare la chiave su Entra,
   mandarla da sola al referente, e scrivere alla persona nome utente,
-  indirizzo dell'istanza e istruzioni;
+  indirizzo dell'istanza e istruzioni. A tutti e due IT dà la data limite del
+  primo accesso, che dalla 0.22.0 il benvenuto e la chiave portano: qui è il
+  giorno del reset più 59 giorni, perché una chiave reimpostata vale almeno 60
+  giorni dal reset (§1);
 - se non c'è, non serve fare niente: la richiesta non era arrivata a Graph, il
   giro dopo crea l'utenza con chiave e benvenuto, e il record conta
   `credenziali_recapitate`. Guardarlo prima di reimpostare.
