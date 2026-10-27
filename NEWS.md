@@ -27,11 +27,13 @@
   to the row's owner with IT in copy. When the round has no owner to give,
   as when no row is admitted, waiting for its account or changed and the
   log is not read, it goes to IT alone, like every outcome without an owner.
-  When IT has enabled the account again the next round finds it `existing`
-  and goes on. A revocation is the exception and still reaches the instance,
-  since taking a right away needs nobody to sign in. The channel never
-  enables an account and asks for no new permission: `accountEnabled` was
-  already in the sweep.
+  A held row stays held: its `identity` reads `disabled`, but its outcome is
+  still the one that asks the owner to approve the change, and it stops on
+  the account once the owner has approved. When IT has enabled the account
+  again the next round finds it `existing` and goes on. A revocation is the
+  exception and still reaches the instance, since taking a right away needs
+  nobody to sign in. The channel never enables an account and asks for no new
+  permission: `accountEnabled` was already in the sweep.
 
 * **The outcome of a row stopped on `TRASPORTO_ACCOUNT_DISATTIVATO` no longer
   says it returns to the queue by itself.** It does not: the account has to be
@@ -120,12 +122,12 @@
   runners call the package as before, and the round record gains no column.
 
 * **The first round after the installation writes to some owners.** Every
-  active row whose account is deactivated, `applied` ones included, becomes
-  `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and its outcome leaves
-  once, to the owner with IT in copy: IT should hear of it before the
-  release. Every row stopped on a collision changes its detail, which now
-  carries the proposal, so its owner receives the message again, with the two
-  answers. No seal moves: the new field is empty everywhere.
+  active row whose account is deactivated, `applied` ones included and held
+  ones excepted, becomes `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and
+  its outcome leaves once, to the owner with IT in copy: IT should hear of it
+  before the release. Every row stopped on a collision changes its detail,
+  which now carries the proposal, so its owner receives the message again,
+  with the two answers. No seal moves: the new field is empty everywhere.
 
 * **Going back to 0.21.0 is a single act too**, with the old dictionary,
   since the old package stops on the new one. On 0.21.0 a deactivated account
@@ -133,7 +135,17 @@
   granted, and their people mailed an access they cannot use. A row created
   from an answered collision was sealed with the answer inside, and 0.21.0
   seals without it: the row reads as changed with nobody on record, and waits
-  for its owner.
+  for its owner. The old dictionary takes `distinct_username` and the choice
+  `disabled` away from the rows that carry them: 0.21.0 writes the verdict
+  again by itself on its first round, and an answer to a collision has to be
+  given again if 0.22.0 comes back.
+
+* **Until 0.23.0 the monthly report leaves out the rows stopped on a
+  deactivated account.** It reads the active rows whose outcome is `applied`,
+  and a row that becomes `transport_error` on `TRASPORTO_ACCOUNT_DISATTIVATO`
+  is no longer one of them: its owner does not find it in the report, and IT
+  does not find its person among the accounts disabled on Entra. Until then
+  the outcome in copy to IT is what tells.
 
 # ubep.azure 0.21.0
 
