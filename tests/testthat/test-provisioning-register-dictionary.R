@@ -680,7 +680,8 @@ test_that("il dizionario porta il campo della risposta, scrivibile dal referente
     "proposed in Username (UPN), and the channel creates a new account with",
     "it. If it is the same person, leave this blank: correct the row, or",
     "write to IT to correct the account. It answers for that proposal only:",
-    "if the proposal changes, paste the new one."
+    "if the proposal changes, paste the new one. Written before the proposal",
+    "it does not count: empty the field, save, and paste it again."
   ))
   expect_equal(
     riga[["Text Validation Type OR Show Slider Number"]], "email"

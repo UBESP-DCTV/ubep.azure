@@ -232,7 +232,11 @@ mail_outcome_message <- function(row) {
   # both answers, names the name taken, which the referent looks up in the
   # directory, and writes the proposal out on a line of its own, to be
   # pasted as it is. The proposal is the one the code carries, which is
-  # this round's; a code without it falls back on the row's username.
+  # this round's; a code without it falls back on the row's username. An
+  # answer written before the proposal does not count (`log_answer_stands()`),
+  # and the referent who wrote it early finds the proposal already in the
+  # field: the message says to empty it and paste it again, since REDCap logs
+  # no write that leaves a value as it was.
   collisione <- if ("DATO_IDENTITA_IN_COLLISIONE" %in% nomi_codici) {
     codice <- codici[nomi_codici == "DATO_IDENTITA_IN_COLLISIONE"][[1L]]
     proposta <- if (grepl(":", codice, fixed = TRUE)) {
@@ -259,8 +263,10 @@ mail_outcome_message <- function(row) {
           "(distinct_username) della riga: al giro successivo il canale crea ",
           "l'account con quel nome, manda a te la chiave e alla persona il ",
           "benvenuto. La risposta vale solo per questa proposta: se la ",
-          "proposta cambia, arriva un messaggio con quella nuova. Scritta da ",
-          "un altro referente, aspetta l'approvazione del referente della ",
+          "proposta cambia, arriva un messaggio con quella nuova. Se il ",
+          "campo porta gia' questo nome, scritto prima di questo messaggio, ",
+          "non vale: svuotalo, salva la riga e incollalo di nuovo. Scritta ",
+          "da un altro referente, aspetta l'approvazione del referente della ",
           "riga, oppure di IT."
         ),
         "",
@@ -285,7 +291,9 @@ mail_outcome_message <- function(row) {
           "(distinct_username): on the next round the channel creates the ",
           "account with that name, and sends you the key and the person the ",
           "welcome. The answer holds for this proposal only: if the proposal ",
-          "changes, a message with the new one follows. Written by another ",
+          "changes, a message with the new one follows. If the field already ",
+          "holds this name, written before this message, it does not count: ",
+          "empty it, save the row and paste it again. Written by another ",
           "referent, it waits for the approval of whoever owns the row, or ",
           "of IT."
         ),

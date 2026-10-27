@@ -68,7 +68,8 @@
   holds only when it equals the proposal of that round, folded as addresses
   are (`collision_answered()`), and only when written after the round wrote
   the proposal (`log_answer_stands()`): an answer filled in when the row was
-  filed, or imported already filled, does not. It is an intent field, so
+  filed, or imported already filled, does not, and the message and the
+  field's note say to empty it, save, and paste it again. It is an intent field, so
   whoever writes it is an author of the row: an answer by somebody other than
   the owner waits for the owner or IT, and the gate judges the rights of
   whoever wrote it. The field is read on `collision` alone and is never the

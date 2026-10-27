@@ -232,6 +232,32 @@ test_that("il messaggio di una collisione spiega le due risposte e nomina il cam
 })
 
 
+test_that("il messaggio di una collisione dice di riscrivere una risposta data prima della proposta", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
+
+  # test
+  # An answer written before the round wrote the proposal does not count
+  # (`log_answer_stands()`), and the referent who filled it in early sees
+  # the proposal already in the field. REDCap logs no write that leaves a
+  # value as it was, so the message says to empty it first.
+  for (frase in c(
+    paste0(
+      "Se il campo porta gia' questo nome, scritto prima di questo ",
+      "messaggio, non vale: svuotalo, salva la riga e incollalo di nuovo."
+    ),
+    paste0(
+      "If the field already holds this name, written before this message, ",
+      "it does not count: empty it, save the row and paste it again."
+    )
+  )) {
+    expect_match(detto, frase, fixed = TRUE)
+  }
+})
+
+
 test_that("il messaggio di una collisione porta il nome occupato e la proposta", { # nolint: line_length_linter.
   # eval
   detto <- mail_outcome_message(
