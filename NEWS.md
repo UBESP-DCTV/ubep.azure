@@ -92,6 +92,17 @@
   and its value. A test fails while an intent field is neither among those
   sealed from the start nor in the list.
 
+* **Tests pin the way out of a row stopped on a stray write of `owned_by`.**
+  A write of `owned_by` with no author, or one of the channel with another
+  field beside it, leaves the owner unknown, and the round writes nothing that
+  would release the row. A write of `owned_by` alone with the channel's token,
+  above the stray one, does: it is what IT does by hand, with two imports when
+  the field already shows the owner, since REDCap logs no import that leaves a
+  value as it was. One rare case stays stopped by design (decided on
+  2026-10-27): a stray write that lands inside a round, between its reading of
+  the log and its seal, and ends below the second-to-last seal. The way out is
+  to delete the row and have a referent create it again.
+
 * **A test pins how an account is born.** The creation sends
   `forceChangePasswordNextSignIn` true and no license, in a single call to
   Graph; the test fails if either changes.
