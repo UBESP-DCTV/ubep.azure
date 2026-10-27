@@ -1001,6 +1001,11 @@ dopo.
   la riga resta in attesa, e nei giri in cui qualcuno sarebbe nato gli `errori`
   portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
 
+L'account nasce sempre allo stesso modo: con il cambio della chiave
+obbligatorio al primo accesso e senza licenze, in una sola chiamata a Graph.
+Dalla 0.22.0 un test fallisce se una delle due cose cambia. Sul primo e sulla
+chiamata unica conta anche il rapporto (§9, «Il primo accesso, da Entra»).
+
 **Una creazione per nome, nello stesso giro.** Il nome è libero quando il giro
 legge l'anagrafica e occupato appena il primo `POST` ha fatto l'account. Fino
 alla 0.21.0 due righe che aspettavano lo stesso nome facevano due `POST`, e il
