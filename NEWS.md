@@ -117,6 +117,22 @@
   installation in the same window, with the round stopped in between. The
   runners call the package as before, and the round record gains no column.
 
+* **The first round after the installation writes to some owners.** Every
+  active row whose account is deactivated, `applied` ones included, becomes
+  `disabled` with `TRASPORTO_ACCOUNT_DISATTIVATO`, and its outcome leaves
+  once, to the owner with IT in copy: IT should hear of it before the
+  release. Every row stopped on a collision changes its detail, which now
+  carries the proposal, so its owner receives the message again, with the two
+  answers. No seal moves: the new field is empty everywhere.
+
+* **Going back to 0.21.0 is a single act too**, with the old dictionary,
+  since the old package stops on the new one. On 0.21.0 a deactivated account
+  is `existing` again: the rows waiting on `TRASPORTO_ACCOUNT_DISATTIVATO` are
+  granted, and their people mailed an access they cannot use. A row created
+  from an answered collision was sealed with the answer inside, and 0.21.0
+  seals without it: the row reads as changed with nobody on record, and waits
+  for its owner.
+
 # ubep.azure 0.21.0
 
 * **`build_ps1_from_xlsx()` is defunct.** Every instance is now linked to the
