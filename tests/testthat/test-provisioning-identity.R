@@ -726,7 +726,9 @@ test_that("il codice di una collisione porta la proposta", {
   # Decided on 2026-10-27, as `SIGILLO_DIVERSO:<seal>` carries its seal: a
   # proposal that moves changes the outcome, and the message leaves again
   # with the new one to paste. Only the collision carries it.
-  expect_equal(codici, "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it")
+  expect_equal(
+    codici, "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it"
+  )
   expect_equal(round_outcome_kind(codici, dry_run = FALSE), "data_error")
   expect_equal(
     identity_stop_codes("ambiguous", proposal = "x@ubep.unipd.it"),
@@ -1060,7 +1062,9 @@ test_that("una risposta su una riga che non e' in collisione e' ignorata", {
   # read by nobody: after the creation it stays on the row as the trace of
   # the answer, equal to the account's own name.
   expect_false(risposta_di("mario.rossi@ubep.unipd.it", directory = esistente))
-  expect_false(risposta_di("mario.rossi@ubep.unipd.it", directory = dir_frame()))
+  expect_false(
+    risposta_di("mario.rossi@ubep.unipd.it", directory = dir_frame())
+  )
   expect_false(risposta_di(
     "mario.rossi.2@ubep.unipd.it",
     richiesta = a_request(
