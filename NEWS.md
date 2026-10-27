@@ -44,8 +44,8 @@
   once.** The name the resolution finds free is taken as soon as the first
   POST has made the account, and until now a second row waiting for the same
   name sent a second POST, on a name already taken. Now the round sends each
-  name once, for the oldest row that waits for it, in the order of the
-  register (`creation_shares()`). Another row of the same person, with the
+  name once, for the oldest row that waits for it by `record_id`, as for a
+  repeated pair (`creation_shares()`). Another row of the same person, with the
   same first name, last name and contact address, shares that account, its
   key, which goes to the referent of the oldest row, and its welcome; it takes
   the error of the creation if there is one, and next round finds the account

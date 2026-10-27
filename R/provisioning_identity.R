@@ -689,8 +689,10 @@ collision_answered <- function(register, resolutions) {
 #' The rows `absent` that a round is about to create, and the name the
 #' resolution found free for each. The name is free when the round sweeps and
 #' taken once the first POST of it has made the account, so the round sends
-#' each name once, for the oldest row that waits for it, in the order of the
-#' register, as the oldest row of a repeated pair keeps it.
+#' each name once, for the oldest row that waits for it. Age is the numeric
+#' `record_id`, as the oldest row of a repeated pair keeps it in
+#' `register_to_desired()`, and not the order of the export; without a
+#' `record_id` it is the order of the rows.
 #'
 #' The other rows that wait for the same name are one of two things. The same
 #' person asked for again, on another project: the same name and surname, as
@@ -703,8 +705,8 @@ collision_answered <- function(register, resolutions) {
 #' which the referent and IT settle. Taking the next free name at once would
 #' make a second account for a person who may already have one.
 #'
-#' @param rows The register rows, carrying `first_name`, `last_name` and
-#'   `contact_email`.
+#' @param rows The register rows, carrying `record_id`, `first_name`,
+#'   `last_name` and `contact_email`.
 #' @param upns The name each row would be created under, as the resolution
 #'   composed it.
 #'
@@ -728,8 +730,13 @@ creation_shares <- function(rows, upns) {
     identity_normalize(field("contact_email")),
     sep = "\n"
   )
+  # Age is the `record_id`, as for a repeated pair in
+  # `register_to_desired()`, and not the order the export happens to give.
+  ids <- field("record_id")
+  age <- suppressWarnings(as.numeric(ids))
+  eldest <- order(age, ids, na.last = TRUE)
   wanted <- identity_normalize(upns)
-  shares <- match(wanted, wanted)
+  shares <- eldest[match(wanted, wanted[eldest])]
   shares[person != person[shares]] <- NA_integer_
   shares
 }

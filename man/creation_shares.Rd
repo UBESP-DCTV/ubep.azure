@@ -7,8 +7,8 @@
 creation_shares(rows, upns)
 }
 \arguments{
-\item{rows}{The register rows, carrying \code{first_name}, \code{last_name} and
-\code{contact_email}.}
+\item{rows}{The register rows, carrying \code{record_id}, \code{first_name},
+\code{last_name} and \code{contact_email}.}
 
 \item{upns}{The name each row would be created under, as the resolution
 composed it.}
@@ -22,8 +22,10 @@ the next round.
 The rows \code{absent} that a round is about to create, and the name the
 resolution found free for each. The name is free when the round sweeps and
 taken once the first POST of it has made the account, so the round sends
-each name once, for the oldest row that waits for it, in the order of the
-register, as the oldest row of a repeated pair keeps it.
+each name once, for the oldest row that waits for it. Age is the numeric
+\code{record_id}, as the oldest row of a repeated pair keeps it in
+\code{register_to_desired()}, and not the order of the export; without a
+\code{record_id} it is the order of the rows.
 }
 \details{
 The other rows that wait for the same name are one of two things. The same

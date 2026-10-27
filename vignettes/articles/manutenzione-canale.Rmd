@@ -1025,9 +1025,10 @@ chiamata unica conta anche il rapporto (§9, «Il primo accesso, da Entra»).
 legge l'anagrafica e occupato appena il primo `POST` ha fatto l'account. Fino
 alla 0.21.0 due righe che aspettavano lo stesso nome facevano due `POST`, e il
 secondo arrivava su un nome ormai preso. Dalla 0.22.0 il giro manda ogni nome
-una volta sola, per la riga più vecchia che lo aspetta, nell'ordine del
-registro (`creation_shares()`). Le altre righe che aspettano lo stesso nome
-sono una di due cose:
+una volta sola, per la riga più vecchia che lo aspetta (`creation_shares()`).
+L'età è il `record_id`, come per la coppia ripetuta, e non l'ordine in cui
+l'export dà le righe. Le altre righe che aspettano lo stesso nome sono una di
+due cose:
 
 - **la stessa persona**, chiesta su un altro progetto: stesso nome, stesso
   cognome e stesso recapito, confrontati come li confronta la risoluzione.

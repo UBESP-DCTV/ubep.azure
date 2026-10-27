@@ -999,6 +999,30 @@ test_that("una creazione per nome: la stessa persona la condivide, un omonimo as
 })
 
 
+test_that("una creazione per nome la fa la riga piu' vecchia per record_id, non la prima letta", { # nolint: line_length_linter.
+  # eval
+  # Record 10 read before record 9, as an export out of numeric order would
+  # give them: the same person on the first two, a namesake on the last two.
+  stessa <- data.frame(
+    record_id = c("10", "9"),
+    first_name = "Mario", last_name = "Rossi",
+    contact_email = "mario.rossi@example.org",
+    stringsAsFactors = FALSE
+  )
+  omonimi <- utils::modifyList(stessa, list(
+    contact_email = c("mario.rossi@example.org", "altro.rossi@example.org")
+  ))
+  nomi <- rep("mario.rossi@ubep.unipd.it", 2L)
+
+  # test
+  # Age is the record_id, as `register_to_desired()` reads it for a repeated
+  # pair: record 9 makes the account and its referent gets the key, and
+  # record 10 shares it, or waits when it is somebody else.
+  expect_identical(creation_shares(stessa, nomi), c(2L, 2L))
+  expect_identical(creation_shares(omonimi, nomi), c(NA, 2L))
+})
+
+
 # The tenant of a collision: the name the row composes, `mario.rossi`, is held
 # by an account that does not answer to it.
 occupante <- function() {
