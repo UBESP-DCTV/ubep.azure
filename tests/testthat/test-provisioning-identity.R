@@ -972,3 +972,145 @@ test_that("una creazione per nome: la stessa persona la condivide, un omonimo as
   expect_identical(creation_shares(righe, nomi), c(1L, 1L, NA, 4L, 5L))
   expect_identical(creation_shares(righe[0, ], character()), integer())
 })
+
+
+# The tenant of a collision: the name the row composes, `mario.rossi`, is held
+# by an account that does not answer to it.
+occupante <- function() {
+  dir_user(
+    givenName = "Anna", surname = "Bianchi",
+    officeLocation = "anna.bianchi@example.org"
+  )
+}
+
+
+# What the round asks of a row in collision: the referent's answer beside the
+# proposal the resolution has just made.
+risposta_di <- function(risposta, richiesta = a_request(),
+                        directory = dir_frame(occupante())) {
+  riga <- as.data.frame(
+    utils::modifyList(richiesta, list(distinct_username = risposta)),
+    stringsAsFactors = FALSE
+  )
+  collision_answered(
+    riga, list(resolve_identity(as.list(riga), directory))
+  )
+}
+
+
+test_that("una risposta uguale alla proposta apre la creazione di una collisione", { # nolint: line_length_linter.
+  # test
+  # The referent pastes the proposal they were sent: the name is somebody
+  # else's, and a new account under the proposal is what they ask for.
+  expect_true(risposta_di("mario.rossi.2@ubep.unipd.it"))
+})
+
+
+test_that("una risposta diversa dalla proposta non apre niente", {
+  # test
+  # The answer is bound to the proposal it answers, and to no other: one that
+  # does not match it, or nothing, opens nothing, and the row stays stopped.
+  expect_false(risposta_di("mario.rossi.3@ubep.unipd.it"))
+  expect_false(risposta_di("mario.rossi@ubep.unipd.it"))
+  expect_false(risposta_di(""))
+  expect_false(risposta_di(NA_character_))
+})
+
+
+test_that("la risposta si confronta senza maiuscole e senza spazi ai bordi", {
+  # test
+  # Folded as every address is folded, on both sides.
+  expect_true(risposta_di("  Mario.Rossi.2@UBEP.unipd.it "))
+})
+
+
+test_that("una risposta su una riga che non e' in collisione e' ignorata", {
+  # eval
+  esistente <- dir_frame(dir_user())
+  creato <- dir_frame(occupante(), dir_user(
+    id = "00000000-0000-0000-0000-000000000002",
+    userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+  ))
+
+  # test
+  # Only a collision asks the question. On every other verdict the field is
+  # read by nobody: after the creation it stays on the row as the trace of
+  # the answer, equal to the account's own name.
+  expect_false(risposta_di("mario.rossi@ubep.unipd.it", directory = esistente))
+  expect_false(risposta_di("mario.rossi@ubep.unipd.it", directory = dir_frame()))
+  expect_false(risposta_di(
+    "mario.rossi.2@ubep.unipd.it",
+    richiesta = a_request(
+      identity = "collision", username = "mario.rossi.2@ubep.unipd.it"
+    ),
+    directory = creato
+  ))
+  expect_false(collision_answered(
+    data.frame(distinct_username = "mario.rossi.2@ubep.unipd.it"),
+    list(identity_verdict("ambiguous", "mario.rossi.2@ubep.unipd.it"))
+  ))
+})
+
+
+test_that("una risposta non lega mai la riga all'account che porta quel nome", {
+  # eval
+  # The answer names the account that holds the composed name, and then the
+  # account of somebody else altogether.
+  occupato <- resolve_identity(
+    a_request(distinct_username = "mario.rossi@ubep.unipd.it"),
+    dir_frame(occupante())
+  )
+  altrui <- resolve_identity(
+    a_request(
+      identity = "collision", username = "mario.rossi.2@ubep.unipd.it",
+      distinct_username = "anna.bianchi@ubep.unipd.it"
+    ),
+    dir_frame(occupante(), dir_user(
+      id = "00000000-0000-0000-0000-000000000002",
+      userPrincipalName = "anna.bianchi@ubep.unipd.it",
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "anna.b@example.org"
+    ))
+  )
+
+  # test
+  # The field is compared, never taken as a name: what the row resolves to
+  # comes from the directory alone, and a collision only ever opens a new
+  # account under the proposal.
+  expect_equal(occupato[["identity"]], "collision")
+  expect_equal(occupato[["username"]], "mario.rossi.2@ubep.unipd.it")
+  expect_equal(altrui[["identity"]], "collision")
+  expect_equal(altrui[["username"]], "mario.rossi.2@ubep.unipd.it")
+})
+
+
+test_that("l'account nato da una risposta risolve created al giro dopo", {
+  # eval
+  # The round after the creation: the proposal is now an account carrying the
+  # row's name and contact address, and the row still says `collision`.
+  nato <- dir_frame(occupante(), dir_user(
+    id = "00000000-0000-0000-0000-000000000002",
+    userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+  ))
+  dopo <- function(risposta) {
+    resolve_identity(
+      a_request(
+        identity = "collision", username = "mario.rossi.2@ubep.unipd.it",
+        distinct_username = risposta
+      ),
+      nato
+    )
+  }
+
+  # test
+  # The account came into being because of this request, as after `absent`.
+  # Without the answer, or with another one, it was not the round's to make,
+  # and the row finds an account that exists.
+  expect_equal(dopo("Mario.Rossi.2@ubep.unipd.it ")[["identity"]], "created")
+  expect_equal(
+    dopo("mario.rossi.2@ubep.unipd.it")[["username"]],
+    "mario.rossi.2@ubep.unipd.it"
+  )
+  expect_equal(dopo("")[["identity"]], "existing")
+  expect_equal(dopo("mario.rossi.3@ubep.unipd.it")[["identity"]], "existing")
+})

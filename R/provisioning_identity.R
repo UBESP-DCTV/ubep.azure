@@ -371,7 +371,8 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
 #'   this project keeps memory. It also says what `username` is: a claim by
 #'   whoever filed the row while the verdict is empty, and this round's own
 #'   earlier answer once one sits beside it, because the two are never written
-#'   apart.
+#'   apart. `distinct_username`, when the row carries it, is read only to tell
+#'   `created` from `existing` after a collision (`confirm_identity()`).
 #' @param directory A directory frame as `directory_users()` returns.
 #' @param domain The tenant's verified domain, defaulting as `compose_upn()`
 #'   does, so that what counts as an internal address and what a composed UPN
@@ -397,6 +398,10 @@ resolve_against_directory <- function(request,
 
   contact <- identity_normalize(request[["contact_email"]] %||% "")
   previous <- identity_normalize(request[["identity"]] %||% "")
+  # The referent's answer to a collision, read only to name the verdict of
+  # the account it brought into being. It is never a name to resolve to.
+  answer <- identity_normalize(request[["distinct_username"]] %||% "")
+  answer[is.na(answer)] <- ""
 
   # `username` is a claim by whoever filed the row only until the round has
   # answered it. The two fields are never written apart — decision 5, and
@@ -478,7 +483,7 @@ resolve_against_directory <- function(request,
         return(identity_verdict("", errors = "DATO_NOME_DIVERGENTE"))
       }
       return(confirm_identity(
-        directory[held & named, , drop = FALSE], declared, previous
+        directory[held & named, , drop = FALSE], declared, previous, answer
       ))
     }
 
@@ -511,7 +516,7 @@ resolve_against_directory <- function(request,
 
   if (sum(matched) == 1L) {
     return(confirm_identity(
-      directory[matched, , drop = FALSE], declared, previous
+      directory[matched, , drop = FALSE], declared, previous, answer
     ))
   }
 
@@ -565,17 +570,25 @@ resolve_against_directory <- function(request,
 #' attribute that they are not authorized sends them to go and argue — which is
 #' the same reasoning `scope_errors()` gives for its fourth case.
 #'
+#' `created` has a second road, decided on 2026-10-27: a row that was
+#' `collision` and finds the account its referent's answer asked for, the
+#' answer equal to the UPN found. That account too came into being because of
+#' this request. Nothing the round does tells `created` from `existing`, so
+#' the difference is only in the minutes.
+#'
 #' @param account The single matching row of the directory frame.
 #' @param declared The declared UPN, normalized and possibly filled in from an
 #'   internal contact address. Empty once a verdict exists on the row, because
 #'   then the register's `username` is this round's own earlier answer and not
 #'   a declaration to confirm.
 #' @param previous The previous verdict, normalized.
+#' @param answer The row's `distinct_username`, normalized: the referent's
+#'   answer to a collision, `""` when there is none.
 #'
 #' @return A list with `identity`, `username` and `errors`.
 #'
 #' @keywords internal
-confirm_identity <- function(account, declared, previous) {
+confirm_identity <- function(account, declared, previous, answer = "") {
   # It stayed a candidate so that it could not silently become "nobody
   # matched", which would create a second account for a person who already has
   # one. Having matched, it still does not grant: it could be a guest, and the
@@ -600,10 +613,58 @@ confirm_identity <- function(account, declared, previous) {
     return(identity_verdict("disabled", account[["userPrincipalName"]][[1L]]))
   }
 
-  identity_verdict(
-    if (identical(previous, "absent")) "created" else "existing",
-    account[["userPrincipalName"]][[1L]]
+  upn <- account[["userPrincipalName"]][[1L]]
+  born <- identical(previous, "absent") || (
+    identical(previous, "collision") && nzchar(answer) &&
+      identical(answer, identity_normalize(upn))
   )
+  identity_verdict(if (born) "created" else "existing", upn)
+}
+
+
+#' Whether the referent answered this collision
+#'
+#' The answer is the row's `distinct_username`, decided on 2026-10-27: the
+#' referent pastes the proposal they were sent there when the account that
+#' holds the composed name is somebody else, and the round then creates an
+#' account under the proposal, as it creates one for `absent`. It answers
+#' that proposal and no other: compared, folded on both sides, with the
+#' proposal the resolution has just made, so a proposal that moved (the name
+#' changed, or the suffix was taken meanwhile) leaves the answer standing for
+#' nothing until the new one is pasted.
+#'
+#' The value is never the name created, nor a name the row resolves to. The
+#' name is the proposal the round found free in this sweep, and the field
+#' only says yes to it; on every verdict but `collision` nobody reads it.
+#'
+#' Pure, and only half of the question: whether the answer was written after
+#' the proposal it names is the log's to say, `log_answer_stands()`.
+#'
+#' @param register The register as read, carrying `distinct_username`.
+#' @param resolutions What `resolve_identity()` answered for each row, in the
+#'   order of `register`.
+#'
+#' @return A logical vector, one answer per row.
+#'
+#' @keywords internal
+collision_answered <- function(register, resolutions) {
+  stopifnot(
+    is.data.frame(register), is.list(resolutions),
+    length(resolutions) == nrow(register)
+  )
+
+  answers <- as.character(
+    register[["distinct_username"]] %||% rep("", nrow(register))
+  )
+  answers[is.na(answers)] <- ""
+  answers <- identity_normalize(answers)
+
+  vapply(seq_along(resolutions), function(i) {
+    verdict <- identity_normalize(resolutions[[i]][["identity"]] %||% "")
+    proposal <- identity_normalize(resolutions[[i]][["username"]] %||% "")
+    identical(verdict, "collision") && nzchar(proposal) &&
+      identical(answers[[i]], proposal)
+  }, logical(1))
 }
 
 

@@ -15,7 +15,8 @@ because of this request. The memory lives in the register, which is where
 this project keeps memory. It also says what \code{username} is: a claim by
 whoever filed the row while the verdict is empty, and this round's own
 earlier answer once one sits beside it, because the two are never written
-apart.}
+apart. \code{distinct_username}, when the row carries it, is read only to tell
+\code{created} from \code{existing} after a collision (\code{confirm_identity()}).}
 
 \item{directory}{A directory frame as \code{directory_users()} returns.}
 

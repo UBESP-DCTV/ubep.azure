@@ -4,7 +4,7 @@
 \alias{confirm_identity}
 \title{Decide whether the single match really is the person the row means}
 \usage{
-confirm_identity(account, declared, previous)
+confirm_identity(account, declared, previous, answer = "")
 }
 \arguments{
 \item{account}{The single matching row of the directory frame.}
@@ -15,6 +15,9 @@ then the register's \code{username} is this round's own earlier answer and not
 a declaration to confirm.}
 
 \item{previous}{The previous verdict, normalized.}
+
+\item{answer}{The row's \code{distinct_username}, normalized: the referent's
+answer to a collision, \code{""} when there is none.}
 }
 \value{
 A list with \code{identity}, \code{username} and \code{errors}.
@@ -40,5 +43,11 @@ The two \code{TRASPORTO_} ones are fields the account does not carry, and neithe
 is the filer's to fix. Telling the one person who cannot reach a directory
 attribute that they are not authorized sends them to go and argue — which is
 the same reasoning \code{scope_errors()} gives for its fourth case.
+
+\code{created} has a second road, decided on 2026-10-27: a row that was
+\code{collision} and finds the account its referent's answer asked for, the
+answer equal to the UPN found. That account too came into being because of
+this request. Nothing the round does tells \code{created} from \code{existing}, so
+the difference is only in the minutes.
 }
 \keyword{internal}
