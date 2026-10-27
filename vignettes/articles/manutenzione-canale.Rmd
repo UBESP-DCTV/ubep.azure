@@ -993,6 +993,24 @@ tre controlli stanno prima della nascita, e non dopo.
   la riga resta in attesa, e nei giri in cui qualcuno sarebbe nato gli `errori`
   portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
 
+**Una creazione per nome, nello stesso giro.** Il nome è libero quando il giro
+legge l'anagrafica e occupato appena il primo `POST` ha fatto l'account. Fino
+alla 0.21.0 due righe che aspettavano lo stesso nome facevano due `POST`, e il
+secondo arrivava su un nome ormai preso. Dalla 0.22.0 il giro manda ogni nome
+una volta sola, per la riga più vecchia che lo aspetta, nell'ordine del
+registro (`creation_shares()`). Le altre righe che aspettano lo stesso nome
+sono una di due cose:
+
+- **la stessa persona**, chiesta su un altro progetto: stesso nome, stesso
+  cognome e stesso recapito, confrontati come li confronta la risoluzione.
+  Condivide la creazione: un account, una chiave, che va al referente della
+  riga più vecchia, e un benvenuto. Prende l'errore della creazione, se c'è, e
+  al giro dopo trova l'account e diventa `created` come la prima;
+- **un'altra persona con lo stesso nome**, o la stessa con un altro recapito,
+  che niente nel giro distingue: aspetta, e al giro dopo trova l'account nuovo
+  come omonimo, `ambiguous`, che decidono il referente e IT. Prendere subito il
+  nome libero seguente farebbe un secondo account a chi forse ne ha già uno.
+
 ### La mail di accesso
 
 Dalla 0.21.0 la persona sa quando ha l'accesso. Prima il canale le scriveva solo
