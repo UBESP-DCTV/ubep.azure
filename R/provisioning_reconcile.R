@@ -446,7 +446,7 @@ provisioning_reconcile <- function(register_url,
   # else about the row is judged as for any other.
   admitted <- admitted | (
     identity_normalize(verdicts) == "disabled" &
-      trimws(as.character(register[["request_status"]])) == "revoked"
+      trimws(as.character(register[["request_status"]])) %in% "revoked"
   )
   absent <- !admitted & identity_normalize(verdicts) == "absent"
 
