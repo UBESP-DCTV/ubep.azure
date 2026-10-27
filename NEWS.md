@@ -54,15 +54,57 @@
   free name at once would make a second account for a person who may already
   have one.
 
-* **The `identity` field of the register gains the choice `disabled`, so this
-  release touches the schema.** The packaged dictionary and the live one have
-  to change together: either side without the other stops the round on
-  `DIZIONARIO_SCELTE_DIVERSE`. Import of the dictionary and installation in
-  the same window, with the round stopped in between.
+* **A referent answers a collision from the register.** On `collision` the
+  composed username belongs to an account with a different first or last
+  name, and until now the answer went to IT by mail. The register gains the
+  field `distinct_username`, *Another person: create this username*: when the
+  account is not the person the row is for, the referent pastes into it the
+  proposal the row carries in `username`, and the next round creates the
+  account under that proposal as it creates an `absent` one, with the key to
+  the owner and the welcome to the person; the round after, the row becomes
+  `created` and the access message leaves. For the same person the field stays
+  blank, and the row is corrected, or IT corrects the account. The answer
+  holds only when it equals the proposal of that round, folded as addresses
+  are (`collision_answered()`), and only when written after the round wrote
+  the proposal (`log_answer_stands()`): an answer filled in when the row was
+  filed, or imported already filled, does not. It is an intent field, so
+  whoever writes it is an author of the row: an answer by somebody other than
+  the owner waits for the owner or IT, and the gate judges the rights of
+  whoever wrote it. The field is read on `collision` alone and is never the
+  name created: the channel never ties a row to an existing account on the
+  referent's word. Namesakes, `ambiguous`, still go to IT by mail.
+
+* **The code of a collision carries the proposal**,
+  `DATO_IDENTITA_IN_COLLISIONE:<proposal>`, as `SIGILLO_DIVERSO:<seal>`
+  carries its seal. When the proposal moves, because the name was corrected or
+  the suffix was taken meanwhile, the outcome changes and the message leaves
+  again with the new one; with the bare code nobody would be told. The message
+  names the username that is taken, writes the proposal on a line of its own,
+  and explains the two answers.
+
+* **An intent field added after the first seals enters the seal only when it
+  holds a value** (`register_late_seal_fields()`). The seal is a hash of the
+  intent fields, and `distinct_username`, even empty, would have moved the
+  seal of every row: on the first round after the import every row ever
+  carried out would have read as changed with nobody on record, been held, and
+  had its owner mailed. Empty, the seal is the one written before the field
+  existed, bit for bit; filled, the field enters after the others as its name
+  and its value. A test fails while an intent field is neither among those
+  sealed from the start nor in the list.
 
 * **A test pins how an account is born.** The creation sends
   `forceChangePasswordNextSignIn` true and no license, in a single call to
   Graph; the test fails if either changes.
+
+* **The register's dictionary changes, so this release touches the schema.**
+  The `identity` field gains the choice `disabled`, and `distinct_username`
+  follows it: 22 fields. The packaged dictionary and the live one have to
+  change together. The new package on the old dictionary stops the round on
+  `DIZIONARIO_CAMPO_ASSENTE` and `DIZIONARIO_SCELTE_DIVERSE`, the old package
+  on the new one on `DIZIONARIO_SCELTE_DIVERSE`, and in either order the round
+  grants nothing until both are done. Import of the dictionary and
+  installation in the same window, with the round stopped in between. The
+  runners call the package as before, and the round record gains no column.
 
 # ubep.azure 0.21.0
 
