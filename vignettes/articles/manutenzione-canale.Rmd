@@ -1061,6 +1061,38 @@ domanda e la risposta, cancellato e riusato in poche ore, con la proposta
 invariata. La risposta vale allora per un account che il referente non ha
 guardato.
 
+### Un account disattivato
+
+Fino alla 0.21.0 una corrispondenza su un account con `accountEnabled` falso
+era `existing`: il giro concedeva il diritto e mandava alla persona la mail di
+un accesso che non poteva usare. Dalla 0.22.0 è `disabled`, con lo UPN
+dell'account in `username`, che è l'account da riattivare. Solo il falso: un
+`accountEnabled` assente resta `existing`, perché la spazzata lo chiede sempre
+e un valore che manca non è un account disattivato.
+
+- **La riga si ferma al cancello** su `TRASPORTO_ACCOUNT_DISATTIVATO`: nessuna
+  istanza la tocca, nessuna mail di accesso parte, nessuno nasce al suo posto.
+  È un codice `TRASPORTO_` perché niente nel registro può cambiare le cose: un
+  account lo riattiva solo IT, mai il canale. La riga resta in coda.
+- **L'esito va al proprietario con IT in copia**, a IT da solo quando il giro
+  non ha un proprietario da dare, come per ogni esito senza proprietario. Parte
+  una volta: nei giri dopo l'esito non cambia, e finché l'account resta
+  disattivato non riparte niente. Il messaggio non dice che la riga torna in
+  coda da sola, come per gli altri `TRASPORTO_`: dice che l'account è
+  disattivato, di solito perché la persona non è mai entrata, e che una
+  risposta lo fa riattivare da IT con una chiave nuova.
+- **Riattivato l'account**, il giro dopo lo trova `existing` e prosegue: se il
+  diritto si crea, parte la mail di accesso.
+- **Una revoca passa.** Togliere un diritto non chiede che la persona entri:
+  fermata, lascerebbe il diritto in REDCap senza che il canale possa toglierlo.
+
+Il canale non chiede permessi nuovi: `accountEnabled` era già nella spazzata
+(`directory_fields()`), e la creazione resta l'unica scrittura su Graph. Il
+verdetto viene da `accountEnabled` falso e da nient'altro, quindi non dice chi
+ha disattivato l'account, se la regola sugli account mai usati o IT a mano; e
+una riga `created` che diventa `disabled` perde quella memoria, e riattivata
+torna `existing`.
+
 ### La mail di accesso
 
 Dalla 0.21.0 la persona sa quando ha l'accesso. Prima il canale le scriveva solo
