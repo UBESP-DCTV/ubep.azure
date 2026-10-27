@@ -2842,3 +2842,128 @@ test_that("owner_payload porta il proprietario e nient'altro", {
   expect_error(owner_payload("1", ""))
   expect_error(owner_payload("1", NA_character_))
 })
+
+
+# The log of a row in collision, newest first: Anna filed it, and the round
+# wrote its verdict with the proposal it had made, signed by the account that
+# holds its token. `sopra` stands above the round's write, `sotto` between the
+# creation and the round's write.
+collisione <- function(sopra = list(), sotto = list(),
+                       proposta = "mario.rossi.2@ubep.unipd.it") {
+  do.call(eventi_finti, c(
+    sopra,
+    list(list(
+      username = "svc-canale-ubep", action = "Update record (API) 1",
+      details = paste0(
+        "username = '", proposta, "', identity = 'collision'"
+      )
+    )),
+    sotto,
+    list(list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', first_name = 'Mario', last_name = 'Rossi'"
+    ))
+  ))
+}
+
+
+risposta <- function(chi = creatrice,
+                     valore = "mario.rossi.2@ubep.unipd.it") {
+  list(username = chi, details = paste0("distinct_username = '", valore, "'"))
+}
+
+
+test_that("la risposta di un altro referente su una riga mai eseguita aspetta il proprietario", { # nolint: line_length_linter.
+  # eval
+  eventi <- collisione(sopra = list(risposta("bruno.verdi@ubep.unipd.it")))
+  autori <- log_pending_authors(
+    eventi, "1", creatrice, channel_account = "svc-canale-ubep",
+    current = register_row(
+      username = "mario.rossi.2@ubep.unipd.it",
+      distinct_username = "mario.rossi.2@ubep.unipd.it"
+    )
+  )
+
+  # test
+  # The answer is an intent field, and whoever writes it is an author of the
+  # row: an account would be made on the word of somebody the row does not
+  # answer to. Anna stays an author for the fields she wrote at the creation.
+  expect_equal(autori, c("bruno.verdi@ubep.unipd.it", creatrice))
+  expect_true(change_needs_approval(autori, creatrice, sealed = FALSE))
+})
+
+
+test_that("una risposta scritta prima della proposta non vale", {
+  # eval
+  # Filled in when the row was filed, before anybody knew the composed name
+  # was taken: whoever knows the convention of the suffixes can guess the
+  # proposal without having looked at who holds the name.
+  eventi <- collisione(sotto = list(risposta()))
+
+  # test
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_false(log_answer_stands(eventi, "1", "mario.rossi.2@ubep.unipd.it"))
+})
+
+
+test_that("una risposta scritta dopo la proposta vale", {
+  # eval
+  eventi <- collisione(sopra = list(risposta()))
+
+  # test
+  # Above the round's write of the proposal, folded as the proposal is folded.
+  # Without the configured account the channel is the account that wrote
+  # the verdict.
+  expect_true(log_answer_stands(
+    eventi, "1", " Mario.Rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_true(log_answer_stands(eventi, "1", "mario.rossi.2@ubep.unipd.it"))
+  # A proposal the channel never wrote, or written by somebody else, is no
+  # question the answer could have come after.
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_false(log_answer_stands(
+    eventi, "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "un-altro-canale"
+  ))
+  # Nor is a log that holds no answer at all.
+  expect_false(log_answer_stands(
+    collisione(), "1", "mario.rossi.2@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+})
+
+
+test_that("una risposta alla proposta di prima non vale per quella nuova", {
+  # eval
+  # The referent answered `.2`; then `.2` was taken, and the round wrote `.3`.
+  prima <- collisione(
+    sopra = list(
+      list(
+        username = "svc-canale-ubep", action = "Update record (API) 1",
+        details = "username = 'mario.rossi.3@ubep.unipd.it'"
+      ),
+      risposta()
+    )
+  )
+  # And then the referent pasted the new one.
+  dopo <- rbind(
+    eventi_finti(risposta(valore = "mario.rossi.3@ubep.unipd.it")), prima
+  )
+
+  # test
+  expect_false(log_answer_stands(
+    prima, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+  expect_true(log_answer_stands(
+    dopo, "1", "mario.rossi.3@ubep.unipd.it",
+    channel_account = "svc-canale-ubep"
+  ))
+})

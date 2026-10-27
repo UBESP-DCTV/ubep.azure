@@ -1856,6 +1856,68 @@ log_approval_stands <- function(events, record, creator,
 }
 
 
+#' Whether a referent's answer to a collision came after the question
+#'
+#' The log half of the answer, beside `collision_answered()`, which compares
+#' its value with the proposal: the newest write of `distinct_username` in the
+#' row's current life stands above the newest write of `username` carrying
+#' that proposal by the channel, the account `log_channel_accounts()` names.
+#' The round writes the proposal through the identity door, together with the
+#' verdict `collision`, the first time it finds it, so that write is the
+#' question; an answer below it was written before anybody was asked.
+#'
+#' Decided on 2026-10-27, and the case is the referent who knows the
+#' convention of the suffixes and fills the field in when the row is filed,
+#' or imports it already filled, without having looked at who holds the
+#' composed name. The answer has to be written again after the proposal;
+#' REDCap logs no write that leaves a value as it was, so writing again means
+#' emptying the field and pasting the proposal anew.
+#'
+#' Who wrote the answer is not asked here: it is an intent field, so its
+#' author is an author of the row, `log_change_authors()`, and the row waits
+#' for its owner when it is somebody else.
+#'
+#' The proposal and the value in the log are folded as addresses are, on
+#' both sides. The order is REDCap's, newest first, as everywhere else in the
+#' log. A log that cannot say which account is the channel,
+#' `log_channel_unknown()`, holds no answer.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param proposal The proposal the resolution has just made for the row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured, for
+#'   `log_channel_accounts()`.
+#'
+#' @return `TRUE` when the answer stands.
+#'
+#' @keywords internal
+log_answer_stands <- function(events, record, proposal,
+                              channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events), is.character(proposal), length(proposal) == 1L
+  )
+
+  wanted <- identity_normalize(proposal)
+  if (is.na(wanted) || !nzchar(wanted)) {
+    return(FALSE)
+  }
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (log_channel_unknown(channel, channel_account)) {
+    return(FALSE)
+  }
+
+  authors <- trimws(as.character(mine[["username"]]))
+  answers <- which(log_wrote(mine, "distinct_username"))
+  asked <- which(
+    log_wrote(mine, "username") & authors %in% channel &
+      identity_normalize(log_value(mine, "username")) == wanted
+  )
+  length(answers) > 0L && length(asked) > 0L && answers[[1L]] < asked[[1L]]
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two
