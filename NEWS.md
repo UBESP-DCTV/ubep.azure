@@ -140,6 +140,13 @@
   again by itself on its first round, and an answer to a collision has to be
   given again if 0.22.0 comes back.
 
+* **Until 0.23.0 the monthly report leaves out the rows stopped on a
+  deactivated account.** It reads the active rows whose outcome is `applied`,
+  and a row that becomes `transport_error` on `TRASPORTO_ACCOUNT_DISATTIVATO`
+  is no longer one of them: its owner does not find it in the report, and IT
+  does not find its person among the accounts disabled on Entra. Until then
+  the outcome in copy to IT is what tells.
+
 # ubep.azure 0.21.0
 
 * **`build_ps1_from_xlsx()` is defunct.** Every instance is now linked to the
