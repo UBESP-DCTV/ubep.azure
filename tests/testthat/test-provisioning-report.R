@@ -2291,7 +2291,8 @@ test_that("il motivo di un server non letto e' detto in parole", {
     "TRASPORTO_ISTANZA_SENZA_MODULO", "INTERNO"
   )
   it <- list(server_non_letti = data.frame(
-    server = paste0("edc", 10:15), motivo = motivi, entra = 0L,
+    server = c("edc10", "edc16", "edc12", "edc18", "edc14", "edc20"),
+    motivo = motivi, entra = 0L,
     non_controllate = 2L, stringsAsFactors = FALSE
   ))
 
@@ -2305,17 +2306,17 @@ test_that("il motivo di un server non letto e' detto in parole", {
     ))
   }
   expect_match(riga("edc10", "it"), "^modulo non aggiornato[.]")
-  expect_match(riga("edc11", "it"), "^non raggiungibile[.]")
+  expect_match(riga("edc16", "it"), "^non raggiungibile[.]")
   expect_match(riga("edc12", "it"), "^segreto non leggibile[.]")
-  expect_match(riga("edc13", "it"), "^segreto rifiutato dal server[.]")
+  expect_match(riga("edc18", "it"), "^segreto rifiutato dal server[.]")
   expect_match(
     riga("edc14", "it"), "^assente dall'inventario delle istanze col modulo[.]"
   )
-  expect_match(riga("edc15", "it"), "^errore INTERNO[.]")
+  expect_match(riga("edc20", "it"), "^errore INTERNO[.]")
   expect_match(riga("edc10", "en"), "^module not updated[.]")
-  expect_match(riga("edc15", "en"), "^error INTERNO[.]")
+  expect_match(riga("edc20", "en"), "^error INTERNO[.]")
   expect_match(
-    riga("edc15", "it"), "non controllate per l'anno senza accessi: 2"
+    riga("edc20", "it"), "non controllate per l'anno senza accessi: 2"
   )
 })
 
