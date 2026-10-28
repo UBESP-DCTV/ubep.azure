@@ -8,7 +8,7 @@
 #'   REDCap is mounted under, as in `"host.example.org/redcap"`. The fleet is
 #'   not uniform on this point, so the mount cannot be assumed.
 #' @param secret Shared secret, sent as the `X-UBEP-Secret` header.
-#' @param operation One of `"state"`, `"apply"`, `"revoke"`.
+#' @param operation One of `"state"`, `"apply"`, `"revoke"`, `"accounts"`.
 #' @param requests List of requests; empty reads the whole instance.
 #' @param dry_run Logical; the module writes only on an explicit `FALSE`.
 #' @param registry Tested fingerprints, see `check_fingerprint()`.
@@ -140,6 +140,95 @@ module_state <- function(server,
     requests = requests, dry_run = TRUE, registry = registry,
     declare = declare
   )
+}
+
+
+#' Largest number of names one `accounts` call may carry
+#'
+#' The module caps the operation at this many names and answers a longer
+#' request with `400` and `INTERNO`, so `module_accounts()` splits by it.
+#'
+#' @return `500L`.
+#'
+#' @keywords internal
+module_accounts_limit <- function() {
+  500L
+}
+
+
+#' Read the local REDCap accounts of a set of people from one instance
+#'
+#' Asks the module only for the names it is given and returns one entry per
+#' name, present or not: `accounts` answers on the names asked, never on the
+#' whole instance, so a person who is missing is an entry that says so and not
+#' an absence the caller has to interpret.
+#'
+#' It accepts contract 4 and nothing else, unlike the other operations. A
+#' module still at 3 does not know `accounts` and answers `501` with
+#' `contract_version: 3`; with the lists the other operations use that would
+#' come out as `INTERNO`, a failure of the module, when it is a module that has
+#' not been updated yet. Accepting only 4 makes the parser look at the contract
+#' before the status, and the answer is `TRASPORTO_CONTRATTO_DISALLINEATO`.
+#'
+#' The names go in chunks of [module_accounts_limit()], because a longer
+#' request is refused by the module. The first chunk that fails is the answer
+#' for the whole call: a partial list would read as people who have never
+#' logged in. Names are de-duplicated ignoring case and surrounding blanks, the
+#' same comparison the module makes, so the same person is not asked twice.
+#' An empty set of names makes no call at all: there is nothing to ask, and a
+#' request with no names is not a read of the instance.
+#'
+#' @inheritParams module_call
+#' @param usernames Character vector of user names.
+#'
+#' @return A list with `ok`, `errors`, `payload` and `gate`; `payload$accounts`
+#'   holds the entries of every call, in the order of the names.
+#'
+#' @keywords internal
+module_accounts <- function(server,
+                            secret,
+                            usernames,
+                            registry = tested_fingerprints(),
+                            declare = certified_fingerprints(registry)) {
+  stopifnot(is.character(usernames))
+
+  usernames <- trimws(usernames)
+  usernames <- usernames[!duplicated(tolower(usernames))]
+
+  if (length(usernames) == 0L) {
+    return(list(
+      ok = TRUE,
+      errors = character(),
+      payload = list(accounts = list()),
+      gate = NA_character_
+    ))
+  }
+
+  chunks <- split(
+    usernames,
+    ceiling(seq_along(usernames) / module_accounts_limit())
+  )
+
+  accounts <- list()
+  answer <- NULL
+
+  for (chunk in unname(chunks)) {
+    answer <- module_call(
+      server, secret, "accounts",
+      requests = lapply(chunk, function(username) list(username = username)),
+      dry_run = TRUE, registry = registry, declare = declare,
+      accepted = 4L
+    )
+
+    if (!isTRUE(answer[["ok"]])) {
+      return(answer)
+    }
+
+    accounts <- c(accounts, answer[["payload"]][["accounts"]])
+  }
+
+  answer[["payload"]][["accounts"]] <- accounts
+  answer
 }
 
 

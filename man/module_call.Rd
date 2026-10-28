@@ -22,7 +22,7 @@ not uniform on this point, so the mount cannot be assumed.}
 
 \item{secret}{Shared secret, sent as the \code{X-UBEP-Secret} header.}
 
-\item{operation}{One of \code{"state"}, \code{"apply"}, \code{"revoke"}.}
+\item{operation}{One of \code{"state"}, \code{"apply"}, \code{"revoke"}, \code{"accounts"}.}
 
 \item{requests}{List of requests; empty reads the whole instance.}
 
