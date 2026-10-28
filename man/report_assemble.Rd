@@ -35,7 +35,9 @@ accounts, is a server that was not read.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
-each a list of \code{referente}, \code{attivati} (rows), \code{senza_primo_accesso}
+each a list of \code{referente}, \code{attivati} (rows), \code{scadenze} (the rows of
+the referent that expire after the day of the reading and by the last
+day of its month, by date, for information), \code{senza_primo_accesso}
 (pairs of person and server, with \code{nome}, \code{upn}, \code{server}, \code{progetti},
 \code{attivata_il}, \code{giorni}, \code{mesi}, \code{segnalata}, \code{storia_nota}, \code{fonte} and
 \code{limite}), \code{senza_accessi} (pairs, with \code{nome}, \code{upn}, \code{server},

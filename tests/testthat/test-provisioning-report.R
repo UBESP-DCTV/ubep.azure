@@ -1405,6 +1405,80 @@ test_that("senza_accessi_gia e non_controllati ci sono anche a vuoto", {
 })
 
 
+# --- the expirations of the month -------------------------------------------
+
+test_that("le scadenze sono quelle del mese in cui si manda, oggi escluso", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", expiration = "2026-11-01"),
+    richiesta(record_id = "42", expiration = "2026-11-30"),
+    richiesta(record_id = "43", expiration = "2026-11-02"),
+    richiesta(record_id = "44", expiration = "2026-12-01"),
+    richiesta(record_id = "45", expiration = ""),
+    # Not an access any more, or not applied: no expiration to speak of.
+    richiesta(record_id = "46", expiration = "2026-11-10",
+              request_status = "revoked"),
+    richiesta(record_id = "47", expiration = "2026-11-10",
+              outcome = "held")
+  )
+  mio <- assemblato(registro = registro)[["referenti"]][[referente]]
+  righe <- report_expiring_lines(mio[["scadenze"]], novembre())
+
+  # test
+  # In date order, the 1st (the day of the reading) and December out.
+  expect_equal(mio[["scadenze"]][["record_id"]], c("43", "42"))
+  expect_match(
+    righe[["it"]][[1L]],
+    "^3[.] Scadono entro novembre [(]2[)], per informazione"
+  )
+  expect_match(righe[["en"]][[1L]], "^3[.] Expiring by the end of November")
+  expect_length(righe[["it"]], 3L)
+  expect_match(righe[["it"]][[2L]], "2026-11-02", fixed = TRUE)
+  expect_match(righe[["it"]][[2L]], "Carla Inventata", fixed = TRUE)
+  expect_match(righe[["it"]][[2L]], "edc10, progetto 9301", fixed = TRUE)
+})
+
+
+test_that("le scadenze sono del referente, e il mese e' quello della lettura", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", expiration = "2026-11-15"),
+    richiesta(record_id = "42", expiration = "2026-11-15")
+  )
+  righe <- report_rows(
+    registro, c(referente, "bruno.fittizio@ubep.unipd.it"),
+    rep(list("2026-08-03 23:03"), 2L), novembre()
+  )
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(), servers = list(edc10 = server_letto())
+  )
+  dicembre <- report_month(as.POSIXct("2026-12-01 06:30", tz = "UTC"))
+
+  # test
+  expect_equal(
+    rapporto[["referenti"]][[referente]][["scadenze"]][["record_id"]], "41"
+  )
+  expect_match(
+    report_expiring_lines(
+      registro_di(richiesta(expiration = "2026-12-31")), dicembre
+    )[["it"]][[1L]],
+    "^3[.] Scadono entro dicembre [(]1[)]"
+  )
+})
+
+
+test_that("senza scadenze la voce non ha righe", {
+  # eval
+  mio <- assemblato()[["referenti"]][[referente]]
+  righe <- report_expiring_lines(mio[["scadenze"]], novembre())
+
+  # test
+  expect_equal(nrow(mio[["scadenze"]]), 0L)
+  expect_length(righe[["it"]], 0L)
+  expect_length(righe[["en"]], 0L)
+})
+
+
 # The report of a referent, with what the item needs.
 rapporto_c <- function(esteso = list(), gia = 0L, non_controllati = NULL) {
   list(
@@ -1769,6 +1843,17 @@ test_that("the mails carry no long dash and no character outside ASCII", {
   ))
   for (lingua in c("it", "en")) {
     testo <- paste(voce_c[[lingua]], collapse = "
+")
+    expect_false(grepl(intToUtf8(0x2014L), testo, fixed = TRUE))
+    expect_true(all(utf8ToInt(testo) < 128L))
+  }
+
+  # The expirations of the month.
+  voce_scadenze <- report_expiring_lines(
+    registro_di(richiesta(expiration = "2026-11-20")), novembre()
+  )
+  for (lingua in c("it", "en")) {
+    testo <- paste(voce_scadenze[[lingua]], collapse = "
 ")
     expect_false(grepl(intToUtf8(0x2014L), testo, fixed = TRUE))
     expect_true(all(utf8ToInt(testo) < 128L))

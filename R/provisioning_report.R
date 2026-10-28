@@ -733,7 +733,9 @@ report_server_asks <- function(register) {
 #'   accounts, is a server that was not read.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
-#'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
+#'   each a list of `referente`, `attivati` (rows), `scadenze` (the rows of
+#'   the referent that expire after the day of the reading and by the last
+#'   day of its month, by date, for information), `senza_primo_accesso`
 #'   (pairs of person and server, with `nome`, `upn`, `server`, `progetti`,
 #'   `attivata_il`, `giorni`, `mesi`, `segnalata`, `storia_nota`, `fonte` and
 #'   `limite`), `senza_accessi` (pairs, with `nome`, `upn`, `server`,
@@ -833,6 +835,16 @@ report_assemble <- function(rows, directory, period, previous = list(),
   judged <- own & !report_expired(text("expiration"), today) &
     !is.na(days) & days >= report_grace_days()
 
+  # The expirations of the month, for information: after the day of the
+  # reading, which is already expired, and up to the last day of its month.
+  expires <- suppressWarnings(
+    as.Date(text("expiration"), format = "%Y-%m-%d")
+  )
+  month_end <- as.Date(
+    paste0(report_shift_month(format(today, "%Y-%m"), 1L), "-01")
+  ) - 1L
+  expiring <- !is.na(expires) & expires > today & expires <= month_end
+
   projects <- function(at) {
     found <- unique(data.frame(
       server = text("server")[at], project_id = text("project_id")[at],
@@ -912,6 +924,13 @@ report_assemble <- function(rows, directory, period, previous = list(),
       drop = FALSE
     ]
     rownames(attivati) <- NULL
+
+    soon <- rows[mine & expiring, , drop = FALSE]
+    soon <- soon[
+      order(as.Date(soon[["expiration"]]), soon[["record_id"]]), ,
+      drop = FALSE
+    ]
+    rownames(soon) <- NULL
 
     people <- list()
     idle <- list()
@@ -1037,7 +1056,7 @@ report_assemble <- function(rows, directory, period, previous = list(),
     silent <- sort(unique(unchecked))
     referenti[[who]] <- list(
       referente = who, attivati = attivati, senza_primo_accesso = people,
-      senza_accessi = idle,
+      scadenze = soon, senza_accessi = idle,
       senza_accessi_gia = nrow(idle_before),
       senza_accessi_gia_coppie = idle_before,
       non_controllati = data.frame(
@@ -1494,6 +1513,60 @@ report_idle_lines <- function(report) {
           server, ": the server did not answer."
         )
       }
+    )
+  )
+}
+
+
+#' The lines of the accesses that expire this month, in both languages
+#'
+#' Information only: it is not an item to look at, and it does not count in
+#' the number of the subject. Each expiration is one line with the person,
+#' the server, the project and the day. Without any, no lines at all, since
+#' "none" would be a claim and the item is only a reminder.
+#'
+#' @param rows The `scadenze` of a referent's report.
+#' @param period What `report_month()` answered: the month named is the one
+#'   of the reading.
+#'
+#' @return A list of two character vectors, `it` and `en`; empty without
+#'   rows.
+#'
+#' @keywords internal
+report_expiring_lines <- function(rows, period) {
+  stopifnot(is.data.frame(rows), is.list(period))
+
+  if (nrow(rows) == 0L) {
+    return(list(it = character(), en = character()))
+  }
+
+  month <- report_month_words(format(period[["oggi"]], "%Y-%m"))
+  each <- function(verb, project) {
+    vapply(seq_len(nrow(rows)), function(i) {
+      paste0(
+        "   - ", trimws(paste(rows[["first_name"]][[i]],
+                              rows[["last_name"]][[i]])),
+        ", ", rows[["username"]][[i]], ": ", verb, " ",
+        trimws(rows[["expiration"]][[i]]), "; ", rows[["server"]][[i]],
+        ", ", project, " ", rows[["project_id"]][[i]], "."
+      )
+    }, "")
+  }
+
+  list(
+    it = c(
+      paste0(
+        "3. Scadono entro ", sub(" .*", "", month[["it"]]), " (", nrow(rows),
+        "), per informazione"
+      ),
+      each("scade il", "progetto")
+    ),
+    en = c(
+      paste0(
+        "3. Expiring by the end of ", sub(" .*", "", month[["en"]]), " (",
+        nrow(rows), "), for information"
+      ),
+      each("expires on", "project")
     )
   )
 }
