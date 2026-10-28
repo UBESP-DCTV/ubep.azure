@@ -46,7 +46,7 @@ $maiuscole = AccountReader::shape(
 ubep_assert_same(true, $maiuscole[0]['exists'], 'il confronto vale anche per il nome della riga');
 
 $utc = AccountReader::shape(['carla.inventata@ubep.unipd.it'], $righe, 'UTC');
-ubep_assert_same('2026-10-20T09:15:00Z', $utc[0]['user_firstvisit'], 'edc03 scrive in UTC');
+ubep_assert_same('2026-10-20T09:15:00Z', $utc[0]['user_firstvisit'], 'un server che scrive in UTC');
 
 $inverno = AccountReader::shape(
     ['carla.inventata@ubep.unipd.it'],
