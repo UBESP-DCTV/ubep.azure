@@ -3876,7 +3876,11 @@ test_that("un mese senza dovuti salvati usa quelli di oggi, e li salva", {
   # eval
   cartella <- withr::local_tempdir()
   doppie()
-  # Nothing ran in November: October has neither a ledger nor a list.
+  # October has a ledger, with IT only, and no list of who was due.
+  report_ledger_add(
+    cartella, "2026-10", report_ledger_read(cartella, "2026-10"),
+    list(destinatario = report_it_key(), at = "2026-11-01 07:30")
+  )
   posta <- posta_finta()
 
   esito <- esegui(cartella, posta, ora = "2026-12-01 06:30")
@@ -3886,8 +3890,137 @@ test_that("un mese senza dovuti salvati usa quelli di oggi, e li salva", {
   expect_match(oggetti[[1L]], "^In ritardo, ottobre 2026")
   expect_equal(report_due_read(cartella, "2026-10")[["dovuti"]], referente)
   invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
-  expect_equal(vapply(invii, `[[`, "", "destinatario"), referente)
+  expect_equal(
+    vapply(invii, `[[`, "", "destinatario"), c(report_it_key(), referente)
+  )
   expect_equal(esito[["mesi_persi"]], character())
+})
+
+
+test_that("una cartella di stato senza mesi vecchi non recupera niente", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  posta <- posta_finta()
+
+  # A directory lost or made again: no file of any earlier month.
+  esito <- esegui(cartella, posta, ora = "2026-12-01 06:30")
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  oggetti <- vapply(posta[["inviate"]][["mail"]], `[[`, "", "subject")
+  expect_false(any(grepl("In ritardo", oggetti)))
+  expect_false(file.exists(file.path(cartella, "2026-10.dovuti.json")))
+  expect_equal(esito[["mesi_persi"]], character())
+  expect_false(record[["in_ritardo"]])
+  vuota <- withr::local_tempdir()
+  expect_length(report_lost_months(vuota, "2027-06")[["mesi"]], 0L)
+  expect_length(
+    report_lost_months(file.path(vuota, "no"), "2027-06")[["mesi"]], 0L
+  )
+})
+
+
+test_that("un mese intero mancante fra due mesi con file si recupera", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  # October is on record and sent whole; November has no file at all.
+  esegui(cartella, posta_finta(), ora = "2026-11-01 06:30")
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta, ora = "2027-01-01 06:30")
+
+  # test
+  oggetti <- vapply(posta[["inviate"]][["mail"]], `[[`, "", "subject")
+  expect_match(oggetti[[1L]], "^In ritardo, novembre 2026")
+  expect_false(any(grepl("ottobre", oggetti)))
+  expect_equal(esito[["recuperati"]][["mese"]], "2026-11")
+  expect_equal(esito[["mesi_persi"]], character())
+})
+
+
+test_that("il recupero manda solo a chi non e' nel registro del mese perso", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+  report_due_write(
+    cartella, "2026-10", c(referente, bruno, report_it_key()),
+    "2026-11-01 07:30"
+  )
+  # Bruno and IT have their reports of October; the referent has not.
+  for (chi in c(bruno, report_it_key())) {
+    report_ledger_add(
+      cartella, "2026-10", report_ledger_read(cartella, "2026-10"),
+      list(destinatario = chi, at = "2026-11-01 07:30")
+    )
+  }
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta, ora = "2026-12-01 06:30")
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  in_ritardo <- Filter(function(m) grepl("^In ritardo", m[["subject"]]), mail)
+  expect_equal(vapply(in_ritardo, `[[`, "", "to"), referente)
+  expect_equal(esito[["recuperati"]][["destinatario"]], referente)
+  invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
+  expect_equal(
+    vapply(invii, `[[`, "", "destinatario"),
+    c(bruno, report_it_key(), referente)
+  )
+  expect_equal(esito[["mesi_persi"]], character())
+})
+
+
+test_that("un registro non scrivibile ferma il recupero, senza perdite", {
+  # eval
+  cartella <- withr::local_tempdir()
+  doppie()
+  bruno <- "bruno.fittizio@ubep.unipd.it"
+  report_due_write(
+    cartella, "2026-10", c(referente, bruno, report_it_key()),
+    "2026-11-01 07:30"
+  )
+  report_ledger_add(
+    cartella, "2026-10", report_ledger_read(cartella, "2026-10"),
+    list(destinatario = report_it_key(), at = "2026-11-01 07:30")
+  )
+  # The ledger of October cannot be written; November's can.
+  vero <- report_ledger_add
+  testthat::local_mocked_bindings(
+    report_ledger_add = function(dir, month, ledger, entry) {
+      if (month == "2026-10") {
+        return(list(
+          ok = FALSE, errors = "RAPPORTO_INVII_NON_SCRITTI", ledger = ledger
+        ))
+      }
+      vero(dir, month, ledger, entry)
+    }
+  )
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta, ora = "2026-12-01 06:30")
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  in_ritardo <- Filter(function(m) grepl("^In ritardo", m[["subject"]]), mail)
+  # The first left, and the write failed: the second is not tried.
+  expect_equal(vapply(in_ritardo, `[[`, "", "to"), referente)
+  expect_equal(esito[["recuperati"]][["destinatario"]], c(referente, bruno))
+  expect_equal(esito[["recuperati"]][["esito"]], c("mandato", "fallito"))
+  expect_true("RAPPORTO_INVII_NON_SCRITTI" %in% record[["errori"]])
+  expect_equal(esito[["mesi_persi"]], "2026-10")
+  expect_true(record[["in_ritardo"]])
+  expect_equal(record[["falliti"]], 1L)
+  # November went on: the referent's and IT's reports left and are on record.
+  expect_equal(record[["mandati"]], 3L)
+  # The ledger of October is as it was, so the referent's late report is
+  # sent again tomorrow: a duplicate accepted, never a report lost.
+  invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
+  expect_equal(vapply(invii, `[[`, "", "destinatario"), report_it_key())
 })
 
 

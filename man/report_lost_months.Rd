@@ -10,7 +10,9 @@ report_lost_months(dir, month)
 \item{dir}{The job's state directory.}
 
 \item{month}{The month the run covers: the months checked are those from
-\code{report_first_month()} up to it, excluded.}
+\code{report_first_month()}, or from the oldest month the directory holds a
+ledger or a list of, whichever is later, up to it, excluded. A directory
+with none recovers nothing.}
 }
 \value{
 A list with \code{ok}, false when a ledger or a list did not read;

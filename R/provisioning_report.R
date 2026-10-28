@@ -2655,7 +2655,9 @@ report_first_month <- function() {
 #'
 #' @param dir The job's state directory.
 #' @param month The month the run covers: the months checked are those from
-#'   `report_first_month()` up to it, excluded.
+#'   `report_first_month()`, or from the oldest month the directory holds a
+#'   ledger or a list of, whichever is later, up to it, excluded. A directory
+#'   with none recovers nothing.
 #'
 #' @return A list with `ok`, false when a ledger or a list did not read;
 #'   `errors`, `RAPPORTO_INVII_ILLEGGIBILI` and `RAPPORTO_DOVUTI_ILLEGGIBILI`;
@@ -2670,8 +2672,21 @@ report_lost_months <- function(dir, month) {
     is.character(month), length(month) == 1L
   )
 
+  # Not before the oldest month the directory holds a file of: a directory
+  # lost or made again has nothing to recover, and would otherwise send a
+  # late report for every month since the first. A month missing between two
+  # that have files is still recovered. A redirected run's files do not count.
+  files <- if (dir.exists(dir)) {
+    list.files(dir, pattern = "^[0-9]{4}-[0-9]{2}([.]dovuti)?[.]json$")
+  } else {
+    character()
+  }
+  if (length(files) == 0L) {
+    return(list(ok = TRUE, errors = character(), mesi = list()))
+  }
+
   candidates <- character()
-  candidate <- report_first_month()
+  candidate <- max(report_first_month(), min(substr(files, 1L, 7L)))
   while (candidate < month) {
     candidates <- c(candidates, candidate)
     candidate <- report_shift_month(candidate, 1L)
@@ -2711,7 +2726,9 @@ report_lost_months <- function(dir, month) {
 #'   `mese`, `ledger`, `pendenti` (who has not received it) and `rapporti`
 #'   (their messages, by name).
 #' @param mailer,copy_to As in `provisioning_report()`; IT is in copy.
-#' @param complete Whether the run read whole and may send.
+#' @param complete Whether the run read whole and the ledger of the month it
+#'   covers read too. Without it nothing leaves, the reports count as failed,
+#'   and the late ones are tried again on the next run.
 #' @param dir The job's state directory.
 #' @param at When the run read, `"%Y-%m-%d %H:%M"` in Rome.
 #'

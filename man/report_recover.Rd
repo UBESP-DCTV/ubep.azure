@@ -13,7 +13,9 @@ report_recover(batch, mailer, complete, copy_to, dir, at)
 
 \item{mailer, copy_to}{As in \code{provisioning_report()}; IT is in copy.}
 
-\item{complete}{Whether the run read whole and may send.}
+\item{complete}{Whether the run read whole and the ledger of the month it
+covers read too. Without it nothing leaves, the reports count as failed,
+and the late ones are tried again on the next run.}
 
 \item{dir}{The job's state directory.}
 
