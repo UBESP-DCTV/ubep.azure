@@ -1995,9 +1995,11 @@ riga del corpo ripete la forma: `TUTTO IN ORDINE` oppure
 dopo i due punti, perché subito prima di un elenco numerato si
 leggerebbe come il punto 2. Le voci vengono in quest’ordine: 1. senza
 primo accesso al server, 2. senza accessi da più di un anno, 3.
-scadenze, poi gli accessi attivati. Nella forma «tutto in ordine» la 1 e
-la 2 dicono «nessuna» e «nessuno», la 3 e gli attivati compaiono se ci
-sono. Né le scadenze né gli attivati contano in N: sono per
+scadenze, poi gli accessi attivati. Nella forma «tutto in ordine» la 1
+dice «nessuna»; la 2 dice «nessuno» oppure, con nessuno elencato, porta
+solo la riga delle già segnalate o quella dei server non controllati; la
+3 compare se c’è qualcosa, gli attivati sempre, con «nessuno» se non ce
+ne sono. Né le scadenze né gli attivati contano in N: sono per
 informazione. Italiano sopra, inglese sotto, IT in copia all’indirizzo
 di `UBEP_POSTA_COPIA`.
 
@@ -2195,9 +2197,11 @@ una riga di conteggio («già segnalate nei mesi scorsi e ancora senza
 accessi»), perché nominare ogni mese le stesse persone farebbe del
 rapporto un elenco. Il registro degli invii ricorda anche queste coppie.
 **Un server non letto non dà mai «nessuno»**: la voce dice «non
-controllato» per le sue coppie candidate e il server va a IT. Con il
-rapporto che parte a ottobre 2026, nessuna riga può entrare prima di
-ottobre 2027. La voce ha, come la prima, un sottotitolo e un «che cosa
+controllato» per le sue coppie candidate e il server va a IT. L’anno si
+conta dalla prima esecuzione della riga da parte del canale, o dalla
+nascita dell’account se è più recente: con il canale che scrive dal 15
+agosto 2026, nessuna coppia può entrare prima della seconda metà di
+agosto 2027. La voce ha, come la prima, un sottotitolo e un «che cosa
 fare».
 
 ### Le scadenze del mese

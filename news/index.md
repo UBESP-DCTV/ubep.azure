@@ -95,10 +95,11 @@ checked. Both are now read from the server itself.
   threshold; the months after, a line counts those already reported and
   still without access. A server not read leaves its pairs “not
   checked”, the line says so, and IT hears of it: an all-clear that
-  covered an item nobody measured would say something false. Since the
-  report starts in October 2026, no line can appear before October
-
-  2027. The item has a subtitle and a “what to do”, like the first.
+  covered an item nobody measured would say something false. The year
+  counts from the channel’s first execution of the row, or from the
+  birth of the account if later: since the channel writes from 15 August
+  2026, no pair can appear before the second half of August 2027. The
+  item has a subtitle and a “what to do”, like the first.
 
 - **A new item, “expiring this month”, for information.** The active
   applied rows whose `expiration` falls after the day of the reading and
@@ -116,9 +117,12 @@ checked. Both are now read from the server itself.
   the first point of the list that follows. N counts the distinct people
   spelled out in the first two items. The order of the items is: no
   first sign-in, no access in a year, expiring, then the accesses
-  granted. In the all-clear form the first two say “none”, and the other
-  two show up when there is something. The mail to IT has the same
-  subject and first line (`Da guardare (N): rapporto REDCap per IT`).
+  granted. In the all-clear form the first says “none”; the second says
+  “none” too or, with nobody spelled out, carries only the line of those
+  already reported or that of the servers not checked; the expiring
+  items show up when there is something, the accesses granted always,
+  with “none” when there are none. The mail to IT has the same subject
+  and first line (`Da guardare (N): rapporto REDCap per IT`).
 
 - **A server not read does not stop anything, and goes to IT.** It is
   not in `errori`, does not touch `letture_complete`, and the report
@@ -188,8 +192,8 @@ checked. Both are now read from the server itself.
   `RAPPORTO_INVII_ILLEGGIBILI`, and does not read as empty: a ledger
   read wrong would send doubles or lose `segnalata anche il`. That code
   can now come from the ledger of a month before the covered one too,
-  read to recover it, and the send of the month is blocked just the
-  same.
+  read to recover it: that month is left out, and the send of the
+  covered month goes on.
 
 - **The record keeps its columns and changes some values.** No new
   column, since one would need the collection rule updated before the
