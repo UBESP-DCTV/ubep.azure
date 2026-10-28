@@ -54,7 +54,13 @@ class AccountReader
             $rows[] = $row;
         }
 
-        return self::shape($usernames, $rows, date_default_timezone_get());
+        // A date the database holds but PHP cannot read is not "never": it
+        // fails the read like a query that did not answer.
+        try {
+            return self::shape($usernames, $rows, date_default_timezone_get());
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     /**
@@ -83,6 +89,8 @@ class AccountReader
      * @param string $timezone  zone the server wrote the dates in
      * @return array one entry per distinct name: username (as asked), exists,
      *               and the five dates as UTC 'Y-m-d\TH:i:s\Z' or null
+     * @throws \UnexpectedValueException when a date is neither empty, nor
+     *                                   zero, nor readable as a date
      */
     public static function shape(array $usernames, array $rows, string $timezone): array
     {
@@ -130,7 +138,8 @@ class AccountReader
     /**
      * Null, an empty string and MySQL's zero date are the same absence: a
      * zero date converted would become a date in year 0 or a PHP error printed
-     * ahead of the JSON.
+     * ahead of the JSON. Anything else that is not a date is not an absence,
+     * and is refused instead of being read as one.
      */
     private static function toUtc($value, \DateTimeZone $zone): ?string
     {
@@ -145,7 +154,11 @@ class AccountReader
         try {
             $date = new \DateTime($value, $zone);
         } catch (\Exception $e) {
-            return null;
+            throw new \UnexpectedValueException(
+                'unreadable date in redcap_user_information',
+                0,
+                $e
+            );
         }
 
         return $date->setTimezone(new \DateTimeZone('UTC'))

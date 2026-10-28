@@ -77,3 +77,18 @@ ubep_assert_true(
         && strpos($sql, 'user_lastactivity') !== false,
     'la select legge le cinque colonne di redcap_user_information'
 );
+
+// A date that is not empty, not zero and not a date is not "never": reading it
+// as null would be a false "never entered". shape() refuses it, and read()
+// turns the refusal into null, like a failed query.
+$guasta = false;
+try {
+    AccountReader::shape(
+        ['carla.inventata@ubep.unipd.it'],
+        [array_merge($righe[0], ['user_firstvisit' => 'non una data'])],
+        'UTC'
+    );
+} catch (\Exception $e) {
+    $guasta = true;
+}
+ubep_assert_true($guasta, 'una data illeggibile non vale null: shape() lancia');

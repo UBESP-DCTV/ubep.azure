@@ -1,5 +1,5 @@
 <?php
-// The provisioning channel endpoint: state, apply and revoke.
+// The provisioning channel endpoint: state, accounts, apply and revoke.
 
 require_once __DIR__ . '/lib/VersionGate.php';
 require_once __DIR__ . '/lib/Surface.php';
@@ -10,7 +10,9 @@ require_once __DIR__ . '/lib/FieldNames.php';
 require_once __DIR__ . '/lib/TestedSurfaces.php';
 require_once __DIR__ . '/lib/Planner.php';
 require_once __DIR__ . '/lib/Applier.php';
+require_once __DIR__ . '/lib/AccountReader.php';
 
+use UbepProvisioning\AccountReader;
 use UbepProvisioning\Allowlist;
 use UbepProvisioning\Applier;
 use UbepProvisioning\Auth;
@@ -20,7 +22,7 @@ use UbepProvisioning\Surface;
 use UbepProvisioning\TestedSurfaces;
 use UbepProvisioning\VersionGate;
 
-const UBEP_CONTRACT_VERSION = 3;
+const UBEP_CONTRACT_VERSION = 4;
 const UBEP_FLOOR_MAJOR = 17;
 const UBEP_CEILING_MAJOR = 17;
 
@@ -176,6 +178,59 @@ if ($gate === VersionGate::BELOW) {
             . ' is below the module floor ' . UBEP_FLOOR_MAJOR,
     ];
     echo json_encode($response, JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// The accounts operation reads a list of usernames and nothing else: no
+// project_id, no plan, no write. It sits before the requests loop below on
+// purpose, because that loop reports a request without a project_id as
+// malformed, and these have none. A list over the cap, or an entry without a
+// scalar username, is refused whole: answering for part of what was asked
+// would hand the caller a short list it could read as "the rest do not exist".
+// A read that fails answers 500 with no `accounts` key at all, never an empty
+// list: an empty list would say that nobody exists.
+if ($operation === 'accounts') {
+    $asked = $body['requests'] ?? [];
+    $usernames = [];
+    $acceptable = is_array($asked) && count($asked) <= AccountReader::LIMIT;
+    if ($acceptable) {
+        foreach ($asked as $request) {
+            if (
+                !is_array($request)
+                || !isset($request['username'])
+                || !is_scalar($request['username'])
+            ) {
+                $acceptable = false;
+                break;
+            }
+            $usernames[] = (string) $request['username'];
+        }
+    }
+    if (!$acceptable) {
+        http_response_code(400);
+        $response['errors'][] = [
+            'code' => 'INTERNO',
+            'message' => 'accounts takes a list of at most '
+                . AccountReader::LIMIT . ' entries, each with a scalar username',
+        ];
+        echo json_encode($response, JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $accounts = AccountReader::read($usernames);
+    if ($accounts === null) {
+        http_response_code(500);
+        $response['errors'][] = [
+            'code' => 'INTERNO',
+            'message' => 'the account dates could not be read',
+        ];
+        echo json_encode($response, JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $response['accounts'] = $accounts;
+    $response['summary'] = ['letti' => count($accounts)];
+    echo json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
 

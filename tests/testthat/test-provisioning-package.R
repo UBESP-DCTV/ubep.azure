@@ -21,6 +21,24 @@ test_that("build_redcap_module produces an installable archive", {
   expect_true(
     paste0("ubep_provisioning_v", version, "/lib/VersionGate.php") %in% entries
   )
+  expect_true(
+    paste0("ubep_provisioning_v", version, "/lib/AccountReader.php") %in% entries
+  )
+})
+
+
+test_that("the archive ships the accounts operation at contract 4", {
+  # eval
+  out_dir <- withr::local_tempdir()
+  zip_path <- build_redcap_module(out_dir)
+  version <- as.character(utils::packageVersion("ubep.azure"))
+  utils::unzip(zip_path, exdir = out_dir)
+  module_dir <- file.path(out_dir, paste0("ubep_provisioning_v", version))
+  api <- readr::read_file(file.path(module_dir, "api.php"))
+
+  # test
+  expect_match(api, "const UBEP_CONTRACT_VERSION = 4;", fixed = TRUE)
+  expect_match(api, "$operation === 'accounts'", fixed = TRUE)
 })
 
 

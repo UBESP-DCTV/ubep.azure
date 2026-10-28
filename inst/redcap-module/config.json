@@ -1,7 +1,7 @@
 {
   "name": "UBEP provisioning",
   "namespace": "UBEP\\Provisioning",
-  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. Nessun elenco di progetti confina la scrittura. A trattenerla sono: il segreto condiviso e l'allowlist di IP qui sotto, il rifiuto sotto la versione minima di REDCap dichiarata in 'compatibility', la simulazione sopra la versione collaudata, la simulazione quando il chiamante non dichiara un'impronta di superficie corrispondente a quella dell'istanza, il rifiuto di una richiesta che tocchi piu' di un progetto, e il fatto che si scrive solo su un 'dry_run' esplicitamente falso.",
+  "description": "Canale di autorizzazione: legge, riconcilia e assegna i diritti di progetto del provisioning UBEP. Legge anche, in sola lettura, le date d'accesso degli account locali. Nessun elenco di progetti confina la scrittura. A trattenerla sono: il segreto condiviso e l'allowlist di IP qui sotto, il rifiuto sotto la versione minima di REDCap dichiarata in 'compatibility', la simulazione sopra la versione collaudata, la simulazione quando il chiamante non dichiara un'impronta di superficie corrispondente a quella dell'istanza, il rifiuto di una richiesta che tocchi piu' di un progetto, e il fatto che si scrive solo su un 'dry_run' esplicitamente falso.",
   "authors": [
     {
       "name": "Corrado Lanera",
