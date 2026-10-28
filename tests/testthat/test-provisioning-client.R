@@ -657,7 +657,7 @@ test_that("accounts chiede solo nomi, in lettura, e legge la risposta al 4", {
 })
 
 
-test_that("oltre 500 nomi accounts si spezza, e un pezzo fallito vale per tutto", {
+test_that("oltre 500 nomi si spezza, e un pezzo fallito vale per tutto", {
   # eval
   nomi <- sprintf("persona%03d@ubep.unipd.it", 1:501)
   chiamate <- list()
