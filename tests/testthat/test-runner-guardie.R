@@ -490,20 +490,25 @@ raggiunte <- function(start, env = asNamespace("ubep.azure"),
 }
 
 
-# The three doors through which the monthly report reaches the outside. The
+# The four doors through which the monthly report reaches the outside. The
 # guard does not follow them: it checks them on their own, and forbids every
-# other way out.
+# other way out. The fourth, `module_accounts()`, is the only way the report
+# speaks to an instance's module, and only to read.
 lettori_del_rapporto <- function() {
-  c("register_records", "register_log", "directory_users")
+  c(
+    "register_records", "register_log", "directory_users", "module_accounts"
+  )
 }
 
 
 # What breaks the rule that the report reads and sends mail. A list of write
 # functions alone is not enough: `register_call()` is the door every reading
-# of the register goes through, and with `action = "import"` it writes. So
-# the report may reach the outside only through its three readers, and is
-# refused `register_call()` and any request of its own; the readers are
-# checked to ask for nothing that writes.
+# of the register goes through, and with `action = "import"` it writes; and
+# `module_call()` is the door every request to an instance goes through, and
+# with `dry_run = FALSE` it writes. So the report may reach the outside only
+# through its four readers, and is refused `register_call()`, `module_call()`,
+# `module_state()` and any request of its own; the readers are checked to ask
+# for nothing that writes.
 violazioni_rapporto <- function(env = asNamespace("ubep.azure")) {
   lettori <- lettori_del_rapporto()
   reached <- raggiunte("provisioning_report", env, fino_a = lettori)
@@ -518,12 +523,18 @@ violazioni_rapporto <- function(env = asNamespace("ubep.azure")) {
   )]
   writing_readers <- lettori[vapply(
     lettori,
-    function(name) grepl('"(import|delete|rename)"', body_of(name)),
+    function(name) {
+      grepl('"(import|delete|rename|apply|revoke)"', body_of(name)) ||
+        grepl("dry_run = FALSE", body_of(name), fixed = TRUE)
+    },
     logical(1)
   )]
 
   unique(c(
-    intersect(reached, c(scritture(), "register_call")),
+    intersect(
+      reached,
+      c(scritture(), "register_call", "module_call", "module_state")
+    ),
     requests, writing_readers
   ))
 }
@@ -625,6 +636,37 @@ test_that("the reach of the report guard follows calls through helpers", {
   expect_setequal(
     raggiunte("rapporto", finto), c("rapporto", "aiuto", "module_apply")
   )
+})
+
+
+test_that("il rapporto parla al modulo solo con accounts, in lettura", {
+  # eval
+  corpo <- paste(deparse(body(module_accounts)), collapse = " ")
+
+  # test
+  expect_match(corpo, '"accounts"', fixed = TRUE)
+  expect_match(corpo, "dry_run = TRUE", fixed = TRUE)
+  expect_true("module_accounts" %in% lettori_del_rapporto())
+})
+
+
+test_that("la guardia vede una scrittura dalla porta di accounts", {
+  # eval
+  per_la_porta <- namespace_con(
+    "provisioning_report", quote(module_call("h", "s", "state"))
+  )
+  per_lo_stato <- namespace_con(
+    "provisioning_report", quote(module_state("h", "s"))
+  )
+  lettore <- namespace_con(
+    "module_accounts",
+    quote(module_call(server, secret, "apply", dry_run = FALSE))
+  )
+
+  # test
+  expect_true("module_call" %in% violazioni_rapporto(per_la_porta))
+  expect_true("module_state" %in% violazioni_rapporto(per_lo_stato))
+  expect_true("module_accounts" %in% violazioni_rapporto(lettore))
 })
 
 
