@@ -1054,9 +1054,12 @@ raccoglitore <- function(riesce = TRUE) {
 colonne_cambiate <- c("record_id", "outcome", "outcome_detail", "applied_as")
 
 
+# riga_di_prova() sta in helper-finti.R, che il linter non legge.
+# nolint start: object_usage_linter.
 registro_di_prova <- function(...) {
   as.data.frame(riga_di_prova(...), stringsAsFactors = FALSE)
 }
+# nolint end
 
 
 test_that("l'esito va a chi ha compilato, non alla persona nominata", {
