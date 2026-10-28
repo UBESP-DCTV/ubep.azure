@@ -34,7 +34,7 @@ whole. A day that cannot read
 judges the month on the last whole reading, so a reading that fails after
 the month was sent does not make it late; with no whole reading on record
 nothing is due, and the month is not called late on a guess.
-\code{in_ritardo} is \code{report_late()}: from the 2nd with the month not complete,
+\code{in_ritardo} is \code{report_late()}: from day 2 with the month not complete,
 or while a month lost still misses a report (\code{mesi_persi}).
 
 \code{istanze_non_lette} counts the servers the report asked and could not read.

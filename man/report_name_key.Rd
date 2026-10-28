@@ -10,7 +10,7 @@ report_name_key(x)
 \item{x}{Character vector of names.}
 }
 \value{
-\code{x} trimmed and lowercased.
+\code{x} trimmed and in lower case.
 }
 \description{
 A REDCap username and a UPN name the same account in two systems that do

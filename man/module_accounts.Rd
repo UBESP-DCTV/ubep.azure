@@ -48,8 +48,8 @@ before the status, and the answer is \code{TRASPORTO_CONTRATTO_DISALLINEATO}.
 The names go in chunks of \code{\link[=module_accounts_limit]{module_accounts_limit()}}, because a longer
 request is refused by the module. The first chunk that fails is the answer
 for the whole call: a partial list would read as people who have never
-logged in. Names are de-duplicated ignoring case and surrounding blanks, the
-same comparison the module makes, so the same person is not asked twice.
+logged in. A name repeated is asked once, ignoring case and surrounding
+blanks, the same comparison the module makes.
 An empty set of names makes no call at all: there is nothing to ask, and a
 request with no names is not a read of the instance.
 }

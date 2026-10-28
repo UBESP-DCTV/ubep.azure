@@ -5,7 +5,7 @@
 #'
 #' @param x Character vector of names.
 #'
-#' @return `x` trimmed and lowercased.
+#' @return `x` trimmed and in lower case.
 #'
 #' @keywords internal
 report_name_key <- function(x) {

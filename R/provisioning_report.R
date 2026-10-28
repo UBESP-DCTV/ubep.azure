@@ -3389,7 +3389,7 @@ report_late <- function(giorno, completo, forzato, persi = 0L) {
 #' judges the month on the last whole reading, so a reading that fails after
 #' the month was sent does not make it late; with no whole reading on record
 #' nothing is due, and the month is not called late on a guess.
-#' `in_ritardo` is `report_late()`: from the 2nd with the month not complete,
+#' `in_ritardo` is `report_late()`: from day 2 with the month not complete,
 #' or while a month lost still misses a report (`mesi_persi`).
 #'
 #' `istanze_non_lette` counts the servers the report asked and could not read.
