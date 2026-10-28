@@ -13,6 +13,17 @@ report_name_key <- function(x) {
 }
 
 
+#' The date keys an `accounts` entry must carry
+#'
+#' @return The names of the three dates the report reads, as the module
+#'   writes them.
+#'
+#' @keywords internal
+report_account_keys <- function() {
+  c("user_firstvisit", "user_lastlogin", "user_lastactivity")
+}
+
+
 #' Read the date of one `accounts` entry
 #'
 #' @param value A string as the module writes it, `NULL` or `""`.
@@ -45,9 +56,10 @@ report_account_time <- function(value) {
 #' The answer is a reading only if it speaks about everyone who was asked.
 #' A missing name read as it stands would be a person who never entered, so
 #' an answer that leaves one out, or that is not shaped as the module shapes
-#' it, is refused whole: the caller treats the server as not read. A date that
-#' is there but does not read refuses the answer too, because it is not the
-#' same as no date.
+#' it, is refused whole: the caller treats the server as not read. An entry
+#' that lacks one of the date keys, or has a date that is there but does not
+#' read, refuses the answer too, because neither is the same as no date (a key
+#' with a null value).
 #'
 #' Names are compared without regard to case or to spaces at the edges, and
 #' the frame carries them that way.
@@ -77,6 +89,11 @@ report_accounts_frame <- function(payload, asked) {
       return(NULL)
     }
     if (!is.logical(exists) || length(exists) != 1L || is.na(exists)) {
+      return(NULL)
+    }
+    # A key that is not there is not a date that is null: it is an answer
+    # that does not have the module's shape, and would read as never.
+    if (!all(report_account_keys() %in% names(entry))) {
       return(NULL)
     }
 

@@ -20,9 +20,10 @@ absent date; \code{NULL} when the answer is not a reading.
 The answer is a reading only if it speaks about everyone who was asked.
 A missing name read as it stands would be a person who never entered, so
 an answer that leaves one out, or that is not shaped as the module shapes
-it, is refused whole: the caller treats the server as not read. A date that
-is there but does not read refuses the answer too, because it is not the
-same as no date.
+it, is refused whole: the caller treats the server as not read. An entry
+that lacks one of the date keys, or has a date that is there but does not
+read, refuses the answer too, because neither is the same as no date (a key
+with a null value).
 }
 \details{
 Names are compared without regard to case or to spaces at the edges, and

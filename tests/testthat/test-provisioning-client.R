@@ -589,7 +589,8 @@ test_that("il canale lavora con moduli al 3 e al 4 mescolati", {
 risposta_accounts <- function(nomi, contratto = 4L) {
   voci <- vapply(nomi, function(nome) {
     sprintf(
-      '{"username": "%s", "exists": true, "first_visit": null}', nome
+      '{"username": "%s", "exists": true, "user_firstvisit": null,
+      "user_lastlogin": null, "user_lastactivity": null}', nome
     )
   }, character(1))
   sprintf(

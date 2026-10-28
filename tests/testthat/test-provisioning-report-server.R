@@ -130,6 +130,47 @@ test_that("a malformed answer is not a reading", {
 })
 
 
+# The payload of a body as `module_call()` reads it, through the same parser.
+payload_di <- function(voci) {
+  body <- sprintf(
+    '{"contract_version": 4, "dry_run": true, "accounts": [%s],
+    "errors": []}',
+    paste(voci, collapse = ", ")
+  )
+  parse_module_response(body, 200L, accepted = 4L)[["payload"]]
+}
+
+test_that("a missing date key is a malformed entry, a null one is not", {
+  # eval
+  senza_chiave <- payload_di(
+    '{"username": "carla.inventata@ubep.unipd.it", "exists": true,
+    "user_lastlogin": null, "user_lastactivity": null}'
+  )
+  senza_altre <- payload_di(
+    '{"username": "carla.inventata@ubep.unipd.it", "exists": true,
+    "user_firstvisit": "2026-10-20T07:15:00Z"}'
+  )
+  nulle <- payload_di(
+    '{"username": "carla.inventata@ubep.unipd.it", "exists": true,
+    "user_firstvisit": null, "user_lastlogin": null,
+    "user_lastactivity": null}'
+  )
+  vuote <- payload_di(
+    '{"username": "carla.inventata@ubep.unipd.it", "exists": true,
+    "user_firstvisit": "", "user_lastlogin": "", "user_lastactivity": ""}'
+  )
+  conti <- report_accounts_frame(nulle, carla)
+
+  # test
+  expect_null(report_accounts_frame(senza_chiave, carla))
+  expect_null(report_accounts_frame(senza_altre, carla))
+  expect_s3_class(conti, "data.frame")
+  expect_true(is.na(conti[["firstvisit"]]))
+  expect_equal(report_server_access(conti, carla)[["stato"]], "mai_entrata")
+  expect_s3_class(report_accounts_frame(vuote, carla), "data.frame")
+})
+
+
 test_that("no one asked, nothing to miss", {
   # eval
   conti <- report_accounts_frame(list(accounts = list()), character())
