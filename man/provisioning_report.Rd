@@ -15,7 +15,9 @@ provisioning_report(
   mailer = NULL,
   redirect_to = NULL,
   copy_to = NULL,
-  channel_account = NULL
+  channel_account = NULL,
+  hosts = character(),
+  secrets = character()
 )
 }
 \arguments{
@@ -49,10 +51,15 @@ account wrote in the channel's fields is ignored; with \code{NULL}, the
 default, every row belongs to its creator, and the channel is whoever
 wrote its fields. The runner reads it from \code{UBEP_CANALE_UTENTE}, a list
 separated by commas, which it requires.}
+
+\item{hosts, secrets}{Named character vectors, server name to host and to
+the secret of its module. A server missing from either, or with an \code{NA}
+secret, is not read.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus
-\code{rapporti}, one row per report due, for whoever reads a single run.
+\code{rapporti}, one row per report due, for whoever reads a single run, and
+\code{server}, what \code{report_server_reads()} answered for each server asked.
 }
 \description{
 \strong{It reads and sends mail, and nothing else.} It does not write in the
@@ -62,6 +69,13 @@ round makes, the tenant with the round's sweep. That is what lets it run
 outside the channel's path, as a job of its own.
 }
 \details{
+It also asks the instances, \code{accounts} only, through \code{report_server_reads()}:
+once the register and the directory have read whole, each server the
+register has rows on is asked for the people of those rows, the rows stopped
+on a disabled account included. A server that is not read stops nothing
+and is not an error: it is counted in \code{istanze_non_lette}, and the report
+goes on without what that server would have said.
+
 The job runs every day, because an alarm on logs looks back two days at
 most and a monthly job cannot be watched by the absence of a record. Every
 day it reads, computes and leaves a record; from the 1st on it sends the

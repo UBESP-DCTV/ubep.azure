@@ -567,7 +567,7 @@ test_that("the monthly report reads and sends mail, and nothing else", {
   # the post have to be in what it reached.
   expect_true(all(
     c("register_records", "register_log", "directory_users",
-      "report_deliver", "report_ledger_add") %in% reached
+      "report_deliver", "report_ledger_add", "module_accounts") %in% reached
   ))
   expect_equal(
     violazioni_rapporto(), character(),
@@ -693,3 +693,4 @@ test_that("the report's runner names no write and not the round", {
     )
   )
 })
+

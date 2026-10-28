@@ -1183,16 +1183,36 @@ scenario <- function() {
              record = "43"),
       evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'",
              record = "41")
+    ),
+    # What `edc10` answers to `accounts`: Carla is not on it, Dario has
+    # signed in. `edc12` has no row in the register and is never asked.
+    conti = list(
+      "edc10.example.org" = list(
+        list(
+          username = "carla.inventata@ubep.unipd.it", exists = FALSE,
+          user_firstvisit = NULL, user_lastlogin = NULL,
+          user_lastactivity = NULL
+        ),
+        list(
+          username = "dario.ipotetico@ubep.unipd.it", exists = TRUE,
+          user_firstvisit = "2026-10-09T08:00:00Z",
+          user_lastlogin = "2026-10-20T09:00:00Z",
+          user_lastactivity = "2026-10-20T09:30:00Z"
+        )
+      )
     )
   )
 }
 
-# Doubles for the three readings. `letto` and `log_letto` say whether the
-# register and a row's log answer; `chiamate` counts the questions asked.
+# Doubles for the four readings. `letto` and `log_letto` say whether the
+# register and a row's log answer; `chiamate` counts the questions asked, the
+# log's in `righe` and the servers' in `server`, host to the names asked. A
+# scenario without `conti` is a module that does not read, as at contract 3.
 doppie <- function(dati = scenario(), letto = TRUE, log_letto = TRUE,
                    rubrica = rubrica_mensile(), env = parent.frame()) {
   chiamate <- new.env()
   chiamate[["righe"]] <- character()
+  chiamate[["server"]] <- list()
   guasto <- list(
     ok = FALSE, errors = "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE",
     payload = NULL
@@ -1227,6 +1247,20 @@ doppie <- function(dati = scenario(), letto = TRUE, log_letto = TRUE,
     directory_users = function(token, base_url) {
       list(ok = TRUE, errors = character(), payload = list(), users = rubrica)
     },
+    module_accounts = function(server, secret, usernames, ...) {
+      chiamate[["server"]][[server]] <- usernames
+      if (is.null(dati[["conti"]])) {
+        return(list(
+          ok = FALSE, errors = "TRASPORTO_CONTRATTO_DISALLINEATO",
+          payload = NULL, gate = NA_character_
+        ))
+      }
+      list(
+        ok = TRUE, errors = character(),
+        payload = list(accounts = dati[["conti"]][[server]]),
+        gate = "collaudata"
+      )
+    },
     .env = env
   )
   chiamate
@@ -1252,12 +1286,16 @@ posta_finta <- function(rifiuta = character()) {
 
 it_prova <- "it-prova@example.org"
 
-esegui <- function(cartella, posta = NULL, ora = "2026-11-01 06:30", ...) {
+esegui <- function(cartella, posta = NULL, ora = "2026-11-01 06:30",
+                   hosts = c(edc10 = "edc10.example.org",
+                             edc12 = "edc12.example.org"),
+                   secrets = c(edc10 = "s3cret", edc12 = "s3cret"), ...) {
   provisioning_report(
     register_url = "registro.example.org", register_token = "gettone",
     graph_token = "gettone", graph_url = "graph.example.org/v1.0",
     ledger_dir = cartella, now = as.POSIXct(ora, tz = "UTC"),
-    mailer = posta[["mailer"]], copy_to = it_prova, ...
+    mailer = posta[["mailer"]], copy_to = it_prova,
+    hosts = hosts, secrets = secrets, ...
   )
 }
 
@@ -1319,6 +1357,115 @@ test_that("the report asks the log of each active row once, and reads it", {
   # still dated each row by its own events: Dario's October row is news,
   # Carla's August one is not.
   expect_equal(esito[["voci_attivati"]], 1L)
+})
+
+
+test_that("il rapporto chiede accounts ai server con righe, per i soli nomi", {
+  # eval
+  chiamate <- doppie()
+
+  esito <- esegui(withr::local_tempdir())
+
+  # test
+  expect_equal(names(chiamate[["server"]]), "edc10.example.org")
+  expect_setequal(
+    chiamate[["server"]][["edc10.example.org"]],
+    c("carla.inventata@ubep.unipd.it", "dario.ipotetico@ubep.unipd.it")
+  )
+  expect_named(esito[["server"]], "edc10")
+  expect_true(esito[["server"]][["edc10"]][["letto"]])
+  expect_equal(esito[["istanze_non_lette"]], 0L)
+})
+
+
+test_that("un server non letto non e' un errore e non ferma l'invio", {
+  # eval
+  doppie()
+  posta <- posta_finta()
+
+  esito <- esegui(
+    withr::local_tempdir(), posta,
+    secrets = c(edc10 = NA, edc12 = "s3cret")
+  )
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  expect_equal(record[["istanze_non_lette"]], 1L)
+  expect_equal(record[["errori"]], character())
+  expect_gt(record[["mandati"]], 0L)
+  expect_true(esito[["letture_complete"]])
+  expect_equal(
+    esito[["server"]][["edc10"]][["motivo"]], "TRASPORTO_SEGRETO_NON_LEGGIBILE"
+  )
+})
+
+
+test_that("un modulo che non risponde e' un server non letto, non un errore", {
+  # eval
+  dati <- scenario()
+  dati[["conti"]] <- NULL
+  doppie(dati)
+  posta <- posta_finta()
+
+  record <- report_record(
+    esegui(withr::local_tempdir(), posta), posta = TRUE
+  )
+
+  # test
+  expect_equal(record[["istanze_non_lette"]], 1L)
+  expect_equal(record[["errori"]], character())
+  expect_gt(record[["mandati"]], 0L)
+})
+
+
+test_that("le righe ferme su account disattivato entrano fra i nomi chiesti", {
+  # eval
+  dati <- scenario()
+  dati[["registro"]] <- rbind(
+    dati[["registro"]],
+    registro_di(richiesta(
+      record_id = "44", server = "edc12", project_id = "9304",
+      username = "elena.supposta@ubep.unipd.it",
+      outcome = "transport_error",
+      outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO"
+    ))
+  )
+  dati[["conti"]][["edc12.example.org"]] <- list(list(
+    username = "elena.supposta@ubep.unipd.it", exists = TRUE,
+    user_firstvisit = "2026-09-01T08:00:00Z", user_lastlogin = NULL,
+    user_lastactivity = NULL
+  ))
+  chiamate <- doppie(dati)
+
+  esito <- esegui(withr::local_tempdir())
+
+  # test
+  expect_equal(
+    chiamate[["server"]][["edc12.example.org"]],
+    "elena.supposta@ubep.unipd.it"
+  )
+  expect_equal(esito[["istanze_non_lette"]], 0L)
+})
+
+
+test_that("revisione 5: una riga ferma si trova fra piu' codici", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "51", outcome = "transport_error",
+              outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO"),
+    richiesta(record_id = "52", outcome = "transport_error",
+              outcome_detail = paste0(
+                "TRASPORTO_ACCOUNT_DISATTIVATO,TRASPORTO_NON_RAGGIUNGIBILE"
+              )),
+    richiesta(record_id = "53", outcome = "transport_error",
+              outcome_detail = "TRASPORTO_NON_RAGGIUNGIBILE"),
+    richiesta(record_id = "54", request_status = "revoked",
+              outcome = "transport_error",
+              outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO")
+  )
+
+  # test
+  expect_equal(report_stopped_rows(registro)[["record_id"]], c("51", "52"))
 })
 
 
@@ -1606,7 +1753,7 @@ test_that("the record carries exactly the columns of its table, in order", {
     "mese_completo", "in_ritardo", "errori"
   ))
   expect_equal(record[["at"]], "2026-11-01 06:30")
-  # Phase 1 reads no instance and does not measure the third item.
+  # Every server is read, and the third item is not measured yet.
   expect_equal(record[["istanze_non_lette"]], 0L)
   expect_equal(record[["voci_senza_accessi"]], 0L)
   # `errori` stays an array with one code, as in the round's record.

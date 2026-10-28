@@ -562,6 +562,86 @@ report_rows <- function(register, creators, executions, period,
 }
 
 
+#' The rows stopped on a disabled account
+#'
+#' A row that is active and was stopped by the round because the account of its
+#' person is disabled: `transport_error` with `TRASPORTO_ACCOUNT_DISATTIVATO`
+#' among its codes. `outcome_detail` can carry more than one code, so the code
+#' is looked for inside the field and not compared with it. These rows are not
+#' in the report, but their people are among the names the report asks the
+#' servers for, so that IT can see them.
+#'
+#' @param register The register, as `register_records()` answers.
+#'
+#' @return The rows of `register` that are active and stopped on a disabled
+#'   account.
+#'
+#' @keywords internal
+report_stopped_rows <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  field <- function(name) {
+    value <- register[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(register)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  stopped <- field("request_status") == "active" &
+    field("outcome") == "transport_error" &
+    grepl(
+      "TRASPORTO_ACCOUNT_DISATTIVATO", field("outcome_detail"), fixed = TRUE
+    )
+
+  rows <- register[stopped, , drop = FALSE]
+  rownames(rows) <- NULL
+  rows
+}
+
+
+#' The names to ask each server
+#'
+#' For every server the register has rows on, the usernames of its active and
+#' applied rows and of the rows stopped on a disabled account
+#' (`report_stopped_rows()`). Blank servers and blank names are left out.
+#'
+#' @param register The register, as `register_records()` answers.
+#'
+#' @return A named list: server to the usernames to ask it, without
+#'   repetitions.
+#'
+#' @keywords internal
+report_server_asks <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  field <- function(data, name) {
+    value <- data[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(data)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  applied <- register[
+    field(register, "request_status") == "active" &
+      field(register, "outcome") == "applied", ,
+    drop = FALSE
+  ]
+  stopped <- report_stopped_rows(register)
+  server <- c(field(applied, "server"), field(stopped, "server"))
+  username <- c(field(applied, "username"), field(stopped, "username"))
+  keep <- nzchar(server) & nzchar(username)
+
+  asks <- split(username[keep], factor(server[keep], unique(server[keep])))
+  lapply(asks, unique)
+}
+
+
 #' Put each row in the report it belongs to
 #'
 #' A row belongs to **its owner**, as the log says, and not to
@@ -1820,6 +1900,13 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' round makes, the tenant with the round's sweep. That is what lets it run
 #' outside the channel's path, as a job of its own.
 #'
+#' It also asks the instances, `accounts` only, through `report_server_reads()`:
+#' once the register and the directory have read whole, each server the
+#' register has rows on is asked for the people of those rows, the rows stopped
+#' on a disabled account included. A server that is not read stops nothing
+#' and is not an error: it is counted in `istanze_non_lette`, and the report
+#' goes on without what that server would have said.
+#'
 #' The job runs every day, because an alarm on logs looks back two days at
 #' most and a monthly job cannot be watched by the absence of a record. Every
 #' day it reads, computes and leaves a record; from the 1st on it sends the
@@ -1892,9 +1979,13 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #'   default, every row belongs to its creator, and the channel is whoever
 #'   wrote its fields. The runner reads it from `UBEP_CANALE_UTENTE`, a list
 #'   separated by commas, which it requires.
+#' @param hosts,secrets Named character vectors, server name to host and to
+#'   the secret of its module. A server missing from either, or with an `NA`
+#'   secret, is not read.
 #'
 #' @return A list that `report_record()` turns into the record, plus
-#'   `rapporti`, one row per report due, for whoever reads a single run.
+#'   `rapporti`, one row per report due, for whoever reads a single run, and
+#'   `server`, what `report_server_reads()` answered for each server asked.
 #'
 #' @keywords internal
 provisioning_report <- function(register_url,
@@ -1907,13 +1998,16 @@ provisioning_report <- function(register_url,
                                 mailer = NULL,
                                 redirect_to = NULL,
                                 copy_to = NULL,
-                                channel_account = NULL) {
+                                channel_account = NULL,
+                                hosts = character(),
+                                secrets = character()) {
   stopifnot(
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
     is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
     is.null(mailer) || is.function(mailer),
-    channel_account_valid(channel_account)
+    channel_account_valid(channel_account),
+    is.character(hosts), is.character(secrets)
   )
 
   period <- report_month(now, month)
@@ -1967,6 +2061,8 @@ provisioning_report <- function(register_url,
 
   assembled <- list(referenti = list(), it = NULL, senza_creatore = 0L)
   logs_read <- TRUE
+  servers <- list()
+  unread_servers <- 0L
 
   if (register_read && directory_read) {
     register <- reading[["records"]]
@@ -2019,6 +2115,15 @@ provisioning_report <- function(register_url,
         errors <- c(errors, answer[["errors"]])
       }
     }
+
+    # The servers are asked after the register and the directory have read
+    # whole, for the people of the rows it has on each. A server that is not
+    # read is not an error and is not a reading that failed: it is counted,
+    # and the pairs of that server fall back on what the directory says.
+    servers <- report_server_reads(
+      report_server_asks(register), hosts, secrets
+    )
+    unread_servers <- sum(!vapply(servers, `[[`, NA, "letto"))
 
     rows <- report_rows(
       register, owners, executions, period, since, born,
@@ -2132,6 +2237,8 @@ provisioning_report <- function(register_url,
     registro_letto = register_read,
     directory_letta = directory_read,
     letture_complete = complete,
+    server = servers,
+    istanze_non_lette = as.integer(unread_servers),
     posta_dirottata = !is.null(redirect_to),
     dovuti = due,
     gia = already,
@@ -2199,8 +2306,9 @@ report_late <- function(giorno, completo, forzato) {
 #' nothing is due, and the month is not called late on a guess.
 #' `in_ritardo` is `report_late()`.
 #'
-#' Phase 1 asks no instance and does not measure the year without access, so
-#' `istanze_non_lette` and `voci_senza_accessi` are zero.
+#' `istanze_non_lette` counts the servers the report asked and could not read.
+#' Phase 1 does not measure the year without access, so `voci_senza_accessi`
+#' is zero.
 #'
 #' Names and codes only, and never a person: the record is shipped to a
 #' workspace and kept.
@@ -2232,7 +2340,7 @@ report_record <- function(esito, posta) {
     giorno_di_invio = length(esito[["pendenti"]]) > 0L,
     registro_letto = isTRUE(esito[["registro_letto"]]),
     directory_letta = isTRUE(esito[["directory_letta"]]),
-    istanze_non_lette = 0L,
+    istanze_non_lette = as.integer(esito[["istanze_non_lette"]] %||% 0L),
     posta = isTRUE(posta),
     posta_dirottata = isTRUE(esito[["posta_dirottata"]]),
     referenti = referenti,

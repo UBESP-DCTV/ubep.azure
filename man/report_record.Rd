@@ -32,8 +32,9 @@ the month was sent does not make it late; with no whole reading on record
 nothing is due, and the month is not called late on a guess.
 \code{in_ritardo} is \code{report_late()}.
 
-Phase 1 asks no instance and does not measure the year without access, so
-\code{istanze_non_lette} and \code{voci_senza_accessi} are zero.
+\code{istanze_non_lette} counts the servers the report asked and could not read.
+Phase 1 does not measure the year without access, so \code{voci_senza_accessi}
+is zero.
 
 Names and codes only, and never a person: the record is shipped to a
 workspace and kept.
