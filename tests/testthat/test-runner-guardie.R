@@ -694,3 +694,16 @@ test_that("the report's runner names no write and not the round", {
   )
 })
 
+
+test_that("il rapporto legge le istanze col modulo e i segreti", {
+  # Same limit as the guards above.
+  script <- testthat::test_path("..", "..", "dev", "runner-rapporto.R")
+  skip_if_not(file.exists(script), "dev/ is not in the built package")
+  testo <- paste(readLines(script, warn = FALSE), collapse = "
+")
+
+  expect_match(testo, 'inventario[["con_modulo"]]', fixed = TRUE)
+  expect_match(testo, "error = function(e) NA_character_", fixed = TRUE)
+  expect_match(testo, "hosts = host", fixed = TRUE)
+  expect_match(testo, "secrets = segreti", fixed = TRUE)
+})
