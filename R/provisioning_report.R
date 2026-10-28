@@ -804,8 +804,10 @@ report_assemble <- function(rows, directory, period, previous = list(),
         tolower(trimws(as.character(entry[["destinatario"]] %||% ""))),
         tolower(who)
       )
+      # A person is named whatever the server: the pairs of a report that
+      # recorded only the person carry an empty server, "all of them".
       named <- key %in% tolower(trimws(as.character(
-        entry[["senza_primo_accesso"]] %||% character()
+        report_pairs(entry[["senza_primo_accesso"]])[["upn"]]
       )))
       if (same && named) substr(as.character(entry[["at"]]), 1L, 10L)
     }))
@@ -1588,6 +1590,78 @@ report_ledger_path <- function(dir, month, collaudo = FALSE) {
 }
 
 
+#' The people a report named, as the ledger keeps them
+#'
+#' A person and a server, one row each: the same person can be named for one
+#' server and not for another, and a repeated sentence about "reported
+#' before" has to tell them apart.
+#'
+#' @param x A data frame of `upn` and `server`, or `NULL` for none.
+#'
+#' @return A data frame of `upn` and `server`, both character.
+#'
+#' @keywords internal
+report_pairs <- function(x = NULL) {
+  if (is.null(x) || nrow(x) == 0L) {
+    return(data.frame(
+      upn = character(), server = character(), stringsAsFactors = FALSE
+    ))
+  }
+  data.frame(
+    upn = as.character(x[["upn"]]), server = as.character(x[["server"]]),
+    stringsAsFactors = FALSE
+  )
+}
+
+
+#' Read one of the lists of people of a ledger entry
+#'
+#' An entry written by the 0.22.0 holds the people as an array of addresses,
+#' with no server: they read with an empty `server`, "all of the person's
+#' servers". An entry from now on holds an array of `{upn, server}`. A list
+#' that is absent reads as none.
+#'
+#' @param x What `jsonlite::fromJSON(simplifyVector = FALSE)` made of it.
+#'
+#' @return A data frame of `upn` and `server`, or `NULL` when it is neither
+#'   shape: the ledger does not read.
+#'
+#' @keywords internal
+report_ledger_pairs <- function(x) {
+  if (is.null(x)) {
+    return(report_pairs())
+  }
+  if (is.character(x)) {
+    x <- as.list(x)
+  }
+  if (!is.list(x)) {
+    return(NULL)
+  }
+
+  rows <- lapply(x, function(item) {
+    if (is.character(item) && length(item) == 1L) {
+      return(c(upn = item, server = ""))
+    }
+    if (is.list(item) && is.character(item[["upn"]]) &&
+          length(item[["upn"]]) == 1L) {
+      server <- item[["server"]] %||% ""
+      if (is.character(server) && length(server) == 1L) {
+        return(c(upn = item[["upn"]], server = server))
+      }
+    }
+    NULL
+  })
+  if (any(vapply(rows, is.null, logical(1)))) {
+    return(NULL)
+  }
+
+  report_pairs(data.frame(
+    upn = vapply(rows, `[[`, "", "upn"),
+    server = vapply(rows, `[[`, "", "server"), stringsAsFactors = FALSE
+  ))
+}
+
+
 #' Read a month's ledger of sent reports
 #'
 #' The ledger is the trace of an event that otherwise leaves none: for each
@@ -1607,8 +1681,10 @@ report_ledger_path <- function(dir, month, collaudo = FALSE) {
 #' @param collaudo Whether to read a redirected run's ledger.
 #'
 #' @return A list with `ok`, `errors` and `invii`, one list per report sent:
-#'   `destinatario`, `at` and `senza_primo_accesso`; and `collaudo`, so that
-#'   whoever adds to it writes it back where it was read.
+#'   `destinatario`, `at`, and `senza_primo_accesso` and `senza_accessi`, the
+#'   people it named, each a data frame of `upn` and `server`; and
+#'   `collaudo`, so that whoever adds to it writes it back where it was
+#'   read.
 #'
 #' @keywords internal
 report_ledger_read <- function(dir, month, collaudo = FALSE) {
@@ -1645,10 +1721,15 @@ report_ledger_read <- function(dir, month, collaudo = FALSE) {
     list(
       destinatario = scalar_as_character(entry[["destinatario"]]),
       at = scalar_as_character(entry[["at"]]),
-      senza_primo_accesso = as.character(unlist(entry[["senza_primo_accesso"]]))
+      senza_primo_accesso = report_ledger_pairs(entry[["senza_primo_accesso"]]),
+      senza_accessi = report_ledger_pairs(entry[["senza_accessi"]])
     )
   })
-  if (!all(nzchar(vapply(invii, `[[`, "", "destinatario")))) {
+  tables <- unlist(lapply(invii, function(entry) {
+    list(entry[["senza_primo_accesso"]], entry[["senza_accessi"]])
+  }), recursive = FALSE)
+  if (!all(nzchar(vapply(invii, `[[`, "", "destinatario"))) ||
+        !all(vapply(tables, is.data.frame, logical(1)))) {
     return(unreadable)
   }
 
@@ -1813,7 +1894,8 @@ report_due_write <- function(dir, month, due, at) {
 #' @inheritParams report_ledger_read
 #' @param ledger The ledger as read, from `report_ledger_read()`, which also
 #'   says whether it is a redirected run's.
-#' @param entry A list of `destinatario`, `at` and `senza_primo_accesso`.
+#' @param entry A list of `destinatario`, `at`, and `senza_primo_accesso` and
+#'   `senza_accessi`, each a data frame of `upn` and `server`, or absent.
 #'
 #' @return A list with `ok`, `errors` and `ledger`, the ledger with the entry
 #'   when it was written and as it was otherwise.
@@ -1826,10 +1908,11 @@ report_ledger_add <- function(dir, month, ledger, entry) {
   invii <- c(ledger[["invii"]], list(list(
     destinatario = as.character(entry[["destinatario"]]),
     at = as.character(entry[["at"]]),
-    senza_primo_accesso = as.character(entry[["senza_primo_accesso"]])
+    senza_primo_accesso = report_pairs(entry[["senza_primo_accesso"]]),
+    senza_accessi = report_pairs(entry[["senza_accessi"]])
   )))
 
-  # `I()` keeps a list of one address an array, and a list of none `[]`: the
+  # A table is an array of `{upn, server}` objects, and an empty one `[]`: the
   # reader takes both back as they were.
   json <- jsonlite::toJSON(
     list(
@@ -1837,11 +1920,12 @@ report_ledger_add <- function(dir, month, ledger, entry) {
       invii = lapply(invii, function(e) {
         list(
           destinatario = e[["destinatario"]], at = e[["at"]],
-          senza_primo_accesso = I(e[["senza_primo_accesso"]])
+          senza_primo_accesso = e[["senza_primo_accesso"]],
+          senza_accessi = e[["senza_accessi"]]
         )
       })
     ),
-    auto_unbox = TRUE, pretty = TRUE
+    auto_unbox = TRUE, pretty = TRUE, dataframe = "rows"
   )
 
   if (!report_write_json(report_ledger_path(dir, month, collaudo), json)) {
@@ -2191,14 +2275,17 @@ provisioning_report <- function(register_url,
       sent <- c(sent, who)
 
       if (keeps_ledger) {
-        named <- if (for_it) {
-          character()
+        # Until the pairs reach the report, a person is named for all of
+        # their servers.
+        people <- if (for_it) {
+          list()
         } else {
-          vapply(
-            assembled[["referenti"]][[who]][["senza_primo_accesso"]],
-            `[[`, "", "upn"
-          )
+          assembled[["referenti"]][[who]][["senza_primo_accesso"]]
         }
+        named <- data.frame(
+          upn = vapply(people, `[[`, "", "upn"),
+          server = rep("", length(people)), stringsAsFactors = FALSE
+        )
         written <- report_ledger_add(
           ledger_dir, period[["mese"]], ledger,
           list(

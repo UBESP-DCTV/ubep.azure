@@ -394,6 +394,11 @@ novembre <- function() {
 
 referente <- "anna.esempio@ubep.unipd.it"
 
+# The people a ledger entry names, one row for each person and server.
+coppie <- function(upn = character(), server = rep("", length(upn))) {
+  data.frame(upn = upn, server = server, stringsAsFactors = FALSE)
+}
+
 
 test_that("only active and applied rows enter the report", {
   # eval
@@ -610,13 +615,13 @@ test_that("earlier reports are read back for the same referent only", {
   )
   precedenti <- list(
     list(destinatario = referente, at = "2026-09-01 07:31",
-         senza_primo_accesso = character()),
+         senza_primo_accesso = coppie()),
     list(destinatario = referente, at = "2026-10-01 07:30",
-         senza_primo_accesso = "Carla.Inventata@ubep.unipd.it"),
+         senza_primo_accesso = coppie("Carla.Inventata@ubep.unipd.it")),
     # Somebody else's report about the same person is somebody else's.
     list(destinatario = "bruno.fittizio@ubep.unipd.it",
          at = "2026-10-02 07:30",
-         senza_primo_accesso = "carla.inventata@ubep.unipd.it")
+         senza_primo_accesso = coppie("carla.inventata@ubep.unipd.it"))
   )
 
   rapporto <- report_assemble(righe, rubrica_mensile(), novembre(), precedenti)
@@ -624,6 +629,44 @@ test_that("earlier reports are read back for the same referent only", {
   # test
   carla <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]][[1L]]
   expect_equal(carla[["segnalata"]], "2026-10-01")
+})
+
+
+test_that("every person of a report with several is read back", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(
+      record_id = "42", username = "elena.supposta@ubep.unipd.it",
+      first_name = "Elena", last_name = "Supposta"
+    )
+  )
+  righe <- report_rows(
+    registro, c(referente, referente),
+    list("2026-08-03 23:03", "2026-08-03 23:03"), novembre()
+  )
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = "elena.supposta@ubep.unipd.it",
+          createdDateTime = "2026-08-03T08:00:00Z",
+          lastPasswordChangeDateTime = "2026-08-03T08:00:00Z")
+  )
+  precedenti <- list(
+    list(destinatario = referente, at = "2026-10-01 07:30",
+         senza_primo_accesso = coppie(
+           c("elena.supposta@ubep.unipd.it", "Carla.Inventata@ubep.unipd.it"),
+           c("edc12", "edc10")
+         ))
+  )
+
+  rapporto <- report_assemble(righe, rubrica, novembre(), precedenti)
+
+  # test
+  persone <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
+  expect_length(persone, 2L)
+  expect_equal(
+    vapply(persone, function(p) p[["segnalata"]], ""),
+    c("2026-10-01", "2026-10-01")
+  )
 })
 
 
@@ -1060,11 +1103,12 @@ test_that("what is added to the ledger is read back as written", {
   vuoto <- report_ledger_read(cartella, "2026-10")
   primo <- report_ledger_add(cartella, "2026-10", vuoto, list(
     destinatario = referente, at = "2026-11-01 07:30",
-    senza_primo_accesso = "carla.inventata@ubep.unipd.it"
+    senza_primo_accesso = coppie("carla.inventata@ubep.unipd.it", "edc10"),
+    senza_accessi = coppie("dario.ipotetico@ubep.unipd.it", "edc12")
   ))
   secondo <- report_ledger_add(cartella, "2026-10", primo[["ledger"]], list(
     destinatario = report_it_key(), at = "2026-11-01 07:30",
-    senza_primo_accesso = character()
+    senza_primo_accesso = coppie()
   ))
 
   letto <- report_ledger_read(cartella, "2026-10")
@@ -1076,14 +1120,89 @@ test_that("what is added to the ledger is read back as written", {
     vapply(letto[["invii"]], `[[`, "", "destinatario"),
     c(referente, report_it_key())
   )
-  # A single address stays a list of one, and none stays a list of none.
   expect_equal(
     letto[["invii"]][[1L]][["senza_primo_accesso"]],
-    "carla.inventata@ubep.unipd.it"
+    coppie("carla.inventata@ubep.unipd.it", "edc10")
   )
-  expect_equal(letto[["invii"]][[2L]][["senza_primo_accesso"]], character())
+  expect_equal(
+    letto[["invii"]][[1L]][["senza_accessi"]],
+    coppie("dario.ipotetico@ubep.unipd.it", "edc12")
+  )
+  # A table of none stays a table of none, whether it was empty or absent.
+  expect_equal(nrow(letto[["invii"]][[2L]][["senza_primo_accesso"]]), 0L)
+  expect_equal(nrow(letto[["invii"]][[2L]][["senza_accessi"]]), 0L)
   # Nothing left behind by the write.
   expect_equal(list.files(cartella), "2026-10.json")
+})
+
+
+test_that("a ledger of the 0.22.0 holds for all of a person's servers", {
+  # eval
+  cartella <- withr::local_tempdir()
+  writeLines(
+    paste0(
+      '{"mese": "2026-10", "invii": [{',
+      '"destinatario": "anna.esempio@ubep.unipd.it", ',
+      '"at": "2026-11-01 07:30", ',
+      '"senza_primo_accesso": ["carla.inventata@ubep.unipd.it"]}]}'
+    ),
+    file.path(cartella, "2026-10.json")
+  )
+
+  voce <- report_ledger_read(cartella, "2026-10")[["invii"]][[1L]]
+
+  # test
+  expect_equal(
+    voce[["senza_primo_accesso"]],
+    coppie("carla.inventata@ubep.unipd.it", "")
+  )
+  expect_equal(nrow(voce[["senza_accessi"]]), 0L)
+})
+
+
+test_that("a person without a server and one with it both read back", {
+  # eval
+  cartella <- withr::local_tempdir()
+  writeLines(
+    paste0(
+      '{"mese": "2026-10", "invii": [{"destinatario": "a@example.org", ',
+      '"at": "2026-11-01 07:30", "senza_primo_accesso": [',
+      '{"upn": "carla.inventata@ubep.unipd.it"}], "senza_accessi": [',
+      '{"upn": "dario.ipotetico@ubep.unipd.it", "server": "edc12"}]}]}'
+    ),
+    file.path(cartella, "2026-10.json")
+  )
+
+  voce <- report_ledger_read(cartella, "2026-10")[["invii"]][[1L]]
+
+  # test
+  expect_equal(
+    voce[["senza_primo_accesso"]],
+    coppie("carla.inventata@ubep.unipd.it", "")
+  )
+  expect_equal(
+    voce[["senza_accessi"]],
+    coppie("dario.ipotetico@ubep.unipd.it", "edc12")
+  )
+})
+
+
+test_that("a list of people of an unknown shape is a ledger unread", {
+  # eval
+  cartella <- withr::local_tempdir()
+  writeLines(
+    paste0(
+      '{"mese": "2026-10", "invii": [{"destinatario": "a@example.org", ',
+      '"at": "2026-11-01 07:30", "senza_accessi": [1, 2]}]}'
+    ),
+    file.path(cartella, "2026-10.json")
+  )
+
+  letto <- report_ledger_read(cartella, "2026-10")
+
+  # test
+  expect_false(letto[["ok"]])
+  expect_equal(letto[["errors"]], "RAPPORTO_INVII_ILLEGGIBILI")
 })
 
 
@@ -1112,7 +1231,7 @@ test_that("earlier months are read back, later ones and other files are not", {
       cartella, mese, report_ledger_read(cartella, mese),
       list(destinatario = referente,
            at = paste0(report_shift_month(mese, 1L), "-01 07:30"),
-           senza_primo_accesso = character())
+           senza_primo_accesso = coppie())
     )
   }
   writeLines("appunti", file.path(cartella, "note.txt"))
@@ -1136,7 +1255,7 @@ test_that("a broken earlier month is named, and the others are read", {
   report_ledger_add(
     cartella, "2026-09", report_ledger_read(cartella, "2026-09"),
     list(destinatario = referente, at = "2026-10-01 07:30",
-         senza_primo_accesso = character())
+         senza_primo_accesso = coppie())
   )
   writeLines("{ rotto", file.path(cartella, "2026-08.json"))
 
@@ -1323,8 +1442,10 @@ test_that("the first run sends to the referent and to IT, and keeps track", {
     vapply(invii, `[[`, "", "destinatario"), c(referente, report_it_key())
   )
   expect_equal(
-    invii[[1L]][["senza_primo_accesso"]], "carla.inventata@ubep.unipd.it"
+    invii[[1L]][["senza_primo_accesso"]],
+    coppie("carla.inventata@ubep.unipd.it", "")
   )
+  expect_equal(nrow(invii[[1L]][["senza_accessi"]]), 0L)
   expect_equal(invii[[1L]][["at"]], "2026-11-01 07:30")
 
   expect_equal(record[["mese"]], "2026-10")

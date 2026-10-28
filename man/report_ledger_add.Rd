@@ -14,7 +14,8 @@ report_ledger_add(dir, month, ledger, entry)
 \item{ledger}{The ledger as read, from \code{report_ledger_read()}, which also
 says whether it is a redirected run's.}
 
-\item{entry}{A list of \code{destinatario}, \code{at} and \code{senza_primo_accesso}.}
+\item{entry}{A list of \code{destinatario}, \code{at}, and \code{senza_primo_accesso} and
+\code{senza_accessi}, each a data frame of \code{upn} and \code{server}, or absent.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{ledger}, the ledger with the entry
