@@ -502,3 +502,84 @@ test_that("a read against a contract 3 module answers", {
   expect_true(result[["ok"]])
   expect_equal(result[["gate"]], "collaudata")
 })
+
+
+test_that("a read against a contract 4 module answers", {
+  # eval
+  body <- '{"contract_version": 4, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": true, "results": [], "summary": {"letti": 0}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_state("redcap.example.org", "s3cret")
+  )
+
+  # test
+  expect_true(result[["ok"]])
+  expect_equal(result[["gate"]], "collaudata")
+})
+
+
+test_that("a write against a contract 4 module is accepted", {
+  # eval
+  # Contract 4 keeps the surface handshake of contracts 2 and 3 and adds the
+  # `accounts` operation, so a write against it is enforceable like before.
+  body <- '{"contract_version": 4, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": false, "results": [], "summary": {"creato": 1}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
+      )),
+      dry_run = FALSE
+    )
+  )
+
+  # test
+  expect_true(result[["ok"]])
+})
+
+
+test_that("il canale lavora con moduli al 3 e al 4 mescolati", {
+  # eval
+  # During a rollout the fleet answers with both contracts at once, and the
+  # channel has to keep reading and writing on every instance meanwhile.
+  richieste <- list(list(
+    username = "mario.rossi@ubep.unipd.it", project_id = 9003L
+  ))
+  risposta <- function(req) {
+    contratto <- if (grepl("edc12", req[["url"]], fixed = TRUE)) 4L else 3L
+    corpo <- sprintf(
+      '{"contract_version": %d, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": false, "results": [], "summary": {}, "errors": []}',
+      contratto
+    )
+    httr2::response(status_code = 200L, body = charToRaw(corpo))
+  }
+
+  # test
+  httr2::with_mocked_responses(risposta, {
+    for (host in c("edc10.example.org", "edc12.example.org")) {
+      expect_true(module_state(host, "s3cret")[["ok"]], info = host)
+      expect_true(
+        module_apply(
+          host, "s3cret", requests = richieste, dry_run = FALSE
+        )[["ok"]],
+        info = host
+      )
+    }
+  })
+})

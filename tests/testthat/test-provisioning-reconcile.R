@@ -378,7 +378,8 @@ istanza_doppia <- function(..., contract = 3L) {
 # change by somebody other than the owner names them here. `senza_diritti` are
 # users of the project who do not manage it.
 istanza_che_scrive <- function(richiedenti = "anna.bianchi@ubep.unipd.it",
-                               senza_diritti = character()) {
+                               senza_diritti = character(),
+                               contract = 3L) {
   written <- FALSE
   utente <- function(chi, diritti) {
     list(
@@ -404,7 +405,7 @@ istanza_che_scrive <- function(richiedenti = "anna.bianchi@ubep.unipd.it",
         user_rights = 0L
       )
     }
-    do.call(istanza_doppia, rows)(data)
+    do.call(istanza_doppia, c(rows, list(contract = contract)))(data)
   }
 }
 
@@ -1070,6 +1071,19 @@ test_that("a real write is followed by a read-back, and applied_as comes from it
   expect_length(riletture, 2L)
   expect_equal(esito[["esiti"]][["outcome"]], "applied")
   expect_match(esito[["esiti"]][["applied_as"]], "expiration=2027-01-01")
+})
+
+
+test_that("una scrittura vera su un modulo al contratto 4 si applica e si rilegge", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_scrive(contract = 4L),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
 })
 
 

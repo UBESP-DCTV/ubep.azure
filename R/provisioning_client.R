@@ -15,6 +15,9 @@
 #' @param declare Fingerprints the caller states it has been tested against.
 #'   The module refuses to write when its own is not among them, so an empty
 #'   declaration writes nothing. Reads and dry runs ignore it.
+#' @param accepted Integer vector of contract versions this call tolerates;
+#'   `NULL` takes the default for the kind of call, `2:4` for a write and
+#'   `1:4` for a read.
 #'
 #' @return A list with `ok`, `errors`, `payload` and `gate`.
 #'
@@ -25,7 +28,8 @@ module_call <- function(server,
                         requests = list(),
                         dry_run = TRUE,
                         registry = tested_fingerprints(),
-                        declare = certified_fingerprints(registry)) {
+                        declare = certified_fingerprints(registry),
+                        accepted = NULL) {
   stopifnot(
     is.character(server), length(server) == 1L,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run)
@@ -79,10 +83,13 @@ module_call <- function(server,
     httr2::resp_body_string(response),
     status = httr2::resp_status(response),
     # Writes need a contract that can enforce the surface handshake, which is
-    # 2 and everything after it. Pinning to exactly 2 would refuse an instance
-    # the moment its module is updated: the deploy would break writing rather
-    # than extend it.
-    accepted = if (writing) c(2L, 3L) else c(1L, 2L, 3L)
+    # 2 and everything after it: 3 and 4 keep it, and 4 only adds `accounts`.
+    # Pinning to exactly 2 would refuse an instance the moment its module is
+    # updated: the deploy would break writing rather than extend it, and a
+    # fleet with modules at 3 and at 4 side by side has to keep working.
+    accepted = accepted %||% (
+      if (writing) c(2L, 3L, 4L) else c(1L, 2L, 3L, 4L)
+    )
   )
 
   # No payload means no major and no fingerprint, so any gate here would be
