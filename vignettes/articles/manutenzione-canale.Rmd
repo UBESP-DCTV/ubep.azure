@@ -1586,7 +1586,8 @@ posta. Non trattiene niente, e la riga è `applied`.
 **Credenziale persa (gravità 1).** Un'utenza è nata e la sua chiave non è
 arrivata a nessuno: `credenziali_perse` è maggiore di zero. Dalla 0.19.0 conta
 anche la creazione di cui si è persa la risposta
-(`TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`, o una risposta che non è di Graph):
+(`TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`, o una risposta che non è di Graph,
+o un 5xx di Graph):
 l'utenza può essere nata con una chiave morta con il processo, e il giro dopo
 la troverebbe e la porterebbe ad `applied` senza che nessuno abbia la chiave.
 Si conta nello stesso giro, e conta anche come benvenuto perso; il codice sta

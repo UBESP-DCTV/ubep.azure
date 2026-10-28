@@ -284,9 +284,9 @@ directory_endpoint <- function(base_url) {
 #'
 #' What must not happen is that nobody learns of it, and `unconfirmed` is what
 #' prevents it. It is `TRUE` on the failures that do not say whether the
-#' account was born -- no answer at all, or one that is not Graph's -- and
-#' `FALSE` on the ones that do, a refusal or a throttle carrying Graph's own
-#' code. The round counts an unconfirmed creation as a key lost, so the alarm
+#' account was born -- no answer at all, one that is not Graph's, or a 5xx of
+#' Graph's, which fails while doing the work -- and `FALSE` on the ones that
+#' do, a refusal or a throttle carrying Graph's own code. The round counts an unconfirmed creation as a key lost, so the alarm
 #' that sends IT to reset a key fires on it.
 #'
 #' @param code The transport code, one of the `TRASPORTO_CREAZIONE_*` family.
@@ -341,7 +341,8 @@ creation_failure <- function(code, payload = NULL, unconfirmed = FALSE) {
 #'   one the account was born with, present only on success. It leaves by the
 #'   return value and by no other road: not the register, not the telemetry
 #'   record, not standard output. `unconfirmed` is `TRUE` on a failure that
-#'   does not say whether the account was born, see `creation_failure()`.
+#'   does not say whether the account was born -- no answer, an answer that is
+#'   not Graph's, or a 5xx of Graph's -- see `creation_failure()`.
 #'   `created_at`, on success only, is when the account was born, which the
 #'   messages count the first sign-in from (`mail_first_signin_deadline()`):
 #'   Graph's `createdDateTime` when the answer carries it in a form the
@@ -433,15 +434,28 @@ directory_create_user <- function(token, base_url, request, upn) {
     # all -- at which point the alarm on absence reports that the channel is
     # not running while it is running very hard. The next round is four hours
     # away and re-reads reality anyway.
+    #
+    # A 5xx is neither: the server failed while doing the work, and whether
+    # the account was born before it failed is not something the answer
+    # says. It carries Graph's own code, so the diagnosis keeps it, but the
+    # creation is unconfirmed and the next round looks for the account before
+    # creating it again.
+    diagnosis <- list(
+      code = scrub(error[["code"]]), message = scrub(error[["message"]])
+    )
+    if (status >= 500L && status <= 599L) {
+      return(creation_failure(
+        "TRASPORTO_CREAZIONE_RISPOSTA_INATTESA",
+        payload = diagnosis, unconfirmed = TRUE
+      ))
+    }
     return(creation_failure(
       if (identical(status, 429L)) {
         "TRASPORTO_CREAZIONE_RIMANDATA"
       } else {
         "TRASPORTO_CREAZIONE_RIFIUTATA"
       },
-      payload = list(
-        code = scrub(error[["code"]]), message = scrub(error[["message"]])
-      )
+      payload = diagnosis
     ))
   }
 

@@ -923,3 +923,25 @@ test_that("a creation whose answer was lost says it cannot tell", {
   expect_false(rimandata[["unconfirmed"]])
   expect_false(riuscita[["unconfirmed"]])
 })
+
+
+test_that("un 5xx di Graph con JSON non dice se l'account e' nato", {
+  # eval
+  risposta_503 <- crea(function(req) {
+    risposta(
+      503L, '{"error":{"code":"serviceNotAvailable","message":"t0ken"}}'
+    )
+  })
+
+  # test
+  expect_false(risposta_503[["ok"]])
+  expect_true(risposta_503[["unconfirmed"]])
+  expect_equal(
+    risposta_503[["errors"]], "TRASPORTO_CREAZIONE_RISPOSTA_INATTESA"
+  )
+  expect_equal(risposta_503[["payload"]][["code"]], "serviceNotAvailable")
+  expect_false(
+    grepl("t0ken", risposta_503[["payload"]][["message"]], fixed = TRUE)
+  )
+  expect_null(risposta_503[["credential"]])
+})
