@@ -187,19 +187,20 @@ Both are now read from the server itself.
 * **Shape of the release.** No dictionary to import, and the round and the
   observer are called as before. The order is what costs most to get wrong:
   first the package, then the module, then the rest. The package goes on the
-  machine first. With the modules still at 3 the channel and the observer
-  work as before, and the report sees every server as "module not updated"
-  without failing, so a report sent in between already has the new form, with
-  the pairs of the first item read from Entra and said so, the second item
-  not checked, and the list of the servers for IT. Then the module of this
-  version on the instances that are on, from the Control Center with *Change
-  Version*, one first, checking that the shared secret stays, then the
+  machine first, together with the job of the report in `/opt`: the new job
+  reads the inventory and the secrets, and the old one with the new package
+  would pass an empty list of servers, so that every server would be reported
+  to IT as missing from the inventory. With the modules still at 3 the channel
+  and the observer work as before, and the report sees every server as "module
+  not updated" without failing, so a report sent in between already has the
+  new form, with the pairs of the first item read from Entra and said so, the
+  second item not checked, and the list of the servers for IT. Then the module
+  of this version on the instances that are on, from the Control Center with
+  *Change Version*, one first, checking that the shared secret stays, then the
   others. The benches that are off stay at 3. Last, a run by hand with a
-  forced month and the post redirected, to read the record and the mails. The
-  job of the report in `/opt` has to be replaced with the new one, since the
-  runner now reads the inventory and the secrets. A module at 4 before the
-  package would have every answer refused by the 0.22.0 client, and the
-  channel would stop applying.
+  forced month and the post redirected, to read the record and the mails. A
+  module at 4 before the package would have every answer refused by the 0.22.0
+  client, and the channel would stop applying.
 
 # ubep.azure 0.22.0
 

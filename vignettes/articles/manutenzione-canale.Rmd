@@ -2062,14 +2062,17 @@ vecchio, poi quello del mese corrente. Il recupero è limitato:
   tempo. Il rapporto a IT non si recupera.
 
 **Il rapporto recuperato porta i soli accessi attivati in quel mese**, letti dal
-log come sempre. Le altre voci dipendono dallo stato di oggi e sarebbero uguali
-in ogni mail: stanno solo nel rapporto del mese corrente, a cui il recuperato
-rimanda. Oggetto `In ritardo, <mese>: accessi REDCap`, prima riga
-`IN RITARDO, <MESE>`. Un recupero che non riesce non ferma il rapporto del mese
-corrente. Un mese che dopo il giro è ancora perso (invio fallito, registro
-non scrivibile) lo dice `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, e il
-registro o i dovuti illeggibili di un mese vecchio lo escludono con
-`RAPPORTO_INVII_ILLEGGIBILI` o `RAPPORTO_DOVUTI_ILLEGGIBILI`.
+log come sempre, e fra questi solo quelli ancora attivi oggi: un accesso
+attivato nel mese perso e revocato dopo non compare, e la riga «Accessi attivati
+nel mese: nessuno» può dire nessuno anche quando ce n'era uno. Le altre voci
+dipendono dallo stato di oggi e sarebbero uguali in ogni mail: stanno solo nel
+rapporto del mese corrente, a cui il recuperato rimanda. Oggetto `In ritardo,
+<mese>: accessi REDCap`, prima riga `IN RITARDO, <MESE>`. Un recupero che non
+riesce non ferma il rapporto del mese corrente. Un mese che dopo il giro è
+ancora perso (invio fallito, registro non scrivibile) lo dice
+`RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, e il registro o i dovuti illeggibili di
+un mese vecchio lo escludono con `RAPPORTO_INVII_ILLEGGIBILI` o
+`RAPPORTO_DOVUTI_ILLEGGIBILI`.
 
 ### Le variabili, e il mese forzato
 
@@ -2165,14 +2168,21 @@ un modulo al contratto 4 risponde 4 anche allo stato e alle scritture, e un
 client della 0.22.0 (che legge 1, 2, 3) rifiuterebbe ogni risposta, e il canale
 smetterebbe di applicare. In quest'ordine:
 
-1. **il pacchetto 0.23.0 sulla macchina**, prima di tutto. Il client accetta il
-   4 e il rapporto chiama `accounts`. Con i moduli ancora al 3 il canale e
-   l'osservatore lavorano come prima, e il rapporto vede ogni server come
-   «modulo non aggiornato» senza fallire: un rapporto partito in questo
-   intervallo ha già la forma nuova (scadenze, oggetto, voce 1 per server) con
-   le coppie della voce 1 lette da Entra e dette tali, la voce 2 «non
-   controllata» e a IT l'elenco dei server. Verifica: un giro del canale e una
-   lettura dell'osservatore puliti;
+1. **il pacchetto 0.23.0 sulla macchina, con la lavorazione del rapporto in
+   `/opt`**, prima di tutto, e insieme: la lavorazione nuova ora legge
+   l'inventario delle istanze col modulo e i loro segreti, come il giro, e si
+   ferma se l'inventario non ne elenca; quella vecchia, con il pacchetto nuovo,
+   passerebbe un elenco di server vuoto, e ogni server risulterebbe «assente
+   dall'inventario delle istanze col modulo», un motivo falso che andrebbe a IT
+   per tutto il mese. La nuova non parte col pacchetto vecchio. L'unità e il
+   timer giornaliero restano come sono. Il client accetta il 4 e il rapporto
+   chiama `accounts`. Con i moduli ancora al 3 il canale e l'osservatore
+   lavorano come prima, e il rapporto vede ogni server come «modulo non
+   aggiornato» senza fallire: un rapporto partito in questo intervallo ha già
+   la forma nuova (scadenze, oggetto, voce 1 per server) con le coppie della
+   voce 1 lette da Entra e dette tali, la voce 2 «non controllata» e a IT
+   l'elenco dei server. Verifica: un giro del canale e una lettura
+   dell'osservatore puliti;
 2. **il modulo 0.23.0** (l'archivio di `build_redcap_module()`) sulle istanze
    accese, con *Change Version* dal Control Center, **prima su una**, verificando
    che il segreto condiviso resti, poi sulle altre. **I banchi spenti restano
@@ -2181,19 +2191,15 @@ smetterebbe di applicare. In quest'ordine:
    prima esecuzione del suo ramo (non eseguibile fuori da REDCap): zero nomi
    deve dare 200 con la lista vuota, un nome noto 200 con la sua voce, oltre 500
    nomi 400;
-3. **la lavorazione del rapporto in `/opt`, da sostituire** con quella nuova:
-   ora legge l'inventario delle istanze col modulo e i loro segreti, come il
-   giro, e si ferma se l'inventario non ne elenca. L'unità e il timer
-   giornaliero restano come sono;
-4. **un'esecuzione a mano col mese forzato e la posta accesa ma dirottata**,
+3. **un'esecuzione a mano col mese forzato e la posta accesa ma dirottata**,
    per leggere il record e le mail. Col mese forzato, non con il solo
    dirottamento: un giro dirottato ma non forzato scrive il vero
    `AAAA-MM.dovuti.json` del mese, che diventerebbe un punto di partenza del
    recupero;
-5. **un allarme da controllare**: nessuna regola sulla tabella del rapporto deve
+4. **un allarme da controllare**: nessuna regola sulla tabella del rapporto deve
    legare `mandati` a `giorno_di_invio`, perché un giro di soli recuperi ha il
    primo sopra zero e il secondo falso;
-6. per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
+5. per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
 
 ## Che cosa questa guida non copre
 
