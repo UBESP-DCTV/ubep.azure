@@ -1112,6 +1112,30 @@ test_that("una riga ferma basta a far partire IT, e senza ferme non parte", {
 })
 
 
+test_that("un server non letto con sole righe ferme e' tra i non letti", {
+  # eval
+  a <- assemblato(
+    servers = list(
+      edc10 = server_letto(entrata_su(carla)),
+      edc12 = server_muto("TRASPORTO_NON_RAGGIUNGIBILE")
+    ),
+    registro = registro_di(
+      richiesta(record_id = "41"),
+      ferma(record_id = "51", server = "edc12",
+            username = "elena.supposta@ubep.unipd.it",
+            first_name = "Elena", last_name = "Supposta")
+    )
+  )
+
+  # test
+  non_letti <- a[["it"]][["server_non_letti"]]
+  expect_equal(non_letti[["server"]], "edc12")
+  expect_equal(non_letti[["motivo"]], "TRASPORTO_NON_RAGGIUNGIBILE")
+  expect_equal(non_letti[["entra"]], 0L)
+  expect_equal(non_letti[["non_controllate"]], 0L)
+})
+
+
 test_that("una persona su due server ha due voci, una per server", {
   # eval
   registro <- registro_di(
@@ -2320,14 +2344,14 @@ test_that("le righe ferme su un account disattivato arrivano a IT", {
     "   - Richiesta 52: Dario Ipotetico, dario.ipotetico@ubep.unipd.it: ",
     "edc10, progetto 9302. La persona e' gia' entrata su edc10."
   ) %in% testo[["it"]])
-  # edc12 was not read: nothing is said of the person there.
+  # edc12 was not read: the mail says why nothing is said of the person.
   expect_true(paste0(
     "   - Richiesta 53: Elena Supposta, elena.supposta@ubep.unipd.it: ",
-    "edc12, progetto 9303."
+    "edc12, progetto 9303. Il server non ha risposto."
   ) %in% testo[["it"]])
   expect_true(paste0(
     "   - Request 53: Elena Supposta, elena.supposta@ubep.unipd.it: ",
-    "edc12, project 9303."
+    "edc12, project 9303. The server did not answer."
   ) %in% testo[["en"]])
 })
 
@@ -2828,6 +2852,43 @@ test_that("IT riceve la mail per una riga ferma, anche senza altro", {
     fixed = TRUE
   ))
   expect_equal(report_record(esito, posta = TRUE)[["senza_creatore"]], 0L)
+})
+
+
+test_that("i server non letti di IT sono le istanze non lette del record", {
+  # eval
+  dati <- scenario()
+  dati[["creazioni"]] <- rbind(
+    dati[["creazioni"]],
+    evento("2026-10-01 10:00", referente, "", record = "43",
+           action = "Create record 43")
+  )
+  # Una riga ferma sola su edc12, che il modulo non legge.
+  dati[["registro"]] <- rbind(
+    dati[["registro"]],
+    registro_di(ferma(
+      record_id = "51", server = "edc12",
+      username = "elena.supposta@ubep.unipd.it",
+      first_name = "Elena", last_name = "Supposta"
+    ))
+  )
+  dati[["conti"]][["edc12.example.org"]] <- NULL
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  testo <- strsplit(mail[[2L]][["body"]], "
+", fixed = TRUE)[[1L]]
+  expect_equal(esito[["istanze_non_lette"]], 1L)
+  expect_true("1. Server non letti (1)" %in% testo)
+  expect_true(any(grepl("^   - edc12: ", testo)))
+  expect_true(any(grepl(
+    "edc12, progetto 9301. Il server non ha risposto.", testo, fixed = TRUE
+  )))
 })
 
 

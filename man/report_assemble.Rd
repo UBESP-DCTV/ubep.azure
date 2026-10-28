@@ -58,10 +58,11 @@ nothing for IT, otherwise a list of \code{senza_referente} (rows, with
 \code{motivo}, \code{entra}, how many pairs of that server went into a
 referent's report on the strength of Entra, and \code{non_controllate}, how
 many were candidates for the year without access and could not be
-checked; one row for each server of the rows that was not read, also
-with none) and \code{disattivati} (the rows of \code{stopped}, with \code{entrata}:
-\code{"si"} or \code{"no"}, whether the person has entered the server, when it was
-read, \code{""} when it was not); and \code{senza_creatore}, how
+checked; one row for each server that was asked and not read, whether
+the rows on it are applied or stopped, also with none) and
+\code{disattivati} (the rows of \code{stopped}, with \code{entrata}: \code{"si"} or \code{"no"},
+whether the person has entered the server, when it was read, \code{""} when
+it was not); and \code{senza_creatore}, how
 many rows have no referent to go to. Since rows can pass, that means
 without an established owner and not only without a creator; the name
 stays, because it is a column of \code{UbepRapporto_CL}, and a renamed

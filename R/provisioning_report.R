@@ -754,10 +754,11 @@ report_server_asks <- function(register) {
 #'   `motivo`, `entra`, how many pairs of that server went into a
 #'   referent's report on the strength of Entra, and `non_controllate`, how
 #'   many were candidates for the year without access and could not be
-#'   checked; one row for each server of the rows that was not read, also
-#'   with none) and `disattivati` (the rows of `stopped`, with `entrata`:
-#'   `"si"` or `"no"`, whether the person has entered the server, when it was
-#'   read, `""` when it was not); and `senza_creatore`, how
+#'   checked; one row for each server that was asked and not read, whether
+#'   the rows on it are applied or stopped, also with none) and
+#'   `disattivati` (the rows of `stopped`, with `entrata`: `"si"` or `"no"`,
+#'   whether the person has entered the server, when it was read, `""` when
+#'   it was not); and `senza_creatore`, how
 #'   many rows have no referent to go to. Since rows can pass, that means
 #'   without an established owner and not only without a creator; the name
 #'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
@@ -1102,7 +1103,11 @@ report_assemble <- function(rows, directory, period, previous = list(),
     )
     vapply(found, `[[`, "", "server")
   }))
-  asked <- sort(unique(text("server")[nzchar(text("server"))]))
+  # Every server the report asked and did not read, whoever the rows are: the
+  # applied ones, the stopped ones, or only the readings that were made.
+  stopped_servers <- trimws(as.character(stopped[["server"]]))
+  asked <- c(names(servers), text("server"), stopped_servers)
+  asked <- sort(unique(asked[!is.na(asked) & nzchar(asked)]))
   asked <- asked[!vapply(
     asked, function(server) isTRUE(reading(server)[["letto"]]), logical(1)
   )]
@@ -2101,7 +2106,7 @@ report_it_message <- function(it, period) {
             " La persona e' gia' entrata su ", server, "."
           ), ifelse(entered == "no", paste0(
             " La persona non e' mai entrata su ", server, "."
-          ), ""))
+          ), " Il server non ha risposto."))
         )
       ),
       en = c(
@@ -2114,7 +2119,7 @@ report_it_message <- function(it, period) {
             " The person has entered ", server, "."
           ), ifelse(entered == "no", paste0(
             " The person has never entered ", server, "."
-          ), ""))
+          ), " The server did not answer."))
         )
       )
     )
