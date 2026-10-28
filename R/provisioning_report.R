@@ -1397,7 +1397,7 @@ report_people_lines <- function(people, period, to_it = 0L) {
         } else if (nzchar(limit)) {
           paste0(
             "     Non e' mai entrata con l'account UBEP: deve entrare entro ",
-            "il ", limit, ", poi l'account viene disattivato (D-31)."
+            "il ", limit, ", poi l'account viene disattivato."
           )
         } else {
           paste0("     Su ", server, " non e' mai entrata.")
@@ -1432,7 +1432,7 @@ report_people_lines <- function(people, period, to_it = 0L) {
         } else if (nzchar(limit)) {
           paste0(
             "     Has never signed in with the UBEP account: must sign in ",
-            "by ", limit, ", then the account is deactivated (D-31)."
+            "by ", limit, ", then the account is deactivated."
           )
         } else {
           paste0("     Has never signed in on ", server, ".")

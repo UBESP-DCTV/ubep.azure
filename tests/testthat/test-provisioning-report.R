@@ -2065,11 +2065,11 @@ test_that("la riga con la data limite dice entro quando, e che cosa segue", {
   # test
   expect_true(paste0(
     "     Non e' mai entrata con l'account UBEP: deve entrare entro il ",
-    "2026-12-18, poi l'account viene disattivato (D-31)."
+    "2026-12-18, poi l'account viene disattivato."
   ) %in% testo[["it"]])
   expect_true(paste0(
     "     Has never signed in with the UBEP account: must sign in by ",
-    "2026-12-18, then the account is deactivated (D-31)."
+    "2026-12-18, then the account is deactivated."
   ) %in% testo[["en"]])
   # Con la data limite non si dice due volte che non e' entrata sul server.
   expect_false("     Su edc10 non e' mai entrata." %in% testo[["it"]])
