@@ -731,6 +731,9 @@ report_server_asks <- function(register) {
 #'   `list(letto = TRUE, conti = <frame>)` or `list(letto = FALSE, motivo)`.
 #'   A server that is not there, or that says it was read without a frame of
 #'   accounts, is a server that was not read.
+#' @param stopped The rows stopped on a disabled account, as
+#'   `report_stopped_rows()` answers, or `NULL` for none. They are not in the
+#'   referents' reports: IT gets them.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
 #'   each a list of `referente`, `attivati` (rows), `scadenze` (the rows of
@@ -752,7 +755,9 @@ report_server_asks <- function(register) {
 #'   referent's report on the strength of Entra, and `non_controllate`, how
 #'   many were candidates for the year without access and could not be
 #'   checked; one row for each server of the rows that was not read, also
-#'   with none); and `senza_creatore`, how
+#'   with none) and `disattivati` (the rows of `stopped`, with `entrata`:
+#'   `"si"` or `"no"`, whether the person has entered the server, when it was
+#'   read, `""` when it was not); and `senza_creatore`, how
 #'   many rows have no referent to go to. Since rows can pass, that means
 #'   without an established owner and not only without a creator; the name
 #'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
@@ -761,10 +766,12 @@ report_server_asks <- function(register) {
 #'
 #' @keywords internal
 report_assemble <- function(rows, directory, period, previous = list(),
-                            unread = character(), servers = list()) {
+                            unread = character(), servers = list(),
+                            stopped = NULL) {
   stopifnot(
     is.data.frame(rows), is.data.frame(directory), is.list(period),
-    is.list(previous), is.character(unread), is.list(servers)
+    is.list(previous), is.character(unread), is.list(servers),
+    is.null(stopped) || is.data.frame(stopped)
   )
 
   text <- function(name) {
@@ -1118,14 +1125,30 @@ report_assemble <- function(rows, directory, period, previous = list(),
     stringsAsFactors = FALSE
   )
 
+  # The rows stopped on a disabled account, with whether the person has ever
+  # entered the server of the row: said only by a server that was read.
+  disattivati <- stopped %||% data.frame()
+  rownames(disattivati) <- NULL
+  disattivati[["entrata"]] <- vapply(seq_len(nrow(disattivati)), function(i) {
+    seen <- reading(trimws(as.character(disattivati[["server"]][[i]])))
+    if (!isTRUE(seen[["letto"]])) {
+      return("")
+    }
+    access <- report_server_access(
+      seen[["conti"]], as.character(disattivati[["username"]][[i]])
+    )
+    if (identical(access[["stato"]], "entrata")) "si" else "no"
+  }, "")
+
   for_it <- nrow(senza_referente) + length(non_giudicabili) +
-    nrow(senza_data) + nrow(server_non_letti)
+    nrow(senza_data) + nrow(server_non_letti) + nrow(disattivati)
   it <- if (for_it > 0L) {
     list(
       senza_referente = senza_referente,
       non_giudicabili = non_giudicabili,
       senza_data = senza_data,
-      server_non_letti = server_non_letti
+      server_non_letti = server_non_letti,
+      disattivati = disattivati
     )
   }
 
@@ -1788,11 +1811,15 @@ report_message <- function(report, period) {
 
 #' Compose the monthly mail to IT
 #'
-#' One mail, and only when there is something in it: the rows with no
-#' referent to send them to, the people the report cannot judge, the rows the
-#' log does not date. It has the referents' form to review, and its number
-#' counts the rows and people listed. A section with nothing in it is not
-#' announced.
+#' One mail, and only when there is something in it. Five sections, numbered
+#' in this order: the rows with no referent to send them to, the people the
+#' report cannot judge, the rows the log does not date, the servers that were
+#' not read (with the reason, and how many pairs of person and server fell
+#' back on Entra or could not be checked for the year without access), and
+#' the rows stopped on a disabled account (with whether the person has ever
+#' entered the server, when the server was read). It has the referents' form
+#' to review, and its number counts the rows, people and servers listed. A
+#' section with nothing in it is not announced.
 #'
 #' @param it The `it` part of what `report_assemble()` answered.
 #' @inheritParams report_message
@@ -2007,6 +2034,92 @@ report_it_message <- function(it, period) {
     )
   }
 
+  unread <- it[["server_non_letti"]]
+  if (!is.null(unread) && nrow(unread) > 0L) {
+    said <- list(
+      TRASPORTO_CONTRATTO_DISALLINEATO = c(
+        it = "modulo non aggiornato", en = "module not updated"
+      ),
+      TRASPORTO_NON_RAGGIUNGIBILE = c(
+        it = "non raggiungibile", en = "not reachable"
+      ),
+      TRASPORTO_SEGRETO_NON_LEGGIBILE = c(
+        it = "segreto non leggibile", en = "secret not readable"
+      ),
+      TRASPORTO_SEGRETO_RIFIUTATO = c(
+        it = "segreto rifiutato dal server", en = "secret refused by the server"
+      ),
+      TRASPORTO_ISTANZA_SENZA_MODULO = c(
+        it = "assente dall'inventario delle istanze col modulo",
+        en = "not in the inventory of the instances with the module"
+      )
+    )
+    reason <- value(unread, "motivo")
+    why <- lapply(reason, function(code) {
+      said[[code]] %||% c(
+        it = paste("errore", code), en = paste("error", code)
+      )
+    })
+    fallen <- as.integer(unread[["entra"]])
+    unchecked <- as.integer(unread[["non_controllate"]])
+    server <- value(unread, "server")
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(unread),
+      it = c(
+        paste0("Server non letti (", nrow(unread), ")"),
+        paste0(
+          "   - ", server, ": ", vapply(why, `[[`, "", "it"), ". ",
+          "Coppie persona-server ricadute su Entra: ", fallen, "; ",
+          "non controllate per l'anno senza accessi: ", unchecked, "."
+        )
+      ),
+      en = c(
+        paste0("Servers not read (", nrow(unread), ")"),
+        paste0(
+          "   - ", server, ": ", vapply(why, `[[`, "", "en"), ". ",
+          "Person-server pairs that fell back on Entra: ", fallen, "; ",
+          "not checked for the year without access: ", unchecked, "."
+        )
+      )
+    )
+  }
+
+  stopped <- it[["disattivati"]]
+  if (!is.null(stopped) && nrow(stopped) > 0L) {
+    entered <- value(stopped, "entrata")
+    server <- value(stopped, "server")
+    words <- row_words(stopped)
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(stopped),
+      it = c(
+        paste0(
+          "Richieste ferme su un account disattivato (", nrow(stopped), ")"
+        ),
+        paste0(
+          words[["it"]],
+          ifelse(entered == "si", paste0(
+            " La persona e' gia' entrata su ", server, "."
+          ), ifelse(entered == "no", paste0(
+            " La persona non e' mai entrata su ", server, "."
+          ), ""))
+        )
+      ),
+      en = c(
+        paste0(
+          "Requests stopped on a disabled account (", nrow(stopped), ")"
+        ),
+        paste0(
+          words[["en"]],
+          ifelse(entered == "si", paste0(
+            " The person has entered ", server, "."
+          ), ifelse(entered == "no", paste0(
+            " The person has never entered ", server, "."
+          ), ""))
+        )
+      )
+    )
+  }
+
   count <- sum(vapply(sections, `[[`, 0L, "n"))
   numbered <- function(lang) {
     unlist(lapply(seq_along(sections), function(i) {
@@ -2016,7 +2129,7 @@ report_it_message <- function(it, period) {
   }
 
   it_body <- c(
-    paste(count, "DA GUARDARE"),
+    paste0("DA GUARDARE: ", count),
     "",
     paste0(
       "Rapporto mensile per IT: le richieste di accesso a REDCap che il ",
@@ -2027,7 +2140,7 @@ report_it_message <- function(it, period) {
     read[["it"]]
   )
   en_body <- c(
-    paste(count, "TO REVIEW"),
+    paste0("TO REVIEW: ", count),
     "",
     paste0(
       "Monthly report for IT: the REDCap access requests the report to the ",
@@ -2040,8 +2153,8 @@ report_it_message <- function(it, period) {
 
   list(
     subject = paste0(
-      count, " da guardare: rapporto REDCap per IT, ", month[["it"]], " / ",
-      count, " to review: REDCap report for IT, ", month[["en"]]
+      "Da guardare (", count, "): rapporto REDCap per IT, ", month[["it"]],
+      " / To review (", count, "): REDCap report for IT, ", month[["en"]]
     ),
     body = paste(c(it_body, "", "---", "", en_body), collapse = "\n"),
     forma = "da_guardare",
@@ -2706,7 +2819,8 @@ provisioning_report <- function(register_url,
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
-      previous[["illeggibili"]], servers = servers
+      previous[["illeggibili"]], servers = servers,
+      stopped = report_stopped_rows(register)
     )
   }
 

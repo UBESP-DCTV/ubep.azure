@@ -10,7 +10,8 @@ report_assemble(
   period,
   previous = list(),
   unread = character(),
-  servers = list()
+  servers = list(),
+  stopped = NULL
 )
 }
 \arguments{
@@ -32,6 +33,10 @@ the mail says nothing about earlier reports rather than something false.}
 \verb{list(letto = TRUE, conti = <frame>)} or \code{list(letto = FALSE, motivo)}.
 A server that is not there, or that says it was read without a frame of
 accounts, is a server that was not read.}
+
+\item{stopped}{The rows stopped on a disabled account, as
+\code{report_stopped_rows()} answers, or \code{NULL} for none. They are not in the
+referents' reports: IT gets them.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
@@ -54,7 +59,9 @@ nothing for IT, otherwise a list of \code{senza_referente} (rows, with
 referent's report on the strength of Entra, and \code{non_controllate}, how
 many were candidates for the year without access and could not be
 checked; one row for each server of the rows that was not read, also
-with none); and \code{senza_creatore}, how
+with none) and \code{disattivati} (the rows of \code{stopped}, with \code{entrata}:
+\code{"si"} or \code{"no"}, whether the person has entered the server, when it was
+read, \code{""} when it was not); and \code{senza_creatore}, how
 many rows have no referent to go to. Since rows can pass, that means
 without an established owner and not only without a creator; the name
 stays, because it is a column of \code{UbepRapporto_CL}, and a renamed

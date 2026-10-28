@@ -899,11 +899,47 @@ assemblato <- function(servers = list(), previous = list(), registro = NULL,
   righe <- report_rows(
     registro, rep(referente, nrow(registro)), esecuzioni, periodo
   )
-  report_assemble(righe, rubrica, periodo, previous, servers = servers)
+  report_assemble(
+    righe, rubrica, periodo, previous, servers = servers,
+    stopped = report_stopped_rows(registro)
+  )
+}
+
+# A row the round stopped because the account of its person is disabled.
+ferma <- function(...) {
+  richiesta(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_ACCOUNT_DISATTIVATO", ...
+  )
 }
 
 voci_b <- function(rapporto) {
   rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
+}
+
+# What IT gets, made by the code from invented people: the server edc12 was
+# not read and Carla fell back on Entra for it; three rows are stopped on a
+# disabled account.
+per_it_con_ferme <- function() {
+  elena <- "elena.supposta@ubep.unipd.it"
+  assemblato(
+    servers = list(
+      edc10 = server_letto(entrata_su(carla), entrata_su(dario)),
+      edc12 = server_muto()
+    ),
+    registro = registro_di(
+      richiesta(record_id = "41"),
+      richiesta(record_id = "42", server = "edc12", project_id = "9302"),
+      ferma(record_id = "51", username = elena,
+            first_name = "Elena", last_name = "Supposta"),
+      ferma(record_id = "52", username = dario,
+            first_name = "Dario", last_name = "Ipotetico",
+            project_id = "9302"),
+      ferma(record_id = "53", username = elena, server = "edc12",
+            first_name = "Elena", last_name = "Supposta",
+            project_id = "9303")
+    )
+  )[["it"]]
 }
 
 test_that("il server decide la voce B anche quando Entra dice entrata", {
@@ -1026,6 +1062,53 @@ test_that("un server non letto compare a IT anche senza coppie su Entra", {
   expect_length(voci_b(tutti_entrati), 0L)
   # Un server letto non e' nell'elenco, e senza altro per IT non c'e' IT.
   expect_null(letto[["it"]])
+})
+
+
+test_that("le righe ferme arrivano a IT, con se la persona e' mai entrata", {
+  # eval
+  elena <- "elena.supposta@ubep.unipd.it"
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    ferma(record_id = "51", username = elena,
+          first_name = "Elena", last_name = "Supposta"),
+    ferma(record_id = "52", username = dario,
+          first_name = "Dario", last_name = "Ipotetico", project_id = "9302"),
+    ferma(record_id = "53", username = elena, server = "edc12",
+          first_name = "Elena", last_name = "Supposta", project_id = "9303")
+  )
+
+  a <- assemblato(
+    servers = list(
+      edc10 = server_letto(entrata_su(carla), entrata_su(dario)),
+      edc12 = server_muto()
+    ),
+    registro = registro
+  )
+
+  # test
+  fermi <- a[["it"]][["disattivati"]]
+  expect_equal(fermi[["record_id"]], c("51", "52", "53"))
+  # Elena non e' su edc10 (letto), Dario si', edc12 non e' stato letto.
+  expect_equal(fermi[["entrata"]], c("no", "si", ""))
+})
+
+
+test_that("una riga ferma basta a far partire IT, e senza ferme non parte", {
+  # eval
+  solo_ferma <- assemblato(
+    servers = list(edc10 = server_letto(entrata_su(carla))),
+    registro = registro_di(
+      richiesta(record_id = "41"),
+      ferma(record_id = "51", username = dario,
+            first_name = "Dario", last_name = "Ipotetico")
+    )
+  )
+  nessuna <- assemblato(servers = list(edc10 = server_letto(entrata_su(carla))))
+
+  # test
+  expect_equal(nrow(solo_ferma[["it"]][["disattivati"]]), 1L)
+  expect_null(nessuna[["it"]])
 })
 
 
@@ -2061,6 +2144,15 @@ test_that("the mails carry no long dash and no character outside ASCII", {
     expect_true(all(utf8ToInt(testo) < 128L))
   }
 
+  # The mail to IT, with the two sections of the servers not read and the
+  # rows stopped on a disabled account.
+  per_it <- report_it_message(per_it_con_ferme(), novembre())
+  testo <- paste(per_it[["subject"]], per_it[["body"]])
+  expect_true(grepl("Server non letti", testo, fixed = TRUE))
+  expect_true(grepl("Richieste ferme", testo, fixed = TRUE))
+  expect_false(grepl(intToUtf8(0x2014L), testo, fixed = TRUE))
+  expect_true(all(utf8ToInt(testo) < 128L))
+
   # The expirations of the month.
   voce_scadenze <- report_expiring_lines(
     registro_di(richiesta(expiration = "2026-11-20")), novembre()
@@ -2100,11 +2192,11 @@ test_that("the mail to IT says what has no referent, by section", {
   expect_equal(
     messaggio[["subject"]],
     paste0(
-      "3 da guardare: rapporto REDCap per IT, ottobre 2026 / ",
-      "3 to review: REDCap report for IT, October 2026"
+      "Da guardare (3): rapporto REDCap per IT, ottobre 2026 / ",
+      "To review (3): REDCap report for IT, October 2026"
     )
   )
-  expect_equal(testo[["it"]][[1L]], "3 DA GUARDARE")
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 3")
   expect_true(
     "1. Richieste senza un referente a cui mandare il rapporto (2)" %in%
       testo[["it"]]
@@ -2140,6 +2232,169 @@ test_that("the mail to IT says what has no referent, by section", {
   # An empty section is not announced.
   expect_false(any(startsWith(testo[["it"]], "3.")))
   expect_true(all(utf8ToInt(messaggio[["body"]]) < 128L))
+})
+
+
+test_that("IT riceve i server non letti con motivo e coppie ricadute", {
+  # eval
+  messaggio <- report_it_message(per_it_con_ferme(), novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_true(any(grepl("Server non letti (1)", testo[["it"]], fixed = TRUE)))
+  expect_true(any(grepl(
+    "edc12: modulo non aggiornato", testo[["it"]], fixed = TRUE
+  )))
+  expect_true(paste0(
+    "   - edc12: modulo non aggiornato. Coppie persona-server ricadute su ",
+    "Entra: 1; non controllate per l'anno senza accessi: 0."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - edc12: module not updated. Person-server pairs that fell back on ",
+    "Entra: 1; not checked for the year without access: 0."
+  ) %in% testo[["en"]])
+})
+
+
+test_that("il motivo di un server non letto e' detto in parole", {
+  # eval
+  motivi <- c(
+    "TRASPORTO_CONTRATTO_DISALLINEATO", "TRASPORTO_NON_RAGGIUNGIBILE",
+    "TRASPORTO_SEGRETO_NON_LEGGIBILE", "TRASPORTO_SEGRETO_RIFIUTATO",
+    "TRASPORTO_ISTANZA_SENZA_MODULO", "INTERNO"
+  )
+  it <- list(server_non_letti = data.frame(
+    server = paste0("edc", 10:15), motivo = motivi, entra = 0L,
+    non_controllate = 2L, stringsAsFactors = FALSE
+  ))
+
+  testo <- parti(report_it_message(it, novembre()))
+
+  # test
+  riga <- function(server, lingua) {
+    trimws(sub(
+      "^ +- [a-z0-9]+: ", "",
+      grep(paste0("- ", server, ": "), testo[[lingua]], value = TRUE)
+    ))
+  }
+  expect_match(riga("edc10", "it"), "^modulo non aggiornato[.]")
+  expect_match(riga("edc11", "it"), "^non raggiungibile[.]")
+  expect_match(riga("edc12", "it"), "^segreto non leggibile[.]")
+  expect_match(riga("edc13", "it"), "^segreto rifiutato dal server[.]")
+  expect_match(
+    riga("edc14", "it"), "^assente dall'inventario delle istanze col modulo[.]"
+  )
+  expect_match(riga("edc15", "it"), "^errore INTERNO[.]")
+  expect_match(riga("edc10", "en"), "^module not updated[.]")
+  expect_match(riga("edc15", "en"), "^error INTERNO[.]")
+  expect_match(
+    riga("edc15", "it"), "non controllate per l'anno senza accessi: 2"
+  )
+})
+
+
+test_that("le righe ferme su un account disattivato arrivano a IT", {
+  # eval
+  messaggio <- report_it_message(per_it_con_ferme(), novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_true(any(grepl(
+    "Richieste ferme su un account disattivato (3)", testo[["it"]],
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "Requests stopped on a disabled account (3)", testo[["en"]], fixed = TRUE
+  )))
+  # Elena is not on edc10, which was read.
+  expect_true(paste0(
+    "   - Richiesta 51: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc10, progetto 9301. La persona non e' mai entrata su edc10."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Request 51: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc10, project 9301. The person has never entered edc10."
+  ) %in% testo[["en"]])
+  # Dario has entered it.
+  expect_true(paste0(
+    "   - Richiesta 52: Dario Ipotetico, dario.ipotetico@ubep.unipd.it: ",
+    "edc10, progetto 9302. La persona e' gia' entrata su edc10."
+  ) %in% testo[["it"]])
+  # edc12 was not read: nothing is said of the person there.
+  expect_true(paste0(
+    "   - Richiesta 53: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc12, progetto 9303."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Request 53: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc12, project 9303."
+  ) %in% testo[["en"]])
+})
+
+
+test_that("il numero di una sezione nuova conta le righe che elenca", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    ferma(record_id = "51", username = dario,
+          first_name = "Dario", last_name = "Ipotetico"),
+    ferma(record_id = "52", username = dario,
+          first_name = "Dario", last_name = "Ipotetico", project_id = "9302")
+  )
+  it <- assemblato(
+    servers = list(edc10 = server_letto(entrata_su(carla))),
+    registro = registro
+  )[["it"]]
+
+  m <- report_it_message(it, novembre())
+  testo <- parti(m)
+
+  # test
+  # Two rows of one person: two lines, and the number says two.
+  expect_true(any(grepl(
+    "Richieste ferme su un account disattivato (2)", testo[["it"]],
+    fixed = TRUE
+  )))
+  expect_equal(m[["n"]], 2L)
+  expect_false(any(grepl("Server non letti", testo[["it"]], fixed = TRUE)))
+})
+
+
+test_that("la mail a IT ha la forma da guardare col numero dopo i due punti", {
+  # eval
+  m <- report_it_message(per_it_con_ferme(), novembre())
+  testo <- parti(m)
+
+  # test
+  # One server not read, three rows stopped.
+  expect_equal(m[["n"]], 4L)
+  expect_equal(
+    m[["subject"]],
+    paste0(
+      "Da guardare (4): rapporto REDCap per IT, ottobre 2026 / ",
+      "To review (4): REDCap report for IT, October 2026"
+    )
+  )
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 4")
+  expect_equal(testo[["en"]][[2L]], "TO REVIEW: 4")
+  expect_equal(m[["forma"]], "da_guardare")
+})
+
+
+test_that("il solo server non letto fa partire IT con la sua sezione", {
+  # eval
+  a <- assemblato(servers = list(edc10 = server_muto("INTERNO")))
+
+  m <- report_it_message(a[["it"]], novembre())
+  testo <- parti(m)
+
+  # test
+  expect_equal(m[["n"]], 1L)
+  expect_match(m[["subject"]], "^Da guardare [(]1[)]: rapporto REDCap per IT")
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 1")
+  expect_true("1. Server non letti (1)" %in% testo[["it"]])
+  expect_false(any(grepl("Richieste ferme", testo[["it"]], fixed = TRUE)))
+  expect_false(any(startsWith(testo[["it"]], "2.")))
 })
 
 
@@ -2495,7 +2750,9 @@ test_that("the first run sends to the referent and to IT, and keeps track", {
   expect_match(
     mail[[1L]][["subject"]], "^Da guardare [(]1[)]: accessi REDCap"
   )
-  expect_match(mail[[2L]][["subject"]], "^1 da guardare: rapporto REDCap")
+  expect_match(
+    mail[[2L]][["subject"]], "^Da guardare [(]1[)]: rapporto REDCap"
+  )
 
   invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
   expect_equal(
@@ -2522,6 +2779,55 @@ test_that("the first run sends to the referent and to IT, and keeps track", {
   expect_true(record[["mese_completo"]])
   expect_false(record[["in_ritardo"]])
   expect_equal(record[["errori"]], character())
+})
+
+
+test_that("IT riceve la mail per una riga ferma, anche senza altro", {
+  # eval
+  dati <- scenario()
+  # Ogni riga ha il suo referente e la sua data: per IT resta la sola riga
+  # ferma su un account disattivato.
+  dati[["creazioni"]] <- rbind(
+    dati[["creazioni"]],
+    evento("2026-10-01 10:00", referente, "", record = "43",
+           action = "Create record 43")
+  )
+  dati[["registro"]] <- rbind(
+    dati[["registro"]],
+    registro_di(ferma(
+      record_id = "51", username = "elena.supposta@ubep.unipd.it",
+      first_name = "Elena", last_name = "Supposta"
+    ))
+  )
+  # Un server risponde per tutti i nomi chiesti: anche Elena, che non c'e'.
+  dati[["conti"]][["edc10.example.org"]] <- c(
+    dati[["conti"]][["edc10.example.org"]],
+    list(list(
+      username = "elena.supposta@ubep.unipd.it", exists = FALSE,
+      user_firstvisit = NULL, user_lastlogin = NULL, user_lastactivity = NULL
+    ))
+  )
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta)
+
+  # test
+  mail <- posta[["inviate"]][["mail"]]
+  expect_equal(vapply(mail, `[[`, "", "to"), c(referente, it_prova))
+  expect_match(
+    mail[[2L]][["subject"]], "^Da guardare [(]1[)]: rapporto REDCap per IT"
+  )
+  expect_true(grepl(
+    "Richiesta 51: Elena Supposta, elena.supposta@ubep.unipd.it: edc10, ",
+    mail[[2L]][["body"]], fixed = TRUE
+  ))
+  expect_true(grepl(
+    "La persona non e' mai entrata su edc10.", mail[[2L]][["body"]],
+    fixed = TRUE
+  ))
+  expect_equal(report_record(esito, posta = TRUE)[["senza_creatore"]], 0L)
 })
 
 
