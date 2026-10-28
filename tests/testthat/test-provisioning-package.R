@@ -22,7 +22,9 @@ test_that("build_redcap_module produces an installable archive", {
     paste0("ubep_provisioning_v", version, "/lib/VersionGate.php") %in% entries
   )
   expect_true(
-    paste0("ubep_provisioning_v", version, "/lib/AccountReader.php") %in% entries
+    paste0(
+      "ubep_provisioning_v", version, "/lib/AccountReader.php"
+    ) %in% entries
   )
 })
 

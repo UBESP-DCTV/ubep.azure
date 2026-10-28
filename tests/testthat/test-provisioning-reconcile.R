@@ -1074,7 +1074,7 @@ test_that("a real write is followed by a read-back, and applied_as comes from it
 })
 
 
-test_that("una scrittura vera su un modulo al contratto 4 si applica e si rilegge", { # nolint: line_length_linter.
+test_that("una scrittura vera su un modulo al 4 si applica e si rilegge", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list())),
