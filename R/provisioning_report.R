@@ -2168,6 +2168,85 @@ report_it_message <- function(it, period) {
 }
 
 
+#' Compose the report of a month that did not leave on time
+#'
+#' The report of a month lost, sent by the first run that can send. It says
+#' it is late and which month it covers, in the subject and on the first
+#' line, and carries the accesses activated in that month, read from the log
+#' as always. The people to look at depend on the state of today, and would
+#' be the same in every late report: they are only in the report of the
+#' month covered by the run, which this one points to.
+#'
+#' @param attivati The `attivati` of a referent's report for the month lost,
+#'   rows, or an empty data frame for none.
+#' @param period What `report_month()` answered for the run, the month it
+#'   covers being the one this report points to.
+#' @param month The month lost, `"AAAA-MM"`.
+#'
+#' @return A list with `subject`, `body`, `forma` (`in_ritardo`) and `n`
+#'   (zero: nobody is listed to look at).
+#'
+#' @keywords internal
+report_late_message <- function(attivati, period, month) {
+  stopifnot(
+    is.data.frame(attivati), is.list(period),
+    is.character(month), length(month) == 1L
+  )
+
+  late <- report_month_words(month)
+  current <- report_month_words(period[["mese"]])
+  activated <- report_activated_lines(attivati)
+  read <- report_read_words(period)
+
+  it <- c(
+    paste0("IN RITARDO, ", toupper(late[["it"]])),
+    "",
+    paste0(
+      "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
+      "referente. Mese: ", late[["it"]], ". Questo rapporto e' partito in ",
+      "ritardo: porta solo gli accessi attivati in quel mese."
+    ),
+    paste0(
+      "Le persone da guardare sono nel rapporto di ", current[["it"]],
+      ", il piu' recente."
+    ),
+    "",
+    activated[["it"]],
+    "",
+    read[["it"]],
+    "Per domande rispondi a questo messaggio: la risposta arriva a IT."
+  )
+  en <- c(
+    paste0("LATE, ", toupper(late[["en"]])),
+    "",
+    paste0(
+      "Monthly report on the REDCap access requests you are the referent ",
+      "of. Month: ", late[["en"]], ". This report left late: it carries ",
+      "only the accesses granted in that month."
+    ),
+    paste0(
+      "The people to review are in the report of ", current[["en"]],
+      ", the latest."
+    ),
+    "",
+    activated[["en"]],
+    "",
+    read[["en"]],
+    "For questions, reply to this message: the reply reaches IT."
+  )
+
+  list(
+    subject = paste0(
+      "In ritardo, ", late[["it"]], ": accessi REDCap / Late, ",
+      late[["en"]], ": REDCap access"
+    ),
+    body = paste(c(it, "", "---", "", en), collapse = "\n"),
+    forma = "in_ritardo",
+    n = 0L
+  )
+}
+
+
 #' The name the report to IT goes under in the ledger
 #'
 #' Parentheses are not allowed in a REDCap username, so no referent can ever
@@ -2552,6 +2631,139 @@ report_ledger_add <- function(dir, month, ledger, entry) {
 }
 
 
+#' The first month the monthly report covers
+#'
+#' A month before it was never due, and is not recovered whatever the state
+#' directory holds.
+#'
+#' @return A month, `"AAAA-MM"`.
+#'
+#' @keywords internal
+report_first_month <- function() {
+  "2026-10"
+}
+
+
+#' The months whose reports did not all leave, from the first one covered
+#'
+#' A month is lost when its ledger of sent reports lacks any of the reports
+#' its list of the reports due holds, or when no list is on record: a month
+#' the job never read whole. The report to IT (`report_it_key()`) is not
+#' counted, because what it carries is the state of today and the report to
+#' IT of the month the run covers carries it. A ledger or a list that does
+#' not read leaves its month out, as it would send blind, and says why.
+#'
+#' @param dir The job's state directory.
+#' @param month The month the run covers: the months checked are those from
+#'   `report_first_month()` up to it, excluded.
+#'
+#' @return A list with `ok`, false when a ledger or a list did not read;
+#'   `errors`, `RAPPORTO_INVII_ILLEGGIBILI` and `RAPPORTO_DOVUTI_ILLEGGIBILI`;
+#'   and `mesi`, the lost months oldest first, each a list of `mese`,
+#'   `dovuti` (as kept, `NULL` when none is) and `ledger` (as
+#'   `report_ledger_read()` answered).
+#'
+#' @keywords internal
+report_lost_months <- function(dir, month) {
+  stopifnot(
+    is.character(dir), length(dir) == 1L, nzchar(dir),
+    is.character(month), length(month) == 1L
+  )
+
+  candidates <- character()
+  candidate <- report_first_month()
+  while (candidate < month) {
+    candidates <- c(candidates, candidate)
+    candidate <- report_shift_month(candidate, 1L)
+  }
+
+  lost <- list()
+  errors <- character()
+  for (m in candidates) {
+    due <- report_due_read(dir, m)
+    ledger <- report_ledger_read(dir, m)
+    errors <- c(errors, due[["errors"]], ledger[["errors"]])
+    if (!isTRUE(due[["ok"]]) || !isTRUE(ledger[["ok"]])) {
+      next
+    }
+    sent <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
+    left <- setdiff(due[["dovuti"]], c(sent, report_it_key()))
+    if (is.null(due[["dovuti"]]) || length(left) > 0L) {
+      lost[[length(lost) + 1L]] <- list(
+        mese = m, dovuti = due[["dovuti"]], ledger = ledger
+      )
+    }
+  }
+
+  list(ok = length(errors) == 0L, errors = unique(errors), mesi = lost)
+}
+
+
+#' Send the late reports of one month lost
+#'
+#' Each report that left is written in the ledger of its month, as if it had
+#' left on time, with the date of the run and the two tables empty: what it
+#' named is not what the month after reads back. A ledger that cannot be
+#' written stops the month, as in the month the run covers, and what it did
+#' not try counts as failed.
+#'
+#' @param batch What `provisioning_report()` composed for one lost month:
+#'   `mese`, `ledger`, `pendenti` (who has not received it) and `rapporti`
+#'   (their messages, by name).
+#' @param mailer,copy_to As in `provisioning_report()`; IT is in copy.
+#' @param complete Whether the run read whole and may send.
+#' @param dir The job's state directory.
+#' @param at When the run read, `"%Y-%m-%d %H:%M"` in Rome.
+#'
+#' @return A list with `rapporti`, a data frame of `mese`, `destinatario`
+#'   and `esito` (`mandato`, `fallito` or `non_mandato`), and `errors`.
+#'
+#' @keywords internal
+report_recover <- function(batch, mailer, complete, copy_to, dir, at) {
+  who <- batch[["pendenti"]]
+  outcome <- rep("non_mandato", length(who))
+  errors <- character()
+  ledger <- batch[["ledger"]]
+
+  if (!is.null(mailer) && !complete) {
+    outcome[] <- "fallito"
+  }
+  if (!is.null(mailer) && complete) {
+    for (k in seq_along(who)) {
+      answer <- report_deliver(
+        mailer, to = who[[k]], cc = copy_to,
+        message = batch[["rapporti"]][[who[[k]]]]
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        outcome[[k]] <- "fallito"
+        errors <- c(errors, answer[["errors"]])
+        next
+      }
+      outcome[[k]] <- "mandato"
+
+      written <- report_ledger_add(
+        dir, batch[["mese"]], ledger,
+        list(destinatario = who[[k]], at = at)
+      )
+      if (!isTRUE(written[["ok"]])) {
+        errors <- c(errors, written[["errors"]])
+        outcome[-seq_len(k)] <- "fallito"
+        break
+      }
+      ledger <- written[["ledger"]]
+    }
+  }
+
+  list(
+    rapporti = data.frame(
+      mese = rep(batch[["mese"]], length(who)), destinatario = who,
+      esito = outcome, stringsAsFactors = FALSE
+    ),
+    errors = errors
+  )
+}
+
+
 #' Hand one report to the mailer, redirected when asked
 #'
 #' @param mailer `function(to, cc, subject, body)` returning `ok` and `errors`.
@@ -2582,6 +2794,54 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
       list(ok = FALSE, errors = "TRASPORTO_POSTA_NON_RAGGIUNGIBILE")
     }
   )
+}
+
+
+#' Whom each row belonged to as a month ended
+#'
+#' The owner is read on the row's log cut at midnight in Rome between the
+#' last day of the month and the first of the next: `before` cuts the writes
+#' of `owned_by` only, and without the channel's account a second account
+#' writing a channel field after it would still make the row ambiguous. A
+#' stamp that does not read stays, and the owner is unknown, as on the whole
+#' log. A row whose log was not read keeps its creator.
+#'
+#' @param logs One element per row, in the register's order: the row's log,
+#'   or `NULL` where it was not read.
+#' @param ids The rows' record ids.
+#' @param creators Whom each row was made by, as `log_creators()` names them.
+#' @param month The month covered, `"AAAA-MM"`.
+#' @param channel_account As in `provisioning_report()`.
+#'
+#' @return A character vector, one owner for each row, `""` where none is
+#'   established.
+#'
+#' @keywords internal
+report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
+  stopifnot(
+    is.list(logs), is.character(ids), is.character(creators),
+    length(logs) == length(ids), length(creators) == length(ids),
+    is.character(month), length(month) == 1L
+  )
+
+  month_end <- paste0(report_shift_month(month, 1L), "-01 00:00")
+  owners <- creators
+  for (i in seq_along(logs)) {
+    log <- logs[[i]]
+    if (is.null(log)) {
+      next
+    }
+    stamps <- trimws(as.character(log[["timestamp"]]))
+    upto <- log[
+      !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,
+      drop = FALSE
+    ]
+    owner <- log_owner(
+      upto, ids[[i]], creators[[i]], channel_account, before = month_end
+    )
+    owners[[i]] <- if (is.na(owner)) "" else owner
+  }
+  owners
 }
 
 
@@ -2617,12 +2877,18 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' beside the ledger (`report_due_read()`); with none on record it says
 #' nothing is due, and the alarm on absence is the one that speaks.
 #'
-#' On the 1st the run moves on to the month just ended, and a report of the
-#' month before that still not sent is not sent any more: it would describe a
-#' month two behind. It is not dropped in silence either. Every run of the
-#' real month compares the ledger of the month before with what its last whole
-#' reading found due, and while a report is missing the record carries
-#' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+#' On the 1st the run moves on to the month just ended. A month whose reports
+#' did not all leave is not given up: the first run that can send (read whole,
+#' the post on) sends the late reports of those months first, oldest first,
+#' each saying it is late and carrying the accesses activated in its own month
+#' (`report_late_message()`), and then the report of the month covered. The
+#' months checked are those from `report_first_month()` up to the month
+#' covered, excluded (`report_lost_months()`); a month with no list of the
+#' reports due kept takes the referents of today for it, and keeps them. The
+#' report to IT is not recovered, since it carries the state of today. Each
+#' late report that leaves is written in the ledger of its month. While a
+#' month is still missing a report after the round, the record carries
+#' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, and `in_ritardo` is true.
 #'
 #' **The real ledger is written only by a real run**: the post on, nobody
 #' redirected, the month the clock gives. A run with the post off sends
@@ -2631,7 +2897,9 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' of October would leave nothing to leave on the 1st of November. So it keeps
 #' a ledger of its own, and is idempotent as the real run is: the timer of a
 #' field test does not send everything again every day. A run with a forced
-#' month writes nothing at all.
+#' month writes nothing at all. Neither of the two recovers a month lost: a
+#' late report that went to the test address would be written in the real
+#' ledger of its month, and its referent would never receive it.
 #'
 #' The report to IT goes to `copy_to`, the address IT is in copy at on every
 #' outcome, under the name `report_it_key()`; the referents' reports go to the
@@ -2677,8 +2945,12 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #'   secret, is not read.
 #'
 #' @return A list that `report_record()` turns into the record, plus
-#'   `rapporti`, one row per report due, for whoever reads a single run, and
-#'   `server`, what `report_server_reads()` answered for each server asked.
+#'   `rapporti`, one row per report due and per late report, with the `mese`
+#'   it covers, for whoever reads a single run; `server`, what
+#'   `report_server_reads()` answered for each server asked; `recuperati`,
+#'   the late reports tried (a data frame of `mese`, `destinatario` and
+#'   `esito`, `mandato` or `fallito`); and `mesi_persi`, the months still
+#'   missing a report after the round.
 #'
 #' @keywords internal
 provisioning_report <- function(register_url,
@@ -2712,21 +2984,17 @@ provisioning_report <- function(register_url,
   previous <- report_ledger_previous(ledger_dir, period[["mese"]])
   errors <- c(errors, ledger[["errors"]], previous[["errors"]])
 
-  # The month before is over for good: what it left unsent is said, and not
-  # sent. Its ledger, when it does not read, is already named above.
-  if (!test_run && !isTRUE(period[["forzato"]])) {
-    before <- report_shift_month(period[["mese"]], -1L)
-    before_due <- report_due_read(ledger_dir, before)
-    before_ledger <- report_ledger_read(ledger_dir, before)
-    errors <- c(errors, before_due[["errors"]])
-    left <- setdiff(
-      before_due[["dovuti"]] %||% character(),
-      vapply(before_ledger[["invii"]], `[[`, "", "destinatario")
-    )
-    if (isTRUE(before_ledger[["ok"]]) && length(left) > 0L) {
-      errors <- c(errors, "RAPPORTO_MESE_PRECEDENTE_INCOMPLETO")
-    }
+  # The months lost: a real run is the only one that recovers them, and the
+  # ones still lost after its round are said in the record. A forced or a
+  # redirected run would write a report that went elsewhere into the real
+  # ledger of a month, and the referent would never receive it.
+  recover <- !test_run && !isTRUE(period[["forzato"]])
+  lost <- if (recover) {
+    report_lost_months(ledger_dir, period[["mese"]])
+  } else {
+    list(ok = TRUE, errors = character(), mesi = list())
   }
+  errors <- c(errors, lost[["errors"]])
 
   # The register and its creations, asked as the round asks them: the
   # creations in one call and with no window, since a record is created once.
@@ -2753,6 +3021,7 @@ provisioning_report <- function(register_url,
   }
 
   assembled <- list(referenti = list(), it = NULL, senza_creatore = 0L)
+  batches <- list()
   logs_read <- TRUE
   servers <- list()
   unread_servers <- 0L
@@ -2774,10 +3043,7 @@ provisioning_report <- function(register_url,
     # looking at again.
     executions <- rep(list(NULL), nrow(register))
     since <- rep(list(NULL), nrow(register))
-    # The owner as the month covered ended, and not today's. The rows whose
-    # log is not read keep their creator: none of them enters the report.
-    owners <- creators
-    month_end <- paste0(report_shift_month(period[["mese"]], 1L), "-01 00:00")
+    logs <- rep(list(NULL), nrow(register))
     active <- field("request_status") == "active" &
       field("outcome") == "applied"
     for (i in which(active)) {
@@ -2789,20 +3055,7 @@ provisioning_report <- function(register_url,
         since[i] <- list(
           report_person_since(answer[["log"]], ids[[i]], channel_account)
         )
-        # The owner is read on the log as it stood when the month ended:
-        # `before` cuts the writes of `owned_by` only, and without the
-        # channel's account a second account writing a channel field after
-        # it would still make the row ambiguous. A stamp that does not read
-        # stays, and the owner is unknown, as on the whole log.
-        stamps <- trimws(as.character(answer[["log"]][["timestamp"]]))
-        upto <- answer[["log"]][
-          !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,
-          drop = FALSE
-        ]
-        owner <- log_owner(
-          upto, ids[[i]], creators[[i]], channel_account, before = month_end
-        )
-        owners[[i]] <- if (is.na(owner)) "" else owner
+        logs[i] <- list(answer[["log"]])
       } else {
         logs_read <- FALSE
         errors <- c(errors, answer[["errors"]])
@@ -2818,15 +3071,64 @@ provisioning_report <- function(register_url,
     )
     unread_servers <- sum(!vapply(servers, `[[`, NA, "letto"))
 
+    # The owner as the month covered ended, and not today's. The rows whose
+    # log is not read keep their creator: none of them enters the report.
+    channel_known <- !is.null(channel_account)
     rows <- report_rows(
-      register, owners, executions, period, since, born,
-      channel_known = !is.null(channel_account)
+      register,
+      report_owners(logs, ids, creators, period[["mese"]], channel_account),
+      executions, period, since, born, channel_known = channel_known
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
       previous[["illeggibili"]], servers = servers,
       stopped = report_stopped_rows(register)
     )
+
+    # The reports of the months lost, from the same readings and the owners
+    # as each of those months ended. What a late report carries is the month's
+    # activations: the rest is today's state, and the report of the month
+    # covered carries it.
+    for (item in if (logs_read) lost[["mesi"]] else list()) {
+      lost_period <- period
+      lost_period[["mese"]] <- item[["mese"]]
+      lost_period[["prossimo"]] <- as.Date(
+        paste0(report_shift_month(item[["mese"]], 2L), "-01")
+      )
+      lost_assembled <- report_assemble(
+        report_rows(
+          register,
+          report_owners(logs, ids, creators, item[["mese"]], channel_account),
+          executions, lost_period, since, born, channel_known = channel_known
+        ),
+        sweep[["users"]], lost_period
+      )
+
+      # Who is due: the list kept when the month was read whole, otherwise the
+      # referents of today for that month, which are kept from now on.
+      due_then <- item[["dovuti"]]
+      if (is.null(due_then)) {
+        due_then <- names(lost_assembled[["referenti"]]) %||% character()
+        kept <- report_due_write(
+          ledger_dir, item[["mese"]], due_then, period[["letto"]]
+        )
+        errors <- c(errors, kept[["errors"]])
+      }
+      due_then <- setdiff(due_then, report_it_key())
+      owed <- setdiff(
+        due_then, vapply(item[["ledger"]][["invii"]], `[[`, "", "destinatario")
+      )
+      batches[[length(batches) + 1L]] <- list(
+        mese = item[["mese"]], ledger = item[["ledger"]], pendenti = owed,
+        rapporti = stats::setNames(lapply(owed, function(who) {
+          report_late_message(
+            lost_assembled[["referenti"]][[who]][["attivati"]] %||%
+              data.frame(),
+            period, item[["mese"]]
+          )
+        }), owed)
+      )
+    }
   }
 
   reports <- lapply(assembled[["referenti"]], report_message, period = period)
@@ -2858,6 +3160,33 @@ provisioning_report <- function(register_url,
   # leave twice. The earlier ones serve "reported before" and nothing else.
   complete <- read_whole && isTRUE(ledger[["ok"]])
   keeps_ledger <- !is.null(mailer) && !isTRUE(period[["forzato"]])
+
+  # The months lost go first, oldest first, and a failure there does not stop
+  # the month covered. What is still missing afterwards is said in the record.
+  recovered <- data.frame(
+    mese = character(), destinatario = character(), esito = character(),
+    stringsAsFactors = FALSE
+  )
+  late_table <- recovered
+  for (batch in batches) {
+    answer <- report_recover(
+      batch, mailer, complete, copy_to, ledger_dir, period[["letto"]]
+    )
+    errors <- c(errors, answer[["errors"]])
+    late_table <- rbind(late_table, answer[["rapporti"]])
+  }
+  recovered <- late_table[late_table[["esito"]] != "non_mandato", ,
+                          drop = FALSE]
+  rownames(recovered) <- NULL
+  still_lost <- vapply(lost[["mesi"]], function(item) {
+    m <- item[["mese"]]
+    !(m %in% vapply(batches, `[[`, "", "mese")) ||
+      any(late_table[["esito"]][late_table[["mese"]] == m] != "mandato")
+  }, NA)
+  lost_months <- vapply(lost[["mesi"]], `[[`, "", "mese")[still_lost]
+  if (length(lost_months) > 0L) {
+    errors <- c(errors, "RAPPORTO_MESE_PRECEDENTE_INCOMPLETO")
+  }
 
   sent <- character()
   failed <- character()
@@ -2974,16 +3303,29 @@ provisioning_report <- function(register_url,
       function(r) length(r[["senza_accessi"]]), 0L
     )),
     senza_creatore = as.integer(assembled[["senza_creatore"]]),
-    rapporti = data.frame(
-      destinatario = due,
-      forma = form_of,
-      voci = count_of,
-      esito = ifelse(
-        due %in% sent, "mandato",
-        ifelse(due %in% already, "gia_mandato",
-               ifelse(due %in% failed, "fallito", "non_mandato"))
+    recuperati = recovered,
+    mesi_persi = lost_months,
+    rapporti = rbind(
+      data.frame(
+        mese = late_table[["mese"]],
+        destinatario = late_table[["destinatario"]],
+        forma = rep("in_ritardo", nrow(late_table)),
+        voci = rep(0L, nrow(late_table)),
+        esito = late_table[["esito"]],
+        stringsAsFactors = FALSE
       ),
-      stringsAsFactors = FALSE
+      data.frame(
+        mese = rep(period[["mese"]], length(due)),
+        destinatario = due,
+        forma = form_of,
+        voci = count_of,
+        esito = ifelse(
+          due %in% sent, "mandato",
+          ifelse(due %in% already, "gia_mandato",
+                 ifelse(due %in% failed, "fallito", "non_mandato"))
+        ),
+        stringsAsFactors = FALSE
+      )
     ),
     errori = unique(errors)
   )
@@ -2992,20 +3334,22 @@ provisioning_report <- function(register_url,
 
 #' Whether the month's reports are late
 #'
-#' From the second day of the month on, with the month not complete. Computed
-#' here and not in the query of the alarm, so that a test covers it. A forced
-#' run speaks about another month and cannot say the real one is late: it
-#' says false, and the next run of the timer says the truth.
+#' From the second day of the month on, with the month not complete, or while
+#' a month lost still misses a report. Computed here and not in the query of
+#' the alarm, so that a test covers it. A forced run speaks about another
+#' month and cannot say the real one is late: it says false, and the next run
+#' of the timer says the truth.
 #'
 #' @param giorno The day of the month the run is in, in Rome.
 #' @param completo Whether every report of the month has left.
 #' @param forzato Whether the month was forced.
+#' @param persi How many months lost still miss a report.
 #'
 #' @return One logical.
 #'
 #' @keywords internal
-report_late <- function(giorno, completo, forzato) {
-  !isTRUE(forzato) && giorno >= 2L && !isTRUE(completo)
+report_late <- function(giorno, completo, forzato, persi = 0L) {
+  !isTRUE(forzato) && ((giorno >= 2L && !isTRUE(completo)) || persi > 0L)
 }
 
 
@@ -3020,11 +3364,16 @@ report_late <- function(giorno, completo, forzato) {
 #' `referenti` counts the reports of the month, the one to IT included: those
 #' due, as today's reading or the last whole one found them, and those the
 #' ledger says left on earlier days. `mese_completo` is the design's
-#' `gia_mandati + mandati == referenti`, on those. A day that cannot read
+#' `gia_mandati + mandati == referenti`, on those, and `mandati` there are the
+#' reports of the month covered only: the late reports of the months lost
+#' count in `mandati` and `falliti` of the record, and not in the completeness
+#' of the month, which a recovery of two of three would otherwise make look
+#' whole. A day that cannot read
 #' judges the month on the last whole reading, so a reading that fails after
 #' the month was sent does not make it late; with no whole reading on record
 #' nothing is due, and the month is not called late on a guess.
-#' `in_ritardo` is `report_late()`.
+#' `in_ritardo` is `report_late()`: from the 2nd with the month not complete,
+#' or while a month lost still misses a report (`mesi_persi`).
 #'
 #' `istanze_non_lette` counts the servers the report asked and could not read.
 #' `voci_senza_accessi` counts the pairs of person and server listed in full
@@ -3051,6 +3400,7 @@ report_record <- function(esito, posta) {
   already <- as.character(esito[["gia"]] %||% character())
   sent <- as.character(esito[["mandati"]] %||% character())
   forms <- as.character(esito[["forme"]] %||% character())
+  recovered <- as.character(esito[["recuperati"]][["esito"]])
 
   referenti <- length(union(due, already))
   completo <- length(already) + length(sent) == referenti
@@ -3065,9 +3415,9 @@ report_record <- function(esito, posta) {
     posta = isTRUE(posta),
     posta_dirottata = isTRUE(esito[["posta_dirottata"]]),
     referenti = referenti,
-    mandati = length(sent),
+    mandati = length(sent) + sum(recovered == "mandato"),
     gia_mandati = length(already),
-    falliti = length(esito[["falliti"]]),
+    falliti = length(esito[["falliti"]]) + sum(recovered == "fallito"),
     in_ordine = sum(forms == "in_ordine"),
     da_guardare = sum(forms == "da_guardare"),
     voci_attivati = as.integer(esito[["voci_attivati"]] %||% 0L),
@@ -3077,7 +3427,8 @@ report_record <- function(esito, posta) {
     senza_creatore = as.integer(esito[["senza_creatore"]] %||% 0L),
     mese_completo = completo,
     in_ritardo = report_late(
-      esito[["giorno"]], completo, esito[["forzato"]]
+      esito[["giorno"]], completo, esito[["forzato"]],
+      persi = length(esito[["mesi_persi"]])
     ),
     errori = as.character(esito[["errori"]] %||% character())
   )

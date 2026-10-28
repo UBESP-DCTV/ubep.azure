@@ -58,8 +58,12 @@ secret, is not read.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus
-\code{rapporti}, one row per report due, for whoever reads a single run, and
-\code{server}, what \code{report_server_reads()} answered for each server asked.
+\code{rapporti}, one row per report due and per late report, with the \code{mese}
+it covers, for whoever reads a single run; \code{server}, what
+\code{report_server_reads()} answered for each server asked; \code{recuperati},
+the late reports tried (a data frame of \code{mese}, \code{destinatario} and
+\code{esito}, \code{mandato} or \code{fallito}); and \code{mesi_persi}, the months still
+missing a report after the round.
 }
 \description{
 \strong{It reads and sends mail, and nothing else.} It does not write in the
@@ -93,12 +97,18 @@ judges the month on the reports the last whole reading found due, kept
 beside the ledger (\code{report_due_read()}); with none on record it says
 nothing is due, and the alarm on absence is the one that speaks.
 
-On the 1st the run moves on to the month just ended, and a report of the
-month before that still not sent is not sent any more: it would describe a
-month two behind. It is not dropped in silence either. Every run of the
-real month compares the ledger of the month before with what its last whole
-reading found due, and while a report is missing the record carries
-\code{RAPPORTO_MESE_PRECEDENTE_INCOMPLETO}.
+On the 1st the run moves on to the month just ended. A month whose reports
+did not all leave is not given up: the first run that can send (read whole,
+the post on) sends the late reports of those months first, oldest first,
+each saying it is late and carrying the accesses activated in its own month
+(\code{report_late_message()}), and then the report of the month covered. The
+months checked are those from \code{report_first_month()} up to the month
+covered, excluded (\code{report_lost_months()}); a month with no list of the
+reports due kept takes the referents of today for it, and keeps them. The
+report to IT is not recovered, since it carries the state of today. Each
+late report that leaves is written in the ledger of its month. While a
+month is still missing a report after the round, the record carries
+\code{RAPPORTO_MESE_PRECEDENTE_INCOMPLETO}, and \code{in_ritardo} is true.
 
 \strong{The real ledger is written only by a real run}: the post on, nobody
 redirected, the month the clock gives. A run with the post off sends
@@ -107,7 +117,9 @@ ledger, it would make the real month read as sent, and a test at the end
 of October would leave nothing to leave on the 1st of November. So it keeps
 a ledger of its own, and is idempotent as the real run is: the timer of a
 field test does not send everything again every day. A run with a forced
-month writes nothing at all.
+month writes nothing at all. Neither of the two recovers a month lost: a
+late report that went to the test address would be written in the real
+ledger of its month, and its referent would never receive it.
 
 The report to IT goes to \code{copy_to}, the address IT is in copy at on every
 outcome, under the name \code{report_it_key()}; the referents' reports go to the
