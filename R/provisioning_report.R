@@ -370,19 +370,23 @@ report_account <- function(directory, upn) {
 
 #' Whether a person has signed in to Entra, from the two dates of their key
 #'
-#' Phase 1 of the report reads Entra and nothing else, with the permission the
-#' round already holds. `lastPasswordChangeDateTime` is, in the words of Learn,
+#' Entra says it with the permission the round already holds, and the report
+#' uses it where the server cannot say it better: for the pairs of a server
+#' that was not read, and for the deadline of a key that is still the one
+#' of the creation. `lastPasswordChangeDateTime` is, in the words of Learn,
 #' "the time when this Microsoft Entra user last changed their password or
 #' when their password was created", and the round creates every account with
 #' `forceChangePasswordNextSignIn`: an account whose key is as old as the
 #' account itself is an account nobody has entered.
 #'
 #' What it cannot see, said where it is decided. A key reset by IT moves the
-#' date without anybody signing in, and the person drops out of the report
-#' (phase 2 removes this). An account that existed long before the request
-#' has dates that diverge, and the person never shows, even if they never
-#' opened the instance asked for: the signal says "has used the UBEP
-#' account", not "has used REDCap".
+#' date without anybody signing in, and the person drops out of the verdict.
+#' An account that existed long before the request has dates that diverge,
+#' and the person never shows, even if they never opened the instance asked
+#' for: the signal says "has used the UBEP account", not "has used REDCap".
+#' That is why a server that was read decides in its place
+#' (`report_server_access()`), and `report_assemble()` asks Entra only when
+#' the server did not answer.
 #'
 #' @param directory A directory frame, as `directory_users()` returns it.
 #' @param upn The person's user principal name.
@@ -653,24 +657,40 @@ report_server_asks <- function(register) {
 #' to the same person the round asks to approve a change. A person asked for
 #' by two referents is in both reports, each with their own rows.
 #'
-#' Three items, of which phase 1 fills two:
+#' Three items, of which the report fills two:
 #'
 #' - **activated in the month**, one line per request, new or modified. It is
 #'   information, and does not count among the things to look at. A new one
 #'   says whether its account was new: `account` is `nuovo` when Entra made
 #'   the account no earlier than the minute the row was made (`creata_il`),
 #'   `esistente` when earlier, `""` when either date is missing;
-#' - **no first sign-in**, one item per person, with every project of theirs:
-#'   the requests of that person activated at least `report_grace_days()`
-#'   before the reading and not expired, when Entra says nobody has entered the
-#'   account (`report_first_access()`). The thirty days run from the later of
-#'   two dates, in Italian time: the channel's first execution for the
-#'   username the row names now (`report_person_since()`), and the birth of
-#'   that account on Entra. A username corrected by a modification, or an
-#'   account made again, is not dated by an activation that was somebody
-#'   else's. The item carries the earliest of those dates among the person's
-#'   requests, how many days and months of thirty days ago it was, and the
-#'   dates of the earlier reports of the same referent that named the person;
+#' - **no first sign-in**, one item per person and server, with the projects
+#'   of the person on that server: the requests of that person on that server
+#'   activated at least `report_grace_days()` before the reading and not
+#'   expired, when the person has never entered the server. The thirty days
+#'   run from the later of two dates, in Italian time: the channel's first
+#'   execution for the username the row names now (`report_person_since()`),
+#'   and the birth of that account on Entra. A username corrected by a
+#'   modification, or an account made again, is not dated by an activation
+#'   that was somebody else's. The item carries the earliest of those dates
+#'   among the requests on that server, how many days and months of thirty
+#'   days ago it was, and the dates of the earlier reports of the same
+#'   referent that named the person on that server (an earlier entry with an
+#'   empty server, written before the server was recorded, names the person
+#'   on every server). Who decides "never entered" depends on the server.
+#'   One that was read decides (`report_server_access()`: no row, or no first
+#'   visit), and Entra does not count, because the server says exactly which
+#'   server and is not misled by a key IT has reset; `fonte` is `server`. One
+#'   that was not read, for any reason, falls back on the rule of Entra
+#'   (`report_first_access()`), and `fonte` is `entra`: the mail says so. The
+#'   account's state is the first filter either way, and an account that is
+#'   not active goes to IT once for the person. `limite` is the last day the
+#'   first sign-in is promised (`mail_first_signin_deadline()`), but only when
+#'   the two dates on Entra agree within `report_tolerance()`, that is when
+#'   the key is still the one of the creation: otherwise the dates diverge
+#'   for the person who entered, for a key reset and for the key the D-31
+#'   rule replaced, and a date computed from them would be a guess, so it is
+#'   `""`;
 #' - **no access for more than a year** is phase 2, and the mail says it was
 #'   not checked.
 #'
@@ -695,25 +715,35 @@ report_server_asks <- function(register) {
 #' @param unread The earlier months whose ledger did not read. A person who
 #'   could have been in one of their reports gets `storia_nota` false, and
 #'   the mail says nothing about earlier reports rather than something false.
+#' @param servers What the readings of the servers answered, as
+#'   `report_server_reads()` returns it: a named list, server to
+#'   `list(letto = TRUE, conti = <frame>)` or `list(letto = FALSE, motivo)`.
+#'   A server that is not there, or that says it was read without a frame of
+#'   accounts, is a server that was not read.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
 #'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
-#'   (people) and `non_giudicati` (a count); `it`, `NULL` when there is
+#'   (pairs of person and server, with `nome`, `upn`, `server`, `progetti`,
+#'   `attivata_il`, `giorni`, `mesi`, `segnalata`, `storia_nota`, `fonte` and
+#'   `limite`) and `non_giudicati` (a count); `it`, `NULL` when there is
 #'   nothing for IT, otherwise a list of `senza_referente` (rows, with
-#'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`) and
-#'   `senza_data` (rows); and `senza_creatore`, how many rows have no
-#'   referent to go to. Since rows can pass, that means without an
-#'   established owner and not only without a creator; the name stays,
-#'   because it is a column of `UbepRapporto_CL`, and a renamed column would
-#'   keep the table's history under one name and the new records under
-#'   another.
+#'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`),
+#'   `senza_data` (rows) and `server_non_letti` (a frame of `server`,
+#'   `motivo` and `entra`, how many pairs of that server went into a
+#'   referent's report on the strength of Entra; one row for each server of
+#'   the rows that was not read, also with none); and `senza_creatore`, how
+#'   many rows have no referent to go to. Since rows can pass, that means
+#'   without an established owner and not only without a creator; the name
+#'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
+#'   column would keep the table's history under one name and the new
+#'   records under another.
 #'
 #' @keywords internal
 report_assemble <- function(rows, directory, period, previous = list(),
-                            unread = character()) {
+                            unread = character(), servers = list()) {
   stopifnot(
     is.data.frame(rows), is.data.frame(directory), is.list(period),
-    is.list(previous), is.character(unread)
+    is.list(previous), is.character(unread), is.list(servers)
   )
 
   text <- function(name) {
@@ -798,20 +828,47 @@ report_assemble <- function(rows, directory, period, previous = list(),
     found
   }
 
-  reported <- function(who, key) {
+  # The earlier reports of this referent that named the person on this
+  # server. The pairs of a report that recorded only the person carry an
+  # empty server, "all of them".
+  reported <- function(who, key, server) {
     dates <- unlist(lapply(previous, function(entry) {
       same <- identical(
         tolower(trimws(as.character(entry[["destinatario"]] %||% ""))),
         tolower(who)
       )
-      # A person is named whatever the server: the pairs of a report that
-      # recorded only the person carry an empty server, "all of them".
-      named <- key %in% tolower(trimws(as.character(
-        report_pairs(entry[["senza_primo_accesso"]])[["upn"]]
-      )))
+      pairs <- report_pairs(entry[["senza_primo_accesso"]])
+      named <- any(
+        tolower(trimws(pairs[["upn"]])) == key &
+          trimws(pairs[["server"]]) %in% c(server, "")
+      )
       if (same && named) substr(as.character(entry[["at"]]), 1L, 10L)
     }))
     sort(unique(as.character(dates)))
+  }
+
+  # What a server says about its people, or why it says nothing. It decides
+  # only when it was read whole: the flag and the frame of its accounts. A
+  # server the caller did not mention was not asked, which is the same as a
+  # module that is not there.
+  reading <- function(server) {
+    found <- servers[[server]]
+    if (is.list(found) && isTRUE(found[["letto"]]) &&
+          is.data.frame(found[["conti"]])) {
+      return(list(letto = TRUE, conti = found[["conti"]]))
+    }
+    reason <- if (is.null(found)) {
+      "TRASPORTO_ISTANZA_SENZA_MODULO"
+    } else {
+      found <- found[["motivo"]]
+      if (is.character(found) && length(found) == 1L && !is.na(found) &&
+            nzchar(found)) {
+        found
+      } else {
+        "INTERNO"
+      }
+    }
+    list(letto = FALSE, motivo = reason)
   }
 
   # A month's reports leave during the month after, so a person dated before
@@ -840,30 +897,81 @@ report_assemble <- function(rows, directory, period, previous = list(),
     candidates <- which(mine & judged)
     keys <- tolower(username[candidates])
     for (key in unique(keys)) {
-      at <- candidates[keys == key]
-      at <- at[order(start[at])]
-      oldest <- at[[1L]]
-      person <- list(
-        nome = trimws(paste(
-          text("first_name")[[oldest]], text("last_name")[[oldest]]
-        )),
-        upn = username[[oldest]],
-        progetti = projects(at)
-      )
+      of_person <- candidates[keys == key]
+      of_person <- of_person[order(start[of_person])]
+      oldest <- of_person[[1L]]
+      name <- trimws(paste(
+        text("first_name")[[oldest]], text("last_name")[[oldest]]
+      ))
+
+      # The account's state is the first filter, whatever the server says:
+      # nobody is judged on an account Entra holds disabled or cannot read.
+      entry <- report_account(directory, username[[oldest]])
+      if (!identical(entry[["stato"]], "attivo")) {
+        non_giudicabili[[length(non_giudicabili) + 1L]] <- list(
+          nome = name, upn = username[[oldest]],
+          progetti = projects(of_person),
+          referente = who, motivo = entry[["stato"]]
+        )
+        next
+      }
+
+      # Entra's verdict is the same for every server of the person, and is
+      # what a server that was not read falls back on.
       verdict <- report_first_access(directory, username[[oldest]])
+      limit <- ""
       if (identical(verdict, "mai_entrata")) {
-        people[[length(people) + 1L]] <- c(person, list(
-          attivata_il = substr(start[[oldest]], 1L, 10L),
-          giorni = days[[oldest]],
-          mesi = days[[oldest]] %/% 30L,
-          segnalata = reported(who, key),
+        limit <- mail_first_signin_deadline(
+          directory[["createdDateTime"]][[entry[["riga"]]]]
+        )
+        if (is.na(limit)) {
+          limit <- ""
+        }
+      }
+
+      unjudged <- integer()
+      for (server in sort(unique(text("server")[of_person]))) {
+        at <- of_person[text("server")[of_person] == server]
+        first <- at[[1L]]
+        seen <- reading(server)
+
+        if (isTRUE(seen[["letto"]])) {
+          never <- identical(
+            report_server_access(seen[["conti"]], username[[first]])[["stato"]],
+            "mai_entrata"
+          )
+        } else {
+          never <- identical(verdict, "mai_entrata")
+          if (!never && !identical(verdict, "entrata")) {
+            unjudged <- c(unjudged, at)
+          }
+        }
+        if (!never) {
+          next
+        }
+
+        people[[length(people) + 1L]] <- list(
+          nome = name,
+          upn = username[[first]],
+          server = server,
+          progetti = projects(at),
+          attivata_il = substr(start[[first]], 1L, 10L),
+          giorni = days[[first]],
+          mesi = days[[first]] %/% 30L,
+          segnalata = reported(who, key, server),
           storia_nota = is.null(unknown_until) ||
-            as.Date(substr(start[[oldest]], 1L, 10L)) >= unknown_until
-        ))
-      } else if (!identical(verdict, "entrata")) {
-        non_giudicabili[[length(non_giudicabili) + 1L]] <- c(person, list(
+            as.Date(substr(start[[first]], 1L, 10L)) >= unknown_until,
+          fonte = if (isTRUE(seen[["letto"]])) "server" else "entra",
+          limite = limit
+        )
+      }
+
+      if (length(unjudged) > 0L) {
+        non_giudicabili[[length(non_giudicabili) + 1L]] <- list(
+          nome = name, upn = username[[oldest]],
+          progetti = projects(unjudged),
           referente = who, motivo = verdict
-        ))
+        )
       }
     }
 
@@ -889,12 +997,41 @@ report_assemble <- function(rows, directory, period, previous = list(),
   senza_data <- rows[undated, , drop = FALSE]
   rownames(senza_data) <- NULL
 
-  for_it <- nrow(senza_referente) + length(non_giudicabili) + nrow(senza_data)
+  # The servers of the rows that were not read, with the pairs of each that
+  # went into a referent's report on what Entra says: those are the ones a
+  # server could have refuted.
+  on_entra <- unlist(lapply(referenti, function(report) {
+    found <- Filter(
+      function(person) identical(person[["fonte"]], "entra"),
+      report[["senza_primo_accesso"]]
+    )
+    vapply(found, `[[`, "", "server")
+  }))
+  asked <- sort(unique(text("server")[nzchar(text("server"))]))
+  asked <- asked[!vapply(
+    asked, function(server) isTRUE(reading(server)[["letto"]]), logical(1)
+  )]
+  server_non_letti <- data.frame(
+    server = asked,
+    motivo = vapply(
+      asked, function(server) reading(server)[["motivo"]], "",
+      USE.NAMES = FALSE
+    ),
+    entra = vapply(
+      asked, function(server) sum(on_entra == server), 0L,
+      USE.NAMES = FALSE
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  for_it <- nrow(senza_referente) + length(non_giudicabili) +
+    nrow(senza_data) + nrow(server_non_letti)
   it <- if (for_it > 0L) {
     list(
       senza_referente = senza_referente,
       non_giudicabili = non_giudicabili,
-      senza_data = senza_data
+      senza_data = senza_data,
+      server_non_letti = server_non_letti
     )
   }
 
@@ -1048,6 +1185,15 @@ report_activated_lines <- function(rows) {
 
 #' The lines of the people with no first sign-in, in both languages
 #'
+#' One entry for each person and server. After the line with the person and
+#' the date and the line with the server's projects, an entry says what the
+#' referent should know of the account: with a `limite`, that the person has
+#' never signed in with the UBEP account and must by that day, the last one,
+#' or the account is deactivated (D-31); without it, only that the person
+#' never entered the server, since the dates on Entra no longer tell whether
+#' they use the account. An entry read from Entra, because the server did not
+#' answer, says so.
+#'
 #' @param people The `senza_primo_accesso` of a referent's report.
 #' @param to_it How many of the referent's people went to IT without being
 #'   judged.
@@ -1066,6 +1212,9 @@ report_people_lines <- function(people, to_it = 0L) {
     # "also on" can be said.
     known <- !isFALSE(person[["storia_nota"]])
     who <- paste0("   - ", person[["nome"]], ", ", person[["upn"]], ": ")
+    server <- person[["server"]]
+    limit <- as.character(person[["limite"]] %||% "")
+    from_entra <- identical(person[["fonte"]], "entra")
     list(
       it = c(
         paste0(
@@ -1084,7 +1233,18 @@ report_people_lines <- function(people, to_it = 0L) {
               " Segnalata anche ", report_join(paste("il", earlier), "e"), "."
             )
           }
-        )
+        ),
+        if (nzchar(limit)) {
+          paste0(
+            "     Non e' mai entrata con l'account UBEP: deve entrare entro ",
+            "il ", limit, ", poi l'account viene disattivato (D-31)."
+          )
+        } else {
+          paste0("     Su ", server, " non e' mai entrata.")
+        },
+        if (from_entra) {
+          "     Letto da Entra: il server non ha risposto."
+        }
       ),
       en = c(
         paste0(
@@ -1101,7 +1261,18 @@ report_people_lines <- function(people, to_it = 0L) {
           } else {
             paste0(" Also reported on ", report_join(earlier, "and"), ".")
           }
-        )
+        ),
+        if (nzchar(limit)) {
+          paste0(
+            "     Has never signed in with the UBEP account: must sign in ",
+            "by ", limit, ", then the account is deactivated (D-31)."
+          )
+        } else {
+          paste0("     Has never signed in on ", server, ".")
+        },
+        if (from_entra) {
+          "     Read from Entra: the server did not answer."
+        }
       )
     )
   })
@@ -1109,8 +1280,8 @@ report_people_lines <- function(people, to_it = 0L) {
   list(
     it = c(
       paste0(
-        "1. Senza primo accesso dopo ", grace, " giorni (", length(people),
-        ")"
+        "1. Senza primo accesso al server dopo ", grace, " giorni (",
+        length(people), ")"
       ),
       paste0(
         "   Hanno l'accesso da almeno ", grace, " giorni e non sono ancora ",
@@ -1129,7 +1300,8 @@ report_people_lines <- function(people, to_it = 0L) {
     ),
     en = c(
       paste0(
-        "1. No first sign-in after ", grace, " days (", length(people), ")"
+        "1. No first sign-in on the server after ", grace, " days (",
+        length(people), ")"
       ),
       paste0(
         "   They have had access for at least ", grace, " days and have not ",
@@ -2215,7 +2387,7 @@ provisioning_report <- function(register_url,
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
-      previous[["illeggibili"]]
+      previous[["illeggibili"]], servers = servers
     )
   }
 
@@ -2275,8 +2447,8 @@ provisioning_report <- function(register_url,
       sent <- c(sent, who)
 
       if (keeps_ledger) {
-        # Until the pairs reach the report, a person is named for all of
-        # their servers.
+        # The pairs the report named, person and server: the next months read
+        # them back to say "also reported on".
         people <- if (for_it) {
           list()
         } else {
@@ -2284,7 +2456,8 @@ provisioning_report <- function(register_url,
         }
         named <- data.frame(
           upn = vapply(people, `[[`, "", "upn"),
-          server = rep("", length(people)), stringsAsFactors = FALSE
+          server = vapply(people, `[[`, "", "server"),
+          stringsAsFactors = FALSE
         )
         written <- report_ledger_add(
           ledger_dir, period[["mese"]], ledger,

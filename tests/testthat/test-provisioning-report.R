@@ -498,6 +498,51 @@ rubrica_mensile <- function(...) {
 }
 
 
+# --- the servers that decide the first sign-in ----------------------------
+
+carla <- "carla.inventata@ubep.unipd.it"
+dario <- "dario.ipotetico@ubep.unipd.it"
+
+# What a module answers for a person who has entered, as the report reads it.
+entrata_su <- function(upn, prima = "2026-09-01T08:00:00Z") {
+  list(
+    username = upn, exists = TRUE, user_firstvisit = prima,
+    user_lastlogin = NULL, user_lastactivity = NULL
+  )
+}
+
+# A server that was read: the persons given have entered, the others are not
+# on it.
+server_letto <- function(...) {
+  accounts <- list(...)
+  list(
+    letto = TRUE,
+    conti = report_accounts_frame(
+      list(accounts = accounts),
+      vapply(accounts, `[[`, "", "username")
+    )
+  )
+}
+
+# A server that was not read.
+server_muto <- function(motivo = "TRASPORTO_CONTRATTO_DISALLINEATO") {
+  list(letto = FALSE, motivo = motivo)
+}
+
+# The servers of some rows, all read, with the answer the old rule would have
+# given for each person: whoever Entra says has entered has entered.
+server_come_entra <- function(righe, rubrica) {
+  upn <- unique(as.character(righe[["username"]]))
+  entrati <- upn[vapply(
+    upn, function(chi) identical(report_first_access(rubrica, chi), "entrata"),
+    logical(1)
+  )]
+  letto <- do.call(server_letto, lapply(entrati, entrata_su))
+  servers <- unique(as.character(righe[["server"]]))
+  stats::setNames(rep(list(letto), length(servers)), servers)
+}
+
+
 test_that("the first-access item waits thirty days on the calendar", {
   # eval
   registro <- registro_di(
@@ -508,7 +553,10 @@ test_that("the first-access item waits thirty days on the calendar", {
   esecuzioni <- list("2026-10-02 23:03", "2026-10-03 23:03")
   righe <- report_rows(registro, rep(referente, 2L), esecuzioni, novembre())
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
   mio <- rapporto[["referenti"]][[referente]]
 
   # test
@@ -523,7 +571,7 @@ test_that("the first-access item waits thirty days on the calendar", {
 })
 
 
-test_that("a person is one item, with every project of theirs", {
+test_that("a person is one item per server, with every project there", {
   # eval
   registro <- registro_di(
     richiesta(record_id = "41", server = "edc10", project_id = "9302"),
@@ -537,21 +585,32 @@ test_that("a person is one item, with every project of theirs", {
   )
   righe <- report_rows(registro, rep(referente, 4L), esecuzioni, novembre())
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
   persone <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
 
   # test
-  # Dario signed in, so he is not there; Carla is there once.
-  expect_length(persone, 1L)
-  carla <- persone[[1L]]
-  expect_equal(carla[["nome"]], "Carla Inventata")
-  expect_equal(carla[["progetti"]][["server"]], c("edc10", "edc10", "edc12"))
-  expect_equal(carla[["progetti"]][["project_id"]], c("9301", "9302", "9303"))
-  # Dated by her oldest request: 90 days, three months of thirty days.
-  expect_equal(carla[["attivata_il"]], "2026-08-03")
-  expect_equal(carla[["giorni"]], 90L)
-  expect_equal(carla[["mesi"]], 3L)
-  expect_equal(carla[["segnalata"]], character())
+  # Dario signed in, so he is not there; Carla is there once for each server.
+  expect_length(persone, 2L)
+  su_edc10 <- persone[[1L]]
+  expect_equal(su_edc10[["nome"]], "Carla Inventata")
+  expect_equal(su_edc10[["server"]], "edc10")
+  expect_equal(su_edc10[["progetti"]][["server"]], c("edc10", "edc10"))
+  expect_equal(su_edc10[["progetti"]][["project_id"]], c("9301", "9302"))
+  # Dated by her oldest request on that server: 90 days, three months of
+  # thirty.
+  expect_equal(su_edc10[["attivata_il"]], "2026-08-03")
+  expect_equal(su_edc10[["giorni"]], 90L)
+  expect_equal(su_edc10[["mesi"]], 3L)
+  expect_equal(su_edc10[["segnalata"]], character())
+  su_edc12 <- persone[[2L]]
+  expect_equal(su_edc12[["server"]], "edc12")
+  expect_equal(su_edc12[["progetti"]][["project_id"]], "9303")
+  expect_equal(su_edc12[["attivata_il"]], "2026-09-20")
+  expect_equal(su_edc12[["giorni"]], 42L)
+  expect_equal(su_edc12[["mesi"]], 1L)
   # None of the four was activated or changed in October.
   expect_equal(nrow(rapporto[["referenti"]][[referente]][["attivati"]]), 0L)
 })
@@ -570,7 +629,10 @@ test_that("an expired access is news in its month and nothing after", {
   )
   righe <- report_rows(registro, rep(referente, 3L), esecuzioni, novembre())
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
   mio <- rapporto[["referenti"]][[referente]]
 
   # test
@@ -594,7 +656,10 @@ test_that("a person asked for by two referents is in both, with each's rows", {
     list("2026-08-03 23:03", "2026-09-03 23:03"), novembre()
   )
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
 
   # test
   expect_setequal(names(rapporto[["referenti"]]), c(referente, bruno))
@@ -624,7 +689,10 @@ test_that("earlier reports are read back for the same referent only", {
          senza_primo_accesso = coppie("carla.inventata@ubep.unipd.it"))
   )
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre(), precedenti)
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(), precedenti,
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
 
   # test
   carla <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]][[1L]]
@@ -654,11 +722,14 @@ test_that("every person of a report with several is read back", {
     list(destinatario = referente, at = "2026-10-01 07:30",
          senza_primo_accesso = coppie(
            c("elena.supposta@ubep.unipd.it", "Carla.Inventata@ubep.unipd.it"),
-           c("edc12", "edc10")
+           c("edc10", "edc10")
          ))
   )
 
-  rapporto <- report_assemble(righe, rubrica, novembre(), precedenti)
+  rapporto <- report_assemble(
+    righe, rubrica, novembre(), precedenti,
+    servers = server_come_entra(righe, rubrica)
+  )
 
   # test
   persone <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
@@ -688,7 +759,10 @@ test_that("rows with nobody to send them to go to IT, with the reason", {
     rubrica[["userPrincipalName"]] == spento
   ] <- FALSE
 
-  rapporto <- report_assemble(righe, rubrica, novembre())
+  rapporto <- report_assemble(
+    righe, rubrica, novembre(),
+    servers = server_come_entra(righe, rubrica)
+  )
 
   # test
   # A creator the log does not name, one whose account is disabled, one the
@@ -733,7 +807,12 @@ test_that("a person the report cannot judge goes to IT, not to the referent", {
           createdDateTime = NULL)
   )
 
-  rapporto <- report_assemble(righe, rubrica, novembre())
+  # Entra's verdicts are what the report judges on when a server did not
+  # answer: here the one of the person's instance.
+  rapporto <- report_assemble(
+    righe, rubrica, novembre(),
+    servers = list(edc10 = server_muto())
+  )
 
   # test
   mio <- rapporto[["referenti"]][[referente]]
@@ -768,7 +847,10 @@ test_that("a row the log does not date goes to IT whoever created it", {
     list(character(), "2026-09-08 23:03"), novembre()
   )
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
 
   # test
   expect_equal(rapporto[["it"]][["senza_data"]][["record_id"]], "41")
@@ -786,7 +868,10 @@ test_that("a referent with only old, quiet requests still has a report", {
     registro, referente, list("2026-08-03 23:03"), novembre()
   )
 
-  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = server_come_entra(righe, rubrica_mensile())
+  )
 
   # test
   # Decided on 2026-10-15: whoever has an active and applied request gets the
@@ -794,6 +879,296 @@ test_that("a referent with only old, quiet requests still has a report", {
   mio <- rapporto[["referenti"]][[referente]]
   expect_equal(nrow(mio[["attivati"]]), 0L)
   expect_length(mio[["senza_primo_accesso"]], 0L)
+})
+
+
+# --- the first sign-in, per server -------------------------------------------
+
+# Carla and Dario, both activated in August on edc10. Carla's two dates on
+# Entra are equal; Dario's key changed a week after his account was born.
+assemblato <- function(servers = list(), previous = list(), registro = NULL,
+                       esecuzioni = NULL, rubrica = rubrica_mensile()) {
+  registro <- registro %||% registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "42", username = dario,
+              first_name = "Dario", last_name = "Ipotetico")
+  )
+  esecuzioni <- esecuzioni %||% rep(list("2026-08-03 23:03"), nrow(registro))
+  righe <- report_rows(
+    registro, rep(referente, nrow(registro)), esecuzioni, novembre()
+  )
+  report_assemble(righe, rubrica, novembre(), previous, servers = servers)
+}
+
+voci_b <- function(rapporto) {
+  rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
+}
+
+test_that("il server decide la voce B anche quando Entra dice entrata", {
+  # eval
+  # Dario: chiave cambiata su Entra, ma assente da edc10.
+  persone <- voci_b(assemblato(servers = list(edc10 = server_letto())))
+
+  # test
+  expect_equal(vapply(persone, `[[`, "", "upn"), c(carla, dario))
+  expect_equal(persone[[2L]][["server"]], "edc10")
+  expect_equal(persone[[2L]][["fonte"]], "server")
+  expect_equal(persone[[2L]][["limite"]], "")
+  expect_equal(persone[[2L]][["progetti"]][["server"]], "edc10")
+})
+
+
+test_that("una persona entrata sul server non e' nella voce B", {
+  # eval
+  # Carla ha user_firstvisit su edc10 anche se Entra ha le date uguali.
+  rapporto <- assemblato(servers = list(edc10 = server_letto(
+    entrata_su(carla), entrata_su(dario)
+  )))
+
+  # test
+  expect_length(voci_b(rapporto), 0L)
+  expect_null(rapporto[["it"]])
+})
+
+
+test_that("la data limite D-31 c'e' solo con la chiave della creazione", {
+  # eval
+  persone <- voci_b(assemblato(servers = list(edc10 = server_letto())))
+
+  # test
+  # Carla: createdDateTime 2026-08-03T08:00:00Z uguale alla chiave, 59 giorni
+  # dopo la nascita dell'account.
+  expect_equal(persone[[1L]][["limite"]], "2026-10-01")
+  # Dario: le date divergono, e la riga non dice altro che il server.
+  expect_equal(persone[[2L]][["limite"]], "")
+})
+
+
+test_that("la data limite non esce se la data di creazione non si legge", {
+  # eval
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = carla,
+          createdDateTime = "2026-08-03T10:00:00+02:00",
+          lastPasswordChangeDateTime = "2026-08-03T10:00:00+02:00")
+  )
+  rubrica <- rubrica[!duplicated(rubrica[["userPrincipalName"]],
+                                 fromLast = TRUE), ]
+
+  persone <- voci_b(assemblato(
+    servers = list(edc10 = server_letto(entrata_su(dario))),
+    rubrica = rubrica
+  ))
+
+  # test
+  # Una data che non ha la forma di Graph non da' una data limite sbagliata.
+  expect_equal(vapply(persone, `[[`, "", "upn"), carla)
+  expect_equal(persone[[1L]][["limite"]], "")
+})
+
+
+test_that("un server non letto ricade su Entra, e IT lo sa", {
+  # eval
+  a <- assemblato(servers = list(edc10 = server_muto()))
+
+  # test
+  persone <- voci_b(a)
+  expect_equal(vapply(persone, `[[`, "", "upn"), carla)
+  expect_equal(vapply(persone, `[[`, "", "fonte"), "entra")
+  expect_equal(persone[[1L]][["limite"]], "2026-10-01")
+  non_letti <- a[["it"]][["server_non_letti"]]
+  expect_equal(non_letti[["server"]], "edc10")
+  expect_equal(non_letti[["motivo"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+  expect_equal(non_letti[["entra"]], 1L)
+})
+
+
+test_that("un server assente da servers e' non letto, senza modulo", {
+  # eval
+  a <- assemblato()
+
+  # test
+  expect_equal(vapply(voci_b(a), `[[`, "", "fonte"), "entra")
+  expect_equal(
+    a[["it"]][["server_non_letti"]][["motivo"]],
+    "TRASPORTO_ISTANZA_SENZA_MODULO"
+  )
+})
+
+
+test_that("un server letto male non decide: ricade su Entra", {
+  # eval
+  # `letto` vero senza i conti non e' una lettura.
+  a <- assemblato(servers = list(edc10 = list(letto = TRUE)))
+
+  # test
+  expect_equal(vapply(voci_b(a), `[[`, "", "fonte"), "entra")
+  expect_equal(a[["it"]][["server_non_letti"]][["motivo"]], "INTERNO")
+})
+
+
+test_that("un server non letto compare a IT anche senza coppie su Entra", {
+  # eval
+  letto <- assemblato(
+    servers = list(edc10 = server_letto(entrata_su(carla), entrata_su(dario)))
+  )
+  tutti_entrati <- assemblato(
+    servers = list(edc10 = server_muto("INTERNO")),
+    registro = registro_di(richiesta(
+      record_id = "42", username = dario,
+      first_name = "Dario", last_name = "Ipotetico"
+    ))
+  )
+
+  # test
+  expect_equal(tutti_entrati[["it"]][["server_non_letti"]][["entra"]], 0L)
+  expect_length(voci_b(tutti_entrati), 0L)
+  # Un server letto non e' nell'elenco, e senza altro per IT non c'e' IT.
+  expect_null(letto[["it"]])
+})
+
+
+test_that("una persona su due server ha due voci, una per server", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", server = "edc10", project_id = "9301"),
+    richiesta(record_id = "42", server = "edc12", project_id = "9302")
+  )
+  a <- assemblato(
+    servers = list(edc10 = server_letto(), edc12 = server_muto()),
+    registro = registro
+  )
+
+  # test
+  persone <- voci_b(a)
+  expect_equal(vapply(persone, `[[`, "", "server"), c("edc10", "edc12"))
+  expect_equal(vapply(persone, `[[`, "", "fonte"), c("server", "entra"))
+  expect_equal(persone[[1L]][["progetti"]][["project_id"]], "9301")
+  expect_equal(persone[[2L]][["progetti"]][["project_id"]], "9302")
+  # Solo edc12 non e' letto.
+  expect_equal(a[["it"]][["server_non_letti"]][["server"]], "edc12")
+  expect_equal(a[["it"]][["server_non_letti"]][["entra"]], 1L)
+})
+
+
+test_that("ogni voce e' datata dalla richiesta piu' vecchia del suo server", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", server = "edc10", project_id = "9301"),
+    richiesta(record_id = "42", server = "edc12", project_id = "9302")
+  )
+  a <- assemblato(
+    servers = list(edc10 = server_letto(), edc12 = server_letto()),
+    registro = registro,
+    esecuzioni = list("2026-08-03 23:03", "2026-09-12 23:03")
+  )
+
+  # test
+  persone <- voci_b(a)
+  expect_equal(
+    vapply(persone, `[[`, "", "attivata_il"), c("2026-08-03", "2026-09-12")
+  )
+  expect_equal(vapply(persone, `[[`, 0L, "giorni"), c(90L, 50L))
+  expect_equal(vapply(persone, `[[`, 0L, "mesi"), c(3L, 1L))
+})
+
+
+test_that("un account che non e' attivo va a IT una volta, qualunque server", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", server = "edc10", project_id = "9301"),
+    richiesta(record_id = "42", server = "edc12", project_id = "9302")
+  )
+  rubrica <- rubrica_mensile()
+  rubrica[["accountEnabled"]][rubrica[["userPrincipalName"]] == carla] <- FALSE
+
+  a <- assemblato(
+    servers = list(edc10 = server_letto(), edc12 = server_letto()),
+    registro = registro, rubrica = rubrica
+  )
+
+  # test
+  # Il server letto non salva un account che Entra dice disabilitato.
+  expect_length(voci_b(a), 0L)
+  persone <- a[["it"]][["non_giudicabili"]]
+  expect_equal(vapply(persone, `[[`, "", "upn"), carla)
+  expect_equal(persone[[1L]][["motivo"]], "disabilitato")
+  expect_equal(persone[[1L]][["progetti"]][["project_id"]], c("9301", "9302"))
+  expect_equal(a[["referenti"]][[referente]][["non_giudicati"]], 1L)
+})
+
+
+test_that("un verdetto di Entra non leggibile conta solo dove il server tace", {
+  # eval
+  rubrica <- rubrica_mensile(
+    conto(userPrincipalName = carla, createdDateTime = NULL)
+  )
+  rubrica <- rubrica[!duplicated(rubrica[["userPrincipalName"]],
+                                 fromLast = TRUE), ]
+  registro <- registro_di(
+    richiesta(record_id = "41", server = "edc10", project_id = "9301"),
+    richiesta(record_id = "42", server = "edc12", project_id = "9302")
+  )
+
+  a <- assemblato(
+    servers = list(edc10 = server_letto(), edc12 = server_muto()),
+    registro = registro, rubrica = rubrica
+  )
+
+  # test
+  # Su edc10 decide il server: mai entrata, senza data limite. Su edc12 la
+  # data di creazione manca, e la persona non si giudica.
+  persone <- voci_b(a)
+  expect_equal(vapply(persone, `[[`, "", "server"), "edc10")
+  expect_equal(persone[[1L]][["limite"]], "")
+  non_giudicabili <- a[["it"]][["non_giudicabili"]]
+  expect_equal(vapply(non_giudicabili, `[[`, "", "motivo"), "senza_creazione")
+  expect_equal(non_giudicabili[[1L]][["progetti"]][["server"]], "edc12")
+  expect_equal(a[["it"]][["server_non_letti"]][["entra"]], 0L)
+})
+
+
+test_that("segnalata anche il: per server, e i registri vecchi per tutti", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41", server = "edc10", project_id = "9301"),
+    richiesta(record_id = "42", server = "edc12", project_id = "9302")
+  )
+  precedenti <- list(
+    list(destinatario = referente, at = "2026-11-01 07:30",
+         senza_primo_accesso = coppie(toupper(carla), "edc10")),
+    list(destinatario = referente, at = "2026-10-01 07:30",
+         senza_primo_accesso = coppie(carla, "")),
+    # Un'altra persona sullo stesso server non c'entra.
+    list(destinatario = referente, at = "2026-09-01 07:30",
+         senza_primo_accesso = coppie(dario, "edc12"))
+  )
+
+  a <- assemblato(
+    servers = list(edc10 = server_letto(), edc12 = server_letto()),
+    registro = registro, previous = precedenti
+  )
+
+  # test
+  su_edc10 <- voci_b(a)[[1L]]
+  su_edc12 <- voci_b(a)[[2L]]
+  expect_equal(su_edc10[["segnalata"]], c("2026-10-01", "2026-11-01"))
+  expect_equal(su_edc12[["segnalata"]], "2026-10-01")
+})
+
+
+test_that("una segnalazione su un altro server non vale per questo", {
+  # eval
+  precedenti <- list(
+    list(destinatario = referente, at = "2026-10-01 07:30",
+         senza_primo_accesso = coppie(carla, "edc12"))
+  )
+
+  a <- assemblato(
+    servers = list(edc10 = server_letto()), previous = precedenti
+  )
+
+  # test
+  expect_equal(voci_b(a)[[1L]][["segnalata"]], character())
 })
 
 
@@ -816,8 +1191,8 @@ persona <- function(..., progetti = data.frame(
   chi <- utils::modifyList(
     list(
       nome = "Carla Inventata", upn = "carla.inventata@ubep.unipd.it",
-      attivata_il = "2026-09-12", giorni = 50L, mesi = 1L,
-      segnalata = character()
+      server = "edc10", attivata_il = "2026-09-12", giorni = 50L, mesi = 1L,
+      segnalata = character(), fonte = "server", limite = ""
     ),
     list(...)
   )
@@ -940,9 +1315,10 @@ test_that("a report to review counts the people, and puts them first", {
         persona(),
         persona(
           nome = "Dario Ipotetico", upn = "dario.ipotetico@ubep.unipd.it",
+          server = "edc12",
           progetti = data.frame(
-            server = c("edc10", "edc10", "edc12"),
-            project_id = c("9301", "9302", "9303"), stringsAsFactors = FALSE
+            server = c("edc12", "edc12"),
+            project_id = c("9302", "9303"), stringsAsFactors = FALSE
           ),
           attivata_il = "2026-08-03", giorni = 90L, mesi = 3L,
           segnalata = c("2026-09-01", "2026-10-01")
@@ -967,7 +1343,9 @@ test_that("a report to review counts the people, and puts them first", {
   expect_equal(testo[["en"]][[2L]], "2 TO REVIEW")
 
   # The anomalies first, the information after.
-  prima <- which(testo[["it"]] == "1. Senza primo accesso dopo 30 giorni (2)")
+  prima <- which(
+    testo[["it"]] == "1. Senza primo accesso al server dopo 30 giorni (2)"
+  )
   dopo <- which(startsWith(testo[["it"]], "Accessi attivati nel mese"))
   expect_length(prima, 1L)
   expect_lt(prima, dopo)
@@ -988,15 +1366,58 @@ test_that("a report to review counts the people, and puts them first", {
     "2026-08-03, 90 giorni fa; senza primo accesso da 3 mesi."
   ) %in% testo[["it"]])
   expect_true(paste0(
-    "     edc10, progetti 9301 e 9302; edc12, progetto 9303. ",
+    "     edc12, progetti 9302 e 9303. ",
     "Segnalata anche il 2026-09-01 e il 2026-10-01."
   ) %in% testo[["it"]])
   expect_true(paste0(
-    "     edc10, projects 9301 and 9302; edc12, project 9303. ",
+    "     edc12, projects 9302 and 9303. ",
     "Also reported on 2026-09-01 and 2026-10-01."
   ) %in% testo[["en"]])
+  expect_true("     Su edc10 non e' mai entrata." %in% testo[["it"]])
+  expect_true("     Su edc12 non e' mai entrata." %in% testo[["it"]])
+  expect_true("     Has never signed in on edc12." %in% testo[["en"]])
   expect_true(any(startsWith(testo[["it"]], "   Che cosa fare: chiedi")))
   expect_true(any(startsWith(testo[["en"]], "   What to do: ask")))
+})
+
+
+test_that("la riga con la data limite dice entro quando, e che cosa segue", {
+  # eval
+  messaggio <- report_message(
+    rapporto_di(persone = list(persona(limite = "2026-10-01"))), novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_true(paste0(
+    "     Non e' mai entrata con l'account UBEP: deve entrare entro il ",
+    "2026-10-01, poi l'account viene disattivato (D-31)."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "     Has never signed in with the UBEP account: must sign in by ",
+    "2026-10-01, then the account is deactivated (D-31)."
+  ) %in% testo[["en"]])
+  # Con la data limite non si dice due volte che non e' entrata sul server.
+  expect_false("     Su edc10 non e' mai entrata." %in% testo[["it"]])
+  expect_false(any(grepl("Letto da Entra", testo[["it"]], fixed = TRUE)))
+})
+
+
+test_that("una coppia letta da Entra lo dice, in tutte e due le lingue", {
+  # eval
+  messaggio <- report_message(
+    rapporto_di(persone = list(persona(fonte = "entra"))), novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_true(
+    "     Letto da Entra: il server non ha risposto." %in% testo[["it"]]
+  )
+  expect_true(
+    "     Read from Entra: the server did not answer." %in% testo[["en"]]
+  )
+  expect_true("     Su edc10 non e' mai entrata." %in% testo[["it"]])
 })
 
 
@@ -1004,7 +1425,13 @@ test_that("the mails carry no long dash and no character outside ASCII", {
   # eval
   messaggi <- list(
     report_message(rapporto_di(attivati_di(richiesta())), novembre()),
-    report_message(rapporto_di(persone = list(persona())), novembre())
+    report_message(rapporto_di(persone = list(persona())), novembre()),
+    report_message(
+      rapporto_di(persone = list(
+        persona(limite = "2026-10-01"), persona(fonte = "entra")
+      )),
+      novembre()
+    )
   )
 
   # test
@@ -1443,7 +1870,7 @@ test_that("the first run sends to the referent and to IT, and keeps track", {
   )
   expect_equal(
     invii[[1L]][["senza_primo_accesso"]],
-    coppie("carla.inventata@ubep.unipd.it", "")
+    coppie("carla.inventata@ubep.unipd.it", "edc10")
   )
   expect_equal(nrow(invii[[1L]][["senza_accessi"]]), 0L)
   expect_equal(invii[[1L]][["at"]], "2026-11-01 07:30")
@@ -1536,6 +1963,91 @@ test_that("un modulo che non risponde e' un server non letto, non un errore", {
   expect_equal(record[["istanze_non_lette"]], 1L)
   expect_equal(record[["errori"]], character())
   expect_gt(record[["mandati"]], 0L)
+})
+
+
+test_that("la mail dice il server e la data limite, e il registro li ricorda", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esegui(cartella, posta)
+
+  # test
+  anna <- posta[["inviate"]][["mail"]][[1L]][["body"]]
+  expect_match(anna, paste0(
+    "Non e' mai entrata con l'account UBEP: deve entrare entro il ",
+    "2026-10-01, poi l'account viene disattivato (D-31)."
+  ), fixed = TRUE)
+  expect_false(grepl("Letto da Entra", anna, fixed = TRUE))
+})
+
+
+test_that("un server non letto fa ricadere la mail su Entra, e lo dice", {
+  # eval
+  doppie()
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esito <- esegui(
+    cartella, posta, secrets = c(edc10 = NA, edc12 = "s3cret")
+  )
+
+  # test
+  anna <- posta[["inviate"]][["mail"]][[1L]][["body"]]
+  expect_match(anna, "Letto da Entra: il server non ha risposto.", fixed = TRUE)
+  expect_match(
+    anna, "Read from Entra: the server did not answer.", fixed = TRUE
+  )
+  # La voce e' quella che Entra dice: Carla. Dario, per Entra, e' entrato.
+  expect_equal(esito[["voci_senza_primo_accesso"]], 1L)
+  invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
+  expect_equal(
+    invii[[1L]][["senza_primo_accesso"]], coppie(carla, "edc10")
+  )
+})
+
+
+test_that("una persona su due server conta due volte, e il registro lo sa", {
+  # eval
+  dati <- scenario()
+  dati[["registro"]] <- rbind(
+    dati[["registro"]][1L, ],
+    registro_di(richiesta(record_id = "44", server = "edc12",
+                          project_id = "9304"))
+  )
+  dati[["eventi"]] <- rbind(
+    dati[["eventi"]],
+    evento("2026-08-04 23:03", canale, "applied_seal = 'dddddddddddd'",
+           record = "44")
+  )
+  dati[["creazioni"]] <- rbind(
+    dati[["creazioni"]],
+    evento("2026-08-04 10:00", referente, "", record = "44",
+           action = "Create record 44")
+  )
+  # Carla is on neither server.
+  dati[["conti"]][["edc12.example.org"]] <- list(list(
+    username = carla, exists = FALSE, user_firstvisit = NULL,
+    user_lastlogin = NULL, user_lastactivity = NULL
+  ))
+  doppie(dati)
+  cartella <- withr::local_tempdir()
+  posta <- posta_finta()
+
+  esito <- esegui(cartella, posta)
+
+  # test
+  expect_equal(esito[["voci_senza_primo_accesso"]], 2L)
+  invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
+  expect_equal(
+    invii[[1L]][["senza_primo_accesso"]],
+    coppie(c(carla, carla), c("edc10", "edc12"))
+  )
+  expect_match(
+    posta[["inviate"]][["mail"]][[1L]][["subject"]], "^2 da guardare"
+  )
 })
 
 

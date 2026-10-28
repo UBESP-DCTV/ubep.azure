@@ -9,7 +9,8 @@ report_assemble(
   directory,
   period,
   previous = list(),
-  unread = character()
+  unread = character(),
+  servers = list()
 )
 }
 \arguments{
@@ -25,19 +26,30 @@ report_assemble(
 \item{unread}{The earlier months whose ledger did not read. A person who
 could have been in one of their reports gets \code{storia_nota} false, and
 the mail says nothing about earlier reports rather than something false.}
+
+\item{servers}{What the readings of the servers answered, as
+\code{report_server_reads()} returns it: a named list, server to
+\verb{list(letto = TRUE, conti = <frame>)} or \code{list(letto = FALSE, motivo)}.
+A server that is not there, or that says it was read without a frame of
+accounts, is a server that was not read.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
 each a list of \code{referente}, \code{attivati} (rows), \code{senza_primo_accesso}
-(people) and \code{non_giudicati} (a count); \code{it}, \code{NULL} when there is
+(pairs of person and server, with \code{nome}, \code{upn}, \code{server}, \code{progetti},
+\code{attivata_il}, \code{giorni}, \code{mesi}, \code{segnalata}, \code{storia_nota}, \code{fonte} and
+\code{limite}) and \code{non_giudicati} (a count); \code{it}, \code{NULL} when there is
 nothing for IT, otherwise a list of \code{senza_referente} (rows, with
-\code{motivo}), \code{non_giudicabili} (people, with \code{referente} and \code{motivo}) and
-\code{senza_data} (rows); and \code{senza_creatore}, how many rows have no
-referent to go to. Since rows can pass, that means without an
-established owner and not only without a creator; the name stays,
-because it is a column of \code{UbepRapporto_CL}, and a renamed column would
-keep the table's history under one name and the new records under
-another.
+\code{motivo}), \code{non_giudicabili} (people, with \code{referente} and \code{motivo}),
+\code{senza_data} (rows) and \code{server_non_letti} (a frame of \code{server},
+\code{motivo} and \code{entra}, how many pairs of that server went into a
+referent's report on the strength of Entra; one row for each server of
+the rows that was not read, also with none); and \code{senza_creatore}, how
+many rows have no referent to go to. Since rows can pass, that means
+without an established owner and not only without a creator; the name
+stays, because it is a column of \code{UbepRapporto_CL}, and a renamed
+column would keep the table's history under one name and the new
+records under another.
 }
 \description{
 A row belongs to \strong{its owner}, as the log says, and not to
@@ -50,24 +62,40 @@ to the same person the round asks to approve a change. A person asked for
 by two referents is in both reports, each with their own rows.
 }
 \details{
-Three items, of which phase 1 fills two:
+Three items, of which the report fills two:
 \itemize{
 \item \strong{activated in the month}, one line per request, new or modified. It is
 information, and does not count among the things to look at. A new one
 says whether its account was new: \code{account} is \code{nuovo} when Entra made
 the account no earlier than the minute the row was made (\code{creata_il}),
 \code{esistente} when earlier, \code{""} when either date is missing;
-\item \strong{no first sign-in}, one item per person, with every project of theirs:
-the requests of that person activated at least \code{report_grace_days()}
-before the reading and not expired, when Entra says nobody has entered the
-account (\code{report_first_access()}). The thirty days run from the later of
-two dates, in Italian time: the channel's first execution for the
-username the row names now (\code{report_person_since()}), and the birth of
-that account on Entra. A username corrected by a modification, or an
-account made again, is not dated by an activation that was somebody
-else's. The item carries the earliest of those dates among the person's
-requests, how many days and months of thirty days ago it was, and the
-dates of the earlier reports of the same referent that named the person;
+\item \strong{no first sign-in}, one item per person and server, with the projects
+of the person on that server: the requests of that person on that server
+activated at least \code{report_grace_days()} before the reading and not
+expired, when the person has never entered the server. The thirty days
+run from the later of two dates, in Italian time: the channel's first
+execution for the username the row names now (\code{report_person_since()}),
+and the birth of that account on Entra. A username corrected by a
+modification, or an account made again, is not dated by an activation
+that was somebody else's. The item carries the earliest of those dates
+among the requests on that server, how many days and months of thirty
+days ago it was, and the dates of the earlier reports of the same
+referent that named the person on that server (an earlier entry with an
+empty server, written before the server was recorded, names the person
+on every server). Who decides "never entered" depends on the server.
+One that was read decides (\code{report_server_access()}: no row, or no first
+visit), and Entra does not count, because the server says exactly which
+server and is not misled by a key IT has reset; \code{fonte} is \code{server}. One
+that was not read, for any reason, falls back on the rule of Entra
+(\code{report_first_access()}), and \code{fonte} is \code{entra}: the mail says so. The
+account's state is the first filter either way, and an account that is
+not active goes to IT once for the person. \code{limite} is the last day the
+first sign-in is promised (\code{mail_first_signin_deadline()}), but only when
+the two dates on Entra agree within \code{report_tolerance()}, that is when
+the key is still the one of the creation: otherwise the dates diverge
+for the person who entered, for a key reset and for the key the D-31
+rule replaced, and a date computed from them would be a guess, so it is
+\code{""};
 \item \strong{no access for more than a year} is phase 2, and the mail says it was
 not checked.
 }
