@@ -140,3 +140,23 @@ ubep_assert_true(
     strpos($ramoTesto, "\$response['dry_run'] = true;") !== false,
     'il ramo accounts risponde sempre dry_run true'
 );
+
+// --- the refusal ------------------------------------------------------------
+// The authorisation is one decision with one refusal. Two checks answering in
+// two ways tell an address outside the allow list whether a secret is right.
+ubep_assert_true(
+    strpos($ubepApiText, 'Auth::authorise(') !== false,
+    'api.php decides the authorisation in one call to Auth::authorise()'
+);
+ubep_assert_same(
+    false,
+    strpos($ubepApiText, 'Auth::checkSecret(') !== false
+        || strpos($ubepApiText, 'Auth::checkIp(') !== false,
+    'api.php does not run the two checks apart, with a refusal each'
+);
+ubep_assert_same(
+    false,
+    strpos($ubepApiText, 'secret rejected') !== false
+        || strpos($ubepApiText, 'address not allowed') !== false,
+    'api.php has no refusal that says which check failed'
+);

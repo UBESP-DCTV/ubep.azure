@@ -78,3 +78,56 @@ ubep_assert_same(
     Auth::checkIp('110.0.0.7', '10.0.0.7'),
     'no prefix matching on the left'
 );
+
+// --- the two checks as one decision ----------------------------------------
+// A caller outside the allow list must get the same refusal whatever secret it
+// sends, and the refusal must not say which of the two checks failed: with two
+// answers, anyone can learn from any address whether a secret is right.
+$ubepList = "192.0.2.1\n10.0.0.7";
+ubep_assert_true(
+    Auth::authorise('s3cret', 's3cret', '10.0.0.7', $ubepList),
+    'secret and address both right: admitted'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise('wrong', 's3cret', '10.0.0.7', $ubepList),
+    'right address, wrong secret: refused'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise('s3cret', 's3cret', '10.0.0.8', $ubepList),
+    'right secret, address outside the list: refused'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise('wrong', 's3cret', '10.0.0.8', $ubepList),
+    'wrong secret, address outside the list: refused'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise(null, 's3cret', '10.0.0.8', $ubepList),
+    'no secret, address outside the list: refused'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise('s3cret', 's3cret', null, $ubepList),
+    'right secret, no address: refused'
+);
+ubep_assert_same(
+    false,
+    Auth::authorise('s3cret', 's3cret', '10.0.0.7', ''),
+    'right secret, empty allow list: refused'
+);
+
+$ubepRefusal = Auth::refusal();
+ubep_assert_same(403, $ubepRefusal['status'], 'the refusal is a 403');
+ubep_assert_same(
+    'TRASPORTO_SEGRETO_RIFIUTATO',
+    $ubepRefusal['code'],
+    'the refusal keeps the transport code the client already knows'
+);
+ubep_assert_same(
+    'not authorised',
+    $ubepRefusal['message'],
+    'the refusal names neither the secret nor the address'
+);

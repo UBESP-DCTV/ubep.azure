@@ -184,6 +184,16 @@ Both are now read from the server itself.
   without JSON already was, and the next round looks for it before creating
   it. A 429 and the other 4xx are as they were.
 
+* **The module refuses in the same way a right secret and a wrong one from an
+  address that is not allowed.** Until now the module checked the secret
+  before the address and answered the two refusals with two messages (`secret
+  rejected`, `address not allowed`), so from any address one could tell
+  whether a secret tried was right. Now both checks are made and the answer is
+  one: 403, `TRASPORTO_SEGRETO_RIFIUTATO`, message `not authorised`, whichever
+  check failed. A caller that reads the message to tell the two cases apart
+  has to stop; the code and the status are as they were, so the client does
+  not change. The comparison of the secret is still `hash_equals`.
+
 * **Shape of the release.** No dictionary to import, and the round and the
   observer are called as before. The order is what costs most to get wrong:
   first the package, then the module, then the rest. The package goes on the

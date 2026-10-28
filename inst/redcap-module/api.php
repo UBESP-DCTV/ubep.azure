@@ -42,15 +42,15 @@ function ubep_fail(string $code, string $message, int $status): void
 }
 
 // --- authorisation: this is the whole of it, see the spec ------------------
-$secret = $_SERVER['HTTP_X_UBEP_SECRET'] ?? null;
-if (!Auth::checkSecret($secret, $module->getSystemSetting('shared-secret'))) {
-    ubep_fail('TRASPORTO_SEGRETO_RIFIUTATO', 'secret rejected', 403);
-}
-if (!Auth::checkIp(
+if (!Auth::authorise(
+    $_SERVER['HTTP_X_UBEP_SECRET'] ?? null,
+    $module->getSystemSetting('shared-secret'),
     $_SERVER['REMOTE_ADDR'] ?? null,
     (string) $module->getSystemSetting('ip-allow-list')
 )) {
-    ubep_fail('TRASPORTO_SEGRETO_RIFIUTATO', 'address not allowed', 403);
+    // One refusal for both checks: it must not tell which one failed.
+    $refusal = Auth::refusal();
+    ubep_fail($refusal['code'], $refusal['message'], $refusal['status']);
 }
 
 // --- context ---------------------------------------------------------------
