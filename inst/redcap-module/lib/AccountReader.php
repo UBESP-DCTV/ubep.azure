@@ -33,9 +33,46 @@ class AccountReader
     ];
 
     /**
+     * The names of an accounts request, or null when the list is to be refused.
+     *
+     * Refused whole, never trimmed to what is acceptable: answering for part of
+     * what was asked would hand the caller a short list it could read as "the
+     * rest do not exist". An entry with an empty or blank username is refused
+     * too, since it would come back as an account that does not exist.
+     *
+     * @param mixed $requests the `requests` field of the body: a list of
+     *                        objects with a scalar `username`
+     * @return array|null the names as strings, in order (empty for an empty
+     *                    list), or null for a list to refuse
+     */
+    public static function usernamesFrom($requests): ?array
+    {
+        if (!is_array($requests) || count($requests) > self::LIMIT) {
+            return null;
+        }
+
+        $usernames = [];
+        foreach ($requests as $request) {
+            if (
+                !is_array($request)
+                || !isset($request['username'])
+                || !is_scalar($request['username'])
+                || trim((string) $request['username']) === ''
+            ) {
+                return null;
+            }
+            $usernames[] = (string) $request['username'];
+        }
+
+        return $usernames;
+    }
+
+    /**
      * @param array $usernames names to look up, as the caller wrote them
      * @return array|null one entry per name (see shape()), or null when the
-     *                    query failed
+     *                    read failed: the query did not answer or threw (the
+     *                    database layer may raise instead of returning false),
+     *                    or a date came back that cannot be read
      */
     public static function read(array $usernames): ?array
     {
@@ -44,21 +81,21 @@ class AccountReader
             return [];
         }
 
-        $query = db_query(self::selectSql($usernames, 'db_escape'));
-        if ($query === false) {
-            return null;
-        }
-
-        $rows = [];
-        while ($row = db_fetch_assoc($query)) {
-            $rows[] = $row;
-        }
-
-        // A date the database holds but PHP cannot read is not "never": it
-        // fails the read like a query that did not answer.
         try {
+            $query = db_query(self::selectSql($usernames, 'db_escape'));
+            if ($query === false) {
+                return null;
+            }
+
+            $rows = [];
+            while ($row = db_fetch_assoc($query)) {
+                $rows[] = $row;
+            }
+
+            // A date the database holds but PHP cannot read is not "never": it
+            // fails the read like a query that did not answer.
             return self::shape($usernames, $rows, date_default_timezone_get());
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return null;
         }
     }

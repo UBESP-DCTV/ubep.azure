@@ -185,33 +185,23 @@ if ($gate === VersionGate::BELOW) {
 // project_id, no plan, no write. It sits before the requests loop below on
 // purpose, because that loop reports a request without a project_id as
 // malformed, and these have none. A list over the cap, or an entry without a
-// scalar username, is refused whole: answering for part of what was asked
+// non-blank scalar username, is refused whole: answering for part of what was asked
 // would hand the caller a short list it could read as "the rest do not exist".
 // A read that fails answers 500 with no `accounts` key at all, never an empty
 // list: an empty list would say that nobody exists.
 if ($operation === 'accounts') {
-    $asked = $body['requests'] ?? [];
-    $usernames = [];
-    $acceptable = is_array($asked) && count($asked) <= AccountReader::LIMIT;
-    if ($acceptable) {
-        foreach ($asked as $request) {
-            if (
-                !is_array($request)
-                || !isset($request['username'])
-                || !is_scalar($request['username'])
-            ) {
-                $acceptable = false;
-                break;
-            }
-            $usernames[] = (string) $request['username'];
-        }
-    }
-    if (!$acceptable) {
+    // Nothing is written whatever the caller sent in dry_run, and the answer
+    // says so.
+    $response['dry_run'] = true;
+
+    $usernames = AccountReader::usernamesFrom($body['requests'] ?? []);
+    if ($usernames === null) {
         http_response_code(400);
         $response['errors'][] = [
             'code' => 'INTERNO',
             'message' => 'accounts takes a list of at most '
-                . AccountReader::LIMIT . ' entries, each with a scalar username',
+                . AccountReader::LIMIT
+                . ' entries, each with a non-blank scalar username',
         ];
         echo json_encode($response, JSON_UNESCAPED_SLASHES);
         exit;

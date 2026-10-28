@@ -129,7 +129,14 @@ ubep_assert_true(
     $ramo !== false && $cinqueZeroUno !== false && $ramo < $cinqueZeroUno,
     'accounts e\' smistato prima del 501'
 );
+$ramoTesto = $ramo === false
+    ? ''
+    : substr($ubepApiText, $ramo, (int) strpos($ubepApiText, '$requests = [];', $ramo) - $ramo);
 ubep_assert_true(
-    strpos($ubepApiText, 'AccountReader::LIMIT') !== false,
-    'il tetto di nomi e\' quello di AccountReader'
+    strpos($ramoTesto, 'AccountReader::usernamesFrom(') !== false,
+    'la lista dei nomi e\' validata da AccountReader::usernamesFrom()'
+);
+ubep_assert_true(
+    strpos($ramoTesto, "\$response['dry_run'] = true;") !== false,
+    'il ramo accounts risponde sempre dry_run true'
 );
