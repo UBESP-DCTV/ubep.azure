@@ -394,3 +394,54 @@ test_that("a failure with no code is still not a reading", {
   expect_false(letture[["edc10"]][["letto"]])
   expect_equal(letture[["edc10"]][["motivo"]], "INTERNO")
 })
+
+
+test_that("a server whose call raises is not read, and the others are", {
+  # eval
+  local_mocked_bindings(
+    module_accounts = function(server, secret, usernames, ...) {
+      if (server == "edc14.example.org") {
+        stop("values must be length 1")
+      }
+      risposta(lapply(usernames, voce))
+    }
+  )
+  letture <- report_server_reads(
+    list(edc10 = carla, edc14 = carla, edc16 = carla),
+    c(
+      edc10 = "edc10.example.org", edc14 = "edc14.example.org",
+      edc16 = "edc16.example.org"
+    ),
+    c(edc10 = "s3cret", edc14 = "s3cret", edc16 = "s3cret")
+  )
+
+  # test
+  expect_false(letture[["edc14"]][["letto"]])
+  expect_equal(letture[["edc14"]][["motivo"]], "INTERNO")
+  expect_true(letture[["edc10"]][["letto"]])
+  expect_true(letture[["edc16"]][["letto"]])
+})
+
+
+test_that("a contract 4 answer with a malformed errors field is not read", {
+  # eval
+  corpi <- c(
+    '{"contract_version": 4, "errors": [{"message": "x"}]}',
+    '{"contract_version": 4, "errors": "x"}'
+  )
+  for (corpo in corpi) {
+    local_mocked_bindings(
+      module_accounts = function(server, secret, usernames, ...) {
+        parse_module_response(corpo, 200L, accepted = 4L)
+      }
+    )
+    letture <- report_server_reads(
+      list(edc10 = carla), c(edc10 = "edc10.example.org"),
+      c(edc10 = "s3cret")
+    )
+
+    # test
+    expect_false(letture[["edc10"]][["letto"]])
+    expect_equal(letture[["edc10"]][["motivo"]], "INTERNO")
+  }
+})

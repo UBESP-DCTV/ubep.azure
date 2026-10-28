@@ -148,6 +148,7 @@ report_accounts_frame <- function(payload, asked) {
 #' the answer is not a reading (see [report_accounts_frame()]).
 #'
 #' Blank and missing names are not asked: `module_accounts()` lets them pass.
+#' A call that raises an error is a server not read, with reason `INTERNO`.
 #'
 #' @param asks Named list: server name to the user names to ask it.
 #' @param hosts Named character vector: server name to host.
@@ -184,7 +185,12 @@ report_server_reads <- function(asks, hosts, secrets) {
     usernames <- trimws(as.character(asks[[server]]))
     usernames <- usernames[!is.na(usernames) & nzchar(usernames)]
 
-    answer <- module_accounts(host, secret, usernames)
+    # A call that raises is a server not read, never a report that stops: the
+    # answer of one instance must not decide whether the others are read.
+    answer <- tryCatch(
+      module_accounts(host, secret, usernames),
+      error = function(e) list(ok = FALSE, errors = "INTERNO")
+    )
     if (!isTRUE(answer[["ok"]])) {
       codes <- as.character(answer[["errors"]])
       return(list(

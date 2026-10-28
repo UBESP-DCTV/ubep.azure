@@ -29,5 +29,6 @@ the answer is not a reading (see \code{\link[=report_accounts_frame]{report_acco
 }
 \details{
 Blank and missing names are not asked: \code{module_accounts()} lets them pass.
+A call that raises an error is a server not read, with reason \code{INTERNO}.
 }
 \keyword{internal}
