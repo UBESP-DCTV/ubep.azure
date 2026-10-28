@@ -4,10 +4,13 @@
 \alias{report_people_lines}
 \title{The lines of the people with no first sign-in, in both languages}
 \usage{
-report_people_lines(people, to_it = 0L)
+report_people_lines(people, period, to_it = 0L)
 }
 \arguments{
 \item{people}{The \code{senza_primo_accesso} of a referent's report.}
+
+\item{period}{What \code{report_month()} answered: \code{oggi} tells whether a
+\code{limite} is past.}
 
 \item{to_it}{How many of the referent's people went to IT without being
 judged.}
@@ -20,9 +23,12 @@ One entry for each person and server. After the line with the person and
 the date and the line with the server's projects, an entry says what the
 referent should know of the account: with a \code{limite}, that the person has
 never signed in with the UBEP account and must by that day, the last one,
-or the account is deactivated (D-31); without it, only that the person
-never entered the server, since the dates on Entra no longer tell whether
-they use the account. An entry read from Entra, because the server did not
-answer, says so.
+or the account is deactivated (D-31); when that day is already past, that
+the key handed over may no longer be valid and that a new one is asked for
+by replying to the mail of the key, which is what the D-31 rule has for an
+expired key; without a \code{limite}, only that the person never entered the
+server, since the dates on Entra no longer tell whether they use the
+account. An entry read from Entra, because the server did not answer, says
+so. Without people, the item says "none".
 }
 \keyword{internal}

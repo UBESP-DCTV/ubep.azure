@@ -17,20 +17,25 @@ A list with \code{subject}, \code{body}, \code{forma} (\code{in_ordine} or
 }
 \description{
 Two forms, told apart by the \strong{first word of the subject}, which is what
-shows in a list of mail without opening anything: \verb{Tutto in ordine} when
-there is nobody to look at, \verb{N da guardare} otherwise. The mail is plain
-text, so the verdict is said again on the first line of the body, in
-capitals. N counts the people listed in full in the items to look at, and
-not the accesses activated, which are information; in the form to review
-the anomalies come first and the information after.
+shows in a list of mail without opening anything: \verb{Tutto in ordine: ...}
+when there is nobody to look at, \verb{Da guardare (N): ...} otherwise, with N
+in brackets so that the subject does not carry two colons in a row. The
+mail is plain text, so the verdict is said again on the first line of the
+body, in capitals (\verb{TUTTO IN ORDINE}, \verb{DA GUARDARE: N}; \verb{ALL CLEAR},
+\verb{TO REVIEW: N}): a number right before a numbered list would read as the
+number of its first item. N counts the people listed in full in the items
+to look at, a person once even when they are on two servers or in both
+items (the user name compared without case), and not the accesses
+activated or the expirations, which are information.
 }
 \details{
-The year without access is not measured in phase 1, and the mail says so
-in both forms: an all-clear that covered an item nobody looked at would
-say something false. For the same reason the people of the referent that
-went to IT without being judged are counted in a line of their own, which
-changes neither the verdict nor the number in the subject: those say what
-was measured.
+The items come in the order of the draft: 1. no first sign-in on the
+server, 2. no access in more than a year, 3. the expirations of the month
+(only if there are any), then the accesses activated. In the all-clear
+form items 1 and 2 say "none" with their number. The people of the
+referent that went to IT without being judged are counted in a line of
+their own, which changes neither the verdict nor the number in the
+subject: those say what was measured.
 
 Italian above and English below, as every mail of the channel, since the
 address says nothing about which one its reader reads.

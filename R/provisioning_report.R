@@ -1283,20 +1283,50 @@ report_activated_lines <- function(rows) {
 #' the date and the line with the server's projects, an entry says what the
 #' referent should know of the account: with a `limite`, that the person has
 #' never signed in with the UBEP account and must by that day, the last one,
-#' or the account is deactivated (D-31); without it, only that the person
-#' never entered the server, since the dates on Entra no longer tell whether
-#' they use the account. An entry read from Entra, because the server did not
-#' answer, says so.
+#' or the account is deactivated (D-31); when that day is already past, that
+#' the key handed over may no longer be valid and that a new one is asked for
+#' by replying to the mail of the key, which is what the D-31 rule has for an
+#' expired key; without a `limite`, only that the person never entered the
+#' server, since the dates on Entra no longer tell whether they use the
+#' account. An entry read from Entra, because the server did not answer, says
+#' so. Without people, the item says "none".
 #'
 #' @param people The `senza_primo_accesso` of a referent's report.
+#' @param period What `report_month()` answered: `oggi` tells whether a
+#'   `limite` is past.
 #' @param to_it How many of the referent's people went to IT without being
 #'   judged.
 #'
 #' @return A list of two character vectors, `it` and `en`.
 #'
 #' @keywords internal
-report_people_lines <- function(people, to_it = 0L) {
+report_people_lines <- function(people, period, to_it = 0L) {
+  stopifnot(is.list(period))
+
   grace <- report_grace_days()
+
+  if (length(people) == 0L) {
+    return(list(
+      it = c(
+        paste0("1. Senza primo accesso al server dopo ", grace,
+               " giorni: nessuna."),
+        if (to_it > 0L) {
+          paste0("Persone non giudicabili, segnalate a IT: ", to_it, ".")
+        }
+      ),
+      en = c(
+        paste0("1. No first sign-in on the server after ", grace,
+               " days: none."),
+        if (to_it > 0L) {
+          paste0(
+            "People that could not be judged, reported to IT: ", to_it, "."
+          )
+        }
+      )
+    ))
+  }
+
+  today <- format(period[["oggi"]], "%Y-%m-%d")
 
   each <- lapply(people, function(person) {
     projects <- report_projects_words(person[["progetti"]])
@@ -1309,6 +1339,7 @@ report_people_lines <- function(people, to_it = 0L) {
     server <- person[["server"]]
     limit <- as.character(person[["limite"]] %||% "")
     from_entra <- identical(person[["fonte"]], "entra")
+    past <- nzchar(limit) && limit < today
     list(
       it = c(
         paste0(
@@ -1328,7 +1359,14 @@ report_people_lines <- function(people, to_it = 0L) {
             )
           }
         ),
-        if (nzchar(limit)) {
+        if (past) {
+          paste0(
+            "     Non e' mai entrata con l'account UBEP: la data per il ",
+            "primo accesso (", limit, ") e' passata e la chiave consegnata ",
+            "puo' non valere piu'. Per averne una nuova, rispondi alla mail ",
+            "della chiave."
+          )
+        } else if (nzchar(limit)) {
           paste0(
             "     Non e' mai entrata con l'account UBEP: deve entrare entro ",
             "il ", limit, ", poi l'account viene disattivato (D-31)."
@@ -1356,7 +1394,14 @@ report_people_lines <- function(people, to_it = 0L) {
             paste0(" Also reported on ", report_join(earlier, "and"), ".")
           }
         ),
-        if (nzchar(limit)) {
+        if (past) {
+          paste0(
+            "     Has never signed in with the UBEP account: the date for ",
+            "the first sign-in (", limit, ") has passed and the key that was ",
+            "handed over may no longer be valid. To get a new one, reply to ",
+            "the mail of the key."
+          )
+        } else if (nzchar(limit)) {
           paste0(
             "     Has never signed in with the UBEP account: must sign in ",
             "by ", limit, ", then the account is deactivated (D-31)."
@@ -1378,8 +1423,8 @@ report_people_lines <- function(people, to_it = 0L) {
         length(people), ")"
       ),
       paste0(
-        "   Hanno l'accesso da almeno ", grace, " giorni e non sono ancora ",
-        "entrate con l'account UBEP."
+        "   Hanno l'accesso a un server da almeno ", grace, " giorni e su ",
+        "quel server non sono ancora entrate."
       ),
       unlist(lapply(each, `[[`, "it")),
       if (to_it > 0L) {
@@ -1387,9 +1432,9 @@ report_people_lines <- function(people, to_it = 0L) {
       },
       paste0(
         "   Che cosa fare: chiedi alla persona se ha ricevuto il benvenuto e ",
-        "la chiave che le hai mandato. Se la chiave e' persa, scrivi a IT: ",
-        "la reimposta e la rimanda a te. Se l'accesso non serve piu', metti ",
-        "la richiesta a revoked."
+        "la chiave che le hai mandato, e di entrare nel server indicato. Se ",
+        "la chiave e' persa, scrivi a IT: la reimposta e la rimanda a te. Se ",
+        "l'accesso a quel server non serve piu', metti la richiesta a revoked."
       )
     ),
     en = c(
@@ -1398,8 +1443,8 @@ report_people_lines <- function(people, to_it = 0L) {
         length(people), ")"
       ),
       paste0(
-        "   They have had access for at least ", grace, " days and have not ",
-        "signed in with the UBEP account yet."
+        "   They have had access to a server for at least ", grace, " days ",
+        "and have not signed in on that server yet."
       ),
       unlist(lapply(each, `[[`, "en")),
       if (to_it > 0L) {
@@ -1409,9 +1454,10 @@ report_people_lines <- function(people, to_it = 0L) {
       },
       paste0(
         "   What to do: ask the person whether they received the welcome and ",
-        "the key you sent them. If the key is lost, write to IT: they reset ",
-        "it and send it back to you. If the access is no longer needed, set ",
-        "the request to revoked."
+        "the key you sent them, and to sign in on the server named. If the ",
+        "key is lost, write to IT: they reset it and send it back to you. If ",
+        "the access to that server is no longer needed, set the request to ",
+        "revoked."
       )
     )
   )
@@ -1522,8 +1568,9 @@ report_idle_lines <- function(report) {
 #'
 #' Information only: it is not an item to look at, and it does not count in
 #' the number of the subject. Each expiration is one line with the person,
-#' the server, the project and the day. Without any, no lines at all, since
-#' "none" would be a claim and the item is only a reminder.
+#' the server, the project and the day, as in the approved draft (`Name:
+#' server, progetto N, scade il AAAA-MM-GG.`). Without any, no lines at all,
+#' since "none" would be a claim and the item is only a reminder.
 #'
 #' @param rows The `scadenze` of a referent's report.
 #' @param period What `report_month()` answered: the month named is the one
@@ -1541,14 +1588,14 @@ report_expiring_lines <- function(rows, period) {
   }
 
   month <- report_month_words(format(period[["oggi"]], "%Y-%m"))
-  each <- function(verb, project) {
+  each <- function(project, verb) {
     vapply(seq_len(nrow(rows)), function(i) {
       paste0(
         "   - ", trimws(paste(rows[["first_name"]][[i]],
                               rows[["last_name"]][[i]])),
-        ", ", rows[["username"]][[i]], ": ", verb, " ",
-        trimws(rows[["expiration"]][[i]]), "; ", rows[["server"]][[i]],
-        ", ", project, " ", rows[["project_id"]][[i]], "."
+        ": ", rows[["server"]][[i]], ", ", project, " ",
+        rows[["project_id"]][[i]], ", ", verb, " ",
+        trimws(rows[["expiration"]][[i]]), "."
       )
     }, "")
   }
@@ -1559,14 +1606,14 @@ report_expiring_lines <- function(rows, period) {
         "3. Scadono entro ", sub(" .*", "", month[["it"]]), " (", nrow(rows),
         "), per informazione"
       ),
-      each("scade il", "progetto")
+      each("progetto", "scade il")
     ),
     en = c(
       paste0(
         "3. Expiring by the end of ", sub(" .*", "", month[["en"]]), " (",
         nrow(rows), "), for information"
       ),
-      each("expires on", "project")
+      each("project", "expires on")
     )
   )
 }
@@ -1594,19 +1641,24 @@ report_read_words <- function(period) {
 #' Compose a referent's monthly report
 #'
 #' Two forms, told apart by the **first word of the subject**, which is what
-#' shows in a list of mail without opening anything: `Tutto in ordine` when
-#' there is nobody to look at, `N da guardare` otherwise. The mail is plain
-#' text, so the verdict is said again on the first line of the body, in
-#' capitals. N counts the people listed in full in the items to look at, and
-#' not the accesses activated, which are information; in the form to review
-#' the anomalies come first and the information after.
+#' shows in a list of mail without opening anything: `Tutto in ordine: ...`
+#' when there is nobody to look at, `Da guardare (N): ...` otherwise, with N
+#' in brackets so that the subject does not carry two colons in a row. The
+#' mail is plain text, so the verdict is said again on the first line of the
+#' body, in capitals (`TUTTO IN ORDINE`, `DA GUARDARE: N`; `ALL CLEAR`,
+#' `TO REVIEW: N`): a number right before a numbered list would read as the
+#' number of its first item. N counts the people listed in full in the items
+#' to look at, a person once even when they are on two servers or in both
+#' items (the user name compared without case), and not the accesses
+#' activated or the expirations, which are information.
 #'
-#' The year without access is not measured in phase 1, and the mail says so
-#' in both forms: an all-clear that covered an item nobody looked at would
-#' say something false. For the same reason the people of the referent that
-#' went to IT without being judged are counted in a line of their own, which
-#' changes neither the verdict nor the number in the subject: those say what
-#' was measured.
+#' The items come in the order of the draft: 1. no first sign-in on the
+#' server, 2. no access in more than a year, 3. the expirations of the month
+#' (only if there are any), then the accesses activated. In the all-clear
+#' form items 1 and 2 say "none" with their number. The people of the
+#' referent that went to IT without being judged are counted in a line of
+#' their own, which changes neither the verdict nor the number in the
+#' subject: those say what was measured.
 #'
 #' Italian above and English below, as every mail of the channel, since the
 #' address says nothing about which one its reader reads.
@@ -1622,55 +1674,48 @@ report_message <- function(report, period) {
   stopifnot(is.list(report), is.list(period))
 
   people <- report[["senza_primo_accesso"]] %||% list()
-  count <- length(people)
+  idle <- report[["senza_accessi"]] %||% list()
+  named <- vapply(c(people, idle), function(x) {
+    tolower(trimws(as.character(x[["upn"]])))
+  }, "")
+  count <- length(unique(named))
   unjudged <- as.integer(report[["non_giudicati"]] %||% 0L)
   month <- report_month_words(period[["mese"]])
   following <- report_day_words(period[["prossimo"]])
-  grace <- report_grace_days()
+  first <- report_people_lines(people, period, unjudged)
+  second <- report_idle_lines(report)
+  expiring <- report_expiring_lines(
+    report[["scadenze"]] %||% data.frame(), period
+  )
   activated <- report_activated_lines(report[["attivati"]])
   read <- report_read_words(period)
 
   if (count == 0L) {
-    verdict <- c(it = "Tutto in ordine", en = "All clear")
-    items <- list(
-      it = c(
-        paste0(
-          "Persone senza primo accesso dopo ", grace, " giorni: nessuna."
-        ),
-        if (unjudged > 0L) {
-          paste0("Persone non giudicabili, segnalate a IT: ", unjudged, ".")
-        },
-        "Persone senza accessi da piu' di un anno: non ancora controllato."
-      ),
-      en = c(
-        paste0("People with no first sign-in after ", grace, " days: none."),
-        if (unjudged > 0L) {
-          paste0(
-            "People that could not be judged, reported to IT: ", unjudged, "."
-          )
-        },
-        "People with no access in more than a year: not checked yet."
-      )
+    verdict <- c(
+      it = "TUTTO IN ORDINE", en = "ALL CLEAR",
+      subject_it = "Tutto in ordine", subject_en = "All clear"
     )
   } else {
     verdict <- c(
-      it = paste(count, "da guardare"), en = paste(count, "to review")
-    )
-    listed <- report_people_lines(people, unjudged)
-    items <- list(
-      it = c(
-        listed[["it"]], "",
-        "2. Senza accessi da piu' di un anno: non ancora controllato."
-      ),
-      en = c(
-        listed[["en"]], "",
-        "2. No access in more than a year: not checked yet."
-      )
+      it = paste0("DA GUARDARE: ", count), en = paste0("TO REVIEW: ", count),
+      subject_it = paste0("Da guardare (", count, ")"),
+      subject_en = paste0("To review (", count, ")")
     )
   }
 
+  # The items are apart by a blank line; the expirations only if there are.
+  items <- function(language) {
+    parts <- list(first[[language]], second[[language]])
+    if (length(expiring[[language]]) > 0L) {
+      parts <- c(parts, list(expiring[[language]]))
+    }
+    unlist(lapply(seq_along(parts), function(i) {
+      c(if (i > 1L) "", parts[[i]])
+    }))
+  }
+
   it <- c(
-    toupper(verdict[["it"]]),
+    verdict[["it"]],
     "",
     paste0(
       "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
@@ -1678,7 +1723,7 @@ report_message <- function(report, period) {
       "Mese: ", month[["it"]], "."
     ),
     "",
-    items[["it"]],
+    items("it"),
     "",
     activated[["it"]],
     "",
@@ -1687,7 +1732,7 @@ report_message <- function(report, period) {
   )
 
   en <- c(
-    toupper(verdict[["en"]]),
+    verdict[["en"]],
     "",
     paste0(
       "Monthly report on the REDCap access requests you are the referent ",
@@ -1695,7 +1740,7 @@ report_message <- function(report, period) {
       "Month: ", month[["en"]], "."
     ),
     "",
-    items[["en"]],
+    items("en"),
     "",
     activated[["en"]],
     "",
@@ -1705,8 +1750,8 @@ report_message <- function(report, period) {
 
   list(
     subject = paste0(
-      verdict[["it"]], ": accessi REDCap, ", month[["it"]], " / ",
-      verdict[["en"]], ": REDCap access, ", month[["en"]]
+      verdict[["subject_it"]], ": accessi REDCap, ", month[["it"]], " / ",
+      verdict[["subject_en"]], ": REDCap access, ", month[["en"]]
     ),
     body = paste(c(it, "", "---", "", en), collapse = "\n"),
     forma = if (count == 0L) "in_ordine" else "da_guardare",

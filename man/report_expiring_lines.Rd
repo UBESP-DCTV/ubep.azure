@@ -19,7 +19,7 @@ rows.
 \description{
 Information only: it is not an item to look at, and it does not count in
 the number of the subject. Each expiration is one line with the person,
-the server, the project and the day. Without any, no lines at all, since
-"none" would be a claim and the item is only a reminder.
+the server, the project and the day, as in the approved draft (\verb{Name: server, progetto N, scade il AAAA-MM-GG.}). Without any, no lines at all,
+since "none" would be a claim and the item is only a reminder.
 }
 \keyword{internal}

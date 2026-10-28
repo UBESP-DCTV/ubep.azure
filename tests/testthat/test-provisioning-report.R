@@ -1433,9 +1433,14 @@ test_that("le scadenze sono quelle del mese in cui si manda, oggi escluso", {
   )
   expect_match(righe[["en"]][[1L]], "^3[.] Expiring by the end of November")
   expect_length(righe[["it"]], 3L)
-  expect_match(righe[["it"]][[2L]], "2026-11-02", fixed = TRUE)
-  expect_match(righe[["it"]][[2L]], "Carla Inventata", fixed = TRUE)
-  expect_match(righe[["it"]][[2L]], "edc10, progetto 9301", fixed = TRUE)
+  expect_equal(
+    righe[["it"]][[2L]],
+    "   - Carla Inventata: edc10, progetto 9301, scade il 2026-11-02."
+  )
+  expect_equal(
+    righe[["en"]][[3L]],
+    "   - Carla Inventata: edc10, project 9301, expires on 2026-11-30."
+  )
 })
 
 
@@ -1644,17 +1649,18 @@ test_that("an all-clear report says so in the first word of the subject", {
     "Month: October 2026."
   ) %in% testo[["en"]])
   expect_true(
-    "Persone senza primo accesso dopo 30 giorni: nessuna." %in% testo[["it"]]
-  )
-  # Phase 1 does not look at the year without access, and an all-clear that
-  # covered it would say something false.
-  expect_true(
-    "Persone senza accessi da piu' di un anno: non ancora controllato." %in%
+    "1. Senza primo accesso al server dopo 30 giorni: nessuna." %in%
       testo[["it"]]
   )
   expect_true(
-    "People with no access in more than a year: not checked yet." %in%
+    "1. No first sign-in on the server after 30 days: none." %in%
       testo[["en"]]
+  )
+  expect_true(
+    "2. Senza accessi da piu' di un anno: nessuno." %in% testo[["it"]]
+  )
+  expect_true(
+    "2. No access in more than a year: none." %in% testo[["en"]]
   )
   expect_true(
     "Accessi attivati nel mese (2), per informazione:" %in% testo[["it"]]
@@ -1728,12 +1734,12 @@ test_that("a report to review counts the people, and puts them first", {
   expect_equal(
     messaggio[["subject"]],
     paste0(
-      "2 da guardare: accessi REDCap, ottobre 2026 / ",
-      "2 to review: REDCap access, October 2026"
+      "Da guardare (2): accessi REDCap, ottobre 2026 / ",
+      "To review (2): REDCap access, October 2026"
     )
   )
-  expect_equal(testo[["it"]][[1L]], "2 DA GUARDARE")
-  expect_equal(testo[["en"]][[2L]], "2 TO REVIEW")
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 2")
+  expect_equal(testo[["en"]][[2L]], "TO REVIEW: 2")
 
   # The anomalies first, the information after.
   prima <- which(
@@ -1743,8 +1749,7 @@ test_that("a report to review counts the people, and puts them first", {
   expect_length(prima, 1L)
   expect_lt(prima, dopo)
   expect_true(
-    "2. Senza accessi da piu' di un anno: non ancora controllato." %in%
-      testo[["it"]]
+    "2. Senza accessi da piu' di un anno: nessuno." %in% testo[["it"]]
   )
 
   expect_true(paste0(
@@ -1770,29 +1775,204 @@ test_that("a report to review counts the people, and puts them first", {
   expect_true("     Su edc12 non e' mai entrata." %in% testo[["it"]])
   expect_true("     Has never signed in on edc12." %in% testo[["en"]])
   expect_true(any(startsWith(testo[["it"]], "   Che cosa fare: chiedi")))
+  expect_true(paste0(
+    "   Hanno l'accesso a un server da almeno 30 giorni e su quel server ",
+    "non sono ancora entrate."
+  ) %in% testo[["it"]])
   expect_true(any(startsWith(testo[["en"]], "   What to do: ask")))
+})
+
+
+test_that("le voci vengono nell'ordine della bozza", {
+  # eval
+  scadenze <- registro_di(richiesta(expiration = "2026-11-20"))
+  mio <- c(
+    rapporto_di(
+      attivati_di(richiesta(record_id = "45")), list(persona())
+    ),
+    list(
+      senza_accessi = list(coppia_c(nome = "Dario Ipotetico", upn = dario)),
+      scadenze = scadenze
+    )
+  )
+  testo <- parti(report_message(mio, novembre()))
+
+  # test
+  for (lingua in c("it", "en")) {
+    posizione <- function(inizio) {
+      which(startsWith(testo[[lingua]], inizio))[[1L]]
+    }
+    inizi <- if (lingua == "it") {
+      c("1. Senza primo accesso al server", "2. Senza accessi da piu'",
+        "3. Scadono entro", "Accessi attivati nel mese")
+    } else {
+      c("1. No first sign-in on the server", "2. No access in more than",
+        "3. Expiring by", "Access granted this month")
+    }
+    expect_true(!is.unsorted(vapply(inizi, posizione, 1L), strictly = TRUE))
+  }
+  # The expirations are information: without any, the item does not exist.
+  senza <- parti(report_message(rapporto_di(persone = list(persona())),
+                                novembre()))
+  expect_false(any(startsWith(senza[["it"]], "3.")))
+})
+
+
+test_that("le persone dell'oggetto sono distinte, anche fra voce B e C", {
+  # eval
+  due_server <- report_message(
+    rapporto_di(persone = list(
+      persona(server = "edc10"),
+      persona(
+        server = "edc12",
+        progetti = data.frame(
+          server = "edc12", project_id = "9303", stringsAsFactors = FALSE
+        )
+      )
+    )),
+    novembre()
+  )
+  # Carla is in the first item on one server and in the second on another,
+  # the user name written with other capitals.
+  maiuscola <- coppia_c(upn = "Carla.Inventata@ubep.unipd.it", server = "edc12")
+  b_e_c <- rapporto_di(persone = list(persona()))
+  b_e_c[["senza_accessi"]] <- list(maiuscola)
+  due_voci <- report_message(b_e_c, novembre())
+  b_e_c[["senza_accessi"]] <- list(
+    maiuscola, coppia_c(nome = "Dario Ipotetico", upn = dario)
+  )
+  due_persone <- report_message(b_e_c, novembre())
+
+  # test
+  expect_equal(due_server[["n"]], 1L)
+  expect_match(due_server[["subject"]], "^Da guardare [(]1[)]: accessi")
+  expect_equal(due_voci[["n"]], 1L)
+  expect_equal(due_persone[["n"]], 2L)
+  expect_equal(parti(due_persone)[["it"]][[1L]], "DA GUARDARE: 2")
+})
+
+
+test_that("solo la voce C porta al da guardare, e la B dice nessuna", {
+  # eval
+  messaggio <- report_message(
+    c(rapporto_di(), list(senza_accessi = list(coppia_c()))), novembre()
+  )
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(messaggio[["forma"]], "da_guardare")
+  expect_equal(messaggio[["n"]], 1L)
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 1")
+  expect_true(
+    "1. Senza primo accesso al server dopo 30 giorni: nessuna." %in%
+      testo[["it"]]
+  )
+  expect_true("2. Senza accessi da piu' di un anno (1)" %in% testo[["it"]])
+})
+
+
+test_that("tutto in ordine dice nessuna e nessuno, e non 'non controllato'", {
+  # eval
+  messaggio <- report_message(rapporto_di(), novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(testo[["it"]][[1L]], "TUTTO IN ORDINE")
+  expect_equal(testo[["en"]][[2L]], "ALL CLEAR")
+  expect_false(any(grepl("non ancora controllato", testo[["it"]],
+                         fixed = TRUE)))
+  expect_false(any(grepl("not checked yet", testo[["en"]], fixed = TRUE)))
+  expect_true(any(grepl(
+    "^2[.] Senza accessi da piu' di un anno: nessuno[.]$", testo[["it"]]
+  )))
+  expect_true(any(grepl(
+    "^1[.] Senza primo accesso al server dopo 30 giorni: nessuna[.]$",
+    testo[["it"]]
+  )))
+})
+
+
+test_that("la riga delle scadenze e' quella della bozza, in due lingue", {
+  # eval
+  mio <- rapporto_di(persone = list(persona(limite = "2026-12-18")))
+  mio[["scadenze"]] <- registro_di(
+    richiesta(first_name = "Elena", last_name = "Supposta",
+              expiration = "2026-11-15")
+  )
+  testo <- parti(report_message(mio, novembre()))
+
+  # test
+  expect_true(
+    "3. Scadono entro novembre (1), per informazione" %in% testo[["it"]]
+  )
+  expect_true(
+    "   - Elena Supposta: edc10, progetto 9301, scade il 2026-11-15." %in%
+      testo[["it"]]
+  )
+  expect_true(
+    "   - Elena Supposta: edc10, project 9301, expires on 2026-11-15." %in%
+      testo[["en"]]
+  )
 })
 
 
 test_that("la riga con la data limite dice entro quando, e che cosa segue", {
   # eval
   messaggio <- report_message(
-    rapporto_di(persone = list(persona(limite = "2026-10-01"))), novembre()
+    rapporto_di(persone = list(persona(limite = "2026-12-18"))), novembre()
   )
   testo <- parti(messaggio)
 
   # test
   expect_true(paste0(
     "     Non e' mai entrata con l'account UBEP: deve entrare entro il ",
-    "2026-10-01, poi l'account viene disattivato (D-31)."
+    "2026-12-18, poi l'account viene disattivato (D-31)."
   ) %in% testo[["it"]])
   expect_true(paste0(
     "     Has never signed in with the UBEP account: must sign in by ",
-    "2026-10-01, then the account is deactivated (D-31)."
+    "2026-12-18, then the account is deactivated (D-31)."
   ) %in% testo[["en"]])
   # Con la data limite non si dice due volte che non e' entrata sul server.
   expect_false("     Su edc10 non e' mai entrata." %in% testo[["it"]])
   expect_false(any(grepl("Letto da Entra", testo[["it"]], fixed = TRUE)))
+})
+
+
+test_that("una data limite gia' passata non e' scritta come scadenza", {
+  # eval
+  # Account creato il 2026-08-03, rapporto del 1 novembre: la data limite
+  # (59 giorni dopo) e' il 2026-10-01, passata.
+  rapporto <- assemblato(servers = list(edc10 = server_muto()))
+  messaggio <- report_message(
+    rapporto[["referenti"]][[referente]], novembre()
+  )
+  testo <- parti(messaggio)
+  oggi <- report_message(
+    rapporto_di(persone = list(persona(limite = "2026-11-01"))), novembre()
+  )
+
+  # test
+  voce <- rapporto[["referenti"]][[referente]][["senza_primo_accesso"]]
+  expect_equal(voce[[1L]][["limite"]], "2026-10-01")
+  expect_true(paste0(
+    "     Non e' mai entrata con l'account UBEP: la data per il primo ",
+    "accesso (2026-10-01) e' passata e la chiave consegnata puo' non valere ",
+    "piu'. Per averne una nuova, rispondi alla mail della chiave."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "     Has never signed in with the UBEP account: the date for the first ",
+    "sign-in (2026-10-01) has passed and the key that was handed over may ",
+    "no longer be valid. To get a new one, reply to the mail of the key."
+  ) %in% testo[["en"]])
+  expect_false(any(grepl("deve entrare entro", testo[["it"]], fixed = TRUE)))
+  expect_false(any(grepl("must sign in by", testo[["en"]], fixed = TRUE)))
+  # The day itself is not past yet.
+  expect_true(any(grepl(
+    "deve entrare entro il 2026-11-01", parti(oggi)[["it"]], fixed = TRUE
+  )))
+  for (riga in c(testo[["it"]], testo[["en"]])) {
+    expect_true(all(utf8ToInt(riga) < 128L))
+  }
 })
 
 
@@ -1821,7 +2001,8 @@ test_that("the mails carry no long dash and no character outside ASCII", {
     report_message(rapporto_di(persone = list(persona())), novembre()),
     report_message(
       rapporto_di(persone = list(
-        persona(limite = "2026-10-01"), persona(fonte = "entra")
+        persona(limite = "2026-12-18"), persona(limite = "2026-10-01"),
+        persona(fonte = "entra")
       )),
       novembre()
     )
@@ -2279,7 +2460,9 @@ test_that("the first run sends to the referent and to IT, and keeps track", {
   # IT in copy on the referent's report, and nobody in copy on its own.
   expect_equal(mail[[1L]][["cc"]], it_prova)
   expect_null(mail[[2L]][["cc"]])
-  expect_match(mail[[1L]][["subject"]], "^1 da guardare: accessi REDCap")
+  expect_match(
+    mail[[1L]][["subject"]], "^Da guardare [(]1[)]: accessi REDCap"
+  )
   expect_match(mail[[2L]][["subject"]], "^1 da guardare: rapporto REDCap")
 
   invii <- report_ledger_read(cartella, "2026-10")[["invii"]]
@@ -2384,7 +2567,7 @@ test_that("un modulo che non risponde e' un server non letto, non un errore", {
 })
 
 
-test_that("la mail dice il server e la data limite, e il registro li ricorda", {
+test_that("la mail dice il server e la data passata, e il registro anche", {
   # eval
   doppie()
   cartella <- withr::local_tempdir()
@@ -2394,10 +2577,13 @@ test_that("la mail dice il server e la data limite, e il registro li ricorda", {
 
   # test
   anna <- posta[["inviate"]][["mail"]][[1L]][["body"]]
+  # Carla's account was made on 3 August: the day for the first sign-in,
+  # 1 October, is past on the 1st of November.
   expect_match(anna, paste0(
-    "Non e' mai entrata con l'account UBEP: deve entrare entro il ",
-    "2026-10-01, poi l'account viene disattivato (D-31)."
+    "Non e' mai entrata con l'account UBEP: la data per il primo accesso ",
+    "(2026-10-01) e' passata"
   ), fixed = TRUE)
+  expect_false(grepl("deve entrare entro", anna, fixed = TRUE))
   expect_false(grepl("Letto da Entra", anna, fixed = TRUE))
 })
 
@@ -2464,7 +2650,7 @@ test_that("una persona su due server conta due volte, e il registro lo sa", {
     coppie(c(carla, carla), c("edc10", "edc12"))
   )
   expect_match(
-    posta[["inviate"]][["mail"]][[1L]][["subject"]], "^2 da guardare"
+    posta[["inviate"]][["mail"]][[1L]][["subject"]], "^Da guardare [(]1[)]"
   )
 })
 
@@ -2940,7 +3126,7 @@ test_that("a person not judged is counted in a report to review too", {
   testo <- parti(messaggio)
 
   # test
-  expect_match(messaggio[["subject"]], "^1 da guardare")
+  expect_match(messaggio[["subject"]], "^Da guardare [(]1[)]")
   expect_true(
     "   Persone non giudicabili, segnalate a IT: 1." %in% testo[["it"]]
   )
