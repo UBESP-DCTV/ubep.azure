@@ -1528,35 +1528,61 @@ report_idle_lines <- function(report) {
   list(
     it = c(
       paste0("2. Senza accessi da piu' di un anno (", length(pairs), ")"),
+      if (length(pairs) > 0L) {
+        paste0(
+          "   Hanno l'accesso da piu' di un anno e su quel server non ",
+          "entrano da piu' di un anno."
+        )
+      },
       unlist(lapply(each, `[[`, "it")),
       if (earlier > 0L) {
         paste0(
-          "   Coppie gia' segnalate nei mesi scorsi e ancora senza accessi: ",
+          "   Gia' segnalate nei mesi scorsi e ancora senza accessi: ",
           earlier, "."
         )
       },
       if (nrow(unchecked) > 0L) {
         paste0(
           "   Non controllato per ", count,
-          ifelse(count == 1L, " coppia su ", " coppie su "),
+          ifelse(count == 1L, " persona su ", " persone su "),
           server, ": il server non ha risposto."
+        )
+      },
+      if (length(pairs) > 0L) {
+        paste0(
+          "   Che cosa fare: se la persona non lavora piu' su quei ",
+          "progetti, metti le richieste a revoked. Se deve restare, non ",
+          "serve niente: dal mese prossimo sara' solo contata."
         )
       }
     ),
     en = c(
       paste0("2. No access in more than a year (", length(pairs), ")"),
+      if (length(pairs) > 0L) {
+        paste0(
+          "   They have had access for more than a year and have not ",
+          "signed in on that server for more than a year."
+        )
+      },
       unlist(lapply(each, `[[`, "en")),
       if (earlier > 0L) {
         paste0(
-          "   Pairs already reported in earlier months and still without ",
+          "   Already reported in earlier months and still without ",
           "access: ", earlier, "."
         )
       },
       if (nrow(unchecked) > 0L) {
         paste0(
           "   Not checked for ", count,
-          ifelse(count == 1L, " pair on ", " pairs on "),
+          ifelse(count == 1L, " person on ", " people on "),
           server, ": the server did not answer."
+        )
+      },
+      if (length(pairs) > 0L) {
+        paste0(
+          "   What to do: if the person no longer works on those projects, ",
+          "set the requests to revoked. If they must stay, nothing is ",
+          "needed: from next month they will only be counted."
         )
       }
     )

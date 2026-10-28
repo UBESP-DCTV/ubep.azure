@@ -1542,31 +1542,63 @@ test_that("la voce C elenca per esteso, conta le gia' segnalate, dice i muti", {
   expect_equal(
     righe[["it"]][[2L]],
     paste0(
+      "   Hanno l'accesso da piu' di un anno e su quel server non entrano ",
+      "da piu' di un anno."
+    )
+  )
+  expect_equal(
+    righe[["it"]][[3L]],
+    paste0(
       "   - Carla Inventata, ", carla, ": attivata il 2026-10-01; ultimo ",
       "accesso il 2026-10-31."
     )
   )
   expect_true(any(righe[["it"]] == "     edc10, progetto 9301."))
   expect_true(any(righe[["it"]] == paste0(
-    "   Coppie gia' segnalate nei mesi scorsi e ancora senza accessi: 2."
+    "   Gia' segnalate nei mesi scorsi e ancora senza accessi: 2."
   )))
   expect_true(any(righe[["it"]] == paste0(
-    "   Non controllato per 3 coppie su edc12: il server non ha risposto."
+    "   Non controllato per 3 persone su edc12: il server non ha risposto."
   )))
   expect_true(any(righe[["it"]] == paste0(
-    "   Non controllato per 1 coppia su edc14: il server non ha risposto."
+    "   Non controllato per 1 persona su edc14: il server non ha risposto."
   )))
+  expect_equal(
+    righe[["it"]][[length(righe[["it"]])]],
+    paste0(
+      "   Che cosa fare: se la persona non lavora piu' su quei progetti, ",
+      "metti le richieste a revoked. Se deve restare, non serve niente: dal ",
+      "mese prossimo sara' solo contata."
+    )
+  )
   expect_equal(righe[["en"]][[1L]], "2. No access in more than a year (1)")
+  expect_equal(
+    righe[["en"]][[2L]],
+    paste0(
+      "   They have had access for more than a year and have not signed in ",
+      "on that server for more than a year."
+    )
+  )
   expect_true(any(righe[["en"]] == paste0(
-    "   Pairs already reported in earlier months and still without ",
-    "access: 2."
+    "   Already reported in earlier months and still without access: 2."
   )))
   expect_true(any(righe[["en"]] == paste0(
-    "   Not checked for 3 pairs on edc12: the server did not answer."
+    "   Not checked for 3 people on edc12: the server did not answer."
   )))
   expect_true(any(righe[["en"]] == paste0(
-    "   Not checked for 1 pair on edc14: the server did not answer."
+    "   Not checked for 1 person on edc14: the server did not answer."
   )))
+  expect_equal(
+    righe[["en"]][[length(righe[["en"]])]],
+    paste0(
+      "   What to do: if the person no longer works on those projects, set ",
+      "the requests to revoked. If they must stay, nothing is needed: from ",
+      "next month they will only be counted."
+    )
+  )
+  # Without a line in full there is nothing to explain nor to do.
+  sole <- report_idle_lines(rapporto_c(gia = 2L))
+  expect_false(any(grepl("Che cosa fare|What to do", unlist(sole))))
 })
 
 
