@@ -20,7 +20,9 @@ provisioning_report(
   mailer = NULL,
   redirect_to = NULL,
   copy_to = NULL,
-  channel_account = NULL
+  channel_account = NULL,
+  hosts = character(),
+  secrets = character()
 )
 ```
 
@@ -75,14 +77,34 @@ provisioning_report(
   fields. The runner reads it from `UBEP_CANALE_UTENTE`, a list
   separated by commas, which it requires.
 
+- hosts, secrets:
+
+  Named character vectors, server name to host and to the secret of its
+  module. A server missing from either, or with an `NA` secret, is not
+  read.
+
 ## Value
 
 A list that
 [`report_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_record.md)
-turns into the record, plus `rapporti`, one row per report due, for
-whoever reads a single run.
+turns into the record, plus `rapporti`, one row per report due and per
+late report, with the `mese` it covers, for whoever reads a single run;
+`server`, what
+[`report_server_reads()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_server_reads.md)
+answered for each server asked; `recuperati`, the late reports tried (a
+data frame of `mese`, `destinatario` and `esito`, `mandato` or
+`fallito`); and `mesi_persi`, the months still missing a report after
+the round.
 
 ## Details
+
+It also asks the instances, `accounts` only, through
+[`report_server_reads()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_server_reads.md):
+once the register and the directory have read whole, each server the
+register has rows on is asked for the people of those rows, the rows
+stopped on a disabled account included. A server that is not read stops
+nothing and is not an error: it is counted in `istanze_non_lette`, and
+the report goes on without what that server would have said.
 
 The job runs every day, because an alarm on logs looks back two days at
 most and a monthly job cannot be watched by the absence of a record.
@@ -104,12 +126,23 @@ found due, kept beside the ledger
 with none on record it says nothing is due, and the alarm on absence is
 the one that speaks.
 
-On the 1st the run moves on to the month just ended, and a report of the
-month before that still not sent is not sent any more: it would describe
-a month two behind. It is not dropped in silence either. Every run of
-the real month compares the ledger of the month before with what its
-last whole reading found due, and while a report is missing the record
-carries `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+On the 1st the run moves on to the month just ended. A month whose
+reports did not all leave is not given up: the first run that can send
+(read whole, the post on) sends the late reports of those months first,
+oldest first, each saying it is late and carrying the accesses activated
+in its own month
+([`report_late_message()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_late_message.md)),
+and then the report of the month covered. The months checked are those
+from
+[`report_first_month()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_first_month.md)
+up to the month covered, excluded
+([`report_lost_months()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_lost_months.md));
+a month with no list of the reports due kept takes the referents of
+today for it, and keeps them. The report to IT is not recovered, since
+it carries the state of today. Each late report that leaves is written
+in the ledger of its month. While a month is still missing a report
+after the round, the record carries
+`RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, and `in_ritardo` is true.
 
 **The real ledger is written only by a real run**: the post on, nobody
 redirected, the month the clock gives. A run with the post off sends
@@ -118,7 +151,10 @@ real ledger, it would make the real month read as sent, and a test at
 the end of October would leave nothing to leave on the 1st of November.
 So it keeps a ledger of its own, and is idempotent as the real run is:
 the timer of a field test does not send everything again every day. A
-run with a forced month writes nothing at all.
+run with a forced month writes nothing at all. Neither of the two
+recovers a month lost: a late report that went to the test address would
+be written in the real ledger of its month, and its referent would never
+receive it.
 
 The report to IT goes to `copy_to`, the address IT is in copy at on
 every outcome, under the name

@@ -31,8 +31,9 @@ report_ledger_read(dir, month, collaudo = FALSE)
 ## Value
 
 A list with `ok`, `errors` and `invii`, one list per report sent:
-`destinatario`, `at` and `senza_primo_accesso`; and `collaudo`, so that
-whoever adds to it writes it back where it was read.
+`destinatario`, `at`, and `senza_primo_accesso` and `senza_accessi`, the
+people it named, each a data frame of `upn` and `server`; and
+`collaudo`, so that whoever adds to it writes it back where it was read.
 
 ## Details
 

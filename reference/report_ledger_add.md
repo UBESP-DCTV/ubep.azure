@@ -30,7 +30,8 @@ report_ledger_add(dir, month, ledger, entry)
 
 - entry:
 
-  A list of `destinatario`, `at` and `senza_primo_accesso`.
+  A list of `destinatario`, `at`, and `senza_primo_accesso` and
+  `senza_accessi`, each a data frame of `upn` and `server`, or absent.
 
 ## Value
 

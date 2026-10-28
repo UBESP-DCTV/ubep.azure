@@ -15,7 +15,7 @@ outside the channel's path, as a job of its own."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,9 @@ outside the channel's path, as a job of its own.</p>
 <span>  mailer <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  redirect_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  copy_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  channel_account <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  channel_account <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  hosts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  secrets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -121,15 +123,32 @@ default, every row belongs to its creator, and the channel is whoever
 wrote its fields. The runner reads it from <code>UBEP_CANALE_UTENTE</code>, a list
 separated by commas, which it requires.</p></dd>
 
+
+<dt id="arg-hosts-secrets">hosts, secrets<a class="anchor" aria-label="anchor" href="#arg-hosts-secrets"></a></dt>
+<dd><p>Named character vectors, server name to host and to
+the secret of its module. A server missing from either, or with an <code>NA</code>
+secret, is not read.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list that <code><a href="report_record.html">report_record()</a></code> turns into the record, plus
-<code>rapporti</code>, one row per report due, for whoever reads a single run.</p>
+<code>rapporti</code>, one row per report due and per late report, with the <code>mese</code>
+it covers, for whoever reads a single run; <code>server</code>, what
+<code><a href="report_server_reads.html">report_server_reads()</a></code> answered for each server asked; <code>recuperati</code>,
+the late reports tried (a data frame of <code>mese</code>, <code>destinatario</code> and
+<code>esito</code>, <code>mandato</code> or <code>fallito</code>); and <code>mesi_persi</code>, the months still
+missing a report after the round.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The job runs every day, because an alarm on logs looks back two days at
+    <p>It also asks the instances, <code>accounts</code> only, through <code><a href="report_server_reads.html">report_server_reads()</a></code>:
+once the register and the directory have read whole, each server the
+register has rows on is asked for the people of those rows, the rows stopped
+on a disabled account included. A server that is not read stops nothing
+and is not an error: it is counted in <code>istanze_non_lette</code>, and the report
+goes on without what that server would have said.</p>
+<p>The job runs every day, because an alarm on logs looks back two days at
 most and a monthly job cannot be watched by the absence of a record. Every
 day it reads, computes and leaves a record; from the 1st on it sends the
 previous month's report to whoever has not received it yet, until the
@@ -144,12 +163,18 @@ next day tries again. Such a day also does not know who is due, so it
 judges the month on the reports the last whole reading found due, kept
 beside the ledger (<code><a href="report_due_read.html">report_due_read()</a></code>); with none on record it says
 nothing is due, and the alarm on absence is the one that speaks.</p>
-<p>On the 1st the run moves on to the month just ended, and a report of the
-month before that still not sent is not sent any more: it would describe a
-month two behind. It is not dropped in silence either. Every run of the
-real month compares the ledger of the month before with what its last whole
-reading found due, and while a report is missing the record carries
-<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code>.</p>
+<p>On the 1st the run moves on to the month just ended. A month whose reports
+did not all leave is not given up: the first run that can send (read whole,
+the post on) sends the late reports of those months first, oldest first,
+each saying it is late and carrying the accesses activated in its own month
+(<code><a href="report_late_message.html">report_late_message()</a></code>), and then the report of the month covered. The
+months checked are those from <code><a href="report_first_month.html">report_first_month()</a></code> up to the month
+covered, excluded (<code><a href="report_lost_months.html">report_lost_months()</a></code>); a month with no list of the
+reports due kept takes the referents of today for it, and keeps them. The
+report to IT is not recovered, since it carries the state of today. Each
+late report that leaves is written in the ledger of its month. While a
+month is still missing a report after the round, the record carries
+<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code>, and <code>in_ritardo</code> is true.</p>
 <p><strong>The real ledger is written only by a real run</strong>: the post on, nobody
 redirected, the month the clock gives. A run with the post off sends
 nothing to record. A redirected run is a field test: recorded in the real
@@ -157,7 +182,9 @@ ledger, it would make the real month read as sent, and a test at the end
 of October would leave nothing to leave on the 1st of November. So it keeps
 a ledger of its own, and is idempotent as the real run is: the timer of a
 field test does not send everything again every day. A run with a forced
-month writes nothing at all.</p>
+month writes nothing at all. Neither of the two recovers a month lost: a
+late report that went to the test address would be written in the real
+ledger of its month, and its referent would never receive it.</p>
 <p>The report to IT goes to <code>copy_to</code>, the address IT is in copy at on every
 outcome, under the name <code><a href="report_it_key.html">report_it_key()</a></code>; the referents' reports go to the
 owner's account, with <code>copy_to</code> in copy.</p>

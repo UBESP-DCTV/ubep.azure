@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -187,9 +187,10 @@ perché solo l’osservatore doveva restare senza confronto, stanno nel
 §2.</p>
 <p><strong>Dalla 0.20.0 la macchina ne ospita una terza</strong>, il
 rapporto mensile ai referenti. Legge il registro e l’anagrafica e manda
-posta, e basta: non scrive nel registro, non tocca Entra, non chiede
-niente alle istanze. Ha la sua unità, la sua tabella e i suoi allarmi, e
-sta nel §9.</p>
+posta, e basta: non scrive nel registro, non tocca Entra, e alle istanze
+chiede una cosa sola: l’operazione <code>accounts</code>, di sola
+lettura. Ha la sua unità, la sua tabella e i suoi allarmi, e sta nel
+§9.</p>
 <p><strong>La cadenza di quattro ore è una decisione, non un
 caso.</strong> Dice: chi compila una richiesta sa entro quattro ore se è
 formalmente corretta e, quando la scrittura è accesa, se è stata evasa.
@@ -1233,7 +1234,7 @@ in attesa, e nei giri in cui qualcuno sarebbe nato gli
 obbligatorio al primo accesso e senza licenze, in una sola chiamata a
 Graph. Dalla 0.22.0 un test fallisce se una delle due cose cambia. Sul
 primo e sulla chiamata unica conta anche il rapporto (§9, «Il primo
-accesso, da Entra»).</p>
+accesso, dal server»).</p>
 <p><strong>Una creazione per nome, nello stesso giro.</strong> Il nome è
 libero quando il giro legge l’anagrafica e occupato appena il primo
 <code>POST</code> ha fatto l’account. Fino alla 0.21.0 due righe che
@@ -1951,12 +1952,12 @@ trattiene niente, e la riga è <code>applied</code>.</p>
 sua chiave non è arrivata a nessuno: <code>credenziali_perse</code> è
 maggiore di zero. Dalla 0.19.0 conta anche la creazione di cui si è
 persa la risposta (<code>TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE</code>, o
-una risposta che non è di Graph): l’utenza può essere nata con una
-chiave morta con il processo, e il giro dopo la troverebbe e la
-porterebbe ad <code>applied</code> senza che nessuno abbia la chiave. Si
-conta nello stesso giro, e conta anche come benvenuto perso; il codice
-sta negli errori del giro e sulla riga. Cercare su Entra l’utenza della
-riga che porta il codice:</p>
+una risposta che non è di Graph, o un 5xx di Graph): l’utenza può essere
+nata con una chiave morta con il processo, e il giro dopo la troverebbe
+e la porterebbe ad <code>applied</code> senza che nessuno abbia la
+chiave. Si conta nello stesso giro, e conta anche come benvenuto perso;
+il codice sta negli errori del giro e sulla riga. Cercare su Entra
+l’utenza della riga che porta il codice:</p>
 <ul>
 <li>se c’è, la procedura è una sola: reimpostare la chiave su Entra,
 mandarla da sola al referente, e scrivere alla persona nome utente,
@@ -2128,19 +2129,24 @@ che qualcuno ha guardato.</p>
 <p><strong>Una mail al mese per referente, con solo il nuovo e
 l’inatteso.</strong> Non l’elenco di tutte le utenze: gli accessi
 attivati nel mese, per informazione, e le persone che a 30 giorni
-dall’attivazione non sono ancora entrate. La terza voce, le persone
-senza accessi da più di un anno, chiede di leggere l’ultimo login sulle
-istanze, quindi il modulo: arriva con la fase 2, e finché non c’è la
-mail scrive «non ancora controllato». Un «tutto in ordine» che coprisse
-una voce non misurata direbbe il falso.</p>
+dall’attivazione non sono ancora entrate sul server. Dalla 0.23.0 (la
+fase 2) ci sono altre due voci: le persone senza accessi da più di un
+anno, e le scadenze del mese. Le prime due si leggono dal server stesso,
+con l’operazione <code>accounts</code> del modulo; finché un server non
+si legge, la voce lo dice, e non scrive «nessuno». Un «tutto in ordine»
+che coprisse una voce non misurata direbbe il falso.</p>
 <p><strong>Il rapporto legge e manda posta, e basta.</strong> Non scrive
-nel registro, non tocca Entra, in fase 1 non chiede niente alle istanze.
-È questo che gli permette di stare fuori dal cammino del canale, e una
-guardia in <code>tests/testthat/test-runner-guardie.R</code> lo tiene
-tale: segue per nome ogni funzione che
-<code><a href="../reference/provisioning_report.html">provisioning_report()</a></code> raggiunge, anche attraverso gli
-aiuti, e nega qualunque scrittura; una seconda guardia legge la
-lavorazione.</p>
+nel registro, non tocca Entra. Alle istanze chiede <strong>solo
+<code>accounts</code></strong>, che legge soltanto, e solo i nomi delle
+righe di quel server. È questo che gli permette di stare fuori dal
+cammino del canale, e una guardia in
+<code>tests/testthat/test-runner-guardie.R</code> lo tiene tale: segue
+per nome ogni funzione che <code><a href="../reference/provisioning_report.html">provisioning_report()</a></code> raggiunge,
+anche attraverso gli aiuti, e nega qualunque scrittura; ammette la sola
+porta <code><a href="../reference/module_accounts.html">module_accounts()</a></code>, e <code><a href="../reference/module_call.html">module_call()</a></code>,
+<code><a href="../reference/module_state.html">module_state()</a></code>, <code><a href="../reference/module_apply.html">module_apply()</a></code> e
+<code><a href="../reference/module_revoke.html">module_revoke()</a></code> restano irraggiungibili. Una seconda
+guardia legge la lavorazione.</p>
 <div class="section level3">
 <h3 id="a-chi-va-e-che-cosa-dice">A chi va, e che cosa dice<a class="anchor" aria-label="anchor" href="#a-chi-va-e-che-cosa-dice"></a>
 </h3>
@@ -2174,10 +2180,22 @@ richiesta risulta nuovo, che è ciò che vede il referente; se manca una
 delle due date la frase non c’è.</p>
 <p>Le due forme si distinguono dalla <strong>prima parola
 dell’oggetto</strong>, che è ciò che si vede nell’elenco della posta:
-<code>Tutto in ordine</code> oppure <code>N da guardare</code>, con N le
-persone elencate per esteso. La voce A non conta: sono gli accessi che
-il referente ha chiesto. Italiano sopra, inglese sotto, IT in copia
-all’indirizzo di <code>UBEP_POSTA_COPIA</code>.</p>
+<code>Tutto in ordine: accessi REDCap, &lt;mese&gt;</code> oppure
+<code>Da guardare (N): accessi REDCap, &lt;mese&gt;</code>, con N le
+persone distinte elencate per esteso nelle prime due voci, ciascuna con
+la sua traduzione inglese dopo la barra. Il numero sta fra parentesi
+nell’oggetto perché la prima parola basti, e senza un secondo «due
+punti» di fila. La prima riga del corpo ripete la forma:
+<code>TUTTO IN ORDINE</code> oppure <code>DA GUARDARE: N</code> (in
+inglese <code>ALL CLEAR</code>, <code>TO REVIEW: N</code>), con il
+numero dopo i due punti, perché subito prima di un elenco numerato si
+leggerebbe come il punto 2. Le voci vengono in quest’ordine: 1. senza
+primo accesso al server, 2. senza accessi da più di un anno, 3.
+scadenze, poi gli accessi attivati. Nella forma «tutto in ordine» la 1 e
+la 2 dicono «nessuna» e «nessuno», la 3 e gli attivati compaiono se ci
+sono. Né le scadenze né gli attivati contano in N: sono per
+informazione. Italiano sopra, inglese sotto, IT in copia all’indirizzo
+di <code>UBEP_POSTA_COPIA</code>.</p>
 <p>Ciò che non ha un referente a cui andare va <strong>a IT, e a nessun
 altro</strong>, in una mail sola e solo quando c’è qualcosa, allo stesso
 indirizzo:</p>
@@ -2193,8 +2211,36 @@ porta la scrittura del sigillo da parte del canale, oppure, senza
 l’utenza configurata, perché i campi del canale li scrivono due account
 e non si sa quale abbia eseguito la riga. La mail distingue i due casi,
 che mandano a cercare cose diverse. Con l’utenza configurata un sigillo
-scritto da un altro account non data niente.</li>
+scritto da un altro account non data niente;</li>
+<li>
+<strong>i server non letti</strong> (dalla 0.23.0): ogni server a
+cui il rapporto ha chiesto <code>accounts</code> e che non ha risposto,
+anche se gli si chiedeva solo una riga ferma. Con il motivo a parole
+(modulo non aggiornato, non raggiungibile, segreto non leggibile o
+rifiutato, errore con il suo codice), quante coppie persona-server sono
+ricadute su Entra e quante sono rimaste «non controllate» per l’anno
+senza accessi;</li>
+<li>
+<strong>le richieste ferme su un account disattivato</strong> (dalla
+0.23.0): le righe attive con <code>TRASPORTO_ACCOUNT_DISATTIVATO</code>
+nel dettaglio dell’esito, anche fra più codici, che il rapporto non
+vedeva perché non sono <code>applied</code>. Dalla 0.22.0 ogni riga
+attiva su un account disattivato finisce qui, quindi la sezione è anche
+quella dei disattivati per un primo accesso che non è arrivato. Per ogni
+riga, se il server è letto, la mail dice se la persona è mai entrata lì.
+È una sezione sola e non il conteggio a parte dei «disattivati per
+mancato primo accesso»: distinguerli chiede di leggere
+<code>forceChangePasswordNextSignIn</code>, e il permesso meno
+privilegiato per farlo è di scrittura; le due date di Entra non bastano,
+perché la regola dei 60 giorni sostituisce la chiave prima di
+disattivare. Il perché di una disattivazione lo sa IT, che la fa.</li>
 </ul>
+<p>L’oggetto e la prima riga della mail a IT hanno la stessa forma di
+quella dei referenti
+(<code>Da guardare (N): rapporto REDCap per IT</code>), con N le righe
+elencate: un server è una riga, una richiesta ferma è una riga. La mail
+a IT parte anche con la sola sezione dei server non letti o delle
+richieste ferme.</p>
 <p>La colonna <code>senza_creatore</code> di
 <code>UbepRapporto_CL</code> <strong>non si è rinominata</strong>, e
 dalla 0.21.0 vuol dire «senza proprietario stabilito»: rinominarla
@@ -2237,8 +2283,35 @@ la sola vita attuale, dall’ultima creazione in poi, come per il giro
 </ul>
 </div>
 <div class="section level3">
-<h3 id="il-primo-accesso-da-entra">Il primo accesso, da Entra<a class="anchor" aria-label="anchor" href="#il-primo-accesso-da-entra"></a>
+<h3 id="il-primo-accesso-dal-server">Il primo accesso, dal server<a class="anchor" aria-label="anchor" href="#il-primo-accesso-dal-server"></a>
 </h3>
+<p><strong>Una riga per persona e server</strong>, non per persona: chi
+ha accesso a due server può essere entrato in uno e non nell’altro. La
+coppia entra se la riga è <code>active</code>, <code>applied</code>, non
+scaduta, attivata da almeno 30 giorni, e il server dice che la persona
+non è mai entrata: nessuna riga in <code>redcap_user_information</code>
+per quel nome, oppure <code>user_firstvisit</code> nullo. Per il server
+il rapporto chiama <code><a href="../reference/module_accounts.html">module_accounts()</a></code>, che chiede
+<code>accounts</code> al modulo (contratto 4) solo per i nomi delle
+righe di quel server, a pezzi di 500 al più, e a ogni nome chiesto il
+modulo risponde con una voce, anche se la persona non c’è: «manca dalla
+risposta» non deve mai voler dire «mai entrata».</p>
+<p><strong>Su un server letto decide il server, e Entra non conta più
+per questa voce.</strong> Il segnale del server dice proprio «su quel
+server», e non sbaglia con una chiave reimpostata da IT, che sposta la
+data su Entra e fa sparire la persona dalla voce.</p>
+<p><strong>Su un server non letto la coppia ricade sulla regola di Entra
+della fase 1</strong>, e la riga lo dice («letto da Entra: il server non
+ha risposto»). Un server non è letto quando è spento, quando il modulo è
+ancora al contratto 3 (risponde 501 e il client lo legge come
+<code>TRASPORTO_CONTRATTO_DISALLINEATO</code>, «modulo non aggiornato»),
+quando il segreto non si legge, o per qualunque errore. Altrettanto vale
+una risposta che tace un nome chiesto, o senza <code>accounts</code>
+utilizzabile, o con una data che non si legge: il server si tratta come
+non letto (<code>INTERNO</code>) e le coppie ricadono, perché letta così
+com’è la persona mancante risulterebbe «mai entrata», un falso positivo
+mandato al referente. Il confronto dei nomi è senza maiuscole e spazi ai
+bordi, nel modulo e nel client, per la stessa ragione.</p>
 <p>Un account abilitato la cui <code>lastPasswordChangeDateTime</code>
 coincide con la <code>createdDateTime</code> <strong>entro 60
 secondi</strong> non è mai stato usato: il canale crea gli account con
@@ -2251,15 +2324,36 @@ e 30, pochi fra 31 e 120; un account fatto a mano dal portale e usato
 una volta sta a 172. Il permesso è <code>User.Read.All</code>, quello
 che il giro ha già, e il campo in più sta in
 <code><a href="../reference/directory_fields.html">directory_fields()</a></code>, quindi anche la spazzata del giro lo
-chiede.</p>
-<p>Che cosa non vede, ed è dichiarato:</p>
+chiede. Dalla 0.23.0 questa regola serve in due posti: il ripiego sui
+server non letti, e la <strong>data limite</strong>.</p>
+<p><strong>La data limite compare solo quando la chiave è ancora quella
+della creazione</strong>, cioè quando le due date di Entra coincidono
+entro i 60 secondi. La chiave consegnata vale almeno 60 giorni dalla
+creazione o dall’ultimo reset, e un account che nessuno usa viene
+disattivato, mai cancellato; la riga dice «deve entrare entro il <data>,
+poi l’account viene disattivato», con la data di
+<code><a href="../reference/mail_first_signin_deadline.html">mail_first_signin_deadline()</a></code> sul
+<code>createdDateTime</code> dell’account. <strong>Quando le date
+divergono la riga dice solo che su quel server la persona non è mai
+entrata</strong>, senza data e senza dire se usa l’account UBEP:
+divergono per chi è entrato, per una chiave reimpostata da IT e per una
+chiave sostituita alla scadenza dei 60 giorni, e Entra non distingue i
+tre casi. Per la stessa ragione una data limite dopo un reset non si può
+calcolare dal rapporto. <strong>Una data limite già passata non si
+scrive come scadenza</strong>: la riga dice che la data per il primo
+accesso è passata, che la chiave consegnata può non valere più, e che
+per averne una nuova si risponde alla mail della chiave.</data></p>
+<p>Che cosa non si vede più, e che cosa resta:</p>
 <ul>
-<li>una <strong>chiave reimpostata da IT</strong> sposta la data anche
-se la persona non è mai entrata, e la persona sparisce dalla voce; la
-fase 2 lo toglie;</li>
-<li>un <strong>account che esisteva da prima</strong> ha le date diverse
-da anni: il segnale dice «è entrata con l’account UBEP», non «è entrata
-su REDCap».</li>
+<li>la <strong>chiave reimpostata da IT</strong> non nasconde più la
+persona, su un server letto: il segnale è del server. Sui server non
+letti resta com’era;</li>
+<li>un <strong>account che esisteva da prima</strong> non confonde più
+la voce su un server letto: il server dice se la persona è entrata
+<em>lì</em>. Sui server non letti il segnale dice ancora «è entrata con
+l’account UBEP», non «è entrata su REDCap»;</li>
+<li>una persona <strong>chiesta su due server</strong> ha due righe, e
+può comparire per uno solo.</li>
 </ul>
 <p><strong>I 30 giorni partono dalla persona, non dalla riga.</strong>
 Contano dal più tardo fra il primo sigillo del canale dopo l’ultima
@@ -2268,14 +2362,50 @@ scrittura di <code>username</code> nella vita attuale della riga
 in ora italiana. Uno <code>username</code> corretto con una modifica, o
 un account ricreato, altrimenti erediterebbero i mesi di un’altra
 persona. La voce A resta datata dalla riga: la richiesta è quella
-attivata allora.</p>
+attivata allora. Su una coppia le date e i «da N mesi» sono quelli della
+richiesta più vecchia <strong>su quel server</strong>.</p>
 <p>La voce dice da quanti mesi di trenta giorni la persona risulta senza
 primo accesso, e in quali rapporti precedenti dello stesso referente è
-già comparsa: si rilegge dal registro degli invii dei mesi prima. Se il
-file di uno di quei mesi non si legge, per le persone che poteva
-contenere la mail non dice né «prima segnalazione» né «segnalata anche»,
-e il record porta <code>RAPPORTO_STORICO_ILLEGGIBILE</code>: quei file
-servono a quella frase e a niente altro, quindi non fermano l’invio.</p>
+già comparsa, per quella coppia: si rilegge dal registro degli invii dei
+mesi prima. Se il file di uno di quei mesi non si legge, per le persone
+che poteva contenere la mail non dice né «prima segnalazione» né
+«segnalata anche», e il record porta
+<code>RAPPORTO_STORICO_ILLEGGIBILE</code>: quei file servono a quella
+frase e a niente altro, quindi non fermano l’invio.</p>
+</div>
+<div class="section level3">
+<h3 id="lultimo-accesso-dal-server">L’ultimo accesso, dal server<a class="anchor" aria-label="anchor" href="#lultimo-accesso-dal-server"></a>
+</h3>
+<p>La voce 2 dice chi ha accesso da più di un anno e su quel server non
+entra da più di un anno. <strong>Una riga per persona e server</strong>,
+e la coppia entra se: riga <code>active</code>, <code>applied</code>,
+non scaduta, attivata da <strong>più di 365 giorni</strong>, server
+letto, la persona c’è con un <code>user_firstvisit</code>, e il più
+recente fra <code>user_lastlogin</code> e <code>user_lastactivity</code>
+risale a più di 365 giorni prima della lettura, in ora italiana (le date
+arrivano dal modulo in UTC). Se mancano tutte e due ma c’è
+<code>user_firstvisit</code>, l’ultimo accesso è quello. Chi non è mai
+entrato non è qui: è la voce 1.</p>
+<p><strong>Per esteso il mese in cui la coppia supera la
+soglia</strong>; i mesi dopo, una riga di conteggio («già segnalate nei
+mesi scorsi e ancora senza accessi»), perché nominare ogni mese le
+stesse persone farebbe del rapporto un elenco. Il registro degli invii
+ricorda anche queste coppie. <strong>Un server non letto non dà mai
+«nessuno»</strong>: la voce dice «non controllato» per le sue coppie
+candidate e il server va a IT. Con il rapporto che parte a ottobre 2026,
+nessuna riga può entrare prima di ottobre 2027. La voce ha, come la
+prima, un sottotitolo e un «che cosa fare».</p>
+</div>
+<div class="section level3">
+<h3 id="le-scadenze-del-mese">Le scadenze del mese<a class="anchor" aria-label="anchor" href="#le-scadenze-del-mese"></a>
+</h3>
+<p>Una voce <strong>per informazione</strong>, che non conta
+nell’oggetto: le righe <code>active</code>, <code>applied</code>, con
+<code>expiration</code> dopo il giorno della lettura (escluso) e fino
+all’ultimo giorno del mese in cui si manda (compreso), in ora italiana.
+Il rapporto del 1° dicembre dice «Scadono entro dicembre». Una riga per
+scadenza: persona, server, progetto, data. Si legge dal registro, senza
+il modulo, e per questo ci sono anche con un server non letto.</p>
 </div>
 <div class="section level3">
 <h3 id="ogni-giorno-non-una-volta-al-mese">Ogni giorno, non una volta al mese<a class="anchor" aria-label="anchor" href="#ogni-giorno-non-una-volta-al-mese"></a>
@@ -2288,33 +2418,85 @@ mese prima a chi non l’ha ancora ricevuto, finché il mese non è
 completo. Un registro illeggibile il 28 si vede il 28.</p>
 <p><strong>Il registro degli invii</strong> sta nella cartella di stato
 dell’unità, un file per mese coperto (<code>AAAA-MM.json</code>): per
-ogni rapporto, quando è partito e quali persone nominava senza primo
-accesso. Non è una copia dello stato che il canale rilegge: nel file non
-c’è niente del registro né di Entra, solo la traccia di un evento che
-altrimenti non ne lascia. Si scrive <strong>dopo</strong> l’invio
-riuscito, come il giro scrive nel registro dopo aver mandato: il prezzo
-accettato è un doppione, mai una perdita. Un file del mese coperto che
-non si legge non vale per vuoto: il rapporto non manda niente e lo dice
-con <code>RAPPORTO_INVII_ILLEGGIBILI</code>.</p>
+ogni rapporto, quando è partito e quali coppie persona-server nominava,
+nelle due voci (senza primo accesso, senza accessi da un anno; le «già
+segnalate» della seconda sì, le «non controllate» no, perché non sono
+state dette). Non è una copia dello stato che il canale rilegge: nel
+file non c’è niente del registro né di Entra, solo la traccia di un
+evento che altrimenti non ne lascia. <strong>I file della 0.22.0, con le
+sole persone, valgono per tutti i server della persona</strong>: il
+prezzo è un «segnalata anche» vero della persona e forse non di quel
+server, mai una perdita. Una lista di persone di una forma che il
+lettore non conosce rende illeggibile il file del mese (non lo legge
+come vuoto): letto male, manderebbe doppioni o perderebbe «segnalata
+anche». Si scrive <strong>dopo</strong> l’invio riuscito, come il giro
+scrive nel registro dopo aver mandato: il prezzo accettato è un
+doppione, mai una perdita. Un file del mese coperto che non si legge non
+vale per vuoto: il rapporto non manda niente e lo dice con
+<code>RAPPORTO_INVII_ILLEGGIBILI</code>. Lo stesso codice può venire dal
+file illeggibile di un mese più vecchio, letto per recuperarlo
+(<code><a href="../reference/report_lost_months.html">report_lost_months()</a></code>): quel mese si esclude e il resto
+prosegue.</p>
 <p><strong>Un giorno in cui qualcosa non si è letto non manda
 niente</strong>: registro, creazioni, anagrafica, il log di una riga
 attiva, il registro degli invii del mese coperto. Un rapporto composto
 su mezza lettura sarebbe sbagliato per qualcuno, e il giorno dopo si
-riprova. Quel giorno non sa nemmeno chi è dovuto, quindi <strong>giudica
-il mese sui dovuti dell’ultima lettura completa</strong>, che ogni
-lettura completa tiene accanto al registro degli invii
-(<code>AAAA-MM.dovuti.json</code>, i soli nomi che il registro degli
-invii già porta). Così una lettura mancata il 15 non fa sembrare in
-ritardo un mese consegnato il primo; senza nessuna lettura completa del
-mese, il mese non si dice in ritardo, e a parlare è l’allarme
-sull’assenza.</p>
-<p><strong>Il mese prima non si recupera, ma non si perde in
-silenzio.</strong> Il primo del mese il rapporto passa al mese appena
-finito, e un rapporto di quello prima ancora non partito non parte più:
-descriverebbe un mese di due indietro. Ogni esecuzione confronta il
-registro degli invii del mese prima con i suoi dovuti, e finché ne manca
-uno il record porta
-<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code>.</p>
+riprova. <strong>Fa eccezione la lettura dei server</strong>: un server
+non letto non è un errore del rapporto, non entra in
+<code>errori</code>, non tocca <code>letture_complete</code> e non ferma
+l’invio. Si conta in <code>istanze_non_lette</code>, va nella mail a IT,
+e le sue coppie ricadono su Entra (voce 1) o restano «non controllate»
+(voce 2). Altrimenti un banco spento con righe sopra, o il primo passo
+della posa, farebbe fallire ogni esecuzione giornaliera. Quel giorno non
+sa nemmeno chi è dovuto, quindi <strong>giudica il mese sui dovuti
+dell’ultima lettura completa</strong>, che ogni lettura completa tiene
+accanto al registro degli invii (<code>AAAA-MM.dovuti.json</code>, i
+soli nomi che il registro degli invii già porta). Così una lettura
+mancata il 15 non fa sembrare in ritardo un mese consegnato il primo;
+senza nessuna lettura completa del mese, il mese non si dice in ritardo,
+e a parlare è l’allarme sull’assenza.</p>
+<p><strong>I mesi persi si recuperano, dalla 0.23.0.</strong> Il primo
+del mese il rapporto passa al mese appena finito; un mese rimasto
+indietro, fino alla 0.22.0, non partiva più e lo diceva solo
+<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code>. Ora il primo giro che
+riesce a mandare manda prima i rapporti dei mesi persi, dal più vecchio,
+poi quello del mese corrente. Il recupero è limitato:</p>
+<ul>
+<li>
+<strong>solo le esecuzioni vere recuperano</strong>. Un mese forzato
+o dirottato scriverebbe, nel registro degli invii vero di un mese perso,
+un rapporto partito verso l’indirizzo di collaudo, e il referente non lo
+riceverebbe mai;</li>
+<li>
+<strong>non prima di ottobre 2026</strong>, il primo mese coperto
+dal rapporto, <strong>né prima del mese più vecchio con un file nella
+cartella di stato</strong> (il registro o i dovuti, non quelli di
+collaudo): una cartella persa o ricreata farebbe partire a ogni
+referente una raffica di rapporti in ritardo, uno per mese da
+ottobre;</li>
+<li>
+<strong>un mese è perso</strong> se manca un dovuto (escluso IT) nel
+suo registro, o non ha i dovuti salvati; i destinatari sono quelli
+salvati per quel mese, altrimenti quelli calcolati oggi per quel mese, e
+il rapporto parte solo a chi non è già nel registro del mese; si scrive
+lì con la data vera, come se fosse partito in tempo. Il rapporto a IT
+non si recupera.</li>
+</ul>
+<p><strong>Il rapporto recuperato porta i soli accessi attivati in quel
+mese</strong>, letti dal log come sempre, e fra questi solo quelli
+ancora attivi oggi: un accesso attivato nel mese perso e revocato dopo
+non compare, e la riga «Accessi attivati nel mese: nessuno» può dire
+nessuno anche quando ce n’era uno. Le altre voci dipendono dallo stato
+di oggi e sarebbero uguali in ogni mail: stanno solo nel rapporto del
+mese corrente, a cui il recuperato rimanda. Oggetto
+<code>In ritardo, &lt;mese&gt;: accessi REDCap</code>, prima riga
+<code>IN RITARDO, &lt;MESE&gt;</code>. Un recupero che non riesce non
+ferma il rapporto del mese corrente. Un mese che dopo il giro è ancora
+perso (invio fallito, registro non scrivibile) lo dice
+<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code>, e il registro o i
+dovuti illeggibili di un mese vecchio lo escludono con
+<code>RAPPORTO_INVII_ILLEGGIBILI</code> o
+<code>RAPPORTO_DOVUTI_ILLEGGIBILI</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="le-variabili-e-il-mese-forzato">Le variabili, e il mese forzato<a class="anchor" aria-label="anchor" href="#le-variabili-e-il-mese-forzato"></a>
@@ -2402,17 +2584,28 @@ partiti nei giorni prima;</li>
 <code>mese_completo</code> è vero quando
 <code>gia_mandati + mandati</code> fa <code>referenti</code>, sui dovuti
 della lettura di oggi o, in un giorno che non legge, dell’ultima lettura
-completa;</li>
+completa. <strong>Vale per il solo mese corrente</strong>: i rapporti
+recuperati contano in <code>mandati</code> e <code>falliti</code>, ma
+non in <code>mese_completo</code>, perché un giro che ne recupera due e
+manda uno dei tre dovuti del mese risulterebbe completo;</li>
 <li>
 <code>in_ritardo</code> si calcola nel pacchetto e non nella query,
-così lo copre un test: dal giorno 2 del mese, con il mese non
-completo.</li>
+così lo copre un test: dal giorno 2 del mese con il mese non completo,
+<strong>oppure finché resta un mese perso non recuperato</strong>.</li>
 </ul>
-<p><code>istanze_non_lette</code> e <code>voci_senza_accessi</code> sono
-zero in fase 1. I codici in <code>errori</code> propri del rapporto
-cominciano per <code>RAPPORTO_</code>: il registro degli invii o i
-dovuti non letti o non scritti, un registro di un mese vecchio
-illeggibile, il mese prima rimasto incompleto.</p>
+<p><code>giorno_di_invio</code> resta «oggi è dovuto il rapporto del
+mese corrente»: un giro di soli recuperi ha <code>mandati</code> sopra
+zero e <code>giorno_di_invio</code> falso, e una regola che leghi l’uno
+all’altro lo leggerebbe male.</p>
+<p>Dalla 0.23.0 <code>istanze_non_lette</code> conta i server a cui si è
+chiesto <code>accounts</code> senza una lettura, e
+<code>voci_senza_accessi</code> le coppie della voce 2 elencate per
+esteso; prima erano zero. Nessuna colonna è nuova: cambiano i valori,
+non i nomi, e la regola di raccolta non si tocca. I codici in
+<code>errori</code> propri del rapporto cominciano per
+<code>RAPPORTO_</code>: il registro degli invii o i dovuti non letti o
+non scritti, un registro di un mese vecchio illeggibile, il mese prima
+rimasto incompleto.</p>
 <p>Tre regole, con la forma di quelle del canale e i nomi nel foglio dei
 parametri:</p>
 <ul>
@@ -2429,32 +2622,66 @@ una colonna nuova o la lavorazione è indietro rispetto al
 pacchetto;</li>
 <li>
 <strong>il rapporto del mese è in ritardo</strong> (gravità 2): dal
-giorno 2 qualche rapporto non è partito. Prima cosa, <code>posta</code>:
-con la posta spenta è l’atteso. Poi <code>falliti</code> ed
-<code>errori</code>, e sullo standard error della lavorazione la tabella
-dei rapporti, uno per riga con destinatario, forma ed esito. Si richiude
-da sé quando l’ultimo è partito, e anche il primo del mese dopo, quando
-il rapporto passa al mese nuovo: da lì il mese rimasto indietro lo dice
-<code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code> in
+giorno 2 qualche rapporto non è partito, o resta un mese perso non
+recuperato. Prima cosa, <code>posta</code>: con la posta spenta è
+l’atteso. Poi <code>falliti</code> ed <code>errori</code>, e sullo
+standard error della lavorazione la tabella dei rapporti, uno per riga
+con mese, destinatario, forma ed esito. Si richiude da sé quando
+l’ultimo è partito, recuperi compresi: il primo giro che riesce a
+mandare manda anche i mesi persi. Un mese rimasto indietro che non si
+recupera lo dice <code>RAPPORTO_MESE_PRECEDENTE_INCOMPLETO</code> in
 <code>errori</code>.</li>
 </ul>
 </div>
 <div class="section level3">
 <h3 id="la-forma-del-rilascio">La forma del rilascio<a class="anchor" aria-label="anchor" href="#la-forma-del-rilascio"></a>
 </h3>
-<p>Nessun dizionario da importare, e giro e osservatore si chiamano come
-prima: le loro lavorazioni restano come sono. Ciò che è nuovo sta fuori
-dal pacchetto, e va in quest’ordine, per la ragione del §5 (la regola di
-raccolta impara le colonne prima che qualcuno le emetta):</p>
+<p><strong>La 0.23.0 tocca il modulo, e l’ordine è il vincolo più
+costoso da sbagliare.</strong> Nessun dizionario da importare, e giro e
+osservatore si chiamano come prima, ma il pacchetto e il modulo cambiano
+insieme, e il modulo non può andare avanti: un modulo al contratto 4
+risponde 4 anche allo stato e alle scritture, e un client della 0.22.0
+(che legge 1, 2, 3) rifiuterebbe ogni risposta, e il canale smetterebbe
+di applicare. In quest’ordine:</p>
 <ol style="list-style-type: decimal">
-<li>la tabella e la sua regola di raccolta;</li>
-<li>le quattro variabili, con <code>UBEP_RAPPORTO_POSTA_A</code> su un
-indirizzo IT;</li>
-<li>il pacchetto, e la lavorazione nuova in <code>/opt</code>;</li>
-<li>l’unità e il timer giornaliero;</li>
-<li>un’esecuzione a mano col mese forzato e la posta accesa ma
-dirottata, per leggere il record e le mail;</li>
-<li>i tre allarmi, dopo il primo record;</li>
+<li>
+<strong>il pacchetto 0.23.0 sulla macchina, con la lavorazione del
+rapporto in <code>/opt</code></strong>, prima di tutto, e insieme: la
+lavorazione nuova ora legge l’inventario delle istanze col modulo e i
+loro segreti, come il giro, e si ferma se l’inventario non ne elenca;
+quella vecchia, con il pacchetto nuovo, passerebbe un elenco di server
+vuoto, e ogni server risulterebbe «assente dall’inventario delle istanze
+col modulo», un motivo falso che andrebbe a IT per tutto il mese. La
+nuova non parte col pacchetto vecchio. L’unità e il timer giornaliero
+restano come sono. Il client accetta il 4 e il rapporto chiama
+<code>accounts</code>. Con i moduli ancora al 3 il canale e
+l’osservatore lavorano come prima, e il rapporto vede ogni server come
+«modulo non aggiornato» senza fallire: un rapporto partito in questo
+intervallo ha già la forma nuova (scadenze, oggetto, voce 1 per server)
+con le coppie della voce 1 lette da Entra e dette tali, la voce 2 «non
+controllata» e a IT l’elenco dei server. Verifica: un giro del canale e
+una lettura dell’osservatore puliti;</li>
+<li>
+<strong>il modulo 0.23.0</strong> (l’archivio di
+<code><a href="../reference/build_redcap_module.html">build_redcap_module()</a></code>) sulle istanze accese, con <em>Change
+Version</em> dal Control Center, <strong>prima su una</strong>,
+verificando che il segreto condiviso resti, poi sulle altre. <strong>I
+banchi spenti restano al 3</strong>: il rapporto li vede come server non
+letti, e non c’è niente da correggere. La prima chiamata vera di
+<code>accounts</code> su un modulo posato è la prima esecuzione del suo
+ramo (non eseguibile fuori da REDCap): zero nomi deve dare 200 con la
+lista vuota, un nome noto 200 con la sua voce, oltre 500 nomi 400;</li>
+<li>
+<strong>un’esecuzione a mano col mese forzato e la posta accesa ma
+dirottata</strong>, per leggere il record e le mail. Col mese forzato,
+non con il solo dirottamento: un giro dirottato ma non forzato scrive il
+vero <code>AAAA-MM.dovuti.json</code> del mese, che diventerebbe un
+punto di partenza del recupero;</li>
+<li>
+<strong>un allarme da controllare</strong>: nessuna regola sulla
+tabella del rapporto deve legare <code>mandati</code> a
+<code>giorno_di_invio</code>, perché un giro di soli recuperi ha il
+primo sopra zero e il secondo falso;</li>
 <li>per ultima la posta: tolto il dirottamento,
 <code>UBEP_RAPPORTO_POSTA=1</code>.</li>
 </ol>

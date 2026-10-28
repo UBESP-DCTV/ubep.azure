@@ -1,7 +1,9 @@
 # Whether a person has signed in to Entra, from the two dates of their key
 
-Phase 1 of the report reads Entra and nothing else, with the permission
-the round already holds. `lastPasswordChangeDateTime` is, in the words
+Entra says it with the permission the round already holds, and the
+report uses it where the server cannot say it better: for the pairs of a
+server that was not read, and for the deadline of a key that is still
+the one of the creation. `lastPasswordChangeDateTime` is, in the words
 of Learn, "the time when this Microsoft Entra user last changed their
 password or when their password was created", and the round creates
 every account with `forceChangePasswordNextSignIn`: an account whose key
@@ -42,7 +44,12 @@ some accounts created before June 2018) and `non_giudicabile`.
 
 What it cannot see, said where it is decided. A key reset by IT moves
 the date without anybody signing in, and the person drops out of the
-report (phase 2 removes this). An account that existed long before the
-request has dates that diverge, and the person never shows, even if they
-never opened the instance asked for: the signal says "has used the UBEP
-account", not "has used REDCap".
+verdict. An account that existed long before the request has dates that
+diverge, and the person never shows, even if they never opened the
+instance asked for: the signal says "has used the UBEP account", not
+"has used REDCap". That is why a server that was read decides in its
+place
+([`report_server_access()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_server_access.md)),
+and
+[`report_assemble()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_assemble.md)
+asks Entra only when the server did not answer.

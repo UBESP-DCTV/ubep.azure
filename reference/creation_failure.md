@@ -41,7 +41,8 @@ confirm is worse in the direction that matters.
 
 What must not happen is that nobody learns of it, and `unconfirmed` is
 what prevents it. It is `TRUE` on the failures that do not say whether
-the account was born – no answer at all, or one that is not Graph's –
-and `FALSE` on the ones that do, a refusal or a throttle carrying
-Graph's own code. The round counts an unconfirmed creation as a key
-lost, so the alarm that sends IT to reset a key fires on it.
+the account was born – no answer at all, one that is not Graph's, or a
+5xx of Graph's, which fails while doing the work – and `FALSE` on the
+ones that do, a refusal or a throttle carrying Graph's own code. The
+round counts an unconfirmed creation as a key lost, so the alarm that
+sends IT to reset a key fires on it.

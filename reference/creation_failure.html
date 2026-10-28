@@ -13,7 +13,7 @@ account that may not exist."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,10 +85,11 @@ credential once. Keeping a secret for a creation we cannot confirm is worse
 in the direction that matters.</p>
 <p>What must not happen is that nobody learns of it, and <code>unconfirmed</code> is what
 prevents it. It is <code>TRUE</code> on the failures that do not say whether the
-account was born – no answer at all, or one that is not Graph's – and
-<code>FALSE</code> on the ones that do, a refusal or a throttle carrying Graph's own
-code. The round counts an unconfirmed creation as a key lost, so the alarm
-that sends IT to reset a key fires on it.</p>
+account was born – no answer at all, one that is not Graph's, or a 5xx of
+Graph's, which fails while doing the work – and <code>FALSE</code> on the ones that
+do, a refusal or a throttle carrying Graph's own code. The round counts an
+unconfirmed creation as a key lost, so the alarm that sends IT to reset a
+key fires on it.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

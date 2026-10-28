@@ -44,7 +44,8 @@ A list with `ok`, `errors`, `payload`, `upn`, and `credential` — the one
 the account was born with, present only on success. It leaves by the
 return value and by no other road: not the register, not the telemetry
 record, not standard output. `unconfirmed` is `TRUE` on a failure that
-does not say whether the account was born, see
+does not say whether the account was born – no answer, an answer that is
+not Graph's, or a 5xx of Graph's – see
 [`creation_failure()`](https://ubesp-dctv.github.io/ubep.azure/reference/creation_failure.md).
 `created_at`, on success only, is when the account was born, which the
 messages count the first sign-in from

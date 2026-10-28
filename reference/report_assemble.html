@@ -21,7 +21,7 @@ by two referents is in both reports, each with their own rows."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,7 +68,9 @@ by two referents is in both reports, each with their own rows.</p>
 <span>  <span class="va">directory</span>,</span>
 <span>  <span class="va">period</span>,</span>
 <span>  previous <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  unread <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  unread <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  servers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  stopped <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,41 +100,100 @@ by two referents is in both reports, each with their own rows.</p>
 could have been in one of their reports gets <code>storia_nota</code> false, and
 the mail says nothing about earlier reports rather than something false.</p></dd>
 
+
+<dt id="arg-servers">servers<a class="anchor" aria-label="anchor" href="#arg-servers"></a></dt>
+<dd><p>What the readings of the servers answered, as
+<code><a href="report_server_reads.html">report_server_reads()</a></code> returns it: a named list, server to
+<code>list(letto = TRUE, conti = &lt;frame&gt;)</code> or <code>list(letto = FALSE, motivo)</code>.
+A server that is not there, or that says it was read without a frame of
+accounts, is a server that was not read.</p></dd>
+
+
+<dt id="arg-stopped">stopped<a class="anchor" aria-label="anchor" href="#arg-stopped"></a></dt>
+<dd><p>The rows stopped on a disabled account, as
+<code><a href="report_stopped_rows.html">report_stopped_rows()</a></code> answers, or <code>NULL</code> for none. They are not in the
+referents' reports: IT gets them.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with <code>referenti</code>, one report per referent named after them,
-each a list of <code>referente</code>, <code>attivati</code> (rows), <code>senza_primo_accesso</code>
-(people) and <code>non_giudicati</code> (a count); <code>it</code>, <code>NULL</code> when there is
+each a list of <code>referente</code>, <code>attivati</code> (rows), <code>scadenze</code> (the rows of
+the referent that expire after the day of the reading and by the last
+day of its month, by date, for information), <code>senza_primo_accesso</code>
+(pairs of person and server, with <code>nome</code>, <code>upn</code>, <code>server</code>, <code>progetti</code>,
+<code>attivata_il</code>, <code>giorni</code>, <code>mesi</code>, <code>segnalata</code>, <code>storia_nota</code>, <code>fonte</code> and
+<code>limite</code>), <code>senza_accessi</code> (pairs, with <code>nome</code>, <code>upn</code>, <code>server</code>,
+<code>progetti</code>, <code>ultimo</code>, the day of the last access in Italian time, and
+<code>attivata_il</code>), <code>senza_accessi_gia</code> (how many pairs an earlier report
+named and are still without access), <code>senza_accessi_gia_coppie</code> (those
+pairs, <code>upn</code> and <code>server</code>, for the ledger) and <code>non_controllati</code> (a frame
+of <code>server</code> and <code>coppie</code>), and <code>non_giudicati</code> (a count); <code>it</code>, <code>NULL</code>
+when there is
 nothing for IT, otherwise a list of <code>senza_referente</code> (rows, with
-<code>motivo</code>), <code>non_giudicabili</code> (people, with <code>referente</code> and <code>motivo</code>) and
-<code>senza_data</code> (rows); and <code>senza_creatore</code>, how many rows have no
-referent to go to. Since rows can pass, that means without an
-established owner and not only without a creator; the name stays,
-because it is a column of <code>UbepRapporto_CL</code>, and a renamed column would
-keep the table's history under one name and the new records under
-another.</p>
+<code>motivo</code>), <code>non_giudicabili</code> (people, with <code>referente</code> and <code>motivo</code>),
+<code>senza_data</code> (rows) and <code>server_non_letti</code> (a frame of <code>server</code>,
+<code>motivo</code>, <code>entra</code>, how many pairs of that server went into a
+referent's report on the strength of Entra, and <code>non_controllate</code>, how
+many were candidates for the year without access and could not be
+checked; one row for each server that was asked and not read, whether
+the rows on it are applied or stopped, also with none) and
+<code>disattivati</code> (the rows of <code>stopped</code>, with <code>entrata</code>: <code>"si"</code> or <code>"no"</code>,
+whether the person has entered the server, when it was read, <code>""</code> when
+it was not); and <code>senza_creatore</code>, how
+many rows have no referent to go to. Since rows can pass, that means
+without an established owner and not only without a creator; the name
+stays, because it is a column of <code>UbepRapporto_CL</code>, and a renamed
+column would keep the table's history under one name and the new
+records under another.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Three items, of which phase 1 fills two:</p><ul><li><p><strong>activated in the month</strong>, one line per request, new or modified. It is
+    <p>Three items, of which the report fills two:</p><ul><li><p><strong>activated in the month</strong>, one line per request, new or modified. It is
 information, and does not count among the things to look at. A new one
 says whether its account was new: <code>account</code> is <code>nuovo</code> when Entra made
 the account no earlier than the minute the row was made (<code>creata_il</code>),
 <code>esistente</code> when earlier, <code>""</code> when either date is missing;</p></li>
-<li><p><strong>no first sign-in</strong>, one item per person, with every project of theirs:
-the requests of that person activated at least <code><a href="report_grace_days.html">report_grace_days()</a></code>
-before the reading and not expired, when Entra says nobody has entered the
-account (<code><a href="report_first_access.html">report_first_access()</a></code>). The thirty days run from the later of
-two dates, in Italian time: the channel's first execution for the
-username the row names now (<code><a href="report_person_since.html">report_person_since()</a></code>), and the birth of
-that account on Entra. A username corrected by a modification, or an
-account made again, is not dated by an activation that was somebody
-else's. The item carries the earliest of those dates among the person's
-requests, how many days and months of thirty days ago it was, and the
-dates of the earlier reports of the same referent that named the person;</p></li>
-<li><p><strong>no access for more than a year</strong> is phase 2, and the mail says it was
-not checked.</p></li>
+<li><p><strong>no first sign-in</strong>, one item per person and server, with the projects
+of the person on that server: the requests of that person on that server
+activated at least <code><a href="report_grace_days.html">report_grace_days()</a></code> before the reading and not
+expired, when the person has never entered the server. The thirty days
+run from the later of two dates, in Italian time: the channel's first
+execution for the username the row names now (<code><a href="report_person_since.html">report_person_since()</a></code>),
+and the birth of that account on Entra. A username corrected by a
+modification, or an account made again, is not dated by an activation
+that was somebody else's. The item carries the earliest of those dates
+among the requests on that server, how many days and months of thirty
+days ago it was, and the dates of the earlier reports of the same
+referent that named the person on that server (an earlier entry with an
+empty server, written before the server was recorded, names the person
+on every server). Who decides "never entered" depends on the server.
+One that was read decides (<code><a href="report_server_access.html">report_server_access()</a></code>: no row, or no first
+visit), and Entra does not count, because the server says exactly which
+server and is not misled by a key IT has reset; <code>fonte</code> is <code>server</code>. One
+that was not read, for any reason, falls back on the rule of Entra
+(<code><a href="report_first_access.html">report_first_access()</a></code>), and <code>fonte</code> is <code>entra</code>: the mail says so. The
+account's state is the first filter either way, and an account that is
+not active goes to IT once for the person. <code>limite</code> is the last day the
+first sign-in is promised (<code><a href="mail_first_signin_deadline.html">mail_first_signin_deadline()</a></code>), but only when
+the two dates on Entra agree within <code><a href="report_tolerance.html">report_tolerance()</a></code>, that is when
+the key is still the one of the creation: otherwise the dates diverge
+for the person who entered, for a key reset and for the key the D-31
+rule replaced, and a date computed from them would be a guess, so it is
+<code>""</code>;</p></li>
+<li><p><strong>no access for more than a year</strong>, one item per person and server. A
+pair is a candidate when its request is active, applied, not expired and
+the person has had the access on that server for more than 365 days
+(the oldest request there, as for the first sign-in). On a server that
+was read, it enters when the person has entered at least once and the
+last access (<code><a href="report_server_access.html">report_server_access()</a></code>) is more than 365 days before the
+reading, both as dates in Italian time. It is listed in full the month it
+crosses the threshold, and counted in <code>senza_accessi_gia</code> after: when an
+earlier report of the same referent named it (an entry with an empty
+server names it on every server). On a server that was not read the pair
+is only counted, per server, in <code>non_controllati</code>: Entra says nothing
+about it, and an empty item would say "none" about something nobody
+measured.</p></li>
 </ul><p>What has no referent to go to goes to IT, and to nobody else: a row whose
 owner the log does not establish (no creation names it, or the log cannot
 say whom it belongs to, <code><a href="log_owner.html">log_owner()</a></code>), or whose owner Entra holds

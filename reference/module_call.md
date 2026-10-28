@@ -14,7 +14,8 @@ module_call(
   requests = list(),
   dry_run = TRUE,
   registry = tested_fingerprints(),
-  declare = certified_fingerprints(registry)
+  declare = certified_fingerprints(registry),
+  accepted = NULL
 )
 ```
 
@@ -32,7 +33,7 @@ module_call(
 
 - operation:
 
-  One of `"state"`, `"apply"`, `"revoke"`.
+  One of `"state"`, `"apply"`, `"revoke"`, `"accounts"`.
 
 - requests:
 
@@ -52,6 +53,12 @@ module_call(
   Fingerprints the caller states it has been tested against. The module
   refuses to write when its own is not among them, so an empty
   declaration writes nothing. Reads and dry runs ignore it.
+
+- accepted:
+
+  Integer vector of contract versions this call tolerates; `NULL` takes
+  the default for the kind of call, `2:4` for a write and `1:4` for a
+  read.
 
 ## Value
 
