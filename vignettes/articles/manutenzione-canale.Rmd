@@ -126,8 +126,9 @@ nel §2.
 
 **Dalla 0.20.0 la macchina ne ospita una terza**, il rapporto mensile ai
 referenti. Legge il registro e l'anagrafica e manda posta, e basta: non scrive
-nel registro, non tocca Entra, non chiede niente alle istanze. Ha la sua
-unità, la sua tabella e i suoi allarmi, e sta nel §9.
+nel registro, non tocca Entra, e alle istanze chiede una cosa sola: l'operazione
+`accounts`, di sola lettura. Ha la sua unità, la sua tabella e i suoi allarmi,
+e sta nel §9.
 
 **La cadenza di quattro ore è una decisione, non un caso.** Dice: chi compila
 una richiesta sa entro quattro ore se è formalmente corretta e, quando la
@@ -1019,7 +1020,7 @@ dopo.
 L'account nasce sempre allo stesso modo: con il cambio della chiave
 obbligatorio al primo accesso e senza licenze, in una sola chiamata a Graph.
 Dalla 0.22.0 un test fallisce se una delle due cose cambia. Sul primo e sulla
-chiamata unica conta anche il rapporto (§9, «Il primo accesso, da Entra»).
+chiamata unica conta anche il rapporto (§9, «Il primo accesso, dal server»).
 
 **Una creazione per nome, nello stesso giro.** Il nome è libero quando il giro
 legge l'anagrafica e occupato appena il primo `POST` ha fatto l'account. Fino
@@ -1586,7 +1587,8 @@ posta. Non trattiene niente, e la riga è `applied`.
 **Credenziale persa (gravità 1).** Un'utenza è nata e la sua chiave non è
 arrivata a nessuno: `credenziali_perse` è maggiore di zero. Dalla 0.19.0 conta
 anche la creazione di cui si è persa la risposta
-(`TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`, o una risposta che non è di Graph):
+(`TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`, o una risposta che non è di Graph,
+o un 5xx di Graph):
 l'utenza può essere nata con una chiave morta con il processo, e il giro dopo
 la troverebbe e la porterebbe ad `applied` senza che nessuno abbia la chiave.
 Si conta nello stesso giro, e conta anche come benvenuto perso; il codice sta
@@ -1751,18 +1753,22 @@ normale l'ultima volta che qualcuno ha guardato.
 
 **Una mail al mese per referente, con solo il nuovo e l'inatteso.** Non
 l'elenco di tutte le utenze: gli accessi attivati nel mese, per informazione,
-e le persone che a 30 giorni dall'attivazione non sono ancora entrate. La
-terza voce, le persone senza accessi da più di un anno, chiede di leggere
-l'ultimo login sulle istanze, quindi il modulo: arriva con la fase 2, e finché
-non c'è la mail scrive «non ancora controllato». Un «tutto in ordine» che
+e le persone che a 30 giorni dall'attivazione non sono ancora entrate sul
+server. Dalla 0.23.0 (la fase 2) ci sono altre due voci: le persone senza
+accessi da più di un anno, e le scadenze del mese. Le prime due si leggono dal
+server stesso, con l'operazione `accounts` del modulo; finché un server non si
+legge, la voce lo dice, e non scrive «nessuno». Un «tutto in ordine» che
 coprisse una voce non misurata direbbe il falso.
 
 **Il rapporto legge e manda posta, e basta.** Non scrive nel registro, non
-tocca Entra, in fase 1 non chiede niente alle istanze. È questo che gli
-permette di stare fuori dal cammino del canale, e una guardia in
-`tests/testthat/test-runner-guardie.R` lo tiene tale: segue per nome ogni
-funzione che `provisioning_report()` raggiunge, anche attraverso gli aiuti, e
-nega qualunque scrittura; una seconda guardia legge la lavorazione.
+tocca Entra. Alle istanze chiede **solo `accounts`**, che legge soltanto, e solo
+i nomi delle righe di quel server. È questo che gli permette di stare fuori dal
+cammino del canale, e una guardia in `tests/testthat/test-runner-guardie.R` lo
+tiene tale: segue per nome ogni funzione che `provisioning_report()` raggiunge,
+anche attraverso gli aiuti, e nega qualunque scrittura; ammette la sola porta
+`module_accounts()`, e `module_call()`, `module_state()`, `module_apply()` e
+`module_revoke()` restano irraggiungibili. Una seconda guardia legge la
+lavorazione.
 
 ### A chi va, e che cosa dice
 
@@ -1792,10 +1798,20 @@ esistente. Un account fatto a mano da IT dopo la richiesta risulta nuovo, che
 è ciò che vede il referente; se manca una delle due date la frase non c'è.
 
 Le due forme si distinguono dalla **prima parola dell'oggetto**, che è ciò che
-si vede nell'elenco della posta: `Tutto in ordine` oppure `N da guardare`, con
-N le persone elencate per esteso. La voce A non conta: sono gli accessi che il
-referente ha chiesto. Italiano sopra, inglese sotto, IT in copia
-all'indirizzo di `UBEP_POSTA_COPIA`.
+si vede nell'elenco della posta: `Tutto in ordine: accessi REDCap, <mese>`
+oppure `Da guardare (N): accessi REDCap, <mese>`, con N le persone distinte
+elencate per esteso nelle prime due voci, ciascuna con la sua traduzione
+inglese dopo la barra. Il numero sta fra parentesi nell'oggetto perché la
+prima parola basti, e senza un secondo «due punti» di fila. La prima riga del
+corpo ripete la forma: `TUTTO IN ORDINE` oppure `DA GUARDARE: N` (in inglese
+`ALL CLEAR`, `TO REVIEW: N`), con il numero dopo i due punti, perché subito
+prima di un elenco numerato si leggerebbe come il punto 2. Le voci vengono in
+quest'ordine: 1. senza primo accesso al server, 2. senza accessi da più di un
+anno, 3. scadenze, poi gli accessi attivati. Nella forma «tutto in ordine» la
+1 e la 2 dicono «nessuna» e «nessuno», la 3 e gli attivati compaiono se ci
+sono. Né le scadenze né gli attivati contano in N: sono per informazione.
+Italiano sopra, inglese sotto, IT in copia all'indirizzo di
+`UBEP_POSTA_COPIA`.
 
 Ciò che non ha un referente a cui andare va **a IT, e a nessun altro**, in una
 mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
@@ -1811,7 +1827,30 @@ mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
   configurata, perché i campi del canale li scrivono due account e non si sa
   quale abbia eseguito la riga. La mail distingue i due casi, che mandano a
   cercare cose diverse. Con l'utenza configurata un sigillo scritto da un altro
-  account non data niente.
+  account non data niente;
+- **i server non letti** (dalla 0.23.0): ogni server a cui il rapporto ha
+  chiesto `accounts` e che non ha risposto, anche se gli si chiedeva solo
+  una riga ferma. Con il motivo a parole (modulo non aggiornato, non
+  raggiungibile, segreto non leggibile o rifiutato, errore con il suo codice),
+  quante coppie persona-server sono ricadute su Entra e quante sono rimaste
+  «non controllate» per l'anno senza accessi;
+- **le richieste ferme su un account disattivato** (dalla 0.23.0): le righe
+  attive con `TRASPORTO_ACCOUNT_DISATTIVATO` nel dettaglio dell'esito, anche
+  fra più codici, che il rapporto non vedeva perché non sono `applied`. Dalla
+  0.22.0 ogni riga attiva su un account disattivato finisce qui, quindi la
+  sezione è anche quella dei disattivati per un primo accesso che non è
+  arrivato. Per ogni riga, se il server è letto, la mail dice se la persona è
+  mai entrata lì. È una sezione sola e non il conteggio a parte dei
+  «disattivati per mancato primo accesso»: distinguerli chiede di leggere
+  `forceChangePasswordNextSignIn`, e il permesso meno privilegiato per farlo è
+  di scrittura; le due date di Entra non bastano, perché la regola dei 60
+  giorni sostituisce la chiave prima di disattivare. Il perché di una
+  disattivazione lo sa IT, che la fa.
+
+L'oggetto e la prima riga della mail a IT hanno la stessa forma di quella dei
+referenti (`Da guardare (N): rapporto REDCap per IT`), con N le righe
+elencate: un server è una riga, una richiesta ferma è una riga. La mail a IT
+parte anche con la sola sezione dei server non letti o delle richieste ferme.
 
 La colonna `senza_creatore` di `UbepRapporto_CL` **non si è rinominata**, e
 dalla 0.21.0 vuol dire «senza proprietario stabilito»: rinominarla sarebbe un
@@ -1847,7 +1886,34 @@ Tre cose da sapere quando si legge il codice:
   in poi, come per il giro (§4); il creatore è quello della riga di oggi,
   perché `log_creators()` prende la creazione più recente.
 
-### Il primo accesso, da Entra
+### Il primo accesso, dal server
+
+**Una riga per persona e server**, non per persona: chi ha accesso a due server
+può essere entrato in uno e non nell'altro. La coppia entra se la riga è
+`active`, `applied`, non scaduta, attivata da almeno 30 giorni, e il server
+dice che la persona non è mai entrata: nessuna riga in `redcap_user_information`
+per quel nome, oppure `user_firstvisit` nullo. Per il server il rapporto chiama
+`module_accounts()`, che chiede `accounts` al modulo (contratto 4) solo per i
+nomi delle righe di quel server, a pezzi di 500 al più, e a ogni nome chiesto il
+modulo risponde con una voce, anche se la persona non c'è: «manca dalla
+risposta» non deve mai voler dire «mai entrata».
+
+**Su un server letto decide il server, e Entra non conta più per questa
+voce.** Il segnale del server dice proprio «su quel server», e non sbaglia con
+una chiave reimpostata da IT, che sposta la data su Entra e fa sparire la
+persona dalla voce.
+
+**Su un server non letto la coppia ricade sulla regola di Entra della fase 1**,
+e la riga lo dice («letto da Entra: il server non ha risposto»). Un server non
+è letto quando è spento, quando il modulo è ancora al contratto 3 (risponde 501
+e il client lo legge come `TRASPORTO_CONTRATTO_DISALLINEATO`, «modulo non
+aggiornato»), quando il segreto non si legge, o per qualunque errore.
+Altrettanto vale una risposta che tace un nome chiesto, o senza `accounts`
+utilizzabile, o con una data che non si legge: il server si tratta come non
+letto (`INTERNO`) e le coppie ricadono, perché letta così com'è la persona
+mancante risulterebbe «mai entrata», un falso positivo mandato al referente. Il
+confronto dei nomi è senza maiuscole e spazi ai bordi, nel modulo e nel client,
+per la stessa ragione.
 
 Un account abilitato la cui `lastPasswordChangeDateTime` coincide con la
 `createdDateTime` **entro 60 secondi** non è mai stato usato: il canale crea gli
@@ -1856,30 +1922,81 @@ nasce nella stessa chiamata che crea l'account. La tolleranza sta in
 `report_tolerance()`, in un posto solo, e una misura nuova la cambia in una
 riga. Confermata il 2026-10-16 sugli account abilitati del tenant: quelli che
 risultano mai usati stanno a 0 secondi, nessuno fra 1 e 30, pochi fra 31 e
-120; un account fatto a mano dal portale e usato una volta sta a 172. Il permesso è `User.Read.All`, quello che il giro ha già, e il campo in
-più sta in `directory_fields()`, quindi anche la spazzata del giro lo chiede.
+120; un account fatto a mano dal portale e usato una volta sta a 172. Il
+permesso è `User.Read.All`, quello che il giro ha già, e il campo in più sta in
+`directory_fields()`, quindi anche la spazzata del giro lo chiede. Dalla 0.23.0 questa regola serve in due posti: il ripiego sui server non letti,
+e la **data limite**.
 
-Che cosa non vede, ed è dichiarato:
+**La data limite compare solo quando la chiave è ancora quella della
+creazione**, cioè quando le due date di Entra coincidono entro i 60 secondi. La
+chiave consegnata vale almeno 60 giorni dalla creazione o dall'ultimo reset, e
+un account che nessuno usa viene disattivato, mai cancellato; la riga dice
+«deve entrare entro il <data>, poi l'account viene disattivato», con la data di
+`mail_first_signin_deadline()` sul `createdDateTime` dell'account. **Quando le
+date divergono la riga dice solo che su quel server la persona non è mai
+entrata**, senza data e senza dire se usa l'account UBEP: divergono per chi è
+entrato, per una chiave reimpostata da IT e per una chiave sostituita alla
+scadenza dei 60 giorni, e Entra non distingue i tre casi. Per la stessa ragione
+una data limite dopo un reset non si può calcolare dal rapporto. **Una data
+limite già passata non si scrive come scadenza**: la riga dice che la data per
+il primo accesso è passata, che la chiave consegnata può non valere più, e che
+per averne una nuova si risponde alla mail della chiave.
 
-- una **chiave reimpostata da IT** sposta la data anche se la persona non è
-  mai entrata, e la persona sparisce dalla voce; la fase 2 lo toglie;
-- un **account che esisteva da prima** ha le date diverse da anni: il segnale
-  dice «è entrata con l'account UBEP», non «è entrata su REDCap».
+Che cosa non si vede più, e che cosa resta:
+
+- la **chiave reimpostata da IT** non nasconde più la persona, su un server
+  letto: il segnale è del server. Sui server non letti resta com'era;
+- un **account che esisteva da prima** non confonde più la voce su un server
+  letto: il server dice se la persona è entrata *lì*. Sui server non letti il
+  segnale dice ancora «è entrata con l'account UBEP», non «è entrata su
+  REDCap»;
+- una persona **chiesta su due server** ha due righe, e può comparire per uno
+  solo.
 
 **I 30 giorni partono dalla persona, non dalla riga.** Contano dal più tardo
 fra il primo sigillo del canale dopo l'ultima scrittura di `username` nella
 vita attuale della riga (`report_person_since()`) e la nascita dell'account su
 Entra, in ora italiana. Uno `username` corretto con una modifica, o un account
 ricreato, altrimenti erediterebbero i mesi di un'altra persona. La voce A resta
-datata dalla riga: la richiesta è quella attivata allora.
+datata dalla riga: la richiesta è quella attivata allora. Su una coppia le date
+e i «da N mesi» sono quelli della richiesta più vecchia **su quel server**.
 
 La voce dice da quanti mesi di trenta giorni la persona risulta senza primo
-accesso, e in quali rapporti precedenti dello stesso referente è già comparsa:
-si rilegge dal registro degli invii dei mesi prima. Se il file di uno di quei
-mesi non si legge, per le persone che poteva contenere la mail non dice né
-«prima segnalazione» né «segnalata anche», e il record porta
+accesso, e in quali rapporti precedenti dello stesso referente è già comparsa,
+per quella coppia: si rilegge dal registro degli invii dei mesi prima. Se il
+file di uno di quei mesi non si legge, per le persone che poteva contenere la
+mail non dice né «prima segnalazione» né «segnalata anche», e il record porta
 `RAPPORTO_STORICO_ILLEGGIBILE`: quei file servono a quella frase e a niente
 altro, quindi non fermano l'invio.
+
+### L'ultimo accesso, dal server
+
+La voce 2 dice chi ha accesso da più di un anno e su quel server non entra da
+più di un anno. **Una riga per persona e server**, e la coppia entra se: riga
+`active`, `applied`, non scaduta, attivata da **più di 365 giorni**, server
+letto, la persona c'è con un `user_firstvisit`, e il più recente fra
+`user_lastlogin` e `user_lastactivity` risale a più di 365 giorni prima della
+lettura, in ora italiana (le date arrivano dal modulo in UTC). Se mancano tutte
+e due ma c'è `user_firstvisit`, l'ultimo accesso è quello. Chi non è mai
+entrato non è qui: è la voce 1.
+
+**Per esteso il mese in cui la coppia supera la soglia**; i mesi dopo, una riga
+di conteggio («già segnalate nei mesi scorsi e ancora senza accessi»), perché
+nominare ogni mese le stesse persone farebbe del rapporto un elenco. Il
+registro degli invii ricorda anche queste coppie. **Un server non letto non dà
+mai «nessuno»**: la voce dice «non controllato» per le sue coppie candidate e
+il server va a IT. Con il rapporto che parte a ottobre 2026, nessuna riga può
+entrare prima di ottobre 2027. La voce ha, come la prima, un sottotitolo e un
+«che cosa fare».
+
+### Le scadenze del mese
+
+Una voce **per informazione**, che non conta nell'oggetto: le righe `active`,
+`applied`, con `expiration` dopo il giorno della lettura (escluso) e fino
+all'ultimo giorno del mese in cui si manda (compreso), in ora italiana. Il
+rapporto del 1° dicembre dice «Scadono entro dicembre». Una riga per scadenza:
+persona, server, progetto, data. Si legge dal registro, senza il modulo, e per
+questo ci sono anche con un server non letto.
 
 ### Ogni giorno, non una volta al mese
 
@@ -1891,18 +2008,32 @@ mese non è completo. Un registro illeggibile il 28 si vede il 28.
 
 **Il registro degli invii** sta nella cartella di stato dell'unità, un file
 per mese coperto (`AAAA-MM.json`): per ogni rapporto, quando è partito e quali
-persone nominava senza primo accesso. Non è una copia dello stato che il canale
+coppie persona-server nominava, nelle due voci (senza primo accesso, senza
+accessi da un anno; le «già segnalate» della seconda sì, le «non controllate»
+no, perché non sono state dette). Non è una copia dello stato che il canale
 rilegge: nel file non c'è niente del registro né di Entra, solo la traccia di
-un evento che altrimenti non ne lascia. Si scrive **dopo** l'invio riuscito,
+un evento che altrimenti non ne lascia. **I file della 0.22.0, con le sole
+persone, valgono per tutti i server della persona**: il prezzo è un «segnalata
+anche» vero della persona e forse non di quel server, mai una perdita. Una lista
+di persone di una forma che il lettore non conosce rende illeggibile il file del
+mese (non lo legge come vuoto): letto male, manderebbe doppioni o perderebbe
+«segnalata anche». Si scrive **dopo** l'invio riuscito,
 come il giro scrive nel registro dopo aver mandato: il prezzo accettato è un
 doppione, mai una perdita. Un file del mese coperto che non si legge non vale
 per vuoto: il rapporto non manda niente e lo dice con
-`RAPPORTO_INVII_ILLEGGIBILI`.
+`RAPPORTO_INVII_ILLEGGIBILI`. Lo stesso codice può venire dal file illeggibile
+di un mese più vecchio, letto per recuperarlo (`report_lost_months()`): quel
+mese si esclude e il resto prosegue.
 
 **Un giorno in cui qualcosa non si è letto non manda niente**: registro,
 creazioni, anagrafica, il log di una riga attiva, il registro degli invii del
 mese coperto. Un rapporto composto su mezza lettura sarebbe sbagliato per
-qualcuno, e il giorno dopo si riprova. Quel giorno non sa nemmeno chi è
+qualcuno, e il giorno dopo si riprova. **Fa eccezione la lettura dei server**:
+un server non letto non è un errore del rapporto, non entra in `errori`, non
+tocca `letture_complete` e non ferma l'invio. Si conta in `istanze_non_lette`,
+va nella mail a IT, e le sue coppie ricadono su Entra (voce 1) o restano «non
+controllate» (voce 2). Altrimenti un banco spento con righe sopra, o il primo
+passo della posa, farebbe fallire ogni esecuzione giornaliera. Quel giorno non sa nemmeno chi è
 dovuto, quindi **giudica il mese sui dovuti dell'ultima lettura completa**, che
 ogni lettura completa tiene accanto al registro degli invii
 (`AAAA-MM.dovuti.json`, i soli nomi che il registro degli invii già porta).
@@ -1910,11 +2041,38 @@ Così una lettura mancata il 15 non fa sembrare in ritardo un mese consegnato
 il primo; senza nessuna lettura completa del mese, il mese non si dice in
 ritardo, e a parlare è l'allarme sull'assenza.
 
-**Il mese prima non si recupera, ma non si perde in silenzio.** Il primo del
-mese il rapporto passa al mese appena finito, e un rapporto di quello prima
-ancora non partito non parte più: descriverebbe un mese di due indietro. Ogni
-esecuzione confronta il registro degli invii del mese prima con i suoi dovuti,
-e finché ne manca uno il record porta `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+**I mesi persi si recuperano, dalla 0.23.0.** Il primo del mese il rapporto
+passa al mese appena finito; un mese rimasto indietro, fino alla 0.22.0, non
+partiva più e lo diceva solo `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`. Ora il
+primo giro che riesce a mandare manda prima i rapporti dei mesi persi, dal più
+vecchio, poi quello del mese corrente. Il recupero è limitato:
+
+- **solo le esecuzioni vere recuperano**. Un mese forzato o dirottato
+  scriverebbe, nel registro degli invii vero di un mese perso, un rapporto
+  partito verso l'indirizzo di collaudo, e il referente non lo riceverebbe
+  mai;
+- **non prima di ottobre 2026**, il primo mese coperto dal rapporto, **né prima
+  del mese più vecchio con un file nella cartella di stato** (il registro o i
+  dovuti, non quelli di collaudo): una cartella persa o ricreata farebbe partire
+  a ogni referente una raffica di rapporti in ritardo, uno per mese da ottobre;
+- **un mese è perso** se manca un dovuto (escluso IT) nel suo registro, o non ha
+  i dovuti salvati; i destinatari sono quelli salvati per quel mese, altrimenti
+  quelli calcolati oggi per quel mese, e il rapporto parte solo a chi non è già
+  nel registro del mese; si scrive lì con la data vera, come se fosse partito in
+  tempo. Il rapporto a IT non si recupera.
+
+**Il rapporto recuperato porta i soli accessi attivati in quel mese**, letti dal
+log come sempre, e fra questi solo quelli ancora attivi oggi: un accesso
+attivato nel mese perso e revocato dopo non compare, e la riga «Accessi attivati
+nel mese: nessuno» può dire nessuno anche quando ce n'era uno. Le altre voci
+dipendono dallo stato di oggi e sarebbero uguali in ogni mail: stanno solo nel
+rapporto del mese corrente, a cui il recuperato rimanda. Oggetto `In ritardo,
+<mese>: accessi REDCap`, prima riga `IN RITARDO, <MESE>`. Un recupero che non
+riesce non ferma il rapporto del mese corrente. Un mese che dopo il giro è
+ancora perso (invio fallito, registro non scrivibile) lo dice
+`RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, e il registro o i dovuti illeggibili di
+un mese vecchio lo escludono con `RAPPORTO_INVII_ILLEGGIBILI` o
+`RAPPORTO_DOVUTI_ILLEGGIBILI`.
 
 ### Le variabili, e il mese forzato
 
@@ -1962,14 +2120,25 @@ leggere un allarme:
   oggi e quelli che il registro degli invii dice partiti nei giorni prima;
 - `mese_completo` è vero quando `gia_mandati + mandati` fa `referenti`, sui
   dovuti della lettura di oggi o, in un giorno che non legge, dell'ultima
-  lettura completa;
+  lettura completa. **Vale per il solo mese corrente**: i rapporti recuperati
+  contano in `mandati` e `falliti`, ma non in `mese_completo`, perché un giro
+  che ne recupera due e manda uno dei tre dovuti del mese risulterebbe
+  completo;
 - `in_ritardo` si calcola nel pacchetto e non nella query, così lo copre un
-  test: dal giorno 2 del mese, con il mese non completo.
+  test: dal giorno 2 del mese con il mese non completo, **oppure finché resta
+  un mese perso non recuperato**.
 
-`istanze_non_lette` e `voci_senza_accessi` sono zero in fase 1. I codici in
-`errori` propri del rapporto cominciano per `RAPPORTO_`: il registro degli
-invii o i dovuti non letti o non scritti, un registro di un mese vecchio
-illeggibile, il mese prima rimasto incompleto.
+`giorno_di_invio` resta «oggi è dovuto il rapporto del mese corrente»: un giro
+di soli recuperi ha `mandati` sopra zero e `giorno_di_invio` falso, e una regola
+che leghi l'uno all'altro lo leggerebbe male.
+
+Dalla 0.23.0 `istanze_non_lette` conta i server a cui si è chiesto `accounts`
+senza una lettura, e `voci_senza_accessi` le coppie della voce 2 elencate per
+esteso; prima erano zero. Nessuna colonna è nuova: cambiano i valori, non i
+nomi, e la regola di raccolta non si tocca. I codici in `errori` propri del
+rapporto cominciano per `RAPPORTO_`: il registro degli invii o i dovuti non
+letti o non scritti, un registro di un mese vecchio illeggibile, il mese prima
+rimasto incompleto.
 
 Tre regole, con la forma di quelle del canale e i nomi nel foglio dei
 parametri:
@@ -1982,28 +2151,55 @@ parametri:
   altre lavorazioni, o la regola di raccolta non conosce una colonna nuova o
   la lavorazione è indietro rispetto al pacchetto;
 - **il rapporto del mese è in ritardo** (gravità 2): dal giorno 2 qualche
-  rapporto non è partito. Prima cosa, `posta`: con la posta spenta è
-  l'atteso. Poi `falliti` ed `errori`, e sullo standard error della
-  lavorazione la tabella dei rapporti, uno per riga con destinatario, forma ed
-  esito. Si richiude da sé quando l'ultimo è partito, e anche il primo del
-  mese dopo, quando il rapporto passa al mese nuovo: da lì il mese rimasto
-  indietro lo dice `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`.
+  rapporto non è partito, o resta un mese perso non recuperato. Prima cosa,
+  `posta`: con la posta spenta è l'atteso. Poi `falliti` ed `errori`, e sullo
+  standard error della lavorazione la tabella dei rapporti, uno per riga con
+  mese, destinatario, forma ed esito. Si richiude da sé quando l'ultimo è
+  partito, recuperi compresi: il primo giro che riesce a mandare manda anche i
+  mesi persi. Un mese rimasto indietro che non si recupera lo dice
+  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`.
 
 ### La forma del rilascio
 
-Nessun dizionario da importare, e giro e osservatore si chiamano come prima: le
-loro lavorazioni restano come sono. Ciò che è nuovo sta fuori dal pacchetto, e
-va in quest'ordine, per la ragione del §5 (la regola di raccolta impara le
-colonne prima che qualcuno le emetta):
+**La 0.23.0 tocca il modulo, e l'ordine è il vincolo più costoso da sbagliare.**
+Nessun dizionario da importare, e giro e osservatore si chiamano come prima, ma
+il pacchetto e il modulo cambiano insieme, e il modulo non può andare avanti:
+un modulo al contratto 4 risponde 4 anche allo stato e alle scritture, e un
+client della 0.22.0 (che legge 1, 2, 3) rifiuterebbe ogni risposta, e il canale
+smetterebbe di applicare. In quest'ordine:
 
-1. la tabella e la sua regola di raccolta;
-2. le quattro variabili, con `UBEP_RAPPORTO_POSTA_A` su un indirizzo IT;
-3. il pacchetto, e la lavorazione nuova in `/opt`;
-4. l'unità e il timer giornaliero;
-5. un'esecuzione a mano col mese forzato e la posta accesa ma dirottata, per
-   leggere il record e le mail;
-6. i tre allarmi, dopo il primo record;
-7. per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
+1. **il pacchetto 0.23.0 sulla macchina, con la lavorazione del rapporto in
+   `/opt`**, prima di tutto, e insieme: la lavorazione nuova ora legge
+   l'inventario delle istanze col modulo e i loro segreti, come il giro, e si
+   ferma se l'inventario non ne elenca; quella vecchia, con il pacchetto nuovo,
+   passerebbe un elenco di server vuoto, e ogni server risulterebbe «assente
+   dall'inventario delle istanze col modulo», un motivo falso che andrebbe a IT
+   per tutto il mese. La nuova non parte col pacchetto vecchio. L'unità e il
+   timer giornaliero restano come sono. Il client accetta il 4 e il rapporto
+   chiama `accounts`. Con i moduli ancora al 3 il canale e l'osservatore
+   lavorano come prima, e il rapporto vede ogni server come «modulo non
+   aggiornato» senza fallire: un rapporto partito in questo intervallo ha già
+   la forma nuova (scadenze, oggetto, voce 1 per server) con le coppie della
+   voce 1 lette da Entra e dette tali, la voce 2 «non controllata» e a IT
+   l'elenco dei server. Verifica: un giro del canale e una lettura
+   dell'osservatore puliti;
+2. **il modulo 0.23.0** (l'archivio di `build_redcap_module()`) sulle istanze
+   accese, con *Change Version* dal Control Center, **prima su una**, verificando
+   che il segreto condiviso resti, poi sulle altre. **I banchi spenti restano
+   al 3**: il rapporto li vede come server non letti, e non c'è niente da
+   correggere. La prima chiamata vera di `accounts` su un modulo posato è la
+   prima esecuzione del suo ramo (non eseguibile fuori da REDCap): zero nomi
+   deve dare 200 con la lista vuota, un nome noto 200 con la sua voce, oltre 500
+   nomi 400;
+3. **un'esecuzione a mano col mese forzato e la posta accesa ma dirottata**,
+   per leggere il record e le mail. Col mese forzato, non con il solo
+   dirottamento: un giro dirottato ma non forzato scrive il vero
+   `AAAA-MM.dovuti.json` del mese, che diventerebbe un punto di partenza del
+   recupero;
+4. **un allarme da controllare**: nessuna regola sulla tabella del rapporto deve
+   legare `mandati` a `giorno_di_invio`, perché un giro di soli recuperi ha il
+   primo sopra zero e il secondo falso;
+5. per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
 
 ## Che cosa questa guida non copre
 

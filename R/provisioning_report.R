@@ -370,19 +370,23 @@ report_account <- function(directory, upn) {
 
 #' Whether a person has signed in to Entra, from the two dates of their key
 #'
-#' Phase 1 of the report reads Entra and nothing else, with the permission the
-#' round already holds. `lastPasswordChangeDateTime` is, in the words of Learn,
+#' Entra says it with the permission the round already holds, and the report
+#' uses it where the server cannot say it better: for the pairs of a server
+#' that was not read, and for the deadline of a key that is still the one
+#' of the creation. `lastPasswordChangeDateTime` is, in the words of Learn,
 #' "the time when this Microsoft Entra user last changed their password or
 #' when their password was created", and the round creates every account with
 #' `forceChangePasswordNextSignIn`: an account whose key is as old as the
 #' account itself is an account nobody has entered.
 #'
 #' What it cannot see, said where it is decided. A key reset by IT moves the
-#' date without anybody signing in, and the person drops out of the report
-#' (phase 2 removes this). An account that existed long before the request
-#' has dates that diverge, and the person never shows, even if they never
-#' opened the instance asked for: the signal says "has used the UBEP
-#' account", not "has used REDCap".
+#' date without anybody signing in, and the person drops out of the verdict.
+#' An account that existed long before the request has dates that diverge,
+#' and the person never shows, even if they never opened the instance asked
+#' for: the signal says "has used the UBEP account", not "has used REDCap".
+#' That is why a server that was read decides in its place
+#' (`report_server_access()`), and `report_assemble()` asks Entra only when
+#' the server did not answer.
 #'
 #' @param directory A directory frame, as `directory_users()` returns it.
 #' @param upn The person's user principal name.
@@ -562,6 +566,86 @@ report_rows <- function(register, creators, executions, period,
 }
 
 
+#' The rows stopped on a disabled account
+#'
+#' A row that is active and was stopped by the round because the account of its
+#' person is disabled: `transport_error` with `TRASPORTO_ACCOUNT_DISATTIVATO`
+#' among its codes. `outcome_detail` can carry more than one code, so the code
+#' is looked for inside the field and not compared with it. These rows are not
+#' in the report, but their people are among the names the report asks the
+#' servers for, so that IT can see them.
+#'
+#' @param register The register, as `register_records()` answers.
+#'
+#' @return The rows of `register` that are active and stopped on a disabled
+#'   account.
+#'
+#' @keywords internal
+report_stopped_rows <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  field <- function(name) {
+    value <- register[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(register)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  stopped <- field("request_status") == "active" &
+    field("outcome") == "transport_error" &
+    grepl(
+      "TRASPORTO_ACCOUNT_DISATTIVATO", field("outcome_detail"), fixed = TRUE
+    )
+
+  rows <- register[stopped, , drop = FALSE]
+  rownames(rows) <- NULL
+  rows
+}
+
+
+#' The names to ask each server
+#'
+#' For every server the register has rows on, the usernames of its active and
+#' applied rows and of the rows stopped on a disabled account
+#' (`report_stopped_rows()`). Blank servers and blank names are left out.
+#'
+#' @param register The register, as `register_records()` answers.
+#'
+#' @return A named list: server to the usernames to ask it, without
+#'   repetitions.
+#'
+#' @keywords internal
+report_server_asks <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  field <- function(data, name) {
+    value <- data[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(data)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  applied <- register[
+    field(register, "request_status") == "active" &
+      field(register, "outcome") == "applied", ,
+    drop = FALSE
+  ]
+  stopped <- report_stopped_rows(register)
+  server <- c(field(applied, "server"), field(stopped, "server"))
+  username <- c(field(applied, "username"), field(stopped, "username"))
+  keep <- nzchar(server) & nzchar(username)
+
+  asks <- split(username[keep], factor(server[keep], unique(server[keep])))
+  lapply(asks, unique)
+}
+
+
 #' Put each row in the report it belongs to
 #'
 #' A row belongs to **its owner**, as the log says, and not to
@@ -573,26 +657,53 @@ report_rows <- function(register, creators, executions, period,
 #' to the same person the round asks to approve a change. A person asked for
 #' by two referents is in both reports, each with their own rows.
 #'
-#' Three items, of which phase 1 fills two:
+#' Three items, of which the report fills two:
 #'
 #' - **activated in the month**, one line per request, new or modified. It is
 #'   information, and does not count among the things to look at. A new one
 #'   says whether its account was new: `account` is `nuovo` when Entra made
 #'   the account no earlier than the minute the row was made (`creata_il`),
 #'   `esistente` when earlier, `""` when either date is missing;
-#' - **no first sign-in**, one item per person, with every project of theirs:
-#'   the requests of that person activated at least `report_grace_days()`
-#'   before the reading and not expired, when Entra says nobody has entered the
-#'   account (`report_first_access()`). The thirty days run from the later of
-#'   two dates, in Italian time: the channel's first execution for the
-#'   username the row names now (`report_person_since()`), and the birth of
-#'   that account on Entra. A username corrected by a modification, or an
-#'   account made again, is not dated by an activation that was somebody
-#'   else's. The item carries the earliest of those dates among the person's
-#'   requests, how many days and months of thirty days ago it was, and the
-#'   dates of the earlier reports of the same referent that named the person;
-#' - **no access for more than a year** is phase 2, and the mail says it was
-#'   not checked.
+#' - **no first sign-in**, one item per person and server, with the projects
+#'   of the person on that server: the requests of that person on that server
+#'   activated at least `report_grace_days()` before the reading and not
+#'   expired, when the person has never entered the server. The thirty days
+#'   run from the later of two dates, in Italian time: the channel's first
+#'   execution for the username the row names now (`report_person_since()`),
+#'   and the birth of that account on Entra. A username corrected by a
+#'   modification, or an account made again, is not dated by an activation
+#'   that was somebody else's. The item carries the earliest of those dates
+#'   among the requests on that server, how many days and months of thirty
+#'   days ago it was, and the dates of the earlier reports of the same
+#'   referent that named the person on that server (an earlier entry with an
+#'   empty server, written before the server was recorded, names the person
+#'   on every server). Who decides "never entered" depends on the server.
+#'   One that was read decides (`report_server_access()`: no row, or no first
+#'   visit), and Entra does not count, because the server says exactly which
+#'   server and is not misled by a key IT has reset; `fonte` is `server`. One
+#'   that was not read, for any reason, falls back on the rule of Entra
+#'   (`report_first_access()`), and `fonte` is `entra`: the mail says so. The
+#'   account's state is the first filter either way, and an account that is
+#'   not active goes to IT once for the person. `limite` is the last day the
+#'   first sign-in is promised (`mail_first_signin_deadline()`), but only when
+#'   the two dates on Entra agree within `report_tolerance()`, that is when
+#'   the key is still the one of the creation: otherwise the dates diverge
+#'   for the person who entered, for a key reset and for the key the D-31
+#'   rule replaced, and a date computed from them would be a guess, so it is
+#'   `""`;
+#' - **no access for more than a year**, one item per person and server. A
+#'   pair is a candidate when its request is active, applied, not expired and
+#'   the person has had the access on that server for more than 365 days
+#'   (the oldest request there, as for the first sign-in). On a server that
+#'   was read, it enters when the person has entered at least once and the
+#'   last access (`report_server_access()`) is more than 365 days before the
+#'   reading, both as dates in Italian time. It is listed in full the month it
+#'   crosses the threshold, and counted in `senza_accessi_gia` after: when an
+#'   earlier report of the same referent named it (an entry with an empty
+#'   server names it on every server). On a server that was not read the pair
+#'   is only counted, per server, in `non_controllati`: Entra says nothing
+#'   about it, and an empty item would say "none" about something nobody
+#'   measured.
 #'
 #' What has no referent to go to goes to IT, and to nobody else: a row whose
 #' owner the log does not establish (no creation names it, or the log cannot
@@ -615,25 +726,53 @@ report_rows <- function(register, creators, executions, period,
 #' @param unread The earlier months whose ledger did not read. A person who
 #'   could have been in one of their reports gets `storia_nota` false, and
 #'   the mail says nothing about earlier reports rather than something false.
+#' @param servers What the readings of the servers answered, as
+#'   `report_server_reads()` returns it: a named list, server to
+#'   `list(letto = TRUE, conti = <frame>)` or `list(letto = FALSE, motivo)`.
+#'   A server that is not there, or that says it was read without a frame of
+#'   accounts, is a server that was not read.
+#' @param stopped The rows stopped on a disabled account, as
+#'   `report_stopped_rows()` answers, or `NULL` for none. They are not in the
+#'   referents' reports: IT gets them.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
-#'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
-#'   (people) and `non_giudicati` (a count); `it`, `NULL` when there is
+#'   each a list of `referente`, `attivati` (rows), `scadenze` (the rows of
+#'   the referent that expire after the day of the reading and by the last
+#'   day of its month, by date, for information), `senza_primo_accesso`
+#'   (pairs of person and server, with `nome`, `upn`, `server`, `progetti`,
+#'   `attivata_il`, `giorni`, `mesi`, `segnalata`, `storia_nota`, `fonte` and
+#'   `limite`), `senza_accessi` (pairs, with `nome`, `upn`, `server`,
+#'   `progetti`, `ultimo`, the day of the last access in Italian time, and
+#'   `attivata_il`), `senza_accessi_gia` (how many pairs an earlier report
+#'   named and are still without access), `senza_accessi_gia_coppie` (those
+#'   pairs, `upn` and `server`, for the ledger) and `non_controllati` (a frame
+#'   of `server` and `coppie`), and `non_giudicati` (a count); `it`, `NULL`
+#'   when there is
 #'   nothing for IT, otherwise a list of `senza_referente` (rows, with
-#'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`) and
-#'   `senza_data` (rows); and `senza_creatore`, how many rows have no
-#'   referent to go to. Since rows can pass, that means without an
-#'   established owner and not only without a creator; the name stays,
-#'   because it is a column of `UbepRapporto_CL`, and a renamed column would
-#'   keep the table's history under one name and the new records under
-#'   another.
+#'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`),
+#'   `senza_data` (rows) and `server_non_letti` (a frame of `server`,
+#'   `motivo`, `entra`, how many pairs of that server went into a
+#'   referent's report on the strength of Entra, and `non_controllate`, how
+#'   many were candidates for the year without access and could not be
+#'   checked; one row for each server that was asked and not read, whether
+#'   the rows on it are applied or stopped, also with none) and
+#'   `disattivati` (the rows of `stopped`, with `entrata`: `"si"` or `"no"`,
+#'   whether the person has entered the server, when it was read, `""` when
+#'   it was not); and `senza_creatore`, how
+#'   many rows have no referent to go to. Since rows can pass, that means
+#'   without an established owner and not only without a creator; the name
+#'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
+#'   column would keep the table's history under one name and the new
+#'   records under another.
 #'
 #' @keywords internal
 report_assemble <- function(rows, directory, period, previous = list(),
-                            unread = character()) {
+                            unread = character(), servers = list(),
+                            stopped = NULL) {
   stopifnot(
     is.data.frame(rows), is.data.frame(directory), is.list(period),
-    is.list(previous), is.character(unread)
+    is.list(previous), is.character(unread), is.list(servers),
+    is.null(stopped) || is.data.frame(stopped)
   )
 
   text <- function(name) {
@@ -704,6 +843,16 @@ report_assemble <- function(rows, directory, period, previous = list(),
   judged <- own & !report_expired(text("expiration"), today) &
     !is.na(days) & days >= report_grace_days()
 
+  # The expirations of the month, for information: after the day of the
+  # reading, which is already expired, and up to the last day of its month.
+  expires <- suppressWarnings(
+    as.Date(text("expiration"), format = "%Y-%m-%d")
+  )
+  month_end <- as.Date(
+    paste0(report_shift_month(format(today, "%Y-%m"), 1L), "-01")
+  ) - 1L
+  expiring <- !is.na(expires) & expires > today & expires <= month_end
+
   projects <- function(at) {
     found <- unique(data.frame(
       server = text("server")[at], project_id = text("project_id")[at],
@@ -718,18 +867,48 @@ report_assemble <- function(rows, directory, period, previous = list(),
     found
   }
 
-  reported <- function(who, key) {
+  # The earlier reports of this referent that named the person on this
+  # server, in the list asked for (`senza_primo_accesso` or
+  # `senza_accessi`). The pairs of a report that recorded only the person
+  # carry an empty server, "all of them".
+  reported <- function(who, key, server, of = "senza_primo_accesso") {
     dates <- unlist(lapply(previous, function(entry) {
       same <- identical(
         tolower(trimws(as.character(entry[["destinatario"]] %||% ""))),
         tolower(who)
       )
-      named <- key %in% tolower(trimws(as.character(
-        entry[["senza_primo_accesso"]] %||% character()
-      )))
+      pairs <- report_pairs(entry[[of]])
+      named <- any(
+        tolower(trimws(pairs[["upn"]])) == key &
+          trimws(pairs[["server"]]) %in% c(server, "")
+      )
       if (same && named) substr(as.character(entry[["at"]]), 1L, 10L)
     }))
     sort(unique(as.character(dates)))
+  }
+
+  # What a server says about its people, or why it says nothing. It decides
+  # only when it was read whole: the flag and the frame of its accounts. A
+  # server the caller did not mention was not asked, which is the same as a
+  # module that is not there.
+  reading <- function(server) {
+    found <- servers[[server]]
+    if (is.list(found) && isTRUE(found[["letto"]]) &&
+          is.data.frame(found[["conti"]])) {
+      return(list(letto = TRUE, conti = found[["conti"]]))
+    }
+    reason <- if (is.null(found)) {
+      "TRASPORTO_ISTANZA_SENZA_MODULO"
+    } else {
+      found <- found[["motivo"]]
+      if (is.character(found) && length(found) == 1L && !is.na(found) &&
+            nzchar(found)) {
+        found
+      } else {
+        "INTERNO"
+      }
+    }
+    list(letto = FALSE, motivo = reason)
   }
 
   # A month's reports leave during the month after, so a person dated before
@@ -754,39 +933,146 @@ report_assemble <- function(rows, directory, period, previous = list(),
     ]
     rownames(attivati) <- NULL
 
+    soon <- rows[mine & expiring, , drop = FALSE]
+    soon <- soon[
+      order(as.Date(soon[["expiration"]]), soon[["record_id"]]), ,
+      drop = FALSE
+    ]
+    rownames(soon) <- NULL
+
     people <- list()
+    idle <- list()
+    idle_before <- report_pairs()
+    unchecked <- character()
     candidates <- which(mine & judged)
     keys <- tolower(username[candidates])
     for (key in unique(keys)) {
-      at <- candidates[keys == key]
-      at <- at[order(start[at])]
-      oldest <- at[[1L]]
-      person <- list(
-        nome = trimws(paste(
-          text("first_name")[[oldest]], text("last_name")[[oldest]]
-        )),
-        upn = username[[oldest]],
-        progetti = projects(at)
-      )
+      of_person <- candidates[keys == key]
+      of_person <- of_person[order(start[of_person])]
+      oldest <- of_person[[1L]]
+      name <- trimws(paste(
+        text("first_name")[[oldest]], text("last_name")[[oldest]]
+      ))
+
+      # The account's state is the first filter, whatever the server says:
+      # nobody is judged on an account Entra holds disabled or cannot read.
+      entry <- report_account(directory, username[[oldest]])
+      if (!identical(entry[["stato"]], "attivo")) {
+        non_giudicabili[[length(non_giudicabili) + 1L]] <- list(
+          nome = name, upn = username[[oldest]],
+          progetti = projects(of_person),
+          referente = who, motivo = entry[["stato"]]
+        )
+        next
+      }
+
+      # Entra's verdict is the same for every server of the person, and is
+      # what a server that was not read falls back on.
       verdict <- report_first_access(directory, username[[oldest]])
+      limit <- ""
       if (identical(verdict, "mai_entrata")) {
-        people[[length(people) + 1L]] <- c(person, list(
-          attivata_il = substr(start[[oldest]], 1L, 10L),
-          giorni = days[[oldest]],
-          mesi = days[[oldest]] %/% 30L,
-          segnalata = reported(who, key),
+        limit <- mail_first_signin_deadline(
+          directory[["createdDateTime"]][[entry[["riga"]]]]
+        )
+        if (is.na(limit)) {
+          limit <- ""
+        }
+      }
+
+      unjudged <- integer()
+      for (server in sort(unique(text("server")[of_person]))) {
+        at <- of_person[text("server")[of_person] == server]
+        first <- at[[1L]]
+        seen <- reading(server)
+
+        # The year without access: a pair active for more than a year, on
+        # a server that says when the person last entered. A server that
+        # was not read says nothing, and the pair is counted as unchecked.
+        if (days[[first]] > 365L) {
+          if (!isTRUE(seen[["letto"]])) {
+            unchecked <- c(unchecked, server)
+          } else {
+            access <- report_server_access(
+              seen[["conti"]], username[[first]]
+            )
+            last <- if (identical(access[["stato"]], "entrata")) {
+              format(access[["ultimo"]], "%Y-%m-%d", tz = "Europe/Rome")
+            }
+            if (!is.null(last) &&
+                  as.integer(today - as.Date(last)) > 365L) {
+              if (length(reported(who, key, server, "senza_accessi")) > 0L) {
+                idle_before <- rbind(idle_before, report_pairs(
+                  data.frame(
+                    upn = username[[first]], server = server,
+                    stringsAsFactors = FALSE
+                  )
+                ))
+              } else {
+                idle[[length(idle) + 1L]] <- list(
+                  nome = name,
+                  upn = username[[first]],
+                  server = server,
+                  progetti = projects(at),
+                  ultimo = last,
+                  attivata_il = substr(start[[first]], 1L, 10L)
+                )
+              }
+            }
+          }
+        }
+
+        if (isTRUE(seen[["letto"]])) {
+          never <- identical(
+            report_server_access(seen[["conti"]], username[[first]])[["stato"]],
+            "mai_entrata"
+          )
+        } else {
+          never <- identical(verdict, "mai_entrata")
+          if (!never && !identical(verdict, "entrata")) {
+            unjudged <- c(unjudged, at)
+          }
+        }
+        if (!never) {
+          next
+        }
+
+        people[[length(people) + 1L]] <- list(
+          nome = name,
+          upn = username[[first]],
+          server = server,
+          progetti = projects(at),
+          attivata_il = substr(start[[first]], 1L, 10L),
+          giorni = days[[first]],
+          mesi = days[[first]] %/% 30L,
+          segnalata = reported(who, key, server),
           storia_nota = is.null(unknown_until) ||
-            as.Date(substr(start[[oldest]], 1L, 10L)) >= unknown_until
-        ))
-      } else if (!identical(verdict, "entrata")) {
-        non_giudicabili[[length(non_giudicabili) + 1L]] <- c(person, list(
+            as.Date(substr(start[[first]], 1L, 10L)) >= unknown_until,
+          fonte = if (isTRUE(seen[["letto"]])) "server" else "entra",
+          limite = limit
+        )
+      }
+
+      if (length(unjudged) > 0L) {
+        non_giudicabili[[length(non_giudicabili) + 1L]] <- list(
+          nome = name, upn = username[[oldest]],
+          progetti = projects(unjudged),
           referente = who, motivo = verdict
-        ))
+        )
       }
     }
 
+    silent <- sort(unique(unchecked))
     referenti[[who]] <- list(
-      referente = who, attivati = attivati, senza_primo_accesso = people
+      referente = who, attivati = attivati, senza_primo_accesso = people,
+      scadenze = soon, senza_accessi = idle,
+      senza_accessi_gia = nrow(idle_before),
+      senza_accessi_gia_coppie = idle_before,
+      non_controllati = data.frame(
+        server = silent,
+        coppie = vapply(silent, function(s) sum(unchecked == s), 0L,
+                        USE.NAMES = FALSE),
+        stringsAsFactors = FALSE
+      )
     )
   }
 
@@ -807,12 +1093,67 @@ report_assemble <- function(rows, directory, period, previous = list(),
   senza_data <- rows[undated, , drop = FALSE]
   rownames(senza_data) <- NULL
 
-  for_it <- nrow(senza_referente) + length(non_giudicabili) + nrow(senza_data)
+  # The servers of the rows that were not read, with the pairs of each that
+  # went into a referent's report on what Entra says: those are the ones a
+  # server could have refuted.
+  on_entra <- unlist(lapply(referenti, function(report) {
+    found <- Filter(
+      function(person) identical(person[["fonte"]], "entra"),
+      report[["senza_primo_accesso"]]
+    )
+    vapply(found, `[[`, "", "server")
+  }))
+  # Every server the report asked and did not read, whoever the rows are: the
+  # applied ones, the stopped ones, or only the readings that were made.
+  stopped_servers <- trimws(as.character(stopped[["server"]]))
+  asked <- c(names(servers), text("server"), stopped_servers)
+  asked <- sort(unique(asked[!is.na(asked) & nzchar(asked)]))
+  asked <- asked[!vapply(
+    asked, function(server) isTRUE(reading(server)[["letto"]]), logical(1)
+  )]
+  server_non_letti <- data.frame(
+    server = asked,
+    motivo = vapply(
+      asked, function(server) reading(server)[["motivo"]], "",
+      USE.NAMES = FALSE
+    ),
+    entra = vapply(
+      asked, function(server) sum(on_entra == server), 0L,
+      USE.NAMES = FALSE
+    ),
+    non_controllate = vapply(asked, function(server) {
+      as.integer(sum(unlist(lapply(referenti, function(report) {
+        found <- report[["non_controllati"]]
+        found[["coppie"]][found[["server"]] == server]
+      }))))
+    }, 0L, USE.NAMES = FALSE),
+    stringsAsFactors = FALSE
+  )
+
+  # The rows stopped on a disabled account, with whether the person has ever
+  # entered the server of the row: said only by a server that was read.
+  disattivati <- stopped %||% data.frame()
+  rownames(disattivati) <- NULL
+  disattivati[["entrata"]] <- vapply(seq_len(nrow(disattivati)), function(i) {
+    seen <- reading(trimws(as.character(disattivati[["server"]][[i]])))
+    if (!isTRUE(seen[["letto"]])) {
+      return("")
+    }
+    access <- report_server_access(
+      seen[["conti"]], as.character(disattivati[["username"]][[i]])
+    )
+    if (identical(access[["stato"]], "entrata")) "si" else "no"
+  }, "")
+
+  for_it <- nrow(senza_referente) + length(non_giudicabili) +
+    nrow(senza_data) + nrow(server_non_letti) + nrow(disattivati)
   it <- if (for_it > 0L) {
     list(
       senza_referente = senza_referente,
       non_giudicabili = non_giudicabili,
-      senza_data = senza_data
+      senza_data = senza_data,
+      server_non_letti = server_non_letti,
+      disattivati = disattivati
     )
   }
 
@@ -966,15 +1307,54 @@ report_activated_lines <- function(rows) {
 
 #' The lines of the people with no first sign-in, in both languages
 #'
+#' One entry for each person and server. After the line with the person and
+#' the date and the line with the server's projects, an entry says what the
+#' referent should know of the account: with a `limite`, that the person has
+#' never signed in with the UBEP account and must by that day, the last one,
+#' or the account is deactivated (D-31); when that day is already past, that
+#' the key handed over may no longer be valid and that a new one is asked for
+#' by replying to the mail of the key, which is what the D-31 rule has for an
+#' expired key; without a `limite`, only that the person never entered the
+#' server, since the dates on Entra no longer tell whether they use the
+#' account. An entry read from Entra, because the server did not answer, says
+#' so. Without people, the item says "none".
+#'
 #' @param people The `senza_primo_accesso` of a referent's report.
+#' @param period What `report_month()` answered: `oggi` tells whether a
+#'   `limite` is past.
 #' @param to_it How many of the referent's people went to IT without being
 #'   judged.
 #'
 #' @return A list of two character vectors, `it` and `en`.
 #'
 #' @keywords internal
-report_people_lines <- function(people, to_it = 0L) {
+report_people_lines <- function(people, period, to_it = 0L) {
+  stopifnot(is.list(period))
+
   grace <- report_grace_days()
+
+  if (length(people) == 0L) {
+    return(list(
+      it = c(
+        paste0("1. Senza primo accesso al server dopo ", grace,
+               " giorni: nessuna."),
+        if (to_it > 0L) {
+          paste0("Persone non giudicabili, segnalate a IT: ", to_it, ".")
+        }
+      ),
+      en = c(
+        paste0("1. No first sign-in on the server after ", grace,
+               " days: none."),
+        if (to_it > 0L) {
+          paste0(
+            "People that could not be judged, reported to IT: ", to_it, "."
+          )
+        }
+      )
+    ))
+  }
+
+  today <- format(period[["oggi"]], "%Y-%m-%d")
 
   each <- lapply(people, function(person) {
     projects <- report_projects_words(person[["progetti"]])
@@ -984,6 +1364,10 @@ report_people_lines <- function(people, to_it = 0L) {
     # "also on" can be said.
     known <- !isFALSE(person[["storia_nota"]])
     who <- paste0("   - ", person[["nome"]], ", ", person[["upn"]], ": ")
+    server <- person[["server"]]
+    limit <- as.character(person[["limite"]] %||% "")
+    from_entra <- identical(person[["fonte"]], "entra")
+    past <- nzchar(limit) && limit < today
     list(
       it = c(
         paste0(
@@ -1002,7 +1386,25 @@ report_people_lines <- function(people, to_it = 0L) {
               " Segnalata anche ", report_join(paste("il", earlier), "e"), "."
             )
           }
-        )
+        ),
+        if (past) {
+          paste0(
+            "     Non e' mai entrata con l'account UBEP: la data per il ",
+            "primo accesso (", limit, ") e' passata e la chiave consegnata ",
+            "puo' non valere piu'. Per averne una nuova, rispondi alla mail ",
+            "della chiave."
+          )
+        } else if (nzchar(limit)) {
+          paste0(
+            "     Non e' mai entrata con l'account UBEP: deve entrare entro ",
+            "il ", limit, ", poi l'account viene disattivato."
+          )
+        } else {
+          paste0("     Su ", server, " non e' mai entrata.")
+        },
+        if (from_entra) {
+          "     Letto da Entra: il server non ha risposto."
+        }
       ),
       en = c(
         paste0(
@@ -1019,7 +1421,25 @@ report_people_lines <- function(people, to_it = 0L) {
           } else {
             paste0(" Also reported on ", report_join(earlier, "and"), ".")
           }
-        )
+        ),
+        if (past) {
+          paste0(
+            "     Has never signed in with the UBEP account: the date for ",
+            "the first sign-in (", limit, ") has passed and the key that was ",
+            "handed over may no longer be valid. To get a new one, reply to ",
+            "the mail of the key."
+          )
+        } else if (nzchar(limit)) {
+          paste0(
+            "     Has never signed in with the UBEP account: must sign in ",
+            "by ", limit, ", then the account is deactivated."
+          )
+        } else {
+          paste0("     Has never signed in on ", server, ".")
+        },
+        if (from_entra) {
+          "     Read from Entra: the server did not answer."
+        }
       )
     )
   })
@@ -1027,12 +1447,12 @@ report_people_lines <- function(people, to_it = 0L) {
   list(
     it = c(
       paste0(
-        "1. Senza primo accesso dopo ", grace, " giorni (", length(people),
-        ")"
+        "1. Senza primo accesso al server dopo ", grace, " giorni (",
+        length(people), ")"
       ),
       paste0(
-        "   Hanno l'accesso da almeno ", grace, " giorni e non sono ancora ",
-        "entrate con l'account UBEP."
+        "   Hanno l'accesso a un server da almeno ", grace, " giorni e su ",
+        "quel server non sono ancora entrate."
       ),
       unlist(lapply(each, `[[`, "it")),
       if (to_it > 0L) {
@@ -1040,18 +1460,19 @@ report_people_lines <- function(people, to_it = 0L) {
       },
       paste0(
         "   Che cosa fare: chiedi alla persona se ha ricevuto il benvenuto e ",
-        "la chiave che le hai mandato. Se la chiave e' persa, scrivi a IT: ",
-        "la reimposta e la rimanda a te. Se l'accesso non serve piu', metti ",
-        "la richiesta a revoked."
+        "la chiave che le hai mandato, e di entrare nel server indicato. Se ",
+        "la chiave e' persa, scrivi a IT: la reimposta e la rimanda a te. Se ",
+        "l'accesso a quel server non serve piu', metti la richiesta a revoked."
       )
     ),
     en = c(
       paste0(
-        "1. No first sign-in after ", grace, " days (", length(people), ")"
+        "1. No first sign-in on the server after ", grace, " days (",
+        length(people), ")"
       ),
       paste0(
-        "   They have had access for at least ", grace, " days and have not ",
-        "signed in with the UBEP account yet."
+        "   They have had access to a server for at least ", grace, " days ",
+        "and have not signed in on that server yet."
       ),
       unlist(lapply(each, `[[`, "en")),
       if (to_it > 0L) {
@@ -1061,10 +1482,192 @@ report_people_lines <- function(people, to_it = 0L) {
       },
       paste0(
         "   What to do: ask the person whether they received the welcome and ",
-        "the key you sent them. If the key is lost, write to IT: they reset ",
-        "it and send it back to you. If the access is no longer needed, set ",
-        "the request to revoked."
+        "the key you sent them, and to sign in on the server named. If the ",
+        "key is lost, write to IT: they reset it and send it back to you. If ",
+        "the access to that server is no longer needed, set the request to ",
+        "revoked."
       )
+    )
+  )
+}
+
+
+#' The lines of the people with no access for more than a year, in both
+#' languages
+#'
+#' One entry for each person and server that crossed the threshold this
+#' month, with the project of the person on that server, when the server
+#' last saw them and since when they have had the access. The pairs named
+#' in an earlier report of the same referent and still without access are
+#' counted in a line of their own, not listed again. The pairs on a server
+#' that did not answer are counted per server and said not to be checked: an
+#' item that covered a server nobody read would say "none" about something
+#' nobody measured, so "none" is only said when there is nothing else to say.
+#'
+#' @param report One referent's report, as `report_assemble()` builds it:
+#'   `senza_accessi` (the pairs listed in full), `senza_accessi_gia` (how
+#'   many were named before) and `non_controllati` (a frame of `server` and
+#'   `coppie`).
+#'
+#' @return A list of two character vectors, `it` and `en`.
+#'
+#' @keywords internal
+report_idle_lines <- function(report) {
+  pairs <- report[["senza_accessi"]] %||% list()
+  earlier <- as.integer(report[["senza_accessi_gia"]] %||% 0L)
+  unchecked <- report[["non_controllati"]]
+  if (is.null(unchecked)) {
+    unchecked <- data.frame(
+      server = character(), coppie = integer(), stringsAsFactors = FALSE
+    )
+  }
+
+  if (length(pairs) == 0L && earlier == 0L && nrow(unchecked) == 0L) {
+    return(list(
+      it = "2. Senza accessi da piu' di un anno: nessuno.",
+      en = "2. No access in more than a year: none."
+    ))
+  }
+
+  each <- lapply(pairs, function(pair) {
+    projects <- report_projects_words(pair[["progetti"]])
+    who <- paste0("   - ", pair[["nome"]], ", ", pair[["upn"]], ": ")
+    list(
+      it = c(
+        paste0(
+          who, "attivata il ", pair[["attivata_il"]], "; ultimo accesso il ",
+          pair[["ultimo"]], "."
+        ),
+        paste0("     ", projects[["it"]], ".")
+      ),
+      en = c(
+        paste0(
+          who, "activated on ", pair[["attivata_il"]], "; last access on ",
+          pair[["ultimo"]], "."
+        ),
+        paste0("     ", projects[["en"]], ".")
+      )
+    )
+  })
+
+  count <- as.integer(unchecked[["coppie"]])
+  server <- as.character(unchecked[["server"]])
+
+  list(
+    it = c(
+      paste0("2. Senza accessi da piu' di un anno (", length(pairs), ")"),
+      if (length(pairs) > 0L) {
+        paste0(
+          "   Hanno l'accesso da piu' di un anno e su quel server non ",
+          "entrano da piu' di un anno."
+        )
+      },
+      unlist(lapply(each, `[[`, "it")),
+      if (earlier > 0L) {
+        paste0(
+          "   Gia' segnalate nei mesi scorsi e ancora senza accessi: ",
+          earlier, "."
+        )
+      },
+      if (nrow(unchecked) > 0L) {
+        paste0(
+          "   Non controllato per ", count,
+          ifelse(count == 1L, " persona su ", " persone su "),
+          server, ": il server non ha risposto."
+        )
+      },
+      if (length(pairs) > 0L) {
+        paste0(
+          "   Che cosa fare: se la persona non lavora piu' su quei ",
+          "progetti, metti le richieste a revoked. Se deve restare, non ",
+          "serve niente: dal mese prossimo sara' solo contata."
+        )
+      }
+    ),
+    en = c(
+      paste0("2. No access in more than a year (", length(pairs), ")"),
+      if (length(pairs) > 0L) {
+        paste0(
+          "   They have had access for more than a year and have not ",
+          "signed in on that server for more than a year."
+        )
+      },
+      unlist(lapply(each, `[[`, "en")),
+      if (earlier > 0L) {
+        paste0(
+          "   Already reported in earlier months and still without ",
+          "access: ", earlier, "."
+        )
+      },
+      if (nrow(unchecked) > 0L) {
+        paste0(
+          "   Not checked for ", count,
+          ifelse(count == 1L, " person on ", " people on "),
+          server, ": the server did not answer."
+        )
+      },
+      if (length(pairs) > 0L) {
+        paste0(
+          "   What to do: if the person no longer works on those projects, ",
+          "set the requests to revoked. If they must stay, nothing is ",
+          "needed: from next month they will only be counted."
+        )
+      }
+    )
+  )
+}
+
+
+#' The lines of the accesses that expire this month, in both languages
+#'
+#' Information only: it is not an item to look at, and it does not count in
+#' the number of the subject. Each expiration is one line with the person,
+#' the server, the project and the day, as in the approved draft (`Name:
+#' server, progetto N, scade il AAAA-MM-GG.`). Without any, no lines at all,
+#' since "none" would be a claim and the item is only a reminder.
+#'
+#' @param rows The `scadenze` of a referent's report.
+#' @param period What `report_month()` answered: the month named is the one
+#'   of the reading.
+#'
+#' @return A list of two character vectors, `it` and `en`; empty without
+#'   rows.
+#'
+#' @keywords internal
+report_expiring_lines <- function(rows, period) {
+  stopifnot(is.data.frame(rows), is.list(period))
+
+  if (nrow(rows) == 0L) {
+    return(list(it = character(), en = character()))
+  }
+
+  month <- report_month_words(format(period[["oggi"]], "%Y-%m"))
+  each <- function(project, verb) {
+    vapply(seq_len(nrow(rows)), function(i) {
+      paste0(
+        "   - ", trimws(paste(rows[["first_name"]][[i]],
+                              rows[["last_name"]][[i]])),
+        ": ", rows[["server"]][[i]], ", ", project, " ",
+        rows[["project_id"]][[i]], ", ", verb, " ",
+        trimws(rows[["expiration"]][[i]]), "."
+      )
+    }, "")
+  }
+
+  list(
+    it = c(
+      paste0(
+        "3. Scadono entro ", sub(" .*", "", month[["it"]]), " (", nrow(rows),
+        "), per informazione"
+      ),
+      each("progetto", "scade il")
+    ),
+    en = c(
+      paste0(
+        "3. Expiring by the end of ", sub(" .*", "", month[["en"]]), " (",
+        nrow(rows), "), for information"
+      ),
+      each("project", "expires on")
     )
   )
 }
@@ -1092,19 +1695,24 @@ report_read_words <- function(period) {
 #' Compose a referent's monthly report
 #'
 #' Two forms, told apart by the **first word of the subject**, which is what
-#' shows in a list of mail without opening anything: `Tutto in ordine` when
-#' there is nobody to look at, `N da guardare` otherwise. The mail is plain
-#' text, so the verdict is said again on the first line of the body, in
-#' capitals. N counts the people listed in full in the items to look at, and
-#' not the accesses activated, which are information; in the form to review
-#' the anomalies come first and the information after.
+#' shows in a list of mail without opening anything: `Tutto in ordine: ...`
+#' when there is nobody to look at, `Da guardare (N): ...` otherwise, with N
+#' in brackets so that the subject does not carry two colons in a row. The
+#' mail is plain text, so the verdict is said again on the first line of the
+#' body, in capitals (`TUTTO IN ORDINE`, `DA GUARDARE: N`; `ALL CLEAR`,
+#' `TO REVIEW: N`): a number right before a numbered list would read as the
+#' number of its first item. N counts the people listed in full in the items
+#' to look at, a person once even when they are on two servers or in both
+#' items (the user name compared without case), and not the accesses
+#' activated or the expirations, which are information.
 #'
-#' The year without access is not measured in phase 1, and the mail says so
-#' in both forms: an all-clear that covered an item nobody looked at would
-#' say something false. For the same reason the people of the referent that
-#' went to IT without being judged are counted in a line of their own, which
-#' changes neither the verdict nor the number in the subject: those say what
-#' was measured.
+#' The items come in the order of the draft: 1. no first sign-in on the
+#' server, 2. no access in more than a year, 3. the expirations of the month
+#' (only if there are any), then the accesses activated. In the all-clear
+#' form items 1 and 2 say "none" with their number. The people of the
+#' referent that went to IT without being judged are counted in a line of
+#' their own, which changes neither the verdict nor the number in the
+#' subject: those say what was measured.
 #'
 #' Italian above and English below, as every mail of the channel, since the
 #' address says nothing about which one its reader reads.
@@ -1120,55 +1728,48 @@ report_message <- function(report, period) {
   stopifnot(is.list(report), is.list(period))
 
   people <- report[["senza_primo_accesso"]] %||% list()
-  count <- length(people)
+  idle <- report[["senza_accessi"]] %||% list()
+  named <- vapply(c(people, idle), function(x) {
+    tolower(trimws(as.character(x[["upn"]])))
+  }, "")
+  count <- length(unique(named))
   unjudged <- as.integer(report[["non_giudicati"]] %||% 0L)
   month <- report_month_words(period[["mese"]])
   following <- report_day_words(period[["prossimo"]])
-  grace <- report_grace_days()
+  first <- report_people_lines(people, period, unjudged)
+  second <- report_idle_lines(report)
+  expiring <- report_expiring_lines(
+    report[["scadenze"]] %||% data.frame(), period
+  )
   activated <- report_activated_lines(report[["attivati"]])
   read <- report_read_words(period)
 
   if (count == 0L) {
-    verdict <- c(it = "Tutto in ordine", en = "All clear")
-    items <- list(
-      it = c(
-        paste0(
-          "Persone senza primo accesso dopo ", grace, " giorni: nessuna."
-        ),
-        if (unjudged > 0L) {
-          paste0("Persone non giudicabili, segnalate a IT: ", unjudged, ".")
-        },
-        "Persone senza accessi da piu' di un anno: non ancora controllato."
-      ),
-      en = c(
-        paste0("People with no first sign-in after ", grace, " days: none."),
-        if (unjudged > 0L) {
-          paste0(
-            "People that could not be judged, reported to IT: ", unjudged, "."
-          )
-        },
-        "People with no access in more than a year: not checked yet."
-      )
+    verdict <- c(
+      it = "TUTTO IN ORDINE", en = "ALL CLEAR",
+      subject_it = "Tutto in ordine", subject_en = "All clear"
     )
   } else {
     verdict <- c(
-      it = paste(count, "da guardare"), en = paste(count, "to review")
-    )
-    listed <- report_people_lines(people, unjudged)
-    items <- list(
-      it = c(
-        listed[["it"]], "",
-        "2. Senza accessi da piu' di un anno: non ancora controllato."
-      ),
-      en = c(
-        listed[["en"]], "",
-        "2. No access in more than a year: not checked yet."
-      )
+      it = paste0("DA GUARDARE: ", count), en = paste0("TO REVIEW: ", count),
+      subject_it = paste0("Da guardare (", count, ")"),
+      subject_en = paste0("To review (", count, ")")
     )
   }
 
+  # The items are apart by a blank line; the expirations only if there are.
+  items <- function(language) {
+    parts <- list(first[[language]], second[[language]])
+    if (length(expiring[[language]]) > 0L) {
+      parts <- c(parts, list(expiring[[language]]))
+    }
+    unlist(lapply(seq_along(parts), function(i) {
+      c(if (i > 1L) "", parts[[i]])
+    }))
+  }
+
   it <- c(
-    toupper(verdict[["it"]]),
+    verdict[["it"]],
     "",
     paste0(
       "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
@@ -1176,7 +1777,7 @@ report_message <- function(report, period) {
       "Mese: ", month[["it"]], "."
     ),
     "",
-    items[["it"]],
+    items("it"),
     "",
     activated[["it"]],
     "",
@@ -1185,7 +1786,7 @@ report_message <- function(report, period) {
   )
 
   en <- c(
-    toupper(verdict[["en"]]),
+    verdict[["en"]],
     "",
     paste0(
       "Monthly report on the REDCap access requests you are the referent ",
@@ -1193,7 +1794,7 @@ report_message <- function(report, period) {
       "Month: ", month[["en"]], "."
     ),
     "",
-    items[["en"]],
+    items("en"),
     "",
     activated[["en"]],
     "",
@@ -1203,8 +1804,8 @@ report_message <- function(report, period) {
 
   list(
     subject = paste0(
-      verdict[["it"]], ": accessi REDCap, ", month[["it"]], " / ",
-      verdict[["en"]], ": REDCap access, ", month[["en"]]
+      verdict[["subject_it"]], ": accessi REDCap, ", month[["it"]], " / ",
+      verdict[["subject_en"]], ": REDCap access, ", month[["en"]]
     ),
     body = paste(c(it, "", "---", "", en), collapse = "\n"),
     forma = if (count == 0L) "in_ordine" else "da_guardare",
@@ -1215,11 +1816,15 @@ report_message <- function(report, period) {
 
 #' Compose the monthly mail to IT
 #'
-#' One mail, and only when there is something in it: the rows with no
-#' referent to send them to, the people the report cannot judge, the rows the
-#' log does not date. It has the referents' form to review, and its number
-#' counts the rows and people listed. A section with nothing in it is not
-#' announced.
+#' One mail, and only when there is something in it. Five sections, numbered
+#' in this order: the rows with no referent to send them to, the people the
+#' report cannot judge, the rows the log does not date, the servers that were
+#' not read (with the reason, and how many pairs of person and server fell
+#' back on Entra or could not be checked for the year without access), and
+#' the rows stopped on a disabled account (with whether the person has ever
+#' entered the server, when the server was read). It has the referents' form
+#' to review, and its number counts the rows, people and servers listed. A
+#' section with nothing in it is not announced.
 #'
 #' @param it The `it` part of what `report_assemble()` answered.
 #' @inheritParams report_message
@@ -1434,6 +2039,92 @@ report_it_message <- function(it, period) {
     )
   }
 
+  unread <- it[["server_non_letti"]]
+  if (!is.null(unread) && nrow(unread) > 0L) {
+    said <- list(
+      TRASPORTO_CONTRATTO_DISALLINEATO = c(
+        it = "modulo non aggiornato", en = "module not updated"
+      ),
+      TRASPORTO_NON_RAGGIUNGIBILE = c(
+        it = "non raggiungibile", en = "not reachable"
+      ),
+      TRASPORTO_SEGRETO_NON_LEGGIBILE = c(
+        it = "segreto non leggibile", en = "secret not readable"
+      ),
+      TRASPORTO_SEGRETO_RIFIUTATO = c(
+        it = "segreto rifiutato dal server", en = "secret refused by the server"
+      ),
+      TRASPORTO_ISTANZA_SENZA_MODULO = c(
+        it = "assente dall'inventario delle istanze col modulo",
+        en = "not in the inventory of the instances with the module"
+      )
+    )
+    reason <- value(unread, "motivo")
+    why <- lapply(reason, function(code) {
+      said[[code]] %||% c(
+        it = paste("errore", code), en = paste("error", code)
+      )
+    })
+    fallen <- as.integer(unread[["entra"]])
+    unchecked <- as.integer(unread[["non_controllate"]])
+    server <- value(unread, "server")
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(unread),
+      it = c(
+        paste0("Server non letti (", nrow(unread), ")"),
+        paste0(
+          "   - ", server, ": ", vapply(why, `[[`, "", "it"), ". ",
+          "Coppie persona-server ricadute su Entra: ", fallen, "; ",
+          "non controllate per l'anno senza accessi: ", unchecked, "."
+        )
+      ),
+      en = c(
+        paste0("Servers not read (", nrow(unread), ")"),
+        paste0(
+          "   - ", server, ": ", vapply(why, `[[`, "", "en"), ". ",
+          "Person-server pairs that fell back on Entra: ", fallen, "; ",
+          "not checked for the year without access: ", unchecked, "."
+        )
+      )
+    )
+  }
+
+  stopped <- it[["disattivati"]]
+  if (!is.null(stopped) && nrow(stopped) > 0L) {
+    entered <- value(stopped, "entrata")
+    server <- value(stopped, "server")
+    words <- row_words(stopped)
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(stopped),
+      it = c(
+        paste0(
+          "Richieste ferme su un account disattivato (", nrow(stopped), ")"
+        ),
+        paste0(
+          words[["it"]],
+          ifelse(entered == "si", paste0(
+            " La persona e' gia' entrata su ", server, "."
+          ), ifelse(entered == "no", paste0(
+            " La persona non e' mai entrata su ", server, "."
+          ), " Il server non ha risposto."))
+        )
+      ),
+      en = c(
+        paste0(
+          "Requests stopped on a disabled account (", nrow(stopped), ")"
+        ),
+        paste0(
+          words[["en"]],
+          ifelse(entered == "si", paste0(
+            " The person has entered ", server, "."
+          ), ifelse(entered == "no", paste0(
+            " The person has never entered ", server, "."
+          ), " The server did not answer."))
+        )
+      )
+    )
+  }
+
   count <- sum(vapply(sections, `[[`, 0L, "n"))
   numbered <- function(lang) {
     unlist(lapply(seq_along(sections), function(i) {
@@ -1443,7 +2134,7 @@ report_it_message <- function(it, period) {
   }
 
   it_body <- c(
-    paste(count, "DA GUARDARE"),
+    paste0("DA GUARDARE: ", count),
     "",
     paste0(
       "Rapporto mensile per IT: le richieste di accesso a REDCap che il ",
@@ -1454,7 +2145,7 @@ report_it_message <- function(it, period) {
     read[["it"]]
   )
   en_body <- c(
-    paste(count, "TO REVIEW"),
+    paste0("TO REVIEW: ", count),
     "",
     paste0(
       "Monthly report for IT: the REDCap access requests the report to the ",
@@ -1467,12 +2158,91 @@ report_it_message <- function(it, period) {
 
   list(
     subject = paste0(
-      count, " da guardare: rapporto REDCap per IT, ", month[["it"]], " / ",
-      count, " to review: REDCap report for IT, ", month[["en"]]
+      "Da guardare (", count, "): rapporto REDCap per IT, ", month[["it"]],
+      " / To review (", count, "): REDCap report for IT, ", month[["en"]]
     ),
     body = paste(c(it_body, "", "---", "", en_body), collapse = "\n"),
     forma = "da_guardare",
     n = count
+  )
+}
+
+
+#' Compose the report of a month that did not leave on time
+#'
+#' The report of a month lost, sent by the first run that can send. It says
+#' it is late and which month it covers, in the subject and on the first
+#' line, and carries the accesses activated in that month, read from the log
+#' as always. The people to look at depend on the state of today, and would
+#' be the same in every late report: they are only in the report of the
+#' month covered by the run, which this one points to.
+#'
+#' @param attivati The `attivati` of a referent's report for the month lost,
+#'   rows, or an empty data frame for none.
+#' @param period What `report_month()` answered for the run, the month it
+#'   covers being the one this report points to.
+#' @param month The month lost, `"AAAA-MM"`.
+#'
+#' @return A list with `subject`, `body`, `forma` (`in_ritardo`) and `n`
+#'   (zero: nobody is listed to look at).
+#'
+#' @keywords internal
+report_late_message <- function(attivati, period, month) {
+  stopifnot(
+    is.data.frame(attivati), is.list(period),
+    is.character(month), length(month) == 1L
+  )
+
+  late <- report_month_words(month)
+  current <- report_month_words(period[["mese"]])
+  activated <- report_activated_lines(attivati)
+  read <- report_read_words(period)
+
+  it <- c(
+    paste0("IN RITARDO, ", toupper(late[["it"]])),
+    "",
+    paste0(
+      "Rapporto mensile sulle richieste di accesso a REDCap di cui sei ",
+      "referente. Mese: ", late[["it"]], ". Questo rapporto e' partito in ",
+      "ritardo: porta solo gli accessi attivati in quel mese."
+    ),
+    paste0(
+      "Le persone da guardare sono nel rapporto di ", current[["it"]],
+      ", il piu' recente."
+    ),
+    "",
+    activated[["it"]],
+    "",
+    read[["it"]],
+    "Per domande rispondi a questo messaggio: la risposta arriva a IT."
+  )
+  en <- c(
+    paste0("LATE, ", toupper(late[["en"]])),
+    "",
+    paste0(
+      "Monthly report on the REDCap access requests you are the referent ",
+      "of. Month: ", late[["en"]], ". This report left late: it carries ",
+      "only the accesses granted in that month."
+    ),
+    paste0(
+      "The people to review are in the report of ", current[["en"]],
+      ", the latest."
+    ),
+    "",
+    activated[["en"]],
+    "",
+    read[["en"]],
+    "For questions, reply to this message: the reply reaches IT."
+  )
+
+  list(
+    subject = paste0(
+      "In ritardo, ", late[["it"]], ": accessi REDCap / Late, ",
+      late[["en"]], ": REDCap access"
+    ),
+    body = paste(c(it, "", "---", "", en), collapse = "\n"),
+    forma = "in_ritardo",
+    n = 0L
   )
 }
 
@@ -1508,6 +2278,78 @@ report_ledger_path <- function(dir, month, collaudo = FALSE) {
 }
 
 
+#' The people a report named, as the ledger keeps them
+#'
+#' A person and a server, one row each: the same person can be named for one
+#' server and not for another, and a repeated sentence about "reported
+#' before" has to tell them apart.
+#'
+#' @param x A data frame of `upn` and `server`, or `NULL` for none.
+#'
+#' @return A data frame of `upn` and `server`, both character.
+#'
+#' @keywords internal
+report_pairs <- function(x = NULL) {
+  if (is.null(x) || nrow(x) == 0L) {
+    return(data.frame(
+      upn = character(), server = character(), stringsAsFactors = FALSE
+    ))
+  }
+  data.frame(
+    upn = as.character(x[["upn"]]), server = as.character(x[["server"]]),
+    stringsAsFactors = FALSE
+  )
+}
+
+
+#' Read one of the lists of people of a ledger entry
+#'
+#' An entry written by the 0.22.0 holds the people as an array of addresses,
+#' with no server: they read with an empty `server`, "all of the person's
+#' servers". An entry from now on holds an array of `{upn, server}`. A list
+#' that is absent reads as none.
+#'
+#' @param x What `jsonlite::fromJSON(simplifyVector = FALSE)` made of it.
+#'
+#' @return A data frame of `upn` and `server`, or `NULL` when it is neither
+#'   shape: the ledger does not read.
+#'
+#' @keywords internal
+report_ledger_pairs <- function(x) {
+  if (is.null(x)) {
+    return(report_pairs())
+  }
+  if (is.character(x)) {
+    x <- as.list(x)
+  }
+  if (!is.list(x)) {
+    return(NULL)
+  }
+
+  rows <- lapply(x, function(item) {
+    if (is.character(item) && length(item) == 1L) {
+      return(c(upn = item, server = ""))
+    }
+    if (is.list(item) && is.character(item[["upn"]]) &&
+          length(item[["upn"]]) == 1L) {
+      server <- item[["server"]] %||% ""
+      if (is.character(server) && length(server) == 1L) {
+        return(c(upn = item[["upn"]], server = server))
+      }
+    }
+    NULL
+  })
+  if (any(vapply(rows, is.null, logical(1)))) {
+    return(NULL)
+  }
+
+  report_pairs(data.frame(
+    upn = vapply(rows, `[[`, "", "upn"),
+    server = vapply(rows, `[[`, "", "server"), stringsAsFactors = FALSE
+  ))
+}
+
+
 #' Read a month's ledger of sent reports
 #'
 #' The ledger is the trace of an event that otherwise leaves none: for each
@@ -1527,8 +2369,10 @@ report_ledger_path <- function(dir, month, collaudo = FALSE) {
 #' @param collaudo Whether to read a redirected run's ledger.
 #'
 #' @return A list with `ok`, `errors` and `invii`, one list per report sent:
-#'   `destinatario`, `at` and `senza_primo_accesso`; and `collaudo`, so that
-#'   whoever adds to it writes it back where it was read.
+#'   `destinatario`, `at`, and `senza_primo_accesso` and `senza_accessi`, the
+#'   people it named, each a data frame of `upn` and `server`; and
+#'   `collaudo`, so that whoever adds to it writes it back where it was
+#'   read.
 #'
 #' @keywords internal
 report_ledger_read <- function(dir, month, collaudo = FALSE) {
@@ -1565,10 +2409,15 @@ report_ledger_read <- function(dir, month, collaudo = FALSE) {
     list(
       destinatario = scalar_as_character(entry[["destinatario"]]),
       at = scalar_as_character(entry[["at"]]),
-      senza_primo_accesso = as.character(unlist(entry[["senza_primo_accesso"]]))
+      senza_primo_accesso = report_ledger_pairs(entry[["senza_primo_accesso"]]),
+      senza_accessi = report_ledger_pairs(entry[["senza_accessi"]])
     )
   })
-  if (!all(nzchar(vapply(invii, `[[`, "", "destinatario")))) {
+  tables <- unlist(lapply(invii, function(entry) {
+    list(entry[["senza_primo_accesso"]], entry[["senza_accessi"]])
+  }), recursive = FALSE)
+  if (!all(nzchar(vapply(invii, `[[`, "", "destinatario"))) ||
+        !all(vapply(tables, is.data.frame, logical(1)))) {
     return(unreadable)
   }
 
@@ -1733,7 +2582,8 @@ report_due_write <- function(dir, month, due, at) {
 #' @inheritParams report_ledger_read
 #' @param ledger The ledger as read, from `report_ledger_read()`, which also
 #'   says whether it is a redirected run's.
-#' @param entry A list of `destinatario`, `at` and `senza_primo_accesso`.
+#' @param entry A list of `destinatario`, `at`, and `senza_primo_accesso` and
+#'   `senza_accessi`, each a data frame of `upn` and `server`, or absent.
 #'
 #' @return A list with `ok`, `errors` and `ledger`, the ledger with the entry
 #'   when it was written and as it was otherwise.
@@ -1746,10 +2596,11 @@ report_ledger_add <- function(dir, month, ledger, entry) {
   invii <- c(ledger[["invii"]], list(list(
     destinatario = as.character(entry[["destinatario"]]),
     at = as.character(entry[["at"]]),
-    senza_primo_accesso = as.character(entry[["senza_primo_accesso"]])
+    senza_primo_accesso = report_pairs(entry[["senza_primo_accesso"]]),
+    senza_accessi = report_pairs(entry[["senza_accessi"]])
   )))
 
-  # `I()` keeps a list of one address an array, and a list of none `[]`: the
+  # A table is an array of `{upn, server}` objects, and an empty one `[]`: the
   # reader takes both back as they were.
   json <- jsonlite::toJSON(
     list(
@@ -1757,11 +2608,12 @@ report_ledger_add <- function(dir, month, ledger, entry) {
       invii = lapply(invii, function(e) {
         list(
           destinatario = e[["destinatario"]], at = e[["at"]],
-          senza_primo_accesso = I(e[["senza_primo_accesso"]])
+          senza_primo_accesso = e[["senza_primo_accesso"]],
+          senza_accessi = e[["senza_accessi"]]
         )
       })
     ),
-    auto_unbox = TRUE, pretty = TRUE
+    auto_unbox = TRUE, pretty = TRUE, dataframe = "rows"
   )
 
   if (!report_write_json(report_ledger_path(dir, month, collaudo), json)) {
@@ -1775,6 +2627,156 @@ report_ledger_add <- function(dir, month, ledger, entry) {
     ledger = list(
       ok = TRUE, errors = character(), invii = invii, collaudo = collaudo
     )
+  )
+}
+
+
+#' The first month the monthly report covers
+#'
+#' A month before it was never due, and is not recovered whatever the state
+#' directory holds.
+#'
+#' @return A month, `"AAAA-MM"`.
+#'
+#' @keywords internal
+report_first_month <- function() {
+  "2026-10"
+}
+
+
+#' The months whose reports did not all leave, from the first one covered
+#'
+#' A month is lost when its ledger of sent reports lacks any of the reports
+#' its list of the reports due holds, or when no list is on record: a month
+#' the job never read whole. The report to IT (`report_it_key()`) is not
+#' counted, because what it carries is the state of today and the report to
+#' IT of the month the run covers carries it. A ledger or a list that does
+#' not read leaves its month out, as it would send blind, and says why.
+#'
+#' @param dir The job's state directory.
+#' @param month The month the run covers: the months checked are those from
+#'   `report_first_month()`, or from the oldest month the directory holds a
+#'   ledger or a list of, whichever is later, up to it, excluded. A directory
+#'   with none recovers nothing.
+#'
+#' @return A list with `ok`, false when a ledger or a list did not read;
+#'   `errors`, `RAPPORTO_INVII_ILLEGGIBILI` and `RAPPORTO_DOVUTI_ILLEGGIBILI`;
+#'   and `mesi`, the lost months oldest first, each a list of `mese`,
+#'   `dovuti` (as kept, `NULL` when none is) and `ledger` (as
+#'   `report_ledger_read()` answered).
+#'
+#' @keywords internal
+report_lost_months <- function(dir, month) {
+  stopifnot(
+    is.character(dir), length(dir) == 1L, nzchar(dir),
+    is.character(month), length(month) == 1L
+  )
+
+  # Not before the oldest month the directory holds a file of: a directory
+  # lost or made again has nothing to recover, and would otherwise send a
+  # late report for every month since the first. A month missing between two
+  # that have files is still recovered. A redirected run's files do not count.
+  files <- if (dir.exists(dir)) {
+    list.files(dir, pattern = "^[0-9]{4}-[0-9]{2}([.]dovuti)?[.]json$")
+  } else {
+    character()
+  }
+  if (length(files) == 0L) {
+    return(list(ok = TRUE, errors = character(), mesi = list()))
+  }
+
+  candidates <- character()
+  candidate <- max(report_first_month(), min(substr(files, 1L, 7L)))
+  while (candidate < month) {
+    candidates <- c(candidates, candidate)
+    candidate <- report_shift_month(candidate, 1L)
+  }
+
+  lost <- list()
+  errors <- character()
+  for (m in candidates) {
+    due <- report_due_read(dir, m)
+    ledger <- report_ledger_read(dir, m)
+    errors <- c(errors, due[["errors"]], ledger[["errors"]])
+    if (!isTRUE(due[["ok"]]) || !isTRUE(ledger[["ok"]])) {
+      next
+    }
+    sent <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
+    left <- setdiff(due[["dovuti"]], c(sent, report_it_key()))
+    if (is.null(due[["dovuti"]]) || length(left) > 0L) {
+      lost[[length(lost) + 1L]] <- list(
+        mese = m, dovuti = due[["dovuti"]], ledger = ledger
+      )
+    }
+  }
+
+  list(ok = length(errors) == 0L, errors = unique(errors), mesi = lost)
+}
+
+
+#' Send the late reports of one month lost
+#'
+#' Each report that left is written in the ledger of its month, as if it had
+#' left on time, with the date of the run and the two tables empty: what it
+#' named is not what the month after reads back. A ledger that cannot be
+#' written stops the month, as in the month the run covers, and what it did
+#' not try counts as failed.
+#'
+#' @param batch What `provisioning_report()` composed for one lost month:
+#'   `mese`, `ledger`, `pendenti` (who has not received it) and `rapporti`
+#'   (their messages, by name).
+#' @param mailer,copy_to As in `provisioning_report()`; IT is in copy.
+#' @param complete Whether the run read whole and the ledger of the month it
+#'   covers read too. Without it nothing leaves, the reports count as failed,
+#'   and the late ones are tried again on the next run.
+#' @param dir The job's state directory.
+#' @param at When the run read, `"%Y-%m-%d %H:%M"` in Rome.
+#'
+#' @return A list with `rapporti`, a data frame of `mese`, `destinatario`
+#'   and `esito` (`mandato`, `fallito` or `non_mandato`), and `errors`.
+#'
+#' @keywords internal
+report_recover <- function(batch, mailer, complete, copy_to, dir, at) {
+  who <- batch[["pendenti"]]
+  outcome <- rep("non_mandato", length(who))
+  errors <- character()
+  ledger <- batch[["ledger"]]
+
+  if (!is.null(mailer) && !complete) {
+    outcome[] <- "fallito"
+  }
+  if (!is.null(mailer) && complete) {
+    for (k in seq_along(who)) {
+      answer <- report_deliver(
+        mailer, to = who[[k]], cc = copy_to,
+        message = batch[["rapporti"]][[who[[k]]]]
+      )
+      if (!isTRUE(answer[["ok"]])) {
+        outcome[[k]] <- "fallito"
+        errors <- c(errors, answer[["errors"]])
+        next
+      }
+      outcome[[k]] <- "mandato"
+
+      written <- report_ledger_add(
+        dir, batch[["mese"]], ledger,
+        list(destinatario = who[[k]], at = at)
+      )
+      if (!isTRUE(written[["ok"]])) {
+        errors <- c(errors, written[["errors"]])
+        outcome[-seq_len(k)] <- "fallito"
+        break
+      }
+      ledger <- written[["ledger"]]
+    }
+  }
+
+  list(
+    rapporti = data.frame(
+      mese = rep(batch[["mese"]], length(who)), destinatario = who,
+      esito = outcome, stringsAsFactors = FALSE
+    ),
+    errors = errors
   )
 }
 
@@ -1812,6 +2814,54 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 }
 
 
+#' Whom each row belonged to as a month ended
+#'
+#' The owner is read on the row's log cut at midnight in Rome between the
+#' last day of the month and the first of the next: `before` cuts the writes
+#' of `owned_by` only, and without the channel's account a second account
+#' writing a channel field after it would still make the row ambiguous. A
+#' stamp that does not read stays, and the owner is unknown, as on the whole
+#' log. A row whose log was not read keeps its creator.
+#'
+#' @param logs One element per row, in the register's order: the row's log,
+#'   or `NULL` where it was not read.
+#' @param ids The rows' record ids.
+#' @param creators Whom each row was made by, as `log_creators()` names them.
+#' @param month The month covered, `"AAAA-MM"`.
+#' @param channel_account As in `provisioning_report()`.
+#'
+#' @return A character vector, one owner for each row, `""` where none is
+#'   established.
+#'
+#' @keywords internal
+report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
+  stopifnot(
+    is.list(logs), is.character(ids), is.character(creators),
+    length(logs) == length(ids), length(creators) == length(ids),
+    is.character(month), length(month) == 1L
+  )
+
+  month_end <- paste0(report_shift_month(month, 1L), "-01 00:00")
+  owners <- creators
+  for (i in seq_along(logs)) {
+    log <- logs[[i]]
+    if (is.null(log)) {
+      next
+    }
+    stamps <- trimws(as.character(log[["timestamp"]]))
+    upto <- log[
+      !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,
+      drop = FALSE
+    ]
+    owner <- log_owner(
+      upto, ids[[i]], creators[[i]], channel_account, before = month_end
+    )
+    owners[[i]] <- if (is.na(owner)) "" else owner
+  }
+  owners
+}
+
+
 #' Run the monthly report once
 #'
 #' **It reads and sends mail, and nothing else.** It does not write in the
@@ -1819,6 +2869,13 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' token, the creations and each active row's log with the same calls the
 #' round makes, the tenant with the round's sweep. That is what lets it run
 #' outside the channel's path, as a job of its own.
+#'
+#' It also asks the instances, `accounts` only, through `report_server_reads()`:
+#' once the register and the directory have read whole, each server the
+#' register has rows on is asked for the people of those rows, the rows stopped
+#' on a disabled account included. A server that is not read stops nothing
+#' and is not an error: it is counted in `istanze_non_lette`, and the report
+#' goes on without what that server would have said.
 #'
 #' The job runs every day, because an alarm on logs looks back two days at
 #' most and a monthly job cannot be watched by the absence of a record. Every
@@ -1837,12 +2894,18 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' beside the ledger (`report_due_read()`); with none on record it says
 #' nothing is due, and the alarm on absence is the one that speaks.
 #'
-#' On the 1st the run moves on to the month just ended, and a report of the
-#' month before that still not sent is not sent any more: it would describe a
-#' month two behind. It is not dropped in silence either. Every run of the
-#' real month compares the ledger of the month before with what its last whole
-#' reading found due, and while a report is missing the record carries
-#' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+#' On the 1st the run moves on to the month just ended. A month whose reports
+#' did not all leave is not given up: the first run that can send (read whole,
+#' the post on) sends the late reports of those months first, oldest first,
+#' each saying it is late and carrying the accesses activated in its own month
+#' (`report_late_message()`), and then the report of the month covered. The
+#' months checked are those from `report_first_month()` up to the month
+#' covered, excluded (`report_lost_months()`); a month with no list of the
+#' reports due kept takes the referents of today for it, and keeps them. The
+#' report to IT is not recovered, since it carries the state of today. Each
+#' late report that leaves is written in the ledger of its month. While a
+#' month is still missing a report after the round, the record carries
+#' `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, and `in_ritardo` is true.
 #'
 #' **The real ledger is written only by a real run**: the post on, nobody
 #' redirected, the month the clock gives. A run with the post off sends
@@ -1851,7 +2914,9 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #' of October would leave nothing to leave on the 1st of November. So it keeps
 #' a ledger of its own, and is idempotent as the real run is: the timer of a
 #' field test does not send everything again every day. A run with a forced
-#' month writes nothing at all.
+#' month writes nothing at all. Neither of the two recovers a month lost: a
+#' late report that went to the test address would be written in the real
+#' ledger of its month, and its referent would never receive it.
 #'
 #' The report to IT goes to `copy_to`, the address IT is in copy at on every
 #' outcome, under the name `report_it_key()`; the referents' reports go to the
@@ -1892,9 +2957,17 @@ report_deliver <- function(mailer, to, cc, message, redirect_to = NULL) {
 #'   default, every row belongs to its creator, and the channel is whoever
 #'   wrote its fields. The runner reads it from `UBEP_CANALE_UTENTE`, a list
 #'   separated by commas, which it requires.
+#' @param hosts,secrets Named character vectors, server name to host and to
+#'   the secret of its module. A server missing from either, or with an `NA`
+#'   secret, is not read.
 #'
 #' @return A list that `report_record()` turns into the record, plus
-#'   `rapporti`, one row per report due, for whoever reads a single run.
+#'   `rapporti`, one row per report due and per late report, with the `mese`
+#'   it covers, for whoever reads a single run; `server`, what
+#'   `report_server_reads()` answered for each server asked; `recuperati`,
+#'   the late reports tried (a data frame of `mese`, `destinatario` and
+#'   `esito`, `mandato` or `fallito`); and `mesi_persi`, the months still
+#'   missing a report after the round.
 #'
 #' @keywords internal
 provisioning_report <- function(register_url,
@@ -1907,13 +2980,16 @@ provisioning_report <- function(register_url,
                                 mailer = NULL,
                                 redirect_to = NULL,
                                 copy_to = NULL,
-                                channel_account = NULL) {
+                                channel_account = NULL,
+                                hosts = character(),
+                                secrets = character()) {
   stopifnot(
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
     is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
     is.null(mailer) || is.function(mailer),
-    channel_account_valid(channel_account)
+    channel_account_valid(channel_account),
+    is.character(hosts), is.character(secrets)
   )
 
   period <- report_month(now, month)
@@ -1925,21 +3001,17 @@ provisioning_report <- function(register_url,
   previous <- report_ledger_previous(ledger_dir, period[["mese"]])
   errors <- c(errors, ledger[["errors"]], previous[["errors"]])
 
-  # The month before is over for good: what it left unsent is said, and not
-  # sent. Its ledger, when it does not read, is already named above.
-  if (!test_run && !isTRUE(period[["forzato"]])) {
-    before <- report_shift_month(period[["mese"]], -1L)
-    before_due <- report_due_read(ledger_dir, before)
-    before_ledger <- report_ledger_read(ledger_dir, before)
-    errors <- c(errors, before_due[["errors"]])
-    left <- setdiff(
-      before_due[["dovuti"]] %||% character(),
-      vapply(before_ledger[["invii"]], `[[`, "", "destinatario")
-    )
-    if (isTRUE(before_ledger[["ok"]]) && length(left) > 0L) {
-      errors <- c(errors, "RAPPORTO_MESE_PRECEDENTE_INCOMPLETO")
-    }
+  # The months lost: a real run is the only one that recovers them, and the
+  # ones still lost after its round are said in the record. A forced or a
+  # redirected run would write a report that went elsewhere into the real
+  # ledger of a month, and the referent would never receive it.
+  recover <- !test_run && !isTRUE(period[["forzato"]])
+  lost <- if (recover) {
+    report_lost_months(ledger_dir, period[["mese"]])
+  } else {
+    list(ok = TRUE, errors = character(), mesi = list())
   }
+  errors <- c(errors, lost[["errors"]])
 
   # The register and its creations, asked as the round asks them: the
   # creations in one call and with no window, since a record is created once.
@@ -1966,7 +3038,10 @@ provisioning_report <- function(register_url,
   }
 
   assembled <- list(referenti = list(), it = NULL, senza_creatore = 0L)
+  batches <- list()
   logs_read <- TRUE
+  servers <- list()
+  unread_servers <- 0L
 
   if (register_read && directory_read) {
     register <- reading[["records"]]
@@ -1985,10 +3060,7 @@ provisioning_report <- function(register_url,
     # looking at again.
     executions <- rep(list(NULL), nrow(register))
     since <- rep(list(NULL), nrow(register))
-    # The owner as the month covered ended, and not today's. The rows whose
-    # log is not read keep their creator: none of them enters the report.
-    owners <- creators
-    month_end <- paste0(report_shift_month(period[["mese"]], 1L), "-01 00:00")
+    logs <- rep(list(NULL), nrow(register))
     active <- field("request_status") == "active" &
       field("outcome") == "applied"
     for (i in which(active)) {
@@ -2000,34 +3072,80 @@ provisioning_report <- function(register_url,
         since[i] <- list(
           report_person_since(answer[["log"]], ids[[i]], channel_account)
         )
-        # The owner is read on the log as it stood when the month ended:
-        # `before` cuts the writes of `owned_by` only, and without the
-        # channel's account a second account writing a channel field after
-        # it would still make the row ambiguous. A stamp that does not read
-        # stays, and the owner is unknown, as on the whole log.
-        stamps <- trimws(as.character(answer[["log"]][["timestamp"]]))
-        upto <- answer[["log"]][
-          !log_stamp_reads(stamps) | substr(stamps, 1L, 16L) < month_end, ,
-          drop = FALSE
-        ]
-        owner <- log_owner(
-          upto, ids[[i]], creators[[i]], channel_account, before = month_end
-        )
-        owners[[i]] <- if (is.na(owner)) "" else owner
+        logs[i] <- list(answer[["log"]])
       } else {
         logs_read <- FALSE
         errors <- c(errors, answer[["errors"]])
       }
     }
 
+    # The servers are asked after the register and the directory have read
+    # whole, for the people of the rows it has on each. A server that is not
+    # read is not an error and is not a reading that failed: it is counted,
+    # and the pairs of that server fall back on what the directory says.
+    servers <- report_server_reads(
+      report_server_asks(register), hosts, secrets
+    )
+    unread_servers <- sum(!vapply(servers, `[[`, NA, "letto"))
+
+    # The owner as the month covered ended, and not today's. The rows whose
+    # log is not read keep their creator: none of them enters the report.
+    channel_known <- !is.null(channel_account)
     rows <- report_rows(
-      register, owners, executions, period, since, born,
-      channel_known = !is.null(channel_account)
+      register,
+      report_owners(logs, ids, creators, period[["mese"]], channel_account),
+      executions, period, since, born, channel_known = channel_known
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
-      previous[["illeggibili"]]
+      previous[["illeggibili"]], servers = servers,
+      stopped = report_stopped_rows(register)
     )
+
+    # The reports of the months lost, from the same readings and the owners
+    # as each of those months ended. What a late report carries is the month's
+    # activations: the rest is today's state, and the report of the month
+    # covered carries it.
+    for (item in if (logs_read) lost[["mesi"]] else list()) {
+      lost_period <- period
+      lost_period[["mese"]] <- item[["mese"]]
+      lost_period[["prossimo"]] <- as.Date(
+        paste0(report_shift_month(item[["mese"]], 2L), "-01")
+      )
+      lost_assembled <- report_assemble(
+        report_rows(
+          register,
+          report_owners(logs, ids, creators, item[["mese"]], channel_account),
+          executions, lost_period, since, born, channel_known = channel_known
+        ),
+        sweep[["users"]], lost_period
+      )
+
+      # Who is due: the list kept when the month was read whole, otherwise the
+      # referents of today for that month, which are kept from now on.
+      due_then <- item[["dovuti"]]
+      if (is.null(due_then)) {
+        due_then <- names(lost_assembled[["referenti"]]) %||% character()
+        kept <- report_due_write(
+          ledger_dir, item[["mese"]], due_then, period[["letto"]]
+        )
+        errors <- c(errors, kept[["errors"]])
+      }
+      due_then <- setdiff(due_then, report_it_key())
+      owed <- setdiff(
+        due_then, vapply(item[["ledger"]][["invii"]], `[[`, "", "destinatario")
+      )
+      batches[[length(batches) + 1L]] <- list(
+        mese = item[["mese"]], ledger = item[["ledger"]], pendenti = owed,
+        rapporti = stats::setNames(lapply(owed, function(who) {
+          report_late_message(
+            lost_assembled[["referenti"]][[who]][["attivati"]] %||%
+              data.frame(),
+            period, item[["mese"]]
+          )
+        }), owed)
+      )
+    }
   }
 
   reports <- lapply(assembled[["referenti"]], report_message, period = period)
@@ -2060,6 +3178,33 @@ provisioning_report <- function(register_url,
   complete <- read_whole && isTRUE(ledger[["ok"]])
   keeps_ledger <- !is.null(mailer) && !isTRUE(period[["forzato"]])
 
+  # The months lost go first, oldest first, and a failure there does not stop
+  # the month covered. What is still missing afterwards is said in the record.
+  recovered <- data.frame(
+    mese = character(), destinatario = character(), esito = character(),
+    stringsAsFactors = FALSE
+  )
+  late_table <- recovered
+  for (batch in batches) {
+    answer <- report_recover(
+      batch, mailer, complete, copy_to, ledger_dir, period[["letto"]]
+    )
+    errors <- c(errors, answer[["errors"]])
+    late_table <- rbind(late_table, answer[["rapporti"]])
+  }
+  recovered <- late_table[late_table[["esito"]] != "non_mandato", ,
+                          drop = FALSE]
+  rownames(recovered) <- NULL
+  still_lost <- vapply(lost[["mesi"]], function(item) {
+    m <- item[["mese"]]
+    !(m %in% vapply(batches, `[[`, "", "mese")) ||
+      any(late_table[["esito"]][late_table[["mese"]] == m] != "mandato")
+  }, NA)
+  lost_months <- vapply(lost[["mesi"]], `[[`, "", "mese")[still_lost]
+  if (length(lost_months) > 0L) {
+    errors <- c(errors, "RAPPORTO_MESE_PRECEDENTE_INCOMPLETO")
+  }
+
   sent <- character()
   failed <- character()
 
@@ -2086,19 +3231,41 @@ provisioning_report <- function(register_url,
       sent <- c(sent, who)
 
       if (keeps_ledger) {
-        named <- if (for_it) {
-          character()
+        # The pairs the report named, person and server: the next months read
+        # them back to say "also reported on".
+        people <- if (for_it) {
+          list()
         } else {
-          vapply(
-            assembled[["referenti"]][[who]][["senza_primo_accesso"]],
-            `[[`, "", "upn"
-          )
+          assembled[["referenti"]][[who]][["senza_primo_accesso"]]
         }
+        named <- data.frame(
+          upn = vapply(people, `[[`, "", "upn"),
+          server = vapply(people, `[[`, "", "server"),
+          stringsAsFactors = FALSE
+        )
+        # The year without access: the pairs listed in full and those that
+        # were named before and are still there, which the next month needs
+        # to go on counting them.
+        idle <- if (for_it) {
+          list()
+        } else {
+          assembled[["referenti"]][[who]][["senza_accessi"]]
+        }
+        idle_named <- rbind(
+          report_pairs(data.frame(
+            upn = vapply(idle, `[[`, "", "upn"),
+            server = vapply(idle, `[[`, "", "server"),
+            stringsAsFactors = FALSE
+          )),
+          report_pairs(
+            assembled[["referenti"]][[who]][["senza_accessi_gia_coppie"]]
+          )
+        )
         written <- report_ledger_add(
           ledger_dir, period[["mese"]], ledger,
           list(
             destinatario = who, at = period[["letto"]],
-            senza_primo_accesso = named
+            senza_primo_accesso = named, senza_accessi = idle_named
           )
         )
         # A ledger that cannot be written would make every later report of
@@ -2132,6 +3299,8 @@ provisioning_report <- function(register_url,
     registro_letto = register_read,
     directory_letta = directory_read,
     letture_complete = complete,
+    server = servers,
+    istanze_non_lette = as.integer(unread_servers),
     posta_dirottata = !is.null(redirect_to),
     dovuti = due,
     gia = already,
@@ -2146,17 +3315,34 @@ provisioning_report <- function(register_url,
       assembled[["referenti"]],
       function(r) length(r[["senza_primo_accesso"]]), 0L
     )),
+    voci_senza_accessi = sum(vapply(
+      assembled[["referenti"]],
+      function(r) length(r[["senza_accessi"]]), 0L
+    )),
     senza_creatore = as.integer(assembled[["senza_creatore"]]),
-    rapporti = data.frame(
-      destinatario = due,
-      forma = form_of,
-      voci = count_of,
-      esito = ifelse(
-        due %in% sent, "mandato",
-        ifelse(due %in% already, "gia_mandato",
-               ifelse(due %in% failed, "fallito", "non_mandato"))
+    recuperati = recovered,
+    mesi_persi = lost_months,
+    rapporti = rbind(
+      data.frame(
+        mese = late_table[["mese"]],
+        destinatario = late_table[["destinatario"]],
+        forma = rep("in_ritardo", nrow(late_table)),
+        voci = rep(0L, nrow(late_table)),
+        esito = late_table[["esito"]],
+        stringsAsFactors = FALSE
       ),
-      stringsAsFactors = FALSE
+      data.frame(
+        mese = rep(period[["mese"]], length(due)),
+        destinatario = due,
+        forma = form_of,
+        voci = count_of,
+        esito = ifelse(
+          due %in% sent, "mandato",
+          ifelse(due %in% already, "gia_mandato",
+                 ifelse(due %in% failed, "fallito", "non_mandato"))
+        ),
+        stringsAsFactors = FALSE
+      )
     ),
     errori = unique(errors)
   )
@@ -2165,20 +3351,22 @@ provisioning_report <- function(register_url,
 
 #' Whether the month's reports are late
 #'
-#' From the second day of the month on, with the month not complete. Computed
-#' here and not in the query of the alarm, so that a test covers it. A forced
-#' run speaks about another month and cannot say the real one is late: it
-#' says false, and the next run of the timer says the truth.
+#' From the second day of the month on, with the month not complete, or while
+#' a month lost still misses a report. Computed here and not in the query of
+#' the alarm, so that a test covers it. A forced run speaks about another
+#' month and cannot say the real one is late: it says false, and the next run
+#' of the timer says the truth.
 #'
 #' @param giorno The day of the month the run is in, in Rome.
 #' @param completo Whether every report of the month has left.
 #' @param forzato Whether the month was forced.
+#' @param persi How many months lost still miss a report.
 #'
 #' @return One logical.
 #'
 #' @keywords internal
-report_late <- function(giorno, completo, forzato) {
-  !isTRUE(forzato) && giorno >= 2L && !isTRUE(completo)
+report_late <- function(giorno, completo, forzato, persi = 0L) {
+  !isTRUE(forzato) && ((giorno >= 2L && !isTRUE(completo)) || persi > 0L)
 }
 
 
@@ -2193,14 +3381,21 @@ report_late <- function(giorno, completo, forzato) {
 #' `referenti` counts the reports of the month, the one to IT included: those
 #' due, as today's reading or the last whole one found them, and those the
 #' ledger says left on earlier days. `mese_completo` is the design's
-#' `gia_mandati + mandati == referenti`, on those. A day that cannot read
+#' `gia_mandati + mandati == referenti`, on those, and `mandati` there are the
+#' reports of the month covered only: the late reports of the months lost
+#' count in `mandati` and `falliti` of the record, and not in the completeness
+#' of the month, which a recovery of two of three would otherwise make look
+#' whole. A day that cannot read
 #' judges the month on the last whole reading, so a reading that fails after
 #' the month was sent does not make it late; with no whole reading on record
 #' nothing is due, and the month is not called late on a guess.
-#' `in_ritardo` is `report_late()`.
+#' `in_ritardo` is `report_late()`: from day 2 with the month not complete,
+#' or while a month lost still misses a report (`mesi_persi`).
 #'
-#' Phase 1 asks no instance and does not measure the year without access, so
-#' `istanze_non_lette` and `voci_senza_accessi` are zero.
+#' `istanze_non_lette` counts the servers the report asked and could not read.
+#' `voci_senza_accessi` counts the pairs of person and server listed in full
+#' for the year without access: those already named in an earlier report and
+#' those on a server not read are not in it.
 #'
 #' Names and codes only, and never a person: the record is shipped to a
 #' workspace and kept.
@@ -2222,6 +3417,7 @@ report_record <- function(esito, posta) {
   already <- as.character(esito[["gia"]] %||% character())
   sent <- as.character(esito[["mandati"]] %||% character())
   forms <- as.character(esito[["forme"]] %||% character())
+  recovered <- as.character(esito[["recuperati"]][["esito"]])
 
   referenti <- length(union(due, already))
   completo <- length(already) + length(sent) == referenti
@@ -2232,23 +3428,24 @@ report_record <- function(esito, posta) {
     giorno_di_invio = length(esito[["pendenti"]]) > 0L,
     registro_letto = isTRUE(esito[["registro_letto"]]),
     directory_letta = isTRUE(esito[["directory_letta"]]),
-    istanze_non_lette = 0L,
+    istanze_non_lette = as.integer(esito[["istanze_non_lette"]] %||% 0L),
     posta = isTRUE(posta),
     posta_dirottata = isTRUE(esito[["posta_dirottata"]]),
     referenti = referenti,
-    mandati = length(sent),
+    mandati = length(sent) + sum(recovered == "mandato"),
     gia_mandati = length(already),
-    falliti = length(esito[["falliti"]]),
+    falliti = length(esito[["falliti"]]) + sum(recovered == "fallito"),
     in_ordine = sum(forms == "in_ordine"),
     da_guardare = sum(forms == "da_guardare"),
     voci_attivati = as.integer(esito[["voci_attivati"]] %||% 0L),
     voci_senza_primo_accesso =
       as.integer(esito[["voci_senza_primo_accesso"]] %||% 0L),
-    voci_senza_accessi = 0L,
+    voci_senza_accessi = as.integer(esito[["voci_senza_accessi"]] %||% 0L),
     senza_creatore = as.integer(esito[["senza_creatore"]] %||% 0L),
     mese_completo = completo,
     in_ritardo = report_late(
-      esito[["giorno"]], completo, esito[["forzato"]]
+      esito[["giorno"]], completo, esito[["forzato"]],
+      persi = length(esito[["mesi_persi"]])
     ),
     errori = as.character(esito[["errori"]] %||% character())
   )

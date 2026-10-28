@@ -28,7 +28,8 @@ A list with \code{ok}, \code{errors}, \code{payload}, \code{upn}, and \code{cred
 one the account was born with, present only on success. It leaves by the
 return value and by no other road: not the register, not the telemetry
 record, not standard output. \code{unconfirmed} is \code{TRUE} on a failure that
-does not say whether the account was born, see \code{creation_failure()}.
+does not say whether the account was born -- no answer, an answer that is
+not Graph's, or a 5xx of Graph's -- see \code{creation_failure()}.
 \code{created_at}, on success only, is when the account was born, which the
 messages count the first sign-in from (\code{mail_first_signin_deadline()}):
 Graph's \code{createdDateTime} when the answer carries it in a form the

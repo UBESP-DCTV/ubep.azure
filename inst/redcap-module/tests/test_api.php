@@ -24,6 +24,7 @@ require_once __DIR__ . '/../lib/FieldNames.php';
 require_once __DIR__ . '/../lib/TestedSurfaces.php';
 require_once __DIR__ . '/../lib/Planner.php';
 require_once __DIR__ . '/../lib/Applier.php';
+require_once __DIR__ . '/../lib/AccountReader.php';
 
 $ubepApiTokens = token_get_all(file_get_contents(__DIR__ . '/../api.php'));
 
@@ -104,4 +105,58 @@ ubep_assert_same(
     [],
     $ubepUnresolved,
     'every class api.php names unqualified resolves once the module is loaded'
+);
+
+// --- the accounts operation ------------------------------------------------
+// api.php cannot be run here, so what is pinned is its text: the contract, and
+// where the branch sits relative to the code it must come before.
+$ubepApiText = file_get_contents(__DIR__ . '/../api.php');
+ubep_assert_true(
+    preg_match('/const UBEP_CONTRACT_VERSION = 4;/', $ubepApiText) === 1,
+    'il contratto e\' il 4'
+);
+$ramo = strpos($ubepApiText, "\$operation === 'accounts'");
+$validazione = strpos($ubepApiText, "foreach ((\$body['requests']");
+$cinqueZeroUno = strpos($ubepApiText, 'http_response_code(501)');
+ubep_assert_true($ramo !== false, 'api.php smista l\'operazione accounts');
+ubep_assert_true($validazione !== false, 'api.php valida requests');
+ubep_assert_true($cinqueZeroUno !== false, 'api.php risponde 501 alle operazioni sconosciute');
+ubep_assert_true(
+    $ramo !== false && $validazione !== false && $ramo < $validazione,
+    'accounts e\' smistato prima della validazione di requests'
+);
+ubep_assert_true(
+    $ramo !== false && $cinqueZeroUno !== false && $ramo < $cinqueZeroUno,
+    'accounts e\' smistato prima del 501'
+);
+$ramoTesto = $ramo === false
+    ? ''
+    : substr($ubepApiText, $ramo, (int) strpos($ubepApiText, '$requests = [];', $ramo) - $ramo);
+ubep_assert_true(
+    strpos($ramoTesto, 'AccountReader::usernamesFrom(') !== false,
+    'la lista dei nomi e\' validata da AccountReader::usernamesFrom()'
+);
+ubep_assert_true(
+    strpos($ramoTesto, "\$response['dry_run'] = true;") !== false,
+    'il ramo accounts risponde sempre dry_run true'
+);
+
+// --- the refusal ------------------------------------------------------------
+// The authorisation is one decision with one refusal. Two checks answering in
+// two ways tell an address outside the allow list whether a secret is right.
+ubep_assert_true(
+    strpos($ubepApiText, 'Auth::authorise(') !== false,
+    'api.php decides the authorisation in one call to Auth::authorise()'
+);
+ubep_assert_same(
+    false,
+    strpos($ubepApiText, 'Auth::checkSecret(') !== false
+        || strpos($ubepApiText, 'Auth::checkIp(') !== false,
+    'api.php does not run the two checks apart, with a refusal each'
+);
+ubep_assert_same(
+    false,
+    strpos($ubepApiText, 'secret rejected') !== false
+        || strpos($ubepApiText, 'address not allowed') !== false,
+    'api.php has no refusal that says which check failed'
 );

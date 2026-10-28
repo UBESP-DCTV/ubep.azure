@@ -1,3 +1,217 @@
+# ubep.azure 0.23.0
+
+Phase 2 of the monthly report to the referents. It closes the two limits
+phase 1 declared: the first sign-in was read from Entra, which says "has
+signed in with the UBEP account" and not "has signed in on that server", and
+the third item, people with no access in more than a year, was not checked.
+Both are now read from the server itself.
+
+* **A new operation of the module, `accounts`, and contract 4.** It answers
+  with the local account of each name asked: whether it exists, and the five
+  dates `user_creation`, `user_firstvisit`, `user_lastlogin`,
+  `user_firstactivity` and `user_lastactivity`, raw, with no verdict. It
+  **only reads**, and only the names it is asked about: an empty list gives
+  no rows, never the people of the server. Every name asked has an entry,
+  absent ones too, so that "not in the answer" never has to mean "never
+  signed in". Names are compared without capitals and without spaces at the
+  ends, since the register may carry `Carla.Inventata@...` where REDCap holds
+  it in lower case. The times are written in the clock of the PHP that wrote
+  them (Rome's clock or UTC, depending on the instance), so the module
+  converts them to UTC and answers in ISO 8601 with `Z`; an empty time and
+  MySQL's zero date are `null`, and a time that cannot be read makes the
+  whole read a failure. **A failed read is an error, never an empty list**:
+  it answers 500 with `INTERNO`, because an empty list would read as "nobody
+  has signed in". A call takes at most 500 names; above that the module
+  answers 400 with `INTERNO` and the client splits. The surface fingerprint
+  does not move, so the conformance is not to be redone.
+
+* **The client accepts contract 4, and `module_accounts()` only contract 4.**
+  `module_call()` accepts `1`, `2`, `3` and `4` on a read and `2`, `3` and `4`
+  on a write, so a channel with modules at 3 and at 4 mixed keeps applying.
+  This is the first thing that goes up in production, and it has to go before
+  the modules: a module at 4 answers 4 to the state and to the writes too,
+  and a 0.22.0 client would refuse them all. `module_accounts()` accepts only
+  4: a module still at 3 answers 501 with `contract_version` 3, and the
+  answer is `TRASPORTO_CONTRATTO_DISALLINEATO` ("module not updated") and not
+  the `INTERNO` the old lists would have given. It splits the names in pieces
+  of 500, drops the doubles, and asks nothing for an empty list. The guard of
+  the report allows it as the only door to the instances: `module_call()`,
+  `module_state()`, `module_apply()` and `module_revoke()` stay out of reach
+  of `provisioning_report()`, and a test follows every function it reaches.
+
+* **The item "no first sign-in" is read per server, with Entra as a
+  fallback.** One line per person and server, and not per person: a person
+  asked for on two servers can have entered one and not the other. A pair
+  enters when the row is active, applied, not expired, activated 30 days ago
+  or more (the rules of phase 1), and the server says the person has never
+  entered: no row, or no `user_firstvisit`. On a server that was read the
+  server decides and Entra no longer counts: the server's signal says exactly
+  "on that server", and a key reset by IT does not hide the person. On a
+  server that was not read (off, module at 3, secret unreadable, error) the
+  pair falls back on the rule of phase 1, and the line says so (`letto da
+  Entra: il server non ha risposto`). An answer that leaves out a name asked,
+  or has no usable `accounts`, is a server not read, never an absent person.
+  **The line gives a date when the key is still the one of the creation**
+  (the two dates of Entra coincide within 60 seconds): the person must sign
+  in by the last day the key is valid, from `mail_first_signin_deadline()`,
+  after which the account is deactivated. The key is valid at least 60 days
+  from the creation or from the last reset by IT. When the dates differ the
+  line says only that on that server the person has never entered, with no
+  date and without saying whether they use the UBEP account: they differ for
+  a person who has entered, for a key reset by IT, and for a key replaced
+  when its time ran out, and Entra does not tell the three apart. A date
+  already past is not written as a deadline: the line says that the date for
+  the first sign-in has passed, that the key handed over may no longer be
+  valid, and that a new one comes by replying to the mail of the key. The
+  item still repeats every month until the person enters, with `segnalata
+  anche il`, and keeps the "since N months".
+
+* **A new item, "no access in more than a year", read from the server.** One
+  line per person and server. A pair enters when the row is active, applied,
+  not expired, activated more than 365 days ago, the server was read, the
+  person is there with a `user_firstvisit`, and the most recent of
+  `user_lastlogin` and `user_lastactivity` is more than 365 days old, in the
+  calendar of Rome. With both missing the last access is `user_firstvisit`. A
+  person who has never entered is not here: that is the other item. The pairs
+  are spelled out the month they pass the threshold; the months after, a line
+  counts those already reported and still without access. A server not read
+  leaves its pairs "not checked", the line says so, and IT hears of it: an
+  all-clear that covered an item nobody measured would say something false.
+  Since the report starts in October 2026, no line can appear before October
+  2027. The item has a subtitle and a "what to do", like the first.
+
+* **A new item, "expiring this month", for information.** The active applied
+  rows whose `expiration` falls after the day of the reading and by the last
+  day of the month the report is sent in (Rome's calendar), one line each:
+  person, server, project, date. Read from the register, with no module. It
+  does not count in the number of the subject.
+
+* **The subject and the first line say how many.** `Tutto in ordine: accessi
+  REDCap, <month> / All clear: REDCap access, <month>` or `Da guardare (N):
+  accessi REDCap, <month> / To review (N): ...`, and the first line of the
+  body `TUTTO IN ORDINE`, `DA GUARDARE: N`, `ALL CLEAR` or `TO REVIEW: N`.
+  The number goes in brackets in the subject so that the first word tells the
+  two forms apart in the list of the mail, and after the colon in the body so
+  that it is not read as the first point of the list that follows. N counts
+  the distinct people spelled out in the first two items. The order of the
+  items is: no first sign-in, no access in a year, expiring, then the
+  accesses granted. In the all-clear form the first two say "none", and the
+  other two show up when there is something. The mail to IT has the same
+  subject and first line (`Da guardare (N): rapporto REDCap per IT`).
+
+* **A server not read does not stop anything, and goes to IT.** It is not in
+  `errori`, does not touch `letture_complete`, and the report leaves anyway.
+  The reads of the register, the logs, the directory and the ledger of the
+  sends stay blocking, as they were. The mail to IT lists every server asked
+  and not read, even when all that was asked of it was a stopped row, with
+  the reason in words (module not updated, not reachable, secret unreadable
+  or refused, error), how many pairs fell back on Entra and how many were
+  left not checked. Without this a switched-off bench with rows on it, or the
+  first step of the installation, would make every daily run fail. The runner
+  reads the inventory of the instances with the module and their secrets as
+  the round's does: an unreadable secret is a server not read and the others
+  are served anyway, and it stops if the inventory lists no instance with the
+  module, which is a configuration to fix.
+
+* **The mail to IT lists the rows stopped on a deactivated account, which
+  closes the commitment of 0.22.0, "Until 0.23.0 the monthly report leaves
+  out the rows stopped on a deactivated account".** The report looks for the
+  active rows whose outcome is `transport_error` with
+  `TRASPORTO_ACCOUNT_DISATTIVATO` in the detail, wherever it stands among
+  several codes. Since 0.22.0 every active row on a deactivated account ends
+  here, so the section is also that of the accounts deactivated because a
+  first sign-in never came. Each row says whether the person has ever entered
+  that server, when the server was read. It is one section and not a count
+  of "deactivated for no first sign-in" on its own: telling them apart needs
+  `forceChangePasswordNextSignIn`, whose least privileged permission is one
+  of write, and the two dates of Entra are not enough, since the replacement
+  of the key comes before the deactivation. Why an account was deactivated is
+  known to IT, who does it.
+
+* **A month the report missed is sent late.** Until 0.22.0 a month that did
+  not leave in full stayed `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` for good.
+  Now the first run that manages to send goes through the months lost, oldest
+  first, then does the current one. Only true runs recover: a forced month or
+  a redirected run would write, in the real ledger of a lost month, a report
+  sent to the test address, and the referent would never get it. Nor does it
+  go before October 2026, the first month the report covers, nor before the
+  oldest month with a file in the state directory: a state directory lost or
+  made again would otherwise send a burst of late reports to every referent.
+  A recovered report is `In ritardo, <month>: accessi REDCap / Late, <month>:
+  REDCap access`, first line `IN RITARDO, <MONTH>`, and carries only the
+  accesses granted in that month, read from the log as always: the other
+  items depend on today's state and would be the same in every mail, so they
+  are only in the report of the current month, to which it points. The
+  recipients are those due saved for that month, or else those computed today
+  for it; it goes only to those not already in that month's ledger, and is
+  written there with the real date, as if it had left in time. A ledger or a
+  set of due that cannot be read excludes that month and raises
+  `RAPPORTO_INVII_ILLEGGIBILI` or `RAPPORTO_DOVUTI_ILLEGGIBILI`. A month
+  still lost after the run is `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`.
+
+* **The ledger of the sends remembers the person and the server.** For each
+  report it keeps the pairs named in each of the two items, not the persons:
+  `segnalata anche il` is per pair, and the count of those already reported
+  in the second item needs it. The ledgers already written, with the persons
+  alone, stay valid for **all** the servers of the person: the cost is a
+  `segnalata anche il` that is true of the person and perhaps not of that
+  server, never a loss. Of the second item it keeps the pairs spelled out
+  and those already reported, not those not checked, which were not told. A
+  list of persons of a shape the reader does not know makes the month's ledger
+  unreadable, `RAPPORTO_INVII_ILLEGGIBILI`, and does not read as empty: a
+  ledger read wrong would send doubles or lose `segnalata anche il`. That
+  code can now come from the ledger of a month before the covered one too,
+  read to recover it, and the send of the month is blocked just the same.
+
+* **The record keeps its columns and changes some values.** No new column,
+  since one would need the collection rule updated before the installation.
+  `istanze_non_lette` counts the servers asked and not read, and
+  `voci_senza_accessi` the pairs of the second item spelled out, both fixed
+  at 0 until now. `mese_completo` is computed on the **current month only**:
+  the reports recovered count in `mandati` and `falliti`, but a run that
+  recovers two months and sends one of the three due of the month would
+  otherwise look whole. `in_ritardo` is true when the current month is not
+  complete from day 2, or while a lost month is still missing a report.
+  `giorno_di_invio` stays "today the report of the current month is due": a
+  run of recoveries alone has `mandati` above zero and `giorno_di_invio`
+  false.
+
+* **A 5xx of Graph with a JSON body is an uncertain creation.**
+  `directory_create_user()` treated it as a refusal, `unconfirmed = FALSE`,
+  and the next round could have created the account again. After a 5xx
+  nobody knows whether the account was born: it is now
+  `TRASPORTO_CREAZIONE_RISPOSTA_INATTESA` with `unconfirmed = TRUE`, as a 5xx
+  without JSON already was, and the next round looks for it before creating
+  it. A 429 and the other 4xx are as they were.
+
+* **The module refuses in the same way a right secret and a wrong one from an
+  address that is not allowed.** Until now the module checked the secret
+  before the address and answered the two refusals with two messages (`secret
+  rejected`, `address not allowed`), so from any address one could tell
+  whether a secret tried was right. Now both checks are made and the answer is
+  one: 403, `TRASPORTO_SEGRETO_RIFIUTATO`, message `not authorised`, whichever
+  check failed. A caller that reads the message to tell the two cases apart
+  has to stop; the code and the status are as they were, so the client does
+  not change. The comparison of the secret is still `hash_equals`.
+
+* **Shape of the release.** No dictionary to import, and the round and the
+  observer are called as before. The order is what costs most to get wrong:
+  first the package, then the module, then the rest. The package goes on the
+  machine first, together with the job of the report in `/opt`: the new job
+  reads the inventory and the secrets, and the old one with the new package
+  would pass an empty list of servers, so that every server would be reported
+  to IT as missing from the inventory. With the modules still at 3 the channel
+  and the observer work as before, and the report sees every server as "module
+  not updated" without failing, so a report sent in between already has the
+  new form, with the pairs of the first item read from Entra and said so, the
+  second item not checked, and the list of the servers for IT. Then the module
+  of this version on the instances that are on, from the Control Center with
+  *Change Version*, one first, checking that the shared secret stays, then the
+  others. The benches that are off stay at 3. Last, a run by hand with a
+  forced month and the post redirected, to read the record and the mails. A
+  module at 4 before the package would have every answer refused by the 0.22.0
+  client, and the channel would stop applying.
+
 # ubep.azure 0.22.0
 
 * **The welcome and the message with the key give the date of the first

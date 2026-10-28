@@ -14,6 +14,39 @@ require_once __DIR__ . '/Allowlist.php';
  */
 class Auth
 {
+    /**
+     * The one refusal. Whoever fails either check, or both, gets exactly this:
+     * a refusal that says which check failed is an oracle, and from any
+     * address outside the allow list it would tell whether a secret is right.
+     *
+     * @return array{status:int,code:string,message:string}
+     */
+    public static function refusal(): array
+    {
+        return [
+            'status' => 403,
+            'code' => 'TRASPORTO_SEGRETO_RIFIUTATO',
+            'message' => 'not authorised',
+        ];
+    }
+
+    /**
+     * Both checks, as one decision. They are both evaluated, with no
+     * short-circuit, and the caller learns only the conjunction: the order of
+     * the two must not show in the answer.
+     */
+    public static function authorise(
+        ?string $providedSecret,
+        ?string $expectedSecret,
+        ?string $remote,
+        string $allowList
+    ): bool {
+        $secretOk = self::checkSecret($providedSecret, $expectedSecret);
+        $ipOk = self::checkIp($remote, $allowList);
+
+        return $secretOk && $ipOk;
+    }
+
     public static function checkSecret(
         ?string $provided,
         ?string $expected

@@ -502,3 +502,264 @@ test_that("a read against a contract 3 module answers", {
   expect_true(result[["ok"]])
   expect_equal(result[["gate"]], "collaudata")
 })
+
+
+test_that("a read against a contract 4 module answers", {
+  # eval
+  body <- '{"contract_version": 4, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": true, "results": [], "summary": {"letti": 0}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_state("redcap.example.org", "s3cret")
+  )
+
+  # test
+  expect_true(result[["ok"]])
+  expect_equal(result[["gate"]], "collaudata")
+})
+
+
+test_that("a write against a contract 4 module is accepted", {
+  # eval
+  # Contract 4 keeps the surface handshake of contracts 2 and 3 and adds the
+  # `accounts` operation, so a write against it is enforceable like before.
+  body <- '{"contract_version": 4, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": false, "results": [], "summary": {"creato": 1}, "errors": []}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 200L, body = charToRaw(body)),
+    module_apply(
+      "redcap.example.org", "s3cret",
+      requests = list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L
+      )),
+      dry_run = FALSE
+    )
+  )
+
+  # test
+  expect_true(result[["ok"]])
+})
+
+
+test_that("il canale lavora con moduli al 3 e al 4 mescolati", {
+  # eval
+  # During a rollout the fleet answers with both contracts at once, and the
+  # channel has to keep reading and writing on every instance meanwhile.
+  richieste <- list(list(
+    username = "mario.rossi@ubep.unipd.it", project_id = 9003L
+  ))
+  risposta <- function(req) {
+    contratto <- if (grepl("edc12", req[["url"]], fixed = TRUE)) 4L else 3L
+    corpo <- sprintf(
+      '{"contract_version": %d, "server": "redcap.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": false, "results": [], "summary": {}, "errors": []}',
+      contratto
+    )
+    httr2::response(status_code = 200L, body = charToRaw(corpo))
+  }
+
+  # test
+  httr2::with_mocked_responses(risposta, {
+    for (host in c("edc10.example.org", "edc12.example.org")) {
+      expect_true(module_state(host, "s3cret")[["ok"]], info = host)
+      expect_true(
+        module_apply(
+          host, "s3cret", requests = richieste, dry_run = FALSE
+        )[["ok"]],
+        info = host
+      )
+    }
+  })
+})
+
+
+# Risposta di un modulo al contratto 4 a `accounts`: una voce per nome chiesto.
+risposta_accounts <- function(nomi, contratto = 4L) {
+  voci <- vapply(nomi, function(nome) {
+    sprintf(
+      '{"username": "%s", "exists": true, "user_firstvisit": null,
+      "user_lastlogin": null, "user_lastactivity": null}', nome
+    )
+  }, character(1))
+  sprintf(
+    '{"contract_version": %d, "server": "edc10.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.11.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "dry_run": true, "accounts": [%s], "errors": []}',
+    contratto, paste(voci, collapse = ", ")
+  )
+}
+
+
+test_that("accounts su un modulo al 3 dice modulo non aggiornato", {
+  # eval
+  # Un modulo al 3 non conosce `accounts`: risponde 501 con il proprio
+  # contratto. Con le liste di oggi uscirebbe INTERNO; il client guarda il
+  # contratto prima dello status.
+  body <- '{"contract_version": 3, "server": "edc10.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.10.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "errors": [{"code": "INTERNO",
+      "message": "operation \'accounts\' is not implemented"}]}'
+  result <- httr2::with_mocked_responses(
+    function(req) httr2::response(status_code = 501L, body = charToRaw(body)),
+    module_accounts(
+      "edc10.example.org", "s3cret", "carla.inventata@ubep.unipd.it"
+    )
+  )
+
+  # test
+  expect_false(result[["ok"]])
+  expect_equal(result[["errors"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+})
+
+
+test_that("accounts chiede solo nomi, in lettura, e legge la risposta al 4", {
+  # eval
+  nomi <- c("carla.inventata@ubep.unipd.it", "dario.ipotetico@ubep.unipd.it")
+  captured <- NULL
+  result <- httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(
+        status_code = 200L, body = charToRaw(risposta_accounts(nomi))
+      )
+    },
+    module_accounts("edc10.example.org", "s3cret", nomi)
+  )
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  expect_equal(sent[["operation"]], "accounts")
+  expect_true(sent[["dry_run"]])
+  expect_equal(names(sent[["requests"]][[1L]]), "username")
+  expect_equal(
+    vapply(sent[["requests"]], function(x) x[["username"]], ""), nomi
+  )
+  expect_true(result[["ok"]])
+  expect_length(result[["payload"]][["accounts"]], 2L)
+  expect_equal(module_accounts_limit(), 500L)
+})
+
+
+test_that("oltre 500 nomi si spezza, e un pezzo fallito vale per tutto", {
+  # eval
+  nomi <- sprintf("persona%03d@ubep.unipd.it", 1:501)
+  chiamate <- list()
+  rispondi <- function(req) {
+    chiesti <- vapply(
+      req[["body"]][["data"]][["requests"]], function(x) x[["username"]], ""
+    )
+    chiamate[[length(chiamate) + 1L]] <<- chiesti
+    httr2::response(
+      status_code = 200L, body = charToRaw(risposta_accounts(chiesti))
+    )
+  }
+  intero <- httr2::with_mocked_responses(
+    rispondi, module_accounts("edc10.example.org", "s3cret", nomi)
+  )
+
+  # test
+  expect_equal(vapply(chiamate, length, 0L), c(500L, 1L))
+  expect_true(intero[["ok"]])
+  expect_length(intero[["payload"]][["accounts"]], 501L)
+  expect_equal(
+    vapply(intero[["payload"]][["accounts"]], function(x) x[["username"]], ""),
+    nomi
+  )
+
+  # eval
+  # Il secondo pezzo risponde 500: il primo, riuscito, non salva il resto.
+  guasto <- '{"contract_version": 4, "server": "edc10.example.org",
+    "redcap_version": "17.3.3", "redcap_major": 17,
+    "module_version": "0.11.0", "version_gate": "collaudata",
+    "surface_fingerprint": "16faf46d5ab1",
+    "allowlist_fingerprint": "aabbccddeeff",
+    "errors": [{"code": "INTERNO", "message": "lettura fallita"}]}'
+  numero <- 0L
+  rotto <- httr2::with_mocked_responses(
+    function(req) {
+      numero <<- numero + 1L
+      if (numero == 1L) {
+        chiesti <- vapply(
+          req[["body"]][["data"]][["requests"]], function(x) x[["username"]], ""
+        )
+        return(httr2::response(
+          status_code = 200L, body = charToRaw(risposta_accounts(chiesti))
+        ))
+      }
+      httr2::response(status_code = 500L, body = charToRaw(guasto))
+    },
+    module_accounts("edc10.example.org", "s3cret", nomi)
+  )
+
+  # test
+  expect_false(rotto[["ok"]])
+  expect_equal(rotto[["errors"]], "INTERNO")
+})
+
+
+test_that("nessun nome, nessuna chiamata", {
+  # eval
+  chiamate <- list()
+  vuoto <- httr2::with_mocked_responses(
+    function(req) {
+      chiamate[[length(chiamate) + 1L]] <<- req
+      httr2::response(status_code = 200L, body = charToRaw("{}"))
+    },
+    module_accounts("edc10.example.org", "s3cret", character())
+  )
+
+  # test
+  expect_length(chiamate, 0L)
+  expect_true(vuoto[["ok"]])
+  expect_equal(vuoto[["errors"]], character())
+  expect_equal(vuoto[["payload"]][["accounts"]], list())
+  expect_identical(vuoto[["gate"]], NA_character_)
+})
+
+
+test_that("un nome ripetuto con altre maiuscole parte una volta", {
+  # eval
+  captured <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      captured <<- req
+      httr2::response(
+        status_code = 200L,
+        body = charToRaw(risposta_accounts("carla.inventata@ubep.unipd.it"))
+      )
+    },
+    module_accounts(
+      "edc10.example.org", "s3cret",
+      c(
+        "carla.inventata@ubep.unipd.it",
+        "Carla.Inventata@ubep.unipd.it",
+        " carla.inventata@UBEP.unipd.it "
+      )
+    )
+  )
+  sent <- captured[["body"]][["data"]]
+
+  # test
+  expect_equal(length(sent[["requests"]]), 1L)
+  expect_equal(
+    sent[["requests"]][[1L]][["username"]], "carla.inventata@ubep.unipd.it"
+  )
+})

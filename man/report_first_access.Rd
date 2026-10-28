@@ -21,8 +21,10 @@ about; or one of the four that go to IT: \code{disabilitato}, \code{non_trovato}
 accounts created before June 2018) and \code{non_giudicabile}.
 }
 \description{
-Phase 1 of the report reads Entra and nothing else, with the permission the
-round already holds. \code{lastPasswordChangeDateTime} is, in the words of Learn,
+Entra says it with the permission the round already holds, and the report
+uses it where the server cannot say it better: for the pairs of a server
+that was not read, and for the deadline of a key that is still the one
+of the creation. \code{lastPasswordChangeDateTime} is, in the words of Learn,
 "the time when this Microsoft Entra user last changed their password or
 when their password was created", and the round creates every account with
 \code{forceChangePasswordNextSignIn}: an account whose key is as old as the
@@ -30,10 +32,12 @@ account itself is an account nobody has entered.
 }
 \details{
 What it cannot see, said where it is decided. A key reset by IT moves the
-date without anybody signing in, and the person drops out of the report
-(phase 2 removes this). An account that existed long before the request
-has dates that diverge, and the person never shows, even if they never
-opened the instance asked for: the signal says "has used the UBEP
-account", not "has used REDCap".
+date without anybody signing in, and the person drops out of the verdict.
+An account that existed long before the request has dates that diverge,
+and the person never shows, even if they never opened the instance asked
+for: the signal says "has used the UBEP account", not "has used REDCap".
+That is why a server that was read decides in its place
+(\code{report_server_access()}), and \code{report_assemble()} asks Entra only when
+the server did not answer.
 }
 \keyword{internal}

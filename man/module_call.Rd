@@ -11,7 +11,8 @@ module_call(
   requests = list(),
   dry_run = TRUE,
   registry = tested_fingerprints(),
-  declare = certified_fingerprints(registry)
+  declare = certified_fingerprints(registry),
+  accepted = NULL
 )
 }
 \arguments{
@@ -21,7 +22,7 @@ not uniform on this point, so the mount cannot be assumed.}
 
 \item{secret}{Shared secret, sent as the \code{X-UBEP-Secret} header.}
 
-\item{operation}{One of \code{"state"}, \code{"apply"}, \code{"revoke"}.}
+\item{operation}{One of \code{"state"}, \code{"apply"}, \code{"revoke"}, \code{"accounts"}.}
 
 \item{requests}{List of requests; empty reads the whole instance.}
 
@@ -32,6 +33,10 @@ not uniform on this point, so the mount cannot be assumed.}
 \item{declare}{Fingerprints the caller states it has been tested against.
 The module refuses to write when its own is not among them, so an empty
 declaration writes nothing. Reads and dry runs ignore it.}
+
+\item{accepted}{Integer vector of contract versions this call tolerates;
+\code{NULL} takes the default for the kind of call, \code{2:4} for a write and
+\code{1:4} for a read.}
 }
 \value{
 A list with \code{ok}, \code{errors}, \code{payload} and \code{gate}.

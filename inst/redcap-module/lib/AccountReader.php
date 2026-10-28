@@ -1,0 +1,204 @@
+<?php
+
+namespace UbepProvisioning;
+
+/**
+ * Reads the access dates of local REDCap accounts.
+ *
+ * The values are raw: the dates come back as REDCap stored them, converted only
+ * to UTC, and no verdict is given here. Whether an account counts as "never
+ * entered" is policy and lives with the caller.
+ *
+ * A failed read is null and never an empty list, unlike StateReader::read().
+ * An empty list here would mean "none of these accounts exist", which the
+ * caller would report as people who never logged in; a database that did not
+ * answer says nothing about anybody.
+ *
+ * Names are compared trimmed and lowercased (strtolower, byte-wise: usernames
+ * are ASCII UPNs), the same comparison the R client makes with trimws() and
+ * tolower() when it drops duplicates.
+ */
+class AccountReader
+{
+    /** Names accepted per call; the caller splits longer lists. */
+    const LIMIT = 500;
+
+    /** The date columns read, and returned under the same names. */
+    private const DATE_COLUMNS = [
+        'user_creation',
+        'user_firstvisit',
+        'user_lastlogin',
+        'user_firstactivity',
+        'user_lastactivity',
+    ];
+
+    /**
+     * The names of an accounts request, or null when the list is to be refused.
+     *
+     * Refused whole, never trimmed to what is acceptable: answering for part of
+     * what was asked would hand the caller a short list it could read as "the
+     * rest do not exist". An entry with an empty or blank username is refused
+     * too, since it would come back as an account that does not exist.
+     *
+     * @param mixed $requests the `requests` field of the body: a list of
+     *                        objects with a scalar `username`
+     * @return array|null the names as strings, in order (empty for an empty
+     *                    list), or null for a list to refuse
+     */
+    public static function usernamesFrom($requests): ?array
+    {
+        if (!is_array($requests) || count($requests) > self::LIMIT) {
+            return null;
+        }
+
+        $usernames = [];
+        foreach ($requests as $request) {
+            if (
+                !is_array($request)
+                || !isset($request['username'])
+                || !is_scalar($request['username'])
+                || trim((string) $request['username']) === ''
+            ) {
+                return null;
+            }
+            $usernames[] = (string) $request['username'];
+        }
+
+        return $usernames;
+    }
+
+    /**
+     * @param array $usernames names to look up, as the caller wrote them
+     * @return array|null one entry per name (see shape()), or null when the
+     *                    read failed: the query did not answer or threw (the
+     *                    database layer may raise instead of returning false),
+     *                    or a date came back that cannot be read
+     */
+    public static function read(array $usernames): ?array
+    {
+        // `in ()` is a syntax error in MySQL, and zero names have zero rows.
+        if ($usernames === []) {
+            return [];
+        }
+
+        try {
+            $query = db_query(self::selectSql($usernames, 'db_escape'));
+            if ($query === false) {
+                return null;
+            }
+
+            $rows = [];
+            while ($row = db_fetch_assoc($query)) {
+                $rows[] = $row;
+            }
+
+            // A date the database holds but PHP cannot read is not "never": it
+            // fails the read like a query that did not answer.
+            return self::shape($usernames, $rows, date_default_timezone_get());
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * The select for these names, normalized and without repeats.
+     *
+     * @param array    $usernames names as the caller wrote them
+     * @param callable $escape    string escaper (db_escape() in production)
+     */
+    public static function selectSql(array $usernames, callable $escape): string
+    {
+        $quoted = [];
+        foreach (array_keys(self::firstSpellings($usernames)) as $name) {
+            $quoted[] = "'" . $escape($name) . "'";
+        }
+
+        return 'select username, ' . implode(', ', self::DATE_COLUMNS)
+            . ' from redcap_user_information where username in ('
+            . implode(', ', $quoted) . ')';
+    }
+
+    /**
+     * Pairs each requested name with its row, in the order asked.
+     *
+     * @param array  $usernames names as the caller wrote them
+     * @param array  $rows      fetched rows of redcap_user_information
+     * @param string $timezone  zone the server wrote the dates in
+     * @return array one entry per distinct name: username (as asked), exists,
+     *               and the five dates as UTC 'Y-m-d\TH:i:s\Z' or null
+     * @throws \UnexpectedValueException when a date is neither empty, nor
+     *                                   zero, nor readable as a date
+     */
+    public static function shape(array $usernames, array $rows, string $timezone): array
+    {
+        $zone = new \DateTimeZone($timezone);
+
+        $byName = [];
+        foreach ($rows as $row) {
+            $byName[self::normalize((string) $row['username'])] = $row;
+        }
+
+        $shaped = [];
+        foreach (self::firstSpellings($usernames) as $key => $asked) {
+            $row = $byName[$key] ?? null;
+            $entry = ['username' => $asked, 'exists' => $row !== null];
+            foreach (self::DATE_COLUMNS as $column) {
+                $entry[$column] = $row === null
+                    ? null
+                    : self::toUtc($row[$column] ?? null, $zone);
+            }
+            $shaped[] = $entry;
+        }
+
+        return $shaped;
+    }
+
+    private static function normalize(string $name): string
+    {
+        return strtolower(trim($name));
+    }
+
+    /** @return array normalized name => first spelling asked, in asked order */
+    private static function firstSpellings(array $usernames): array
+    {
+        $first = [];
+        foreach ($usernames as $name) {
+            $key = self::normalize((string) $name);
+            if (!isset($first[$key])) {
+                $first[$key] = (string) $name;
+            }
+        }
+
+        return $first;
+    }
+
+    /**
+     * Null, an empty string and MySQL's zero date are the same absence: a
+     * zero date converted would become a date in year 0 or a PHP error printed
+     * ahead of the JSON. Anything else that is not a date is not an absence,
+     * and is refused instead of being read as one.
+     */
+    private static function toUtc($value, \DateTimeZone $zone): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $value = (string) $value;
+        if (strncmp($value, '0000-00-00', 10) === 0) {
+            return null;
+        }
+
+        try {
+            $date = new \DateTime($value, $zone);
+        } catch (\Exception $e) {
+            throw new \UnexpectedValueException(
+                'unreadable date in redcap_user_information',
+                0,
+                $e
+            );
+        }
+
+        return $date->setTimezone(new \DateTimeZone('UTC'))
+            ->format('Y-m-d\TH:i:s\Z');
+    }
+}

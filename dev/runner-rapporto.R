@@ -10,6 +10,8 @@
 # tabella sua.
 #
 # Legge e manda posta, e basta: non scrive nel registro e non tocca Entra.
+# Alle istanze col modulo chiede solo `accounts`, con i segreti che il giro
+# usa; un'istanza non letta non ferma niente.
 # Una guardia in tests/testthat/test-runner-guardie.R lo tiene tale, su
 # questo file e su tutto cio' che il pacchetto raggiunge da
 # provisioning_report().
@@ -189,6 +191,11 @@ if (is.null(registro[["host"]]) || is.null(registro[["segreto"]])) {
   )
 }
 
+con_modulo <- inventario[["con_modulo"]]
+if (length(con_modulo) == 0L) {
+  stop("l'inventario non elenca nessuna istanza con il modulo", call. = FALSE)
+}
+
 # --- il rapporto ------------------------------------------------------------
 
 token <- token_imds("https://vault.azure.net")
@@ -202,6 +209,21 @@ token_graph <- if (nzchar(GRAPH)) {
 } else {
   ""
 }
+
+# Le istanze che il rapporto puo' interrogare, solo per `accounts`: come nel
+# giro, un segreto che non si riesce a leggere e' un NA e non un'eccezione. Il
+# rapporto sa gia' dire che un server non letto non ferma niente.
+nomi <- vapply(con_modulo, function(i) as.character(i[["nome"]]), character(1))
+host <- vapply(con_modulo, function(i) as.character(i[["host"]]), character(1))
+names(host) <- nomi
+
+segreti <- vapply(con_modulo, function(istanza) {
+  tryCatch(
+    segreto_da_keyvault(istanza[["segreto"]], token),
+    error = function(e) NA_character_
+  )
+}, character(1))
+names(segreti) <- nomi
 
 registro_token <- segreto_da_keyvault(registro[["segreto"]], token)
 
@@ -232,7 +254,9 @@ esito <- ubep.azure:::provisioning_report(
   mailer = mailer,
   redirect_to = if (nzchar(POSTA_A)) POSTA_A else NULL,
   copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
-  channel_account = CANALE_UTENTE
+  channel_account = CANALE_UTENTE,
+  hosts = host,
+  secrets = segreti
 )
 
 # Il record e' anche il riassunto sullo standard output: cio' che si stampa e

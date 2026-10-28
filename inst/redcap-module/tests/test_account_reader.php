@@ -1,0 +1,168 @@
+<?php
+// inst/redcap-module/tests/test_account_reader.php
+require_once __DIR__ . '/../lib/AccountReader.php';
+
+use UbepProvisioning\AccountReader;
+
+ubep_assert_same(500, AccountReader::LIMIT, 'the cap is 500 names per call');
+
+$righe = [[
+    'username' => 'carla.inventata@ubep.unipd.it',
+    'user_creation' => '2026-10-20 09:00:00',
+    'user_firstvisit' => '2026-10-20 09:15:00',
+    'user_lastlogin' => null,
+    'user_firstactivity' => '',
+    'user_lastactivity' => '0000-00-00 00:00:00',
+]];
+$roma = AccountReader::shape(
+    ['Carla.Inventata@ubep.unipd.it', 'nessuno@ubep.unipd.it',
+     'carla.inventata@ubep.unipd.it '],
+    $righe, 'Europe/Rome'
+);
+ubep_assert_same(2, count($roma), 'un nome ripetuto con altre maiuscole e\' una voce');
+ubep_assert_same('Carla.Inventata@ubep.unipd.it', $roma[0]['username'], 'il nome resta come chiesto');
+ubep_assert_same(true, $roma[0]['exists'], 'revisione 3: maiuscole diverse, stessa persona');
+ubep_assert_same('2026-10-20T07:15:00Z', $roma[0]['user_firstvisit'], 'ora legale di Roma, UTC+2');
+ubep_assert_same('2026-10-20T07:00:00Z', $roma[0]['user_creation'], 'anche la creazione e\' in UTC');
+ubep_assert_same(null, $roma[0]['user_lastlogin'], 'null resta null');
+ubep_assert_same(null, $roma[0]['user_firstactivity'], 'stringa vuota e\' null');
+ubep_assert_same(null, $roma[0]['user_lastactivity'], 'revisione 4: la data zero e\' null');
+ubep_assert_same('nessuno@ubep.unipd.it', $roma[1]['username'], 'l\'ordine chiesto si conserva');
+ubep_assert_same(false, $roma[1]['exists'], 'un nome assente ha la sua voce');
+ubep_assert_same(null, $roma[1]['user_firstvisit'], 'e nessuna data');
+ubep_assert_same(null, $roma[1]['user_creation'], 'nemmeno la creazione');
+
+// A name asked with padding is the same person as the padding-free row.
+$spazi = AccountReader::shape([' Carla.Inventata@ubep.unipd.it  '], $righe, 'UTC');
+ubep_assert_same(' Carla.Inventata@ubep.unipd.it  ', $spazi[0]['username'], 'anche con gli spazi, il nome resta come chiesto');
+ubep_assert_same(true, $spazi[0]['exists'], 'gli spazi ai bordi non fanno un assente');
+
+// A row that REDCap stores with other capitals still matches.
+$maiuscole = AccountReader::shape(
+    ['carla.inventata@ubep.unipd.it'],
+    [array_merge($righe[0], ['username' => 'Carla.Inventata@ubep.unipd.it'])],
+    'UTC'
+);
+ubep_assert_same(true, $maiuscole[0]['exists'], 'il confronto vale anche per il nome della riga');
+
+$utc = AccountReader::shape(['carla.inventata@ubep.unipd.it'], $righe, 'UTC');
+ubep_assert_same('2026-10-20T09:15:00Z', $utc[0]['user_firstvisit'], 'un server che scrive in UTC');
+
+$inverno = AccountReader::shape(
+    ['carla.inventata@ubep.unipd.it'],
+    [array_merge($righe[0], ['user_firstvisit' => '2026-12-01 08:00:00'])],
+    'Europe/Rome'
+);
+ubep_assert_same('2026-12-01T07:00:00Z', $inverno[0]['user_firstvisit'], 'ora solare di Roma, UTC+1');
+
+ubep_assert_same([], AccountReader::shape([], $righe, 'UTC'), 'nessun nome, nessuna voce');
+
+// The empty list is answered without a query: this suite defines no db_query(),
+// so a call to it would be a fatal error.
+ubep_assert_same([], AccountReader::read([]), 'una lista vuota non interroga il database');
+
+// The query asks for the normalized names, once each, escaped one by one.
+$sql = AccountReader::selectSql(
+    ['Carla.Inventata@ubep.unipd.it', 'carla.inventata@ubep.unipd.it ', "d'ario@ubep.unipd.it"],
+    function (string $name): string {
+        return addslashes($name);
+    }
+);
+ubep_assert_true(
+    strpos($sql, "username in ('carla.inventata@ubep.unipd.it', 'd\\'ario@ubep.unipd.it')") !== false,
+    'la select chiede i nomi senza spazi, in minuscolo, una volta sola, con l\'escape'
+);
+ubep_assert_true(
+    strpos($sql, 'from redcap_user_information') !== false
+        && strpos($sql, 'user_lastactivity') !== false,
+    'la select legge le cinque colonne di redcap_user_information'
+);
+
+// A date that is not empty, not zero and not a date is not "never": reading it
+// as null would be a false "never entered". shape() refuses it, and read()
+// turns the refusal into null, like a failed query.
+$guasta = false;
+try {
+    AccountReader::shape(
+        ['carla.inventata@ubep.unipd.it'],
+        [array_merge($righe[0], ['user_firstvisit' => 'non una data'])],
+        'UTC'
+    );
+} catch (\Exception $e) {
+    $guasta = true;
+}
+ubep_assert_true($guasta, 'una data illeggibile non vale null: shape() lancia');
+
+// --- usernamesFrom(): the list the accounts operation accepts ---------------
+$cinquecento = [];
+for ($i = 0; $i < AccountReader::LIMIT; $i++) {
+    $cinquecento[] = ['username' => 'utente' . $i . '@ubep.unipd.it'];
+}
+$accettata = AccountReader::usernamesFrom($cinquecento);
+ubep_assert_same(500, $accettata === null ? -1 : count($accettata), 'cinquecento voci sono accettate');
+ubep_assert_same('utente0@ubep.unipd.it', $accettata[0] ?? null, 'i nomi escono come stringhe, nell\'ordine chiesto');
+$cinquecento[] = ['username' => 'uno.di.troppo@ubep.unipd.it'];
+ubep_assert_same(null, AccountReader::usernamesFrom($cinquecento), 'cinquecentouno voci sono rifiutate');
+ubep_assert_same([], AccountReader::usernamesFrom([]), 'la lista vuota e\' accettata: zero nomi');
+ubep_assert_same(null, AccountReader::usernamesFrom('carla'), 'una lista che non e\' un array e\' rifiutata');
+ubep_assert_same(null, AccountReader::usernamesFrom(null), 'nemmeno null e\' una lista');
+ubep_assert_same(null, AccountReader::usernamesFrom([['project_id' => 901]]), 'una voce senza username e\' rifiutata');
+ubep_assert_same(null, AccountReader::usernamesFrom([['username' => ['a@ubep.unipd.it']]]), 'uno username array e\' rifiutato');
+ubep_assert_same(null, AccountReader::usernamesFrom([['username' => null]]), 'uno username null e\' rifiutato');
+ubep_assert_same(null, AccountReader::usernamesFrom(['carla']), 'una voce che non e\' un oggetto e\' rifiutata');
+ubep_assert_same(null, AccountReader::usernamesFrom([['username' => '']]), 'uno username vuoto e\' rifiutato');
+ubep_assert_same(null, AccountReader::usernamesFrom([['username' => "  \t "]]), 'uno username di soli spazi e\' rifiutato');
+ubep_assert_same(
+    null,
+    AccountReader::usernamesFrom([['username' => 'carla@ubep.unipd.it'], ['username' => '']]),
+    'una sola voce non valida rifiuta tutta la lista'
+);
+
+// --- read(): a failure is null, whatever form it takes ----------------------
+// Local stubs for REDCap's database functions; nothing else defines them. The
+// stub counts its calls so the empty-list test above stays honest about not
+// querying: it ran before any stub existed in this file.
+$GLOBALS['ubep_db_calls'] = 0;
+$GLOBALS['ubep_db_mode'] = 'rows';
+$GLOBALS['ubep_db_rows'] = [];
+if (!function_exists('db_escape')) {
+    function db_escape($value)
+    {
+        return addslashes((string) $value);
+    }
+}
+if (!function_exists('db_query')) {
+    function db_query($sql)
+    {
+        $GLOBALS['ubep_db_calls']++;
+        if ($GLOBALS['ubep_db_mode'] === 'throws') {
+            throw new \RuntimeException('mysqli strict mode');
+        }
+        if ($GLOBALS['ubep_db_mode'] === 'false') {
+            return false;
+        }
+
+        return 'result';
+    }
+}
+if (!function_exists('db_fetch_assoc')) {
+    function db_fetch_assoc($query)
+    {
+        return array_shift($GLOBALS['ubep_db_rows']) ?? false;
+    }
+}
+
+$GLOBALS['ubep_db_calls'] = 0;
+ubep_assert_same([], AccountReader::read([]), 'ancora: nessuna query per zero nomi');
+ubep_assert_same(0, $GLOBALS['ubep_db_calls'], 'read([]) non chiama db_query()');
+
+$GLOBALS['ubep_db_mode'] = 'throws';
+ubep_assert_same(null, AccountReader::read(['carla.inventata@ubep.unipd.it']), 'un\'eccezione di db_query() e\' una lettura fallita');
+$GLOBALS['ubep_db_mode'] = 'false';
+ubep_assert_same(null, AccountReader::read(['carla.inventata@ubep.unipd.it']), 'db_query() false e\' una lettura fallita');
+$GLOBALS['ubep_db_mode'] = 'rows';
+$GLOBALS['ubep_db_rows'] = [array_merge($righe[0], ['user_firstvisit' => 'non una data'])];
+ubep_assert_same(null, AccountReader::read(['carla.inventata@ubep.unipd.it']), 'una data illeggibile e\' una lettura fallita');
+$GLOBALS['ubep_db_rows'] = [$righe[0]];
+$letta = AccountReader::read(['carla.inventata@ubep.unipd.it']);
+ubep_assert_same(true, $letta[0]['exists'] ?? null, 'una lettura riuscita da la voce');

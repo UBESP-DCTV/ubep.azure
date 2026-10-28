@@ -113,6 +113,13 @@ test_that("a read accepts either contract version", {
   # are the only ones worth knowing about.
   expect_true(one[["ok"]])
   expect_true(two[["ok"]])
+
+  four <- parse_module_response(
+    '{"contract_version": 4, "version_gate": "collaudata"}',
+    status = 200L,
+    accepted = 1:4
+  )
+  expect_true(four[["ok"]])
 })
 
 

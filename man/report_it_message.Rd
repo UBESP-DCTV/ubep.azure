@@ -15,10 +15,14 @@ report_it_message(it, period)
 A list with \code{subject}, \code{body}, \code{forma} and \code{n}.
 }
 \description{
-One mail, and only when there is something in it: the rows with no
-referent to send them to, the people the report cannot judge, the rows the
-log does not date. It has the referents' form to review, and its number
-counts the rows and people listed. A section with nothing in it is not
-announced.
+One mail, and only when there is something in it. Five sections, numbered
+in this order: the rows with no referent to send them to, the people the
+report cannot judge, the rows the log does not date, the servers that were
+not read (with the reason, and how many pairs of person and server fell
+back on Entra or could not be checked for the year without access), and
+the rows stopped on a disabled account (with whether the person has ever
+entered the server, when the server was read). It has the referents' form
+to review, and its number counts the rows, people and servers listed. A
+section with nothing in it is not announced.
 }
 \keyword{internal}
