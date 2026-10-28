@@ -691,8 +691,19 @@ report_server_asks <- function(register) {
 #'   for the person who entered, for a key reset and for the key the D-31
 #'   rule replaced, and a date computed from them would be a guess, so it is
 #'   `""`;
-#' - **no access for more than a year** is phase 2, and the mail says it was
-#'   not checked.
+#' - **no access for more than a year**, one item per person and server. A
+#'   pair is a candidate when its request is active, applied, not expired and
+#'   the person has had the access on that server for more than 365 days
+#'   (the oldest request there, as for the first sign-in). On a server that
+#'   was read, it enters when the person has entered at least once and the
+#'   last access (`report_server_access()`) is more than 365 days before the
+#'   reading, both as dates in Italian time. It is listed in full the month it
+#'   crosses the threshold, and counted in `senza_accessi_gia` after: when an
+#'   earlier report of the same referent named it (an entry with an empty
+#'   server names it on every server). On a server that was not read the pair
+#'   is only counted, per server, in `non_controllati`: Entra says nothing
+#'   about it, and an empty item would say "none" about something nobody
+#'   measured.
 #'
 #' What has no referent to go to goes to IT, and to nobody else: a row whose
 #' owner the log does not establish (no creation names it, or the log cannot
@@ -725,13 +736,21 @@ report_server_asks <- function(register) {
 #'   each a list of `referente`, `attivati` (rows), `senza_primo_accesso`
 #'   (pairs of person and server, with `nome`, `upn`, `server`, `progetti`,
 #'   `attivata_il`, `giorni`, `mesi`, `segnalata`, `storia_nota`, `fonte` and
-#'   `limite`) and `non_giudicati` (a count); `it`, `NULL` when there is
+#'   `limite`), `senza_accessi` (pairs, with `nome`, `upn`, `server`,
+#'   `progetti`, `ultimo`, the day of the last access in Italian time, and
+#'   `attivata_il`), `senza_accessi_gia` (how many pairs an earlier report
+#'   named and are still without access), `senza_accessi_gia_coppie` (those
+#'   pairs, `upn` and `server`, for the ledger) and `non_controllati` (a frame
+#'   of `server` and `coppie`), and `non_giudicati` (a count); `it`, `NULL`
+#'   when there is
 #'   nothing for IT, otherwise a list of `senza_referente` (rows, with
 #'   `motivo`), `non_giudicabili` (people, with `referente` and `motivo`),
 #'   `senza_data` (rows) and `server_non_letti` (a frame of `server`,
-#'   `motivo` and `entra`, how many pairs of that server went into a
-#'   referent's report on the strength of Entra; one row for each server of
-#'   the rows that was not read, also with none); and `senza_creatore`, how
+#'   `motivo`, `entra`, how many pairs of that server went into a
+#'   referent's report on the strength of Entra, and `non_controllate`, how
+#'   many were candidates for the year without access and could not be
+#'   checked; one row for each server of the rows that was not read, also
+#'   with none); and `senza_creatore`, how
 #'   many rows have no referent to go to. Since rows can pass, that means
 #'   without an established owner and not only without a creator; the name
 #'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
@@ -829,15 +848,16 @@ report_assemble <- function(rows, directory, period, previous = list(),
   }
 
   # The earlier reports of this referent that named the person on this
-  # server. The pairs of a report that recorded only the person carry an
-  # empty server, "all of them".
-  reported <- function(who, key, server) {
+  # server, in the list asked for (`senza_primo_accesso` or
+  # `senza_accessi`). The pairs of a report that recorded only the person
+  # carry an empty server, "all of them".
+  reported <- function(who, key, server, of = "senza_primo_accesso") {
     dates <- unlist(lapply(previous, function(entry) {
       same <- identical(
         tolower(trimws(as.character(entry[["destinatario"]] %||% ""))),
         tolower(who)
       )
-      pairs <- report_pairs(entry[["senza_primo_accesso"]])
+      pairs <- report_pairs(entry[[of]])
       named <- any(
         tolower(trimws(pairs[["upn"]])) == key &
           trimws(pairs[["server"]]) %in% c(server, "")
@@ -894,6 +914,9 @@ report_assemble <- function(rows, directory, period, previous = list(),
     rownames(attivati) <- NULL
 
     people <- list()
+    idle <- list()
+    idle_before <- report_pairs()
+    unchecked <- character()
     candidates <- which(mine & judged)
     keys <- tolower(username[candidates])
     for (key in unique(keys)) {
@@ -935,6 +958,42 @@ report_assemble <- function(rows, directory, period, previous = list(),
         first <- at[[1L]]
         seen <- reading(server)
 
+        # The year without access: a pair active for more than a year, on
+        # a server that says when the person last entered. A server that
+        # was not read says nothing, and the pair is counted as unchecked.
+        if (days[[first]] > 365L) {
+          if (!isTRUE(seen[["letto"]])) {
+            unchecked <- c(unchecked, server)
+          } else {
+            access <- report_server_access(
+              seen[["conti"]], username[[first]]
+            )
+            last <- if (identical(access[["stato"]], "entrata")) {
+              format(access[["ultimo"]], "%Y-%m-%d", tz = "Europe/Rome")
+            }
+            if (!is.null(last) &&
+                  as.integer(today - as.Date(last)) > 365L) {
+              if (length(reported(who, key, server, "senza_accessi")) > 0L) {
+                idle_before <- rbind(idle_before, report_pairs(
+                  data.frame(
+                    upn = username[[first]], server = server,
+                    stringsAsFactors = FALSE
+                  )
+                ))
+              } else {
+                idle[[length(idle) + 1L]] <- list(
+                  nome = name,
+                  upn = username[[first]],
+                  server = server,
+                  progetti = projects(at),
+                  ultimo = last,
+                  attivata_il = substr(start[[first]], 1L, 10L)
+                )
+              }
+            }
+          }
+        }
+
         if (isTRUE(seen[["letto"]])) {
           never <- identical(
             report_server_access(seen[["conti"]], username[[first]])[["stato"]],
@@ -975,8 +1034,18 @@ report_assemble <- function(rows, directory, period, previous = list(),
       }
     }
 
+    silent <- sort(unique(unchecked))
     referenti[[who]] <- list(
-      referente = who, attivati = attivati, senza_primo_accesso = people
+      referente = who, attivati = attivati, senza_primo_accesso = people,
+      senza_accessi = idle,
+      senza_accessi_gia = nrow(idle_before),
+      senza_accessi_gia_coppie = idle_before,
+      non_controllati = data.frame(
+        server = silent,
+        coppie = vapply(silent, function(s) sum(unchecked == s), 0L,
+                        USE.NAMES = FALSE),
+        stringsAsFactors = FALSE
+      )
     )
   }
 
@@ -1021,6 +1090,12 @@ report_assemble <- function(rows, directory, period, previous = list(),
       asked, function(server) sum(on_entra == server), 0L,
       USE.NAMES = FALSE
     ),
+    non_controllate = vapply(asked, function(server) {
+      as.integer(sum(unlist(lapply(referenti, function(report) {
+        found <- report[["non_controllati"]]
+        found[["coppie"]][found[["server"]] == server]
+      }))))
+    }, 0L, USE.NAMES = FALSE),
     stringsAsFactors = FALSE
   )
 
@@ -1319,6 +1394,106 @@ report_people_lines <- function(people, to_it = 0L) {
         "it and send it back to you. If the access is no longer needed, set ",
         "the request to revoked."
       )
+    )
+  )
+}
+
+
+#' The lines of the people with no access for more than a year, in both
+#' languages
+#'
+#' One entry for each person and server that crossed the threshold this
+#' month, with the project of the person on that server, when the server
+#' last saw them and since when they have had the access. The pairs named
+#' in an earlier report of the same referent and still without access are
+#' counted in a line of their own, not listed again. The pairs on a server
+#' that did not answer are counted per server and said not to be checked: an
+#' item that covered a server nobody read would say "none" about something
+#' nobody measured, so "none" is only said when there is nothing else to say.
+#'
+#' @param report One referent's report, as `report_assemble()` builds it:
+#'   `senza_accessi` (the pairs listed in full), `senza_accessi_gia` (how
+#'   many were named before) and `non_controllati` (a frame of `server` and
+#'   `coppie`).
+#'
+#' @return A list of two character vectors, `it` and `en`.
+#'
+#' @keywords internal
+report_idle_lines <- function(report) {
+  pairs <- report[["senza_accessi"]] %||% list()
+  earlier <- as.integer(report[["senza_accessi_gia"]] %||% 0L)
+  unchecked <- report[["non_controllati"]]
+  if (is.null(unchecked)) {
+    unchecked <- data.frame(
+      server = character(), coppie = integer(), stringsAsFactors = FALSE
+    )
+  }
+
+  if (length(pairs) == 0L && earlier == 0L && nrow(unchecked) == 0L) {
+    return(list(
+      it = "2. Senza accessi da piu' di un anno: nessuno.",
+      en = "2. No access in more than a year: none."
+    ))
+  }
+
+  each <- lapply(pairs, function(pair) {
+    projects <- report_projects_words(pair[["progetti"]])
+    who <- paste0("   - ", pair[["nome"]], ", ", pair[["upn"]], ": ")
+    list(
+      it = c(
+        paste0(
+          who, "attivata il ", pair[["attivata_il"]], "; ultimo accesso il ",
+          pair[["ultimo"]], "."
+        ),
+        paste0("     ", projects[["it"]], ".")
+      ),
+      en = c(
+        paste0(
+          who, "activated on ", pair[["attivata_il"]], "; last access on ",
+          pair[["ultimo"]], "."
+        ),
+        paste0("     ", projects[["en"]], ".")
+      )
+    )
+  })
+
+  count <- as.integer(unchecked[["coppie"]])
+  server <- as.character(unchecked[["server"]])
+
+  list(
+    it = c(
+      paste0("2. Senza accessi da piu' di un anno (", length(pairs), ")"),
+      unlist(lapply(each, `[[`, "it")),
+      if (earlier > 0L) {
+        paste0(
+          "   Coppie gia' segnalate nei mesi scorsi e ancora senza accessi: ",
+          earlier, "."
+        )
+      },
+      if (nrow(unchecked) > 0L) {
+        paste0(
+          "   Non controllato per ", count,
+          ifelse(count == 1L, " coppia su ", " coppie su "),
+          server, ": il server non ha risposto."
+        )
+      }
+    ),
+    en = c(
+      paste0("2. No access in more than a year (", length(pairs), ")"),
+      unlist(lapply(each, `[[`, "en")),
+      if (earlier > 0L) {
+        paste0(
+          "   Pairs already reported in earlier months and still without ",
+          "access: ", earlier, "."
+        )
+      },
+      if (nrow(unchecked) > 0L) {
+        paste0(
+          "   Not checked for ", count,
+          ifelse(count == 1L, " pair on ", " pairs on "),
+          server, ": the server did not answer."
+        )
+      }
     )
   )
 }
@@ -2459,11 +2634,29 @@ provisioning_report <- function(register_url,
           server = vapply(people, `[[`, "", "server"),
           stringsAsFactors = FALSE
         )
+        # The year without access: the pairs listed in full and those that
+        # were named before and are still there, which the next month needs
+        # to go on counting them.
+        idle <- if (for_it) {
+          list()
+        } else {
+          assembled[["referenti"]][[who]][["senza_accessi"]]
+        }
+        idle_named <- rbind(
+          report_pairs(data.frame(
+            upn = vapply(idle, `[[`, "", "upn"),
+            server = vapply(idle, `[[`, "", "server"),
+            stringsAsFactors = FALSE
+          )),
+          report_pairs(
+            assembled[["referenti"]][[who]][["senza_accessi_gia_coppie"]]
+          )
+        )
         written <- report_ledger_add(
           ledger_dir, period[["mese"]], ledger,
           list(
             destinatario = who, at = period[["letto"]],
-            senza_primo_accesso = named
+            senza_primo_accesso = named, senza_accessi = idle_named
           )
         )
         # A ledger that cannot be written would make every later report of
@@ -2512,6 +2705,10 @@ provisioning_report <- function(register_url,
     voci_senza_primo_accesso = sum(vapply(
       assembled[["referenti"]],
       function(r) length(r[["senza_primo_accesso"]]), 0L
+    )),
+    voci_senza_accessi = sum(vapply(
+      assembled[["referenti"]],
+      function(r) length(r[["senza_accessi"]]), 0L
     )),
     senza_creatore = as.integer(assembled[["senza_creatore"]]),
     rapporti = data.frame(
@@ -2567,8 +2764,9 @@ report_late <- function(giorno, completo, forzato) {
 #' `in_ritardo` is `report_late()`.
 #'
 #' `istanze_non_lette` counts the servers the report asked and could not read.
-#' Phase 1 does not measure the year without access, so `voci_senza_accessi`
-#' is zero.
+#' `voci_senza_accessi` counts the pairs of person and server listed in full
+#' for the year without access: those already named in an earlier report and
+#' those on a server not read are not in it.
 #'
 #' Names and codes only, and never a person: the record is shipped to a
 #' workspace and kept.
@@ -2612,7 +2810,7 @@ report_record <- function(esito, posta) {
     voci_attivati = as.integer(esito[["voci_attivati"]] %||% 0L),
     voci_senza_primo_accesso =
       as.integer(esito[["voci_senza_primo_accesso"]] %||% 0L),
-    voci_senza_accessi = 0L,
+    voci_senza_accessi = as.integer(esito[["voci_senza_accessi"]] %||% 0L),
     senza_creatore = as.integer(esito[["senza_creatore"]] %||% 0L),
     mese_completo = completo,
     in_ritardo = report_late(

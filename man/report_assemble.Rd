@@ -38,13 +38,21 @@ A list with \code{referenti}, one report per referent named after them,
 each a list of \code{referente}, \code{attivati} (rows), \code{senza_primo_accesso}
 (pairs of person and server, with \code{nome}, \code{upn}, \code{server}, \code{progetti},
 \code{attivata_il}, \code{giorni}, \code{mesi}, \code{segnalata}, \code{storia_nota}, \code{fonte} and
-\code{limite}) and \code{non_giudicati} (a count); \code{it}, \code{NULL} when there is
+\code{limite}), \code{senza_accessi} (pairs, with \code{nome}, \code{upn}, \code{server},
+\code{progetti}, \code{ultimo}, the day of the last access in Italian time, and
+\code{attivata_il}), \code{senza_accessi_gia} (how many pairs an earlier report
+named and are still without access), \code{senza_accessi_gia_coppie} (those
+pairs, \code{upn} and \code{server}, for the ledger) and \code{non_controllati} (a frame
+of \code{server} and \code{coppie}), and \code{non_giudicati} (a count); \code{it}, \code{NULL}
+when there is
 nothing for IT, otherwise a list of \code{senza_referente} (rows, with
 \code{motivo}), \code{non_giudicabili} (people, with \code{referente} and \code{motivo}),
 \code{senza_data} (rows) and \code{server_non_letti} (a frame of \code{server},
-\code{motivo} and \code{entra}, how many pairs of that server went into a
-referent's report on the strength of Entra; one row for each server of
-the rows that was not read, also with none); and \code{senza_creatore}, how
+\code{motivo}, \code{entra}, how many pairs of that server went into a
+referent's report on the strength of Entra, and \code{non_controllate}, how
+many were candidates for the year without access and could not be
+checked; one row for each server of the rows that was not read, also
+with none); and \code{senza_creatore}, how
 many rows have no referent to go to. Since rows can pass, that means
 without an established owner and not only without a creator; the name
 stays, because it is a column of \code{UbepRapporto_CL}, and a renamed
@@ -96,8 +104,19 @@ the key is still the one of the creation: otherwise the dates diverge
 for the person who entered, for a key reset and for the key the D-31
 rule replaced, and a date computed from them would be a guess, so it is
 \code{""};
-\item \strong{no access for more than a year} is phase 2, and the mail says it was
-not checked.
+\item \strong{no access for more than a year}, one item per person and server. A
+pair is a candidate when its request is active, applied, not expired and
+the person has had the access on that server for more than 365 days
+(the oldest request there, as for the first sign-in). On a server that
+was read, it enters when the person has entered at least once and the
+last access (\code{report_server_access()}) is more than 365 days before the
+reading, both as dates in Italian time. It is listed in full the month it
+crosses the threshold, and counted in \code{senza_accessi_gia} after: when an
+earlier report of the same referent named it (an entry with an empty
+server names it on every server). On a server that was not read the pair
+is only counted, per server, in \code{non_controllati}: Entra says nothing
+about it, and an empty item would say "none" about something nobody
+measured.
 }
 
 What has no referent to go to goes to IT, and to nobody else: a row whose

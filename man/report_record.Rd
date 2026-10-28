@@ -33,8 +33,9 @@ nothing is due, and the month is not called late on a guess.
 \code{in_ritardo} is \code{report_late()}.
 
 \code{istanze_non_lette} counts the servers the report asked and could not read.
-Phase 1 does not measure the year without access, so \code{voci_senza_accessi}
-is zero.
+\code{voci_senza_accessi} counts the pairs of person and server listed in full
+for the year without access: those already named in an earlier report and
+those on a server not read are not in it.
 
 Names and codes only, and never a person: the record is shipped to a
 workspace and kept.
