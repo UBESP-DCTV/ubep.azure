@@ -17,7 +17,7 @@ La cartella condivisa (vedi `teams_path` sotto) non contiene il codice, ma il **
 | Slug del vault (nome del progetto fuori da qui) | `ubep-azure` — la cartella si chiama `ubep.azure`, dal nome del pacchetto R, ma il punto non è ammesso in kebab-case |
 | Nota indice nel vault | [`c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md`](c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md) |
 | Fonte ufficiale (cartella condivisa) | `C:/Users/corra/Unit of Biostatistics Epidemiology and Public Health/IT - RedCap UBEP` |
-| Source label per `vault-add` | `ubep-sharepoint` |
+| Source label delle note in `_inbox/` | `ubep-sharepoint` |
 | Repo remoto (pubblico) | <https://github.com/UBESP-DCTV/ubep.azure> |
 | Sito pkgdown | <https://ubesp-dctv.github.io/ubep.azure/> |
 
@@ -29,17 +29,17 @@ Le directory aggiuntive (la cartella condivisa e la sotto-cartella di progetto d
 
 Cwd = questo repo. Le directory accessibili sono:
 
-- la cartella condivisa (R-mostly: l'hook globale `shared-path-guard` protegge dalle Write accidentali);
+- la cartella condivisa (R-mostly: l'hook globale `shared-path-guard` chiede conferma per ogni scrittura, dai file-tool e dalla shell);
 - la sotto-cartella di progetto del vault `<vault>/progetti/ubep-azure/` (lettura + scrittura).
 
-**Il resto del vault NON è accessibile da questo repo, neanche in lettura.** È enforced a runtime dall'hook `PreToolUse` `vault_isolation.py` (referenziato in `.claude/settings.json`, scope in `.claude/vault-isolation.json`) e non è bypassabile da auto-mode. Le sole eccezioni sono `<vault>/progetti/ubep-azure/` (workspace nostro) e `<vault>/_inbox/` (write-only, per `/vault-add`).
+**Il resto del vault NON è accessibile da questo repo, neanche in lettura.** È enforced a runtime dall'hook `PreToolUse` `vault_isolation.py` (referenziato in `.claude/settings.json`, scope in `.claude/vault-isolation.json`) e non è bypassabile da auto-mode. Le sole eccezioni sono `<vault>/progetti/ubep-azure/` (workspace nostro) e `<vault>/_inbox/` (write-only, per le note nuove).
 
 ## Regole rigide
 
 1. **Scrivere QUI di default**: codice, test, documentazione, note di analisi. Tutto sotto git.
-2. **Cartella condivisa = R-mostly**: leggi procedure, work instruction e template ufficiali, ma non scrivere senza conferma esplicita. L'hook globale `shared-path-guard` blocca i Write/Edit verso `IT - RedCap UBEP` finché non imposti `CLAUDE_SHARED_WRITE_OK=1` per l'operazione specifica.
+2. **Cartella condivisa = R-mostly**: leggi procedure, work instruction e template ufficiali, ma non scrivere senza conferma esplicita. L'hook globale `shared-path-guard` intercetta ogni scrittura verso `IT - RedCap UBEP` (Write, Edit e i comandi di Bash e PowerShell che ci scrivono) e chiede il permesso a [cl] per quella sola operazione; in una sessione senza nessuno davanti (`claude -p`) la scrittura è negata.
 3. **MAI** creare `.claude/`, `CLAUDE.md`, `.git/`, `.gitignore` dentro la cartella condivisa — l'hook globale lo blocca senza override.
-4. **Vault = drop-in-only**: per appuntare qualcosa nel vault da questa sessione, usa `/vault-add` (skill globale). Quella scrive in `$OBSIDIAN_VAULT_PATH/_inbox/<slug>-ubep-sharepoint.md` con `source: ubep-sharepoint` automaticamente popolato.
+4. **Vault = drop-in-only**: per appuntare qualcosa nel vault da questa sessione, scrivi una nota nuova in `c:/Users/corra/github/cl/obsidian-vault/_inbox/<AAAA-MM-GG>-<argomento>-ubep-sharepoint.md` con `source: ubep-sharepoint` nel frontmatter. L'inbox è concessa in sola scrittura: niente lettura, niente modifica di note esistenti.
 5. **Credenziali e tenant ID non si committano.** Questo repo è pubblico. App registration, client secret, object ID, tenant ID, liste utenti reali: niente di tutto ciò entra in git, nemmeno negli esempi roxygen o nei test. Usa `.Renviron` (già in `.gitignore`) e, nei test, fixture anonime.
 6. **Due cartelle di vault, una primaria e una secondaria.** `progetti/ubep-azure` è la nostra: lì si scrive di default. `progetti/update-redcap` è il progetto parallelo dell'aggiornamento del parco (REDCap, PHP, MySQL), agganciato in lettura e scrittura perché quello che succede lì è un input diretto qui — la superficie di REDCap cambia con gli aggiornamenti. Si legge sempre, si scrive **solo** quando il contenuto riguarda gli aggiornamenti; le decisioni di questo sotto-progetto restano nella nostra. Il resto del vault non è accessibile.
 7. **Niente firme di co-authorship nei messaggi di commit.** Nessun trailer `Co-Authored-By`, nessuna menzione dell'assistente: il messaggio finisce col contenuto. Non vale per le menzioni legittime di Claude come strumento (`CLAUDE.md`, `.claude/`, lo scaffold), che sono contenuto del progetto.
@@ -91,7 +91,7 @@ Comandi ricorrenti: `devtools::load_all()`, `devtools::document()`, `devtools::t
 
 ## Ponte verso il vault
 
-Quando questo progetto produce knowledge riusabile (pattern di chiamata Graph API, workaround di autenticazione, schema di provisioning), candidalo per il vault tramite `/vault-add` (atterra in `_inbox/`, poi `/note-promote` lo smista in `risorse/`).
+Quando questo progetto produce knowledge riusabile (pattern di chiamata Graph API, workaround di autenticazione, schema di provisioning), candidalo per il vault con una nota in `_inbox/` (punto 4 sopra; poi `note-promote` la smista in `risorse/`).
 
 Quando le decisioni di progetto cambiano (deadline, stato, scope), aggiorna manualmente la nota indice nel vault, [`progetti/ubep-azure/ubep-azure.md`](c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md).
 
