@@ -55,7 +55,7 @@
 <td><a href="c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md"><code>c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md</code></a></td>
 </tr><tr><td>Fonte ufficiale (cartella condivisa)</td>
 <td><code>C:/Users/corra/Unit of Biostatistics Epidemiology and Public Health/IT - RedCap UBEP</code></td>
-</tr><tr><td>Source label per <code>vault-add</code>
+</tr><tr><td>Source label delle note in <code>_inbox/</code>
 </td>
 <td><code>ubep-sharepoint</code></td>
 </tr><tr><td>Repo remoto (pubblico)</td>
@@ -68,20 +68,20 @@
 <p>Apri questa cartella in <strong>Positron</strong>. Apri una sessione Claude dal plugin integrato — niente da configurare, niente flag da passare.</p>
 <p>Le directory aggiuntive (la cartella condivisa e la sotto-cartella di progetto del vault) sono pre-configurate in <code>.claude/settings.json</code> sotto <code>permissions.additionalDirectories</code> e vengono agganciate automaticamente ad ogni sessione lanciata in questo cwd.</p>
 <p>Cwd = questo repo. Le directory accessibili sono:</p>
-<ul><li>la cartella condivisa (R-mostly: l’hook globale <code>shared-path-guard</code> protegge dalle Write accidentali);</li>
+<ul><li>la cartella condivisa (R-mostly: l’hook globale <code>shared-path-guard</code> chiede conferma per ogni scrittura, dai file-tool e dalla shell);</li>
 <li>la sotto-cartella di progetto del vault <code>&lt;vault&gt;/progetti/ubep-azure/</code> (lettura + scrittura).</li>
-</ul><p><strong>Il resto del vault NON è accessibile da questo repo, neanche in lettura.</strong> È enforced a runtime dall’hook <code>PreToolUse</code> <code>vault_isolation.py</code> (referenziato in <code>.claude/settings.json</code>, scope in <code>.claude/vault-isolation.json</code>) e non è bypassabile da auto-mode. Le sole eccezioni sono <code>&lt;vault&gt;/progetti/ubep-azure/</code> (workspace nostro) e <code>&lt;vault&gt;/_inbox/</code> (write-only, per <code>/vault-add</code>).</p>
+</ul><p><strong>Il resto del vault NON è accessibile da questo repo, neanche in lettura.</strong> È enforced a runtime dall’hook <code>PreToolUse</code> <code>vault_isolation.py</code> (referenziato in <code>.claude/settings.json</code>, scope in <code>.claude/vault-isolation.json</code>) e non è bypassabile da auto-mode. Le sole eccezioni sono <code>&lt;vault&gt;/progetti/ubep-azure/</code> (workspace nostro) e <code>&lt;vault&gt;/_inbox/</code> (write-only, per le note nuove).</p>
 </div>
 <div class="section level2">
 <h2 id="regole-rigide">Regole rigide<a class="anchor" aria-label="anchor" href="#regole-rigide"></a></h2>
 <ol style="list-style-type: decimal"><li>
 <strong>Scrivere QUI di default</strong>: codice, test, documentazione, note di analisi. Tutto sotto git.</li>
 <li>
-<strong>Cartella condivisa = R-mostly</strong>: leggi procedure, work instruction e template ufficiali, ma non scrivere senza conferma esplicita. L’hook globale <code>shared-path-guard</code> blocca i Write/Edit verso <code>IT - RedCap UBEP</code> finché non imposti <code>CLAUDE_SHARED_WRITE_OK=1</code> per l’operazione specifica.</li>
+<strong>Cartella condivisa = R-mostly</strong>: leggi procedure, work instruction e template ufficiali, ma non scrivere senza conferma esplicita. L’hook globale <code>shared-path-guard</code> intercetta ogni scrittura verso <code>IT - RedCap UBEP</code> (Write, Edit e i comandi di Bash e PowerShell che ci scrivono) e chiede il permesso a [cl] per quella sola operazione; in una sessione senza nessuno davanti (<code>claude -p</code>) la scrittura è negata.</li>
 <li>
 <strong>MAI</strong> creare <code>.claude/</code>, <code>CLAUDE.md</code>, <code>.git/</code>, <code>.gitignore</code> dentro la cartella condivisa — l’hook globale lo blocca senza override.</li>
 <li>
-<strong>Vault = drop-in-only</strong>: per appuntare qualcosa nel vault da questa sessione, usa <code>/vault-add</code> (skill globale). Quella scrive in <code>$OBSIDIAN_VAULT_PATH/_inbox/&lt;slug&gt;-ubep-sharepoint.md</code> con <code>source: ubep-sharepoint</code> automaticamente popolato.</li>
+<strong>Vault = drop-in-only</strong>: per appuntare qualcosa nel vault da questa sessione, scrivi una nota nuova in <code>c:/Users/corra/github/cl/obsidian-vault/_inbox/&lt;AAAA-MM-GG&gt;-&lt;argomento&gt;-ubep-sharepoint.md</code> con <code>source: ubep-sharepoint</code> nel frontmatter. L’inbox è concessa in sola scrittura: niente lettura, niente modifica di note esistenti.</li>
 <li>
 <strong>Credenziali e tenant ID non si committano.</strong> Questo repo è pubblico. App registration, client secret, object ID, tenant ID, liste utenti reali: niente di tutto ciò entra in git, nemmeno negli esempi roxygen o nei test. Usa <code>.Renviron</code> (già in <code>.gitignore</code>) e, nei test, fixture anonime.</li>
 <li>
@@ -139,7 +139,7 @@
 </ul></div>
 <div class="section level2">
 <h2 id="ponte-verso-il-vault">Ponte verso il vault<a class="anchor" aria-label="anchor" href="#ponte-verso-il-vault"></a></h2>
-<p>Quando questo progetto produce knowledge riusabile (pattern di chiamata Graph API, workaround di autenticazione, schema di provisioning), candidalo per il vault tramite <code>/vault-add</code> (atterra in <code>_inbox/</code>, poi <code>/note-promote</code> lo smista in <code>risorse/</code>).</p>
+<p>Quando questo progetto produce knowledge riusabile (pattern di chiamata Graph API, workaround di autenticazione, schema di provisioning), candidalo per il vault con una nota in <code>_inbox/</code> (punto 4 sopra; poi <code>note-promote</code> la smista in <code>risorse/</code>).</p>
 <p>Quando le decisioni di progetto cambiano (deadline, stato, scope), aggiorna manualmente la nota indice nel vault, <a href="c:/Users/corra/github/cl/obsidian-vault/progetti/ubep-azure/ubep-azure.md"><code>progetti/ubep-azure/ubep-azure.md</code></a>.</p>
 </div>
 <div class="section level2">
