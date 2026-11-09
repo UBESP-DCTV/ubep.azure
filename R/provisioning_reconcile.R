@@ -109,6 +109,14 @@
 #' change, since no approval lets them through, and before the identity's own
 #' codes. A row never carried out changes as before.
 #'
+#' **The oldest row of a pair keeps it whether the round serves it or not.**
+#' A row the round stops (held, blind, on its identity, on a pair that moved)
+#' still holds its pair, the one carried out when the log says it, and a
+#' younger row on that pair takes `DATO_COPPIA_DUPLICATA` as it would beside
+#' an older row the round serves. Otherwise the younger one was carried out
+#' on its own authority while the older waited, and the access followed
+#' whichever of the two stood.
+#'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
 #' cadence and the second consumes the first, so a resolver on a timer of its
@@ -980,6 +988,60 @@ provisioning_reconcile <- function(register_url,
     }
   }
 
+  # The oldest row of a pair keeps it whether this round serves it or not.
+  # `register_to_desired()` sees only the rows still standing, so a younger
+  # row on the pair of an older one the round has stopped (held, blind, on
+  # its identity, on a pair that moved) was its pair's oldest and was carried
+  # out on its own authority, for as long as the older one waited; back, the
+  # older one would take the pair again, and the access would follow whichever
+  # stood. So the rows the round does not serve hold their pair too: the one
+  # carried out, when the log says it, and otherwise the one the row names
+  # under the username the resolution found. A row stopped because its pair
+  # moved holds the pair it was carried out on, which is still its own. Age is
+  # the `record_id`, as there.
+  claim_of <- function(server, project, username) {
+    paste(
+      trimws(server), trimws(project), identity_normalize(username),
+      sep = "\r"
+    )
+  }
+  field_at <- function(field, i) {
+    value <- trimws(as.character(register[[field]][[i]]))
+    if (length(value) != 1L || is.na(value)) "" else value
+  }
+  claims <- vapply(seq_along(record_ids), function(i) {
+    if (standing[[i]]) {
+      return(NA_character_)
+    }
+    carried_pair <- executed_pair[[i]]
+    if (!is.null(carried_pair) && !anyNA(carried_pair)) {
+      return(claim_of(
+        carried_pair[["server"]], carried_pair[["project_id"]],
+        carried_pair[["username"]]
+      ))
+    }
+    named <- resolvable[[i]] && nzchar(resolved_names[[i]])
+    if (!named || !nzchar(field_at("server", i)) ||
+          !nzchar(field_at("project_id", i))) {
+      return(NA_character_)
+    }
+    claim_of(
+      field_at("server", i), field_at("project_id", i), resolved_names[[i]]
+    )
+  }, character(1))
+  age <- suppressWarnings(as.numeric(record_ids))
+  rank <- integer(length(record_ids))
+  rank[order(age, record_ids, na.last = TRUE)] <- seq_along(record_ids)
+  for (i in which(standing)) {
+    name <- if (creating[[i]]) creation_names[[i]] else resolved_names[[i]]
+    if (!nzchar(name)) {
+      next
+    }
+    mine <- claim_of(field_at("server", i), field_at("project_id", i), name)
+    if (any(!is.na(claims) & claims == mine & rank < rank[[i]])) {
+      row_errors[[record_ids[[i]]]] <- "DATO_COPPIA_DUPLICATA"
+    }
+  }
   for (id in as.character(resolved[["record_id"]])[malformed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "DATO_PROGETTO_INESISTENTE"

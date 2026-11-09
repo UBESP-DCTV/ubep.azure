@@ -6068,6 +6068,109 @@ test_that("una persona assente su una riga mai eseguita nasce come prima", {
 })
 
 
+# ---- The oldest row of a pair keeps it, served or not ----
+
+# Two rows for Mario on edc10, project 9003: 5 carried out, 12 filed after it
+# and never carried out. `storia` is what happened to row 5 since.
+due_righe <- function(cambi5 = list(),
+                      storia = list(),
+                      cambi12 = list(),
+                      directory = directory_doppia(),
+                      ...) {
+  riga5 <- utils::modifyList(
+    eseguita_row("5", applied_seal = sigillo_eseguito("5")), cambi5
+  )
+  riga12 <- utils::modifyList(list(record_id = "12"), cambi12)
+  giro(
+    registro_con_log(
+      record_json(riga5, riga12),
+      storia = c(storia, carried_out(sigillo_eseguito("5"), id = "5")),
+      creazioni = creazioni_finte(creata_da_anna("12"), creata_da_anna("5"))
+    ),
+    istanza_che_scrive(),
+    directory = directory,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+esito_di <- function(esito, id) {
+  at <- as.character(esito[["esiti"]][["record_id"]]) == id
+  list(
+    outcome = as.character(esito[["esiti"]][["outcome"]][at]),
+    detail = as.character(esito[["esiti"]][["outcome_detail"]][at])
+  )
+}
+
+
+test_that("una riga piu' recente non prende la coppia di una riga eseguita in attesa", { # nolint: line_length_linter.
+  # eval
+  esito <- due_righe(
+    list(role_name = "read only"),
+    list(cambio(bruno, "role_name = 'read only'", record = "5"))
+  )
+
+  # test
+  # Row 5 waits for Anna's approval and still governs Mario on that project.
+  # Served in its place, row 12 would grant on its own authority for as long
+  # as row 5 waits, and the two would take turns.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "held")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una riga piu' recente non prende la coppia di una riga eseguita ora ambigua", { # nolint: line_length_linter.
+  # eval
+  # A second account with Mario's name and his contact address: row 5 is
+  # ambiguous now. Row 12 gives an address only Mario's account carries.
+  esito <- due_righe(
+    cambi12 = list(contact_email = "mario.12@example.org"),
+    directory = directory_doppia(
+      graph_user(otherMails = I("mario.12@example.org")),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000003",
+        userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+      )
+    )
+  )
+
+  # test
+  expect_equal(
+    esito_di(esito, "5")[["detail"]], "DATO_RECAPITO_NON_IDENTIFICA"
+  )
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la coppia di una riga ferma per cambio di coppia resta sua", {
+  # eval
+  # Anna moved row 5 to edc12: it stops, and the pair it governs is still
+  # the one carried out, on edc10.
+  esito <- due_righe(
+    list(server = "edc12"),
+    list(cambio(anna, "server = 'edc12'", record = "5"))
+  )
+
+  # test
+  expect_equal(esito_di(esito, "5")[["detail"]], "DATO_COPPIA_CAMBIATA")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la riga eseguita in ordine tiene la coppia e la piu' recente resta doppione", { # nolint: line_length_linter.
+  # eval
+  esito <- due_righe()
+
+  # test
+  # The baseline the three above are read against: with row 5 served, the
+  # rule was already there.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+})
+
 
 test_that("una riga ferma per cambio di coppia scrive al proprietario che cosa era eseguito", { # nolint: line_length_linter.
   # eval

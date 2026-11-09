@@ -207,6 +207,14 @@ the account changed on Entra, and it is IT's. Both come before a held
 change, since no approval lets them through, and before the identity's own
 codes. A row never carried out changes as before.
 
+\strong{The oldest row of a pair keeps it whether the round serves it or not.}
+A row the round stops (held, blind, on its identity, on a pair that moved)
+still holds its pair, the one carried out when the log says it, and a
+younger row on that pair takes \code{DATO_COPPIA_DUPLICATA} as it would beside
+an older row the round serves. Otherwise the younger one was carried out
+on its own authority while the older waited, and the access followed
+whichever of the two stood.
+
 \strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
 the design — and the reason is latency: resolving and acting have the same
 cadence and the second consumes the first, so a resolver on a timer of its
