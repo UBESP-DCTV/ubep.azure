@@ -2030,7 +2030,7 @@ test_that("la mail di accesso si dirotta e non parte in simulazione", {
 # 9003, for Sara, and that now names another pair.
 coppia_di_prova <- list(
   outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA",
-  server = "edc12", executed_server = "edc10", executed_project_id = "29",
+  server = "edc12", executed_server = "edc10", executed_project_id = "9029",
   executed_username = "sara.collaudozeta@ubep.unipd.it",
   pair_changed = "server", edited_by = "bruno@ubep.unipd.it"
 )
@@ -2056,7 +2056,7 @@ test_that("il messaggio di una coppia cambiata dice che cosa e com'era", {
   )
   expect_match(
     corpo,
-    "Eseguita su: edc10, progetto 29, per sara.collaudozeta@ubep.unipd.it.",
+    "Eseguita su: edc10, progetto 9029, per sara.collaudozeta@ubep.unipd.it.",
     fixed = TRUE
   )
   expect_match(
@@ -2070,7 +2070,7 @@ test_that("il messaggio di una coppia cambiata dice che cosa e com'era", {
   )
   expect_match(
     corpo,
-    "Applied on: edc10, project 29, for sara.collaudozeta@ubep.unipd.it.",
+    "Applied on: edc10, project 9029, for sara.collaudozeta@ubep.unipd.it.",
     fixed = TRUE
   )
   expect_match(corpo, "The channel wrote nothing on the instance", fixed = TRUE)
@@ -2130,7 +2130,7 @@ test_that("il messaggio di un account cambiato su Entra va a IT e non chiede nie
     outcome = "transport_error",
     outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA",
     username = "sara.nuova@ubep.unipd.it",
-    executed_server = "edc10", executed_project_id = "29",
+    executed_server = "edc10", executed_project_id = "9029",
     executed_username = "sara.collaudozeta@ubep.unipd.it",
     pair_changed = "account"
   ))[["body"]]
@@ -2159,7 +2159,7 @@ test_that("il messaggio di un account cambiato su Entra va a IT e non chiede nie
   )
   expect_match(
     rinominato,
-    "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto 29.",
+    "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto 9029.",
     fixed = TRUE
   )
   expect_match(
