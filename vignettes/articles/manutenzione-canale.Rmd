@@ -2237,6 +2237,10 @@ smetterebbe di applicare. In quest'ordine:
   `scope_errors()`, che rifiuta una richiesta il cui autore non detiene il
   permesso `user_rights` sul progetto che la richiesta nomina — la regola è che
   il canale non deve permettere a nessuno ciò che non potrebbe già fare a mano.
+  Dalla 0.24.0 un permesso con la scadenza dell'utente sul progetto già
+  raggiunta vale come nessun permesso: la scadenza di REDCap è il primo giorno
+  senza accesso, quindi chi scade oggi è già fuori, e la data è quella del
+  client, come nella validazione della scadenza di una richiesta.
   **È in catena**: il giro lo interroga per ogni istanza che ha risposto, e una
   guardia nega qualunque funzione del pacchetto che sappia scrivere su
   un'istanza senza nominarlo. Il cancello si interroga sulle risposte e mai

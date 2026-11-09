@@ -1278,6 +1278,26 @@ test_that("a revoked row is revoked even when its last day has passed", {
 })
 
 
+test_that("a requester whose access to the project has expired is refused", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list(expiration = as.character(Sys.Date() - 1L))),
+    dry_run = FALSE
+  )
+
+  # test
+  # The expiration travels in the module's own state reply, the one the gate
+  # already reads, so a requester who holds User Rights on a project whose
+  # access has expired is judged as one who holds none.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
 test_that("an active row whose last day has passed is still refused", {
   # eval
   esito <- giro(

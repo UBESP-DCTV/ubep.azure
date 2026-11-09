@@ -10,11 +10,15 @@ round_rights(server, state)
 \item{server}{The instance name, which a \code{state} reply names once at the top
 and not on every row.}
 
-\item{state}{What \code{module_state()} returned.}
+\item{state}{What \code{module_state()} returned.
+
+The expiration travels with the permission, because a management
+permission past its expiration does not grant (\code{scope_errors()}). A null
+is no expiration, and reads as \code{NA}.}
 }
 \value{
 A data frame with \code{server}, \code{project_id}, \code{username}, and
-\code{user_rights} only when it was reported.
+\code{user_rights} and \code{expiration} only when the permission was reported.
 }
 \description{
 The permission column is added only when the instance actually reported it.
