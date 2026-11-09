@@ -40,12 +40,14 @@ the instance, the project and the person.
   second account for the same person, key to the owner and welcome to the
   person. The row now takes `transport_error` with
   `TRASPORTO_IDENTITA_CAMBIATA`, with nothing written on the instance and
-  nobody created. A revoked row whose person the tenant no longer holds took
-  `applied` with `absent`, which said the access was gone while it was still
-  on the instance: it takes the same code. The row goes on by itself when the
-  round finds the account carried out again, a deleted account restored for
-  instance; a rename that stays has no way out through the register in this
-  version. A row whose resolution names nobody, `ambiguous` or a collision
+  nobody created. A revoked row that resolves to another account that exists
+  takes it too: revoking that account would take away an access the row
+  never gave. A revoked row whose person the tenant no longer holds, with
+  nobody having written the person, closes as before, `applied` with
+  `absent`, before any instance is asked: there is nobody to take the access
+  from and nobody to create. The row goes on by itself when the round finds
+  the account carried out again, a deleted account restored for instance; a
+  rename that stays has no way out through the register in this version. A row whose resolution names nobody, `ambiguous` or a collision
   nobody answered, keeps the code of its identity as before.
 
 * **The outcome messages of the two codes.** Both go to the owner with IT in
@@ -77,16 +79,43 @@ the instance, the project and the person.
   stay intent fields, inside the seal, and no seal moves. A `@READONLY` of an
   outcome field wrapped in an `@IF` now reads as `DIZIONARIO_READONLY_CADUTO`.
 
+* **A revoked row whose last day of access has passed is revoked.** The
+  expiration of a revocation is no longer validated, since the revocation
+  does not write it: `register_to_desired()` drops `expiration` from a
+  revoked row before validating it. Until 0.23.0 the row took
+  `DATO_SCADENZA_NON_VALIDA` at every round and the access stayed. An active
+  row whose last day has passed is refused as before.
+
+* **The monthly report is late from day 2 also when the month never had a
+  whole reading.** For instance, when the log of an active row can never be
+  read. Until 0.23.0 `referenti` was 0, the month read as complete and no
+  alarm said otherwise. Now `dovuti_sconosciuti` holds when today's reading
+  is not whole and the file of the month's dues is missing or does not read,
+  and `report_late()` applies it from day 2 of the month, in Rome's calendar.
+  The record does not change.
+
+* **The scope gate takes a User Rights whose expiration on the project has
+  been reached as no rights.** REDCap's expiration is the first day without
+  access, so a permission expiring today or earlier is refused with
+  `DATO_AMBITO_NON_AUTORIZZATO`: a referent whose access to the project
+  expired cannot authorize requests through the channel, revocations of
+  somebody else's row included, as they could not by hand. `round_rights()`
+  carries `expiration` from the module's `state`, of the current contract;
+  an empty one is no expiration, and one that does not read as a date, on a
+  permission that would grant, is `TRASPORTO_PERMESSO_NON_LEGGIBILE`.
+
 * **Shape of the release.** Package and dictionary go in either order: the
   conditional tag is not compared, so 0.24.0 with the dictionary of 0.23.0,
   and 0.23.0 with the dictionary of 0.24.0, both conform. Until the
   dictionary is imported the two fields stay writable on the form, and the
   round refuses the change all the same. The module and the contract do not
   change. On the first round after the installation a row changes its
-  outcome only where the register already holds one of these cases: a row
-  carried out whose account was deleted or no longer matches the row, a
-  revoked row on a person the tenant no longer holds, a younger row on the
-  pair of an older one the round stops. An account renamed before 0.24.0 was
+  outcome only where the register already holds one of these cases: an
+  active row carried out whose account was deleted or no longer matches the
+  row, a younger row on the pair of an older one the round stops, a revoked
+  row whose last day of access has passed (revoked now), a row whose author
+  or owner has an expired access to the project
+  (`DATO_AMBITO_NON_AUTORIZZATO`). An account renamed before 0.24.0 was
   already carried out under its new name, and its row is not concerned.
 
 # ubep.azure 0.23.0

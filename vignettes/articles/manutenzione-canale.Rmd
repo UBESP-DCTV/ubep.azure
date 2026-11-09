@@ -1028,7 +1028,13 @@ non è il valore eseguito, e si legge quella sotto. La regola è
   0.23.0 il giro eseguiva il nome nuovo senza dire niente, ricreava l'account
   cancellato con lo stesso nome (che su REDCap ritrova tutti i diritti di
   prima) o ne creava un secondo per la stessa persona. L'esito va al
-  proprietario con IT in copia, e dice che la riga non va modificata. La riga
+  proprietario con IT in copia, e dice che la riga non va modificata. Lo
+  prende anche una riga revocata che risolve un altro account esistente:
+  revocarlo toglierebbe un accesso che la riga non ha mai dato. Una riga
+  revocata la cui persona non è più nel tenant, senza che nessuno l'abbia
+  scritta, si chiude invece come prima, `applied` con `absent`, prima delle
+  istanze (deciso il 2026-11-10): non c'è nessuno a cui togliere l'accesso e
+  nessuno da creare. La riga
   riparte da sola quando la risoluzione ritrova l'account eseguito, per
   esempio un account cancellato e ripristinato; per un account rinominato che
   resta tale questa versione non ha un'uscita dal registro, e la decisione è
