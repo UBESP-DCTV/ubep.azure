@@ -90,8 +90,12 @@ round_scope_readable <- function(state) {
 #'   and not on every row.
 #' @param state What `module_state()` returned.
 #'
+#' The expiration travels with the permission, because a management
+#' permission past its expiration does not grant (`scope_errors()`). A null
+#' is no expiration, and reads as `NA`.
+#'
 #' @return A data frame with `server`, `project_id`, `username`, and
-#'   `user_rights` only when it was reported.
+#'   `user_rights` and `expiration` only when the permission was reported.
 #'
 #' @keywords internal
 round_rights <- function(server, state) {
@@ -122,6 +126,14 @@ round_rights <- function(server, state) {
       suppressWarnings(as.integer(value))
     }
   }, integer(1))
+  frame[["expiration"]] <- vapply(results, function(row) {
+    value <- row[["expiration"]]
+    if (is.null(value) || length(value) != 1L) {
+      NA_character_
+    } else {
+      as.character(value)
+    }
+  }, character(1))
 
   frame
 }

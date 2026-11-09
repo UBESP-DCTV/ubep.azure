@@ -73,6 +73,48 @@ test_that("a requester who is a user but manages nobody is refused", {
 })
 
 
+test_that("a management permission past its expiration refuses", {
+  # eval
+  # REDCap's expiration is the first day without access, so a right that
+  # expires today is already out, as it is for the person signing in.
+  judged <- function(expiration) {
+    scope_errors(
+      register_rows(list()),
+      rights_rows(list(expiration = expiration))
+    )
+  }
+  ieri <- judged(as.character(Sys.Date() - 1L))
+  oggi <- judged(as.character(Sys.Date()))
+  domani <- judged(as.character(Sys.Date() + 1L))
+  vuota <- judged("")
+  assente <- judged(NA_character_)
+
+  # test
+  # The channel must not let anyone do what they could not do by hand, and a
+  # referent whose access to the project has expired cannot open its User
+  # Rights page. That is a verdict about the referent, so it goes to them.
+  expect_equal(ieri[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
+  expect_equal(oggi[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
+  expect_length(domani, 0L)
+  expect_length(vuota, 0L)
+  expect_length(assente, 0L)
+})
+
+
+test_that("an expiration that does not read as a date is ours to fix", {
+  # eval
+  errors <- scope_errors(
+    register_rows(list()),
+    rights_rows(list(expiration = "31/12/2027"))
+  )
+
+  # test
+  # REDCap keeps the expiration as a date, so this is a reply nobody can read:
+  # refused as an unreadable permission is, and not granted.
+  expect_equal(errors[["1"]], "TRASPORTO_PERMESSO_NON_LEGGIBILE")
+})
+
+
 test_that("a permission that could not be read refuses, never grants", {
   # eval
   unknown <- scope_errors(

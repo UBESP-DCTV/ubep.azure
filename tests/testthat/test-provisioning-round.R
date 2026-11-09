@@ -124,6 +124,20 @@ test_that("the rights frame carries no permission column when nobody reported on
 })
 
 
+test_that("the rights frame carries the expiration the instance reported", {
+  # eval
+  rights <- round_rights("edc10", state_reply(
+    list(expiration = "2026-11-01"),
+    list(username = "anna.bianchi@ubep.unipd.it")
+  ))
+
+  # test
+  # The gate refuses a management permission past its expiration, and it can
+  # only if the expiration reaches it. A null is no expiration, and is NA.
+  expect_equal(rights[["expiration"]], c("2026-11-01", NA_character_))
+})
+
+
 test_that("a null permission travels as NA and never as a zero", {
   # eval
   # Built inline rather than through the helper: `%||%` would substitute the

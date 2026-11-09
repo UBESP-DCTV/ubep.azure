@@ -2505,7 +2505,18 @@ register_to_desired <- function(register) {
       next
     }
 
-    taken <- intake_request(requests[[i]])
+    # A revocation writes no last day, so the one the row still carries is
+    # not validated: checked, a revoked row whose date had passed was refused
+    # with `DATO_SCADENZA_NON_VALIDA` at every round, never reached the plan,
+    # and the access it asked to remove stayed for good, because the date only
+    # gets older. Dropped here, before the intake, so that it is neither
+    # checked nor converted, and the revoke batch carries no expiration.
+    request <- requests[[i]]
+    if (identical(statuses[[i]], "revoked")) {
+      request[["expiration"]] <- NULL
+    }
+
+    taken <- intake_request(request)
     if (length(taken[["errors"]]) > 0L) {
       errors[[ids[[i]]]] <- taken[["errors"]]
       next

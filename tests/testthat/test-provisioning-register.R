@@ -277,6 +277,32 @@ test_that("register_to_desired reports the data errors of validation", {
 })
 
 
+test_that("a revoked row is not refused for a last day that has passed", {
+  # eval
+  yesterday <- as.character(Sys.Date() - 1L)
+  register <- rbind(
+    register_row(
+      record_id = "1", request_status = "revoked", expiration = yesterday
+    ),
+    register_row(
+      record_id = "2", project_id = "9004", expiration = yesterday
+    )
+  )
+  split <- register_to_desired(register)
+
+  # test
+  # A revocation writes no last day, so the one the row still carries is not
+  # a reason to keep the access. Refused, the row never reached the plan and
+  # the right it asked to remove stayed for good: the date only gets older.
+  # The active row with the same date is refused as before.
+  expect_length(split[["revoked"]], 1L)
+  expect_equal(split[["revoked"]][[1]][["record_id"]], "1")
+  expect_null(split[["errors"]][["1"]])
+  expect_equal(split[["errors"]][["2"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_length(split[["desired"]], 0L)
+})
+
+
 test_that("the last day of access is converted once, at the border", {
   # eval
   last_day <- Sys.Date() + 30L

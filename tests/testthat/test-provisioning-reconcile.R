@@ -1232,6 +1232,93 @@ test_that("a revoke the re-read still shows is not called applied", {
 })
 
 
+# An instance that holds the pair until a revoke is written for real, and
+# then no longer does: the read-back after the revoke is what `applied` and
+# `absent` are claims about, so the double has to move.
+istanza_che_revoca <- function() {
+  revocato <- FALSE
+  function(data) {
+    if (identical(data[["operation"]], "revoke") &&
+          isFALSE(data[["dry_run"]])) {
+      revocato <<- TRUE # nolint: assignment_linter.
+    }
+    rows <- list(list())
+    if (!revocato) {
+      rows <- c(rows, list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
+        role_name = "data entry"
+      )))
+    }
+    do.call(istanza_doppia, rows)(data)
+  }
+}
+
+
+test_that("a revoked row is revoked even when its last day has passed", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      request_status = "revoked",
+      expiration = as.character(Sys.Date() - 1L)
+    ))),
+    istanza_che_revoca(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The last day is checked because an apply would write it. A revoke writes
+  # none, and refusing the row for it left the right on the instance with no
+  # way for the register to remove it: the date never comes back.
+  revocazioni <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, scritture())
+  expect_length(revocazioni, 1L)
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_equal(esito[["esiti"]][["applied_as"]], "absent")
+})
+
+
+test_that("a requester whose access to the project has expired is refused", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list(expiration = as.character(Sys.Date() - 1L))),
+    dry_run = FALSE
+  )
+
+  # test
+  # The expiration travels in the module's own state reply, the one the gate
+  # already reads, so a requester who holds User Rights on a project whose
+  # access has expired is judged as one who holds none.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
+test_that("an active row whose last day has passed is still refused", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      expiration = as.character(Sys.Date() - 1L)
+    ))),
+    istanza_che_revoca(),
+    dry_run = FALSE
+  )
+
+  # test
+  # What the revocation fix must not touch: an active row past its last day
+  # is a data error, and nothing is written to the instance for it.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+})
+
+
 test_that("a simulated write carries the module's own intention in applied_as", { # nolint: line_length_linter.
   # eval
   esito <- giro(
