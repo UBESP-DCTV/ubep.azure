@@ -105,7 +105,7 @@
 #' instance, the project, or the person written so that the round would serve
 #' somebody else; `TRASPORTO_IDENTITA_CAMBIATA` when the round would serve
 #' another account, or create one, and nobody wrote the person in the row:
-#' the account changed on Entra, and it is IT's. Both come before a held
+#' the account changed on Entra, and it is for IT. Both come before a held
 #' change, since no approval lets them through, and before the identity's own
 #' codes. A row never carried out changes as before.
 #'

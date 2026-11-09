@@ -48,7 +48,7 @@ else, another account or a person to create. Setting the fields back to
 the values carried out brings the row back as it was; another person or
 another project is a new request, and this one is revoked, its fields
 back first;
-\item \code{TRASPORTO_IDENTITA_CAMBIATA}, IT's, decided on 2026-11-09 as well: the
+\item \code{TRASPORTO_IDENTITA_CAMBIATA}, for IT, decided on 2026-11-09 as well: the
 round would serve another account or create one while nobody wrote the
 person in the row, so the account changed on Entra (renamed, deleted,
 its name corrected). Nothing in the row explains it, and the referent has
