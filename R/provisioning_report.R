@@ -2891,8 +2891,9 @@ report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
 #' A report composed on half a reading would be wrong for somebody, and the
 #' next day tries again. Such a day also does not know who is due, so it
 #' judges the month on the reports the last whole reading found due, kept
-#' beside the ledger (`report_due_read()`); with none on record it says
-#' nothing is due, and the alarm on absence is the one that speaks.
+#' beside the ledger (`report_due_read()`); with none on record it counts
+#' nothing, and from the second day calls the month late (`report_late()`):
+#' the alarm on absence watches the register and the directory, not the logs.
 #'
 #' On the 1st the run moves on to the month just ended. A month whose reports
 #' did not all leave is not given up: the first run that can send (read whole,
@@ -3170,6 +3171,11 @@ provisioning_report <- function(register_url,
     errors <- c(errors, known[["errors"]])
     due <- known[["dovuti"]] %||% character()
   }
+  # Nobody knows who is due: no whole reading today and none kept for the
+  # month. Nothing is counted then, so the month reads complete at 0 = 0,
+  # and a month whose reading failed every day would never be late.
+  # `report_late()` is told, and judges it from the 2nd.
+  due_unknown <- !read_whole && is.null(known[["dovuti"]])
   already <- vapply(ledger[["invii"]], `[[`, "", "destinatario")
   pending <- setdiff(due, already)
 
@@ -3299,6 +3305,7 @@ provisioning_report <- function(register_url,
     registro_letto = register_read,
     directory_letta = directory_read,
     letture_complete = complete,
+    dovuti_sconosciuti = due_unknown,
     server = servers,
     istanze_non_lette = as.integer(unread_servers),
     posta_dirottata = !is.null(redirect_to),
@@ -3351,9 +3358,12 @@ provisioning_report <- function(register_url,
 
 #' Whether the month's reports are late
 #'
-#' From the second day of the month on, with the month not complete, or while
-#' a month lost still misses a report. Computed here and not in the query of
-#' the alarm, so that a test covers it. A forced run speaks about another
+#' From the second day of the month on, with the month not complete or with
+#' who is due not known, or while a month lost still misses a report. Who is
+#' due is not known when no reading of the month was whole, today or on an
+#' earlier day: nothing is counted then, and a month counted on nothing reads
+#' complete. Computed here and not in the query of the alarm, so that a test
+#' covers it. A forced run speaks about another
 #' month and cannot say the real one is late: it says false, and the next run
 #' of the timer says the truth.
 #'
@@ -3361,12 +3371,18 @@ provisioning_report <- function(register_url,
 #' @param completo Whether every report of the month has left.
 #' @param forzato Whether the month was forced.
 #' @param persi How many months lost still miss a report.
+#' @param sconosciuti Whether who is due is not known, from
+#'   `provisioning_report()`'s `dovuti_sconosciuti`.
 #'
 #' @return One logical.
 #'
 #' @keywords internal
-report_late <- function(giorno, completo, forzato, persi = 0L) {
-  !isTRUE(forzato) && ((giorno >= 2L && !isTRUE(completo)) || persi > 0L)
+report_late <- function(giorno, completo, forzato, persi = 0L,
+                        sconosciuti = FALSE) {
+  !isTRUE(forzato) && (
+    (giorno >= 2L && (!isTRUE(completo) || isTRUE(sconosciuti))) ||
+      persi > 0L
+  )
 }
 
 
@@ -3388,9 +3404,10 @@ report_late <- function(giorno, completo, forzato, persi = 0L) {
 #' whole. A day that cannot read
 #' judges the month on the last whole reading, so a reading that fails after
 #' the month was sent does not make it late; with no whole reading on record
-#' nothing is due, and the month is not called late on a guess.
-#' `in_ritardo` is `report_late()`: from day 2 with the month not complete,
-#' or while a month lost still misses a report (`mesi_persi`).
+#' nothing is counted, and `mese_completo` is true on nothing.
+#' `in_ritardo` is `report_late()`: from day 2 with the month not complete
+#' or with no whole reading on record (`dovuti_sconosciuti`), or while a month
+#' lost still misses a report (`mesi_persi`).
 #'
 #' `istanze_non_lette` counts the servers the report asked and could not read.
 #' `voci_senza_accessi` counts the pairs of person and server listed in full
@@ -3445,7 +3462,8 @@ report_record <- function(esito, posta) {
     mese_completo = completo,
     in_ritardo = report_late(
       esito[["giorno"]], completo, esito[["forzato"]],
-      persi = length(esito[["mesi_persi"]])
+      persi = length(esito[["mesi_persi"]]),
+      sconosciuti = isTRUE(esito[["dovuti_sconosciuti"]])
     ),
     errori = as.character(esito[["errori"]] %||% character())
   )

@@ -3304,7 +3304,7 @@ test_that("an unreadable register sends nothing, and judges the month known", {
 })
 
 
-test_that("a month never read whole is not called late", {
+test_that("a month never read whole is late from the 2nd", {
   # eval
   doppie(letto = FALSE)
   cartella <- withr::local_tempdir()
@@ -3314,11 +3314,42 @@ test_that("a month never read whole is not called late", {
   )
 
   # test
-  # Nothing says what is due: the reading that failed is reported by the
-  # alarm on absence, and this one stays quiet rather than guess.
+  # Nothing says what is due, so nothing is counted: `referenti` is 0 and
+  # `mese_completo` is 0 = 0. That is not a month that left, and from the 2nd
+  # it is late, or a month whose reading fails every day would never be.
   expect_equal(record[["referenti"]], 0L)
   expect_true(record[["mese_completo"]])
-  expect_false(record[["in_ritardo"]])
+  expect_true(record[["in_ritardo"]])
+})
+
+
+test_that("a month whose logs never read is late from the 2nd, in Rome", {
+  # eval
+  # The register and the directory answer, an active row's log does not:
+  # the alarm on absence watches the first two only.
+  doppie(log_letto = FALSE)
+  cartella <- withr::local_tempdir()
+
+  terzo <- esegui(cartella, posta_finta(), ora = "2026-11-03 06:30")
+  record <- report_record(terzo, posta = TRUE)
+  primo <- report_record(
+    esegui(cartella, posta_finta(), ora = "2026-11-01 06:30"), posta = TRUE
+  )
+  # 23:30 UTC on the 1st is 00:30 on the 2nd in Rome, the day lateness is
+  # judged on.
+  mezzanotte <- report_record(
+    esegui(cartella, posta_finta(), ora = "2026-11-01 23:30"), posta = TRUE
+  )
+
+  # test
+  expect_true(record[["registro_letto"]])
+  expect_true(record[["directory_letta"]])
+  expect_false(terzo[["letture_complete"]])
+  expect_false(file.exists(file.path(cartella, "2026-10.dovuti.json")))
+  expect_equal(record[["referenti"]], 0L)
+  expect_true(record[["in_ritardo"]])
+  expect_false(primo[["in_ritardo"]])
+  expect_true(mezzanotte[["in_ritardo"]])
 })
 
 
@@ -3450,6 +3481,16 @@ test_that("late means from the 2nd on, with the month not complete", {
   expect_true(report_late(28L, completo = FALSE, forzato = FALSE))
   expect_false(report_late(2L, completo = TRUE, forzato = FALSE))
   expect_false(report_late(2L, completo = FALSE, forzato = TRUE))
+  # Who is due unknown: late from the 2nd as a month not complete is.
+  expect_false(
+    report_late(1L, completo = TRUE, forzato = FALSE, sconosciuti = TRUE)
+  )
+  expect_true(
+    report_late(2L, completo = TRUE, forzato = FALSE, sconosciuti = TRUE)
+  )
+  expect_false(
+    report_late(2L, completo = TRUE, forzato = TRUE, sconosciuti = TRUE)
+  )
   # A month lost still missing a report is late from the first day, unless
   # the run is forced.
   expect_true(report_late(1L, completo = TRUE, forzato = FALSE, persi = 1L))

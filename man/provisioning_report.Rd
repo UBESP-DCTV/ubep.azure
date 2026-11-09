@@ -94,8 +94,9 @@ people it could hold are told without their earlier reports.
 A report composed on half a reading would be wrong for somebody, and the
 next day tries again. Such a day also does not know who is due, so it
 judges the month on the reports the last whole reading found due, kept
-beside the ledger (\code{report_due_read()}); with none on record it says
-nothing is due, and the alarm on absence is the one that speaks.
+beside the ledger (\code{report_due_read()}); with none on record it counts
+nothing, and from the second day calls the month late (\code{report_late()}):
+the alarm on absence watches the register and the directory, not the logs.
 
 On the 1st the run moves on to the month just ended. A month whose reports
 did not all leave is not given up: the first run that can send (read whole,

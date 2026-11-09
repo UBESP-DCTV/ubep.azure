@@ -2130,7 +2130,11 @@ leggere un allarme:
   completo;
 - `in_ritardo` si calcola nel pacchetto e non nella query, così lo copre un
   test: dal giorno 2 del mese con il mese non completo, **oppure finché resta
-  un mese perso non recuperato**.
+  un mese perso non recuperato**. Dalla 0.24.0 anche dal giorno 2 di un mese
+  che non ha mai avuto una lettura intera: senza dovuti `referenti` vale 0 e
+  `mese_completo` risulta vero su niente, e un mese il cui log di una riga
+  attiva non si legge mai, che l'allarme d'assenza non vede, non risultava
+  mai in ritardo.
 
 `giorno_di_invio` resta «oggi è dovuto il rapporto del mese corrente»: un giro
 di soli recuperi ha `mandati` sopra zero e `giorno_di_invio` falso, e una regola
