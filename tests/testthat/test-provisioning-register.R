@@ -3240,3 +3240,34 @@ test_that("un account cambiato su Entra senza scritture ferma la riga per IT", {
     "DATO_COPPIA_CAMBIATA"
   )
 })
+
+
+test_that("una revoca su una persona che il tenant non tiene piu' non e' un cambio", {
+  # test
+  # Decided on 2026-11-10: nobody to take the access from, nobody to create,
+  # and the row closes before the instances as it did. Written by a
+  # referent, the person moved all the same; a pair that moved still stops.
+  expect_equal(
+    pair_change(eseguiti, ora(), "", TRUE, FALSE, revoked = TRUE)[["code"]],
+    ""
+  )
+  expect_equal(
+    pair_change(eseguiti, ora(), "", TRUE, TRUE, revoked = TRUE)[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  expect_equal(
+    pair_change(
+      eseguiti, ora(server = "edc12"), "", TRUE, FALSE, revoked = TRUE
+    )[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  # Another account that exists is no closing: revoking it would take away
+  # an access the row never gave.
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "mario.rossi.2@ubep.unipd.it", FALSE, FALSE,
+      revoked = TRUE
+    )[["code"]],
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+})

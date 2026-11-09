@@ -771,7 +771,9 @@ provisioning_reconcile <- function(register_url,
       executed_pair[[i]], register[i, , drop = FALSE],
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
       creating = creating[[i]] && !unheard[[i]],
-      rewritten = rewritten
+      rewritten = rewritten,
+      revoked = trimws(as.character(register[["request_status"]][[i]])) %in%
+        "revoked"
     )
   })
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))

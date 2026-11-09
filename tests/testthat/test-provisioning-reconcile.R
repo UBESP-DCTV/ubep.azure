@@ -3177,16 +3177,9 @@ test_that("la revoca altrui di una persona assente non si chiude senza cancello"
   )
 
   # test
-  # The exception is decided at the gate, on Bruno's rights, and this row
-  # never reaches it. It waited for its creator until 2026-11-09; since then
-  # a row carried out whose person the tenant no longer holds stops for IT
-  # (`pair_change()`): the access carried out may still be on the instance,
-  # and nothing closes the row as revoked.
-  expect_equal(
-    as.character(esito[["esiti"]][["outcome_detail"]]),
-    "TRASPORTO_IDENTITA_CAMBIATA"
-  )
-  expect_length(scritture(), 0L)
+  # The exception is decided at the gate, on Bruno's rights. A row that never
+  # reaches the gate waits for its creator, as before the exception existed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
 })
 
 
@@ -6117,20 +6110,72 @@ test_that("un nome corretto su Entra non fa nascere un secondo account", {
 })
 
 
-test_that("una revoca su un account cancellato non si dichiara eseguita", {
+test_that("una revoca su un account cancellato si chiude come prima", {
   # eval
   esito <- giro_coppia(
     list(request_status = "revoked"),
     list(cambio(anna, "request_status = 'revoked'")),
-    directory = directory_vuota()
+    directory = directory_vuota(),
+    mailer = posta_accesa
   )
 
   # test
-  # The person is not in the tenant, and the access carried out is on the
-  # instance all the same: `applied` with `absent` would say it was removed.
+  # Decided on 2026-11-10: the person is not in the tenant, so there is
+  # nobody to take the access from and nobody to create. The row closes
+  # before any instance is asked, as it did before 0.24.0, and stopped for
+  # IT it would bring, on the first round, outcomes and copies for rows long
+  # closed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_length(interrogazioni(), 0L)
+})
+
+
+test_that("una revoca su un account rinominato non revoca il nome nuovo", {
+  # eval
+  esito <- giro_coppia(
+    list(request_status = "revoked"),
+    list(cambio(anna, "request_status = 'revoked'")),
+    directory = directory_doppia(
+      graph_user(userPrincipalName = "mario.rossi.nuovo@ubep.unipd.it")
+    )
+  )
+
+  # test
+  # Revoking the new name would take away an access the row never gave, and
+  # leave the one it gave: the row stops for IT.
   expect_equal(
     as.character(esito[["esiti"]][["outcome_detail"]]),
     "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una revoca spostata su una persona assente resta un cambio di coppia", {
+  # eval
+  # Anna revokes and writes somebody the tenant does not hold: the row would
+  # close as revoked while Mario's access stays.
+  esito <- giro_coppia(
+    list(
+      request_status = "revoked", first_name = "Nadia", last_name = "Nuova",
+      contact_email = "nadia@example.org"
+    ),
+    list(cambio(
+      anna, paste0(
+        "request_status = 'revoked', first_name = 'Nadia', ",
+        "last_name = 'Nuova', contact_email = 'nadia@example.org'"
+      )
+    )),
+    directory = directory_doppia()
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
   )
   nulla_scritto()
 })

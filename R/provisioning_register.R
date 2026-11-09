@@ -1232,6 +1232,15 @@ log_executed_values <- function(events, record, creator,
 #' them. A username carried out the log does not say decides nothing, except
 #' against a creation.
 #'
+#' **A revoked row whose person the tenant no longer holds is no change**,
+#' decided on 2026-11-10, when nobody wrote the person in it: there is nobody
+#' to take the access from and nobody to create, and the round closes the row
+#' before any instance is asked, as it did before the rule. Stopped for IT,
+#' the rows long closed that way would bring an outcome and a copy each on
+#' the first round. A revoked row that resolves to another account that
+#' exists still stops: revoking that account would take away an access the
+#' row never gave.
+#'
 #' @param executed What `log_executed_values()` answered for `server`,
 #'   `project_id` and `username`.
 #' @param current The row as the register holds it, a list or a one-row data
@@ -1242,19 +1251,22 @@ log_executed_values <- function(events, record, creator,
 #' @param rewritten Whether a write of the person fields by somebody other
 #'   than the channel stands in the row since its last execution; `NA` when
 #'   the log does not say who wrote it, which counts as a write.
+#' @param revoked Whether the row asks for `revoked`.
 #'
 #' @return A list with `code`, one of the two codes or `""`, and `changed`,
 #'   which of `"server"`, `"project_id"` and `"person"` moved, or `"account"`
 #'   for the second code.
 #'
 #' @keywords internal
-pair_change <- function(executed, current, target, creating, rewritten) {
+pair_change <- function(executed, current, target, creating, rewritten,
+                        revoked = FALSE) {
   stopifnot(
     is.character(executed),
     all(c("server", "project_id", "username") %in% names(executed)),
     is.character(target), length(target) == 1L,
     is.logical(creating), length(creating) == 1L, !is.na(creating),
-    is.logical(rewritten), length(rewritten) == 1L
+    is.logical(rewritten), length(rewritten) == 1L,
+    is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
   )
 
   now <- function(field) {
@@ -1279,7 +1291,10 @@ pair_change <- function(executed, current, target, creating, rewritten) {
     changed <- c(changed, "project_id")
   }
 
-  person <- creating || (
+  # A revocation on a person the tenant no longer holds creates nobody: it
+  # closes, unless somebody wrote that person.
+  closing <- creating && revoked && isFALSE(rewritten)
+  person <- (creating && !closing) || (
     !is.na(target) && nzchar(target) && !is.na(executed[["username"]]) &&
       identity_normalize(target) != identity_normalize(executed[["username"]])
   )

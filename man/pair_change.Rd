@@ -4,7 +4,7 @@
 \alias{pair_change}
 \title{Whether a row the round carried out now asks for another pair}
 \usage{
-pair_change(executed, current, target, creating, rewritten)
+pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
 }
 \arguments{
 \item{executed}{What \code{log_executed_values()} answered for \code{server},
@@ -21,6 +21,8 @@ resolution names nobody or would create somebody.}
 \item{rewritten}{Whether a write of the person fields by somebody other
 than the channel stands in the row since its last execution; \code{NA} when
 the log does not say who wrote it, which counts as a write.}
+
+\item{revoked}{Whether the row asks for \code{revoked}.}
 }
 \value{
 A list with \code{code}, one of the two codes or \code{""}, and \code{changed},
@@ -64,5 +66,14 @@ code of the identity, which concedes nothing either; a person to create is
 somebody else on a row carried out, whatever name the round would give
 them. A username carried out the log does not say decides nothing, except
 against a creation.
+
+\strong{A revoked row whose person the tenant no longer holds is no change},
+decided on 2026-11-10, when nobody wrote the person in it: there is nobody
+to take the access from and nobody to create, and the round closes the row
+before any instance is asked, as it did before the rule. Stopped for IT,
+the rows long closed that way would bring an outcome and a copy each on
+the first round. A revoked row that resolves to another account that
+exists still stops: revoking that account would take away an access the
+row never gave.
 }
 \keyword{internal}
