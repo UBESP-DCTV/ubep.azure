@@ -2967,3 +2967,250 @@ test_that("una risposta alla proposta di prima non vale per quella nuova", {
     channel_account = "svc-canale-ubep"
   ))
 })
+
+
+# A row Anna filed for Mario on edc10, project 9003, that the round resolved
+# and carried out, newest first: the seals door's event, the identity door's
+# write of the username below it, and the creation at the bottom, carrying
+# the fields as REDCap logs them, `campo = 'valore'`.
+eseguita_su <- function(...,
+                        username = "mario.rossi@ubep.unipd.it",
+                        sigillo = "000000000000") {
+  eventi_finti(
+    ...,
+    list(
+      username = canale, action = "Update record (API) 1",
+      details = paste0(
+        "applied_seal = '", sigillo, "', seal_state = 'intact'"
+      )
+    ),
+    list(
+      username = canale, action = "Update record (API) 1",
+      details = paste0("username = '", username, "', identity = 'existing'")
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = paste0(
+        "record_id = '1', server = 'edc10', project_id = '9003', ",
+        "first_name = 'Mario', last_name = 'Rossi', ",
+        "contact_email = 'mario.rossi@example.org', role_name = 'data entry', ",
+        "request_status = 'active'"
+      )
+    )
+  )
+}
+
+test_that("i valori eseguiti sono quelli sotto l'ultimo sigillo del canale", {
+  # eval
+  # Above the seal Bruno moved the row to edc12 and project 9004.
+  eventi <- eseguita_su(list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "server = 'edc12', project_id = '9004'"
+  ))
+
+  # test
+  # What was carried out is what stands below the channel's last seal: the
+  # creation for the pair, the identity door for the person. A write above
+  # it is a change, not what was carried out.
+  for (account in list(NULL, canale)) {
+    expect_equal(
+      log_executed_values(eventi, "1", creatrice, channel_account = account),
+      c(
+        server = "edc10", project_id = "9003",
+        username = "mario.rossi@ubep.unipd.it"
+      )
+    )
+  }
+})
+
+
+test_that("senza un sigillo del canale non c'e' un valore eseguito", {
+  # eval
+  mai <- eventi_finti(list(
+    username = creatrice, action = "Create record 1",
+    details = "record_id = '1', server = 'edc10', project_id = '9003'"
+  ))
+  importato <- rbind(
+    eventi_finti(list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "applied_seal = '000000000000', seal_state = 'intact'"
+    )),
+    mai
+  )
+
+  # test
+  # A row the channel never sealed is a row never carried out, whatever the
+  # field holds; a seal a referent imported carried out nothing.
+  expect_true(all(is.na(log_executed_values(mai, "1", creatrice))))
+  expect_true(all(is.na(
+    log_executed_values(importato, "1", creatrice, channel_account = canale)
+  )))
+})
+
+
+test_that("un nome utente eseguito con l'apostrofo si legge intero", {
+  # eval
+  eventi <- eseguita_su(username = "luca.d'amico@ubep.unipd.it")
+
+  # test
+  # Cut at the first apostrophe it would read `luca.d`, and every round would
+  # find a username different from the one carried out.
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+      "username"
+    ]],
+    "luca.d'amico@ubep.unipd.it"
+  )
+})
+
+
+test_that("un campo che il log non porta sotto il sigillo e' ignoto", {
+  # eval
+  eventi <- eventi_finti(
+    applicata,
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1'"
+    )
+  )
+
+  # test
+  expect_true(all(is.na(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)
+  )))
+})
+
+
+test_that("una scrittura scoperta sotto il sigillo non e' il valore eseguito", {
+  # eval
+  # Cinzia wrote the server while the round that sealed the row ran: below
+  # its seal, with no approval above her write. The round carried out the
+  # value it had read, the creation's.
+  eventi <- eventi_finti(
+    eseguita("222222222222"),
+    list(
+      username = "cinzia.rossi@ubep.unipd.it", details = "server = 'edc12'"
+    ),
+    list(
+      username = canale, action = "Update record (API) 1",
+      details = "username = 'mario.rossi@ubep.unipd.it', identity = 'existing'"
+    ),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', server = 'edc10', project_id = '9003'"
+    )
+  )
+
+  # test
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+      "server"
+    ]],
+    "edc10"
+  )
+})
+
+
+eseguiti <- c(
+  server = "edc10", project_id = "9003",
+  username = "mario.rossi@ubep.unipd.it"
+)
+ora <- function(...) {
+  utils::modifyList(list(server = "edc10", project_id = "9003"), list(...))
+}
+
+test_that("istanza o progetto diversi da quelli eseguiti cambiano la coppia", {
+  # test
+  # Decided on 2026-11-09: a row the channel carried out does not change its
+  # pair, whoever wrote the change. `09003` is the project `9003`.
+  spostata <- pair_change(
+    eseguiti, ora(server = "edc12"), "mario.rossi@ubep.unipd.it", FALSE, FALSE
+  )
+  expect_equal(spostata[["code"]], "DATO_COPPIA_CAMBIATA")
+  expect_equal(spostata[["changed"]], "server")
+  expect_equal(
+    pair_change(
+      eseguiti, ora(project_id = "9004"), "mario.rossi@ubep.unipd.it",
+      FALSE, FALSE
+    )[["changed"]],
+    "project_id"
+  )
+  expect_equal(
+    pair_change(
+      eseguiti, ora(project_id = " 09003 "), "mario.rossi@ubep.unipd.it",
+      FALSE, FALSE
+    )[["code"]],
+    ""
+  )
+})
+
+
+test_that("un'altra persona scritta da un referente cambia la coppia", {
+  # test
+  # The person fields written by somebody, resolved to another account or to
+  # somebody to create: the referent moved the row to another person.
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "giulia.verdi@ubep.unipd.it", FALSE, TRUE
+    )[["changed"]],
+    "person"
+  )
+  expect_equal(
+    pair_change(eseguiti, ora(), "", TRUE, TRUE)[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  # An author the log cannot name is a write all the same.
+  expect_equal(
+    pair_change(eseguiti, ora(), "", TRUE, NA)[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  # The same person, written again: nothing moved.
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "Mario.Rossi@ubep.unipd.it", FALSE, TRUE
+    )[["code"]],
+    ""
+  )
+})
+
+
+test_that("un account cambiato su Entra senza scritture ferma la riga per IT", {
+  # test
+  # Renamed, deleted or renamed in its first or last name on Entra, with
+  # nobody writing the person in the row: the round does not move a row it
+  # carried out, nor makes somebody for it, and the cause is IT's.
+  rinominato <- pair_change(
+    eseguiti, ora(), "mario.rossi.2@ubep.unipd.it", FALSE, FALSE
+  )
+  expect_equal(rinominato[["code"]], "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_equal(
+    pair_change(eseguiti, ora(), "", TRUE, FALSE)[["code"]],
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  # A creation is never allowed on such a row, even when the log does not
+  # say which username was carried out.
+  ignoti <- eseguiti
+  ignoti[["username"]] <- NA_character_
+  expect_equal(
+    pair_change(ignoti, ora(), "", TRUE, FALSE)[["code"]],
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  # A resolution that names nobody (ambiguous, a collision not answered) is
+  # left to the identity's own code; an unknown username carried out decides
+  # nothing.
+  expect_equal(pair_change(eseguiti, ora(), "", FALSE, TRUE)[["code"]], "")
+  expect_equal(
+    pair_change(
+      ignoti, ora(), "mario.rossi.2@ubep.unipd.it", FALSE, FALSE
+    )[["code"]],
+    ""
+  )
+  # The pair, when it moved too, comes first: it is the referent's to undo.
+  expect_equal(
+    pair_change(
+      eseguiti, ora(server = "edc12"), "mario.rossi.2@ubep.unipd.it",
+      FALSE, FALSE
+    )[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+})

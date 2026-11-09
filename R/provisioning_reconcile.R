@@ -95,6 +95,20 @@
 #' could give, from an owner nobody could name, and the gate would have
 #' nobody whose rights to ask.
 #'
+#' **A row the channel has carried out does not change its pair**, decided on
+#' 2026-11-09: the instance, the project and the person it was carried out
+#' for, as the owners' log holds them below the channel's last seal
+#' (`log_executed_values()`). Whoever wrote the change, the owner included,
+#' approved or not, the row stops before the plan (`pair_change()`): nothing
+#' is written on the instance, nobody is created on Entra, the row keeps its
+#' seal and its owner. `DATO_COPPIA_CAMBIATA` when the referent moved it, the
+#' instance, the project, or the person written so that the round would serve
+#' somebody else; `TRASPORTO_IDENTITA_CAMBIATA` when the round would serve
+#' another account, or create one, and nobody wrote the person in the row:
+#' the account changed on Entra, and it is IT's. Both come before a held
+#' change, since no approval lets them through, and before the identity's own
+#' codes. A row never carried out changes as before.
+#'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
 #' cadence and the second consumes the first, so a resolver on a timer of its
@@ -530,6 +544,9 @@ provisioning_reconcile <- function(register_url,
   log_errors <- character()
   creators <- rep("", nrow(register))
   owners_now <- rep("", nrow(register))
+  # The owners' log, kept for the pair each row carried out: `NULL` when it
+  # was not asked or could not be read.
+  owners_log <- NULL
   if (any(admitted | awaiting | tampered)) {
     reading_creations <- register_log(
       register_url, register_token, logtype = "record_add"
@@ -565,6 +582,7 @@ provisioning_reconcile <- function(register_url,
             schema = schema
           ))
         }
+        owners_log <- reading_owners[["log"]]
         owners_now <- vapply(seq_along(record_ids), function(i) {
           owner <- log_owner(
             reading_owners[["log"]], record_ids[[i]], creators[[i]],
@@ -698,6 +716,60 @@ provisioning_reconcile <- function(register_url,
   # say both that it goes to IT alone and that it goes to the owner.
   blind <- (checked & unread) | (tampered & !nzchar(owners_now))
 
+  # A row the channel has carried out does not change its pair, decided on
+  # 2026-11-09: not the instance, not the project, not the person. Carried
+  # out on another pair it would leave the old one on the instance with no
+  # row to govern it, since only an explicit revocation takes anything away;
+  # and a revoked row moved elsewhere would take away an access it never
+  # governed. The rule is `pair_change()`, and it holds whoever wrote the
+  # change, approved or not: the row stops here, before the plan, with
+  # nothing written on the instance, nobody created, no new seal and the
+  # same owner. Rows never carried out are not concerned.
+  #
+  # The pair carried out is read from the owners' log, which the round holds
+  # whole, and not from the row's own log: an account renamed on Entra moves
+  # no seal, since the register still holds the old name when it is read, so
+  # that row is never among the ones whose log is asked for. Whether somebody
+  # wrote the person is read from the row's log, which is asked for every row
+  # whose seal moved; a row whose seal did not move holds the person carried
+  # out.
+  person_fields <- c("first_name", "last_name", "contact_email")
+  resolvable <- identity_normalize(verdicts) %in%
+    c("existing", "created", "disabled")
+  executed_pair <- lapply(seq_along(record_ids), function(i) {
+    if (is.null(owners_log) || !nzchar(sealed[[i]])) {
+      return(NULL)
+    }
+    log_executed_values(
+      owners_log, record_ids[[i]], creators[[i]],
+      approvers = approvers, channel_account = channel_account
+    )
+  })
+  shifts <- lapply(seq_along(record_ids), function(i) {
+    if (is.null(executed_pair[[i]]) || blind[[i]]) {
+      return(list(code = "", changed = character()))
+    }
+    rewritten <- FALSE
+    if (checked[[i]] && !unread[[i]]) {
+      who <- log_change_authors(
+        events, record_ids[[i]], fields = person_fields,
+        channel_account = channel_account,
+        current = register_after[i, , drop = FALSE],
+        creator = creators[[i]], approvers = approvers
+      )
+      rewritten <- if (anyNA(who)) NA else length(who) > 0L
+    }
+    pair_change(
+      executed_pair[[i]], register[i, , drop = FALSE],
+      target = if (resolvable[[i]]) resolved_names[[i]] else "",
+      creating = creating[[i]] && !unheard[[i]],
+      rewritten = rewritten
+    )
+  })
+  shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
+  moved <- nzchar(shift_code)
+  awaiting <- awaiting & !moved
+
   # A revocation and nothing else, by somebody other than the owner, is free
   # when they manage the project, and only the instance can say whether they
   # do. So it is not held here: it stands provisionally and the gate decides,
@@ -708,7 +780,7 @@ provisioning_reconcile <- function(register_url,
   # Only a row the gate will see: one with a person to take the access from.
   # A revoked row whose person the tenant no longer holds is settled before
   # any instance is asked, so nobody's rights would ever be read for it.
-  withdrawal <- awaits & !cleared & !blind & revoked_now & admitted
+  withdrawal <- awaits & !cleared & !blind & !moved & revoked_now & admitted
   withdrawal[withdrawal] <- vapply(which(withdrawal), function(i) {
     log_revocation_only(
       events, record_ids[[i]], creators[[i]], intent, approvers,
@@ -731,8 +803,10 @@ provisioning_reconcile <- function(register_url,
     )
   })
 
-  held <- awaits & !cleared & !blind & !withdrawal
-  standing <- (admitted | awaiting) & !held & !blind
+  # A pair that moved stops before a held change: an approval cannot let it
+  # through, so the message asks for what can.
+  held <- awaits & !cleared & !blind & !withdrawal & !moved
+  standing <- (admitted | awaiting) & !held & !blind & !moved
 
   held_outcome <- function(i) {
     outcome_payload(
@@ -758,6 +832,15 @@ provisioning_reconcile <- function(register_url,
       # new value, while the one the owner holds approves nothing any more.
       # It is also where a referent who lost the message finds it, on the row
       # itself.
+      # A pair that moved comes before the identity verdict too: a person the
+      # resolution can name is another person, and a row withdrawn on a person
+      # the tenant no longer holds still has its access on the instance.
+      if (moved[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]], round_outcome_kind(shift_code[[i]], dry_run),
+          detail = shift_code[[i]], at = at
+        ))
+      }
       if (held[[i]]) {
         return(held_outcome(i))
       }
@@ -896,6 +979,7 @@ provisioning_reconcile <- function(register_url,
       row_errors[[id]] <- arrivals[["errors"]][[id]]
     }
   }
+
   for (id in as.character(resolved[["record_id"]])[malformed]) {
     if (is.null(row_errors[[id]])) {
       row_errors[[id]] <- "DATO_PROGETTO_INESISTENTE"
@@ -1546,6 +1630,12 @@ provisioning_reconcile <- function(register_url,
   edited_by <- vapply(pending, function(authors) {
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
+  carried_field <- function(field) {
+    vapply(seq_along(record_ids), function(i) {
+      value <- if (moved[[i]]) executed_pair[[i]][[field]] else ""
+      if (is.na(value)) "" else value
+    }, character(1))
+  }
   posta <- posted(
     changed, born,
     granted = granted,
@@ -1561,6 +1651,15 @@ provisioning_reconcile <- function(register_url,
       owner = owner_after,
       passed = passed,
       edited_by = edited_by,
+      # What a row that moved was carried out on, which its message names so
+      # that the referent knows what to set the fields back to; and what
+      # moved. Empty on every other row.
+      executed_server = carried_field("server"),
+      executed_project_id = carried_field("project_id"),
+      executed_username = carried_field("username"),
+      pair_changed = vapply(seq_along(record_ids), function(i) {
+        if (moved[[i]]) paste(shifts[[i]][["changed"]], collapse = ",") else ""
+      }, character(1)),
       stringsAsFactors = FALSE
     )
   )

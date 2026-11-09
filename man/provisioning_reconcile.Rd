@@ -193,6 +193,20 @@ and not \code{held}, because a held message asks for an approval that nobody
 could give, from an owner nobody could name, and the gate would have
 nobody whose rights to ask.
 
+\strong{A row the channel has carried out does not change its pair}, decided on
+2026-11-09: the instance, the project and the person it was carried out
+for, as the owners' log holds them below the channel's last seal
+(\code{log_executed_values()}). Whoever wrote the change, the owner included,
+approved or not, the row stops before the plan (\code{pair_change()}): nothing
+is written on the instance, nobody is created on Entra, the row keeps its
+seal and its owner. \code{DATO_COPPIA_CAMBIATA} when the referent moved it, the
+instance, the project, or the person written so that the round would serve
+somebody else; \code{TRASPORTO_IDENTITA_CAMBIATA} when the round would serve
+another account, or create one, and nobody wrote the person in the row:
+the account changed on Entra, and it is IT's. Both come before a held
+change, since no approval lets them through, and before the identity's own
+codes. A row never carried out changes as before.
+
 \strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
 the design — and the reason is latency: resolving and acting have the same
 cadence and the second consumes the first, so a resolver on a timer of its
