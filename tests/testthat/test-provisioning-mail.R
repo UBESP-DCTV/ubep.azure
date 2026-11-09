@@ -2095,7 +2095,9 @@ test_that("il messaggio di una coppia cambiata dice le due uscite", {
     fixed = TRUE
   )
   expect_match(corpo, "Non serve approvare", fixed = TRUE)
-  expect_match(corpo, "set instance, project, first name, last name", fixed = TRUE)
+  expect_match(
+    corpo, "set instance, project, first name, last name", fixed = TRUE
+  )
   expect_match(corpo, "set Requested state to revoked", fixed = TRUE)
   expect_match(corpo, "file a new request", fixed = TRUE)
   expect_match(corpo, "No approval is needed", fixed = TRUE)

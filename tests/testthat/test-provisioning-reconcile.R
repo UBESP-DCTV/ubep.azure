@@ -5761,10 +5761,10 @@ giulia <- graph_user(
 
 # Nothing left for an instance or for Graph, and nothing sealed again.
 nulla_scritto <- function() {
-  expect_length(scritture(), 0L)
-  expect_length(creazioni(), 0L)
-  expect_null(sigilli_scritti())
-  expect_null(proprietari_scritti())
+  testthat::expect_length(scritture(), 0L)
+  testthat::expect_length(creazioni(), 0L)
+  testthat::expect_null(sigilli_scritti())
+  testthat::expect_null(proprietari_scritti())
 }
 
 
