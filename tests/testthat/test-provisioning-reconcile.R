@@ -6155,7 +6155,7 @@ test_that("una revoca su un account rinominato non revoca il nome nuovo", {
 })
 
 
-test_that("una revoca spostata su una persona assente resta un cambio di coppia", {
+test_that("una revoca spostata su una persona assente resta un cambio di coppia", { # nolint: line_length_linter.
   # eval
   # Anna revokes and writes somebody the tenant does not hold: the row would
   # close as revoked while Mario's access stays.

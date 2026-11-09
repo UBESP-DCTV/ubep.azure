@@ -3242,7 +3242,7 @@ test_that("un account cambiato su Entra senza scritture ferma la riga per IT", {
 })
 
 
-test_that("una revoca su una persona che il tenant non tiene piu' non e' un cambio", {
+test_that("una revoca su una persona che il tenant non tiene piu' non e' un cambio", { # nolint: line_length_linter.
   # test
   # Decided on 2026-11-10: nobody to take the access from, nobody to create,
   # and the row closes before the instances as it did. Written by a
