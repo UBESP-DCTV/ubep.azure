@@ -1918,6 +1918,67 @@ log_answer_stands <- function(events, record, proposal,
 }
 
 
+#' The fields a dictionary makes read-only on every row
+#'
+#' The fields whose annotation carries `@READONLY` outside any `@IF(...)`.
+#' A tag inside an `@IF` holds only on the rows its condition picks, and the
+#' field can be written on the others: `server` and `project_id` are locked
+#' that way once a row carries a seal (decided on 2026-11-09), and they are
+#' intent fields, not fields of the channel. Counted with the rest, they
+#' would read as read-only fields the live register lost, on a register that
+#' has not imported the tag yet, and the round would stop.
+#'
+#' The `@IF` is cut with its parentheses balanced, skipping what stands
+#' inside quotes, since a condition can hold a parenthesis of its own; an
+#' `@IF` nested in another goes with it. A tag after the `@IF` still counts.
+#'
+#' @param dictionary A data dictionary, with `Variable / Field Name` and
+#'   `Field Annotation`.
+#'
+#' @return The names of those fields, in dictionary order.
+#'
+#' @keywords internal
+dictionary_readonly <- function(dictionary) {
+  annotation <- as.character(dictionary[["Field Annotation"]])
+  annotation[is.na(annotation)] <- ""
+
+  # The text left once every `@IF(...)` is taken out, the first one at each
+  # pass: from its opening parenthesis a scan with a depth counter, what
+  # stands inside quotes skipped. An `@IF` left open takes the rest.
+  unconditional <- vapply(annotation, function(text) {
+    repeat {
+      at <- regexpr("@IF\\s*\\(", text)
+      if (at < 0L) {
+        return(text)
+      }
+      start <- as.integer(at)
+      chars <- strsplit(text, "", fixed = TRUE)[[1]]
+      i <- start + attr(at, "match.length")
+      depth <- 1L
+      quote <- ""
+      while (i <= length(chars) && depth > 0L) {
+        ch <- chars[[i]]
+        if (nzchar(quote)) {
+          if (ch == quote) quote <- ""
+        } else if (ch %in% c("'", "\"")) {
+          quote <- ch
+        } else if (ch == "(") {
+          depth <- depth + 1L
+        } else if (ch == ")") {
+          depth <- depth - 1L
+        }
+        i <- i + 1L
+      }
+      text <- paste0(
+        substr(text, 1L, start - 1L), " ", substr(text, i, nchar(text))
+      )
+    }
+  }, character(1), USE.NAMES = FALSE)
+
+  dictionary[["Variable / Field Name"]][grepl("@READONLY", unconditional)]
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two
@@ -1941,7 +2002,9 @@ log_answer_stands <- function(events, record, proposal,
 #' - `DIZIONARIO_SCELTE_DIVERSE` — same type, and the value that revokes is
 #'   gone;
 #' - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
-#'   outcome, and the register carries a success nobody produced;
+#'   outcome, and the register carries a success nobody produced. Only the
+#'   tag that holds on every row is compared, `dictionary_readonly()`: one
+#'   inside an `@IF` is not;
 #' - `DIZIONARIO_COLONNA_ASSENTE` — the dictionary is malformed, and without
 #'   this code it would read as conforming rather than as unreadable;
 #' - `DIZIONARIO_SCELTE_NON_CONFRONTATE` — reported for `server` when no
@@ -1974,10 +2037,12 @@ compare_dictionary <- function(actual, instances = NULL) {
     if (length(fields) == 0L) character(0) else paste0(code, ":", fields)
   }
 
+  # Only the tag that holds on every row, `dictionary_readonly()`: a tag
+  # inside an `@IF` is not compared, so a register that has not imported one
+  # reads as conforming, and one wrapped around an outcome's tag is a tag
+  # that fell.
   readonly_in <- function(dictionary) {
-    annotation <- dictionary[["Field Annotation"]]
-    annotation[is.na(annotation)] <- ""
-    dictionary[[field]][grepl("@READONLY", annotation)]
+    dictionary_readonly(dictionary)
   }
 
   # Checked up front because an absent column does not raise downstream: the

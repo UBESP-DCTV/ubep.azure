@@ -99,17 +99,101 @@ test_that("the identity vocabulary names the state nobody had named", {
 
 test_that("the job-written fields are the ones marked read-only", {
   # eval
-  dictionary <- register_dictionary()
-  annotation <- dictionary[["Field Annotation"]]
-  annotation[is.na(annotation)] <- ""
-  names <- dictionary[["Variable / Field Name"]]
-  marked <- names[grepl("@READONLY", annotation)]
+  marked <- dictionary_readonly(register_dictionary())
 
   # test
   # Without the tag a requester could type "applied" into the outcome and the
   # register would carry a success nobody produced. The tag governs the form
-  # only, not the API, so the job keeps writing them.
+  # only, not the API, so the job keeps writing them. Only the tag that holds
+  # on every row counts: `server` and `project_id` carry one inside an `@IF`,
+  # and they are intent fields.
   expect_setequal(marked, register_readonly_fields())
+})
+
+
+test_that("un @READONLY dentro un @IF non rende il campo di sola lettura", {
+  # eval
+  dizionario <- data.frame(
+    `Variable / Field Name` = c("a", "b", "c", "d", "e", "f"),
+    `Field Annotation` = c(
+      "@READONLY",
+      " @USERNAME @READONLY",
+      '@IF([applied_seal] <> "", @READONLY, "")',
+      " @IF([x] = '1', @HIDDEN, @IF([y] = 'a(b)', @READONLY, '')) @DEFAULT='1'",
+      '@IF([z] = ")", @HIDDEN, "") @READONLY',
+      NA
+    ),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+
+  # test
+  # A field read-only on some rows only can be written on the others, so it
+  # does not answer the question the channel's fields are asked. Parentheses
+  # and quotes inside the condition do not end the `@IF` early, and a tag
+  # after it still counts.
+  expect_equal(dictionary_readonly(dizionario), c("a", "b", "e"))
+})
+
+
+test_that("server e project_id sono di sola lettura dopo la prima esecuzione", {
+  # eval
+  dizionario <- register_dictionary()
+  nota <- stats::setNames(
+    dizionario[["Field Annotation"]], dizionario[["Variable / Field Name"]]
+  )
+
+  # test
+  # Decided on 2026-11-09: a row the channel has carried out does not change
+  # its pair, and the form says so by locking the two fields once the row
+  # carries a seal. The Data Import Tool is not locked by it, on purpose:
+  # there the round's own rule acts (`pair_change()`). The two stay intent
+  # fields, inside the seal, and are not fields of the channel.
+  for (campo in c("server", "project_id")) {
+    expect_equal(
+      nota[[campo]], '@IF([applied_seal] <> "", @READONLY, "")', info = campo
+    )
+    expect_true(campo %in% register_intent_fields(), info = campo)
+    expect_false(campo %in% register_readonly_fields(), info = campo)
+    expect_false(campo %in% register_channel_fields(), info = campo)
+  }
+  # The person stays writable: a corrected name or address of the same
+  # person goes through as before.
+  for (campo in c("first_name", "last_name", "contact_email")) {
+    expect_true(is.na(nota[[campo]]) || !nzchar(nota[[campo]]), info = campo)
+  }
+})
+
+
+test_that("il pacchetto nuovo con il dizionario di prima non si ferma", {
+  # eval
+  # The live register before the import: no annotation on the two fields.
+  istanze <- c("edc10", "edc12")
+  vivo <- register_dictionary(istanze)
+  prima <- vivo[["Variable / Field Name"]] %in% c("server", "project_id")
+  vivo[["Field Annotation"]][prima] <- NA
+  detto <- compare_dictionary(vivo, istanze)
+
+  # test
+  # Release order is free: the conditional tag is not compared, so a round
+  # between the installation and the import reads the register as before.
+  expect_true(detto[["conforms"]])
+  expect_equal(detto[["differences"]], character(0))
+})
+
+
+test_that("un @READONLY d'esito chiuso dentro un @IF e' caduto", {
+  # eval
+  dizionario <- register_dictionary()
+  riga <- dizionario[["Variable / Field Name"]] == "outcome"
+  dizionario[["Field Annotation"]][riga] <-
+    '@IF([record_id] = "1", @READONLY, "")'
+  detto <- compare_dictionary(dizionario)
+
+  # test
+  # Read-only on one row and writable on all the others is a fallen tag: a
+  # referent could type `applied` into the outcome of every other row.
+  expect_true("DIZIONARIO_READONLY_CADUTO:outcome" %in% detto[["differences"]])
+  expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
 })
 
 
