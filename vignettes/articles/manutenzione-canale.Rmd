@@ -991,6 +991,80 @@ fermato prima di agire.
 Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla colonna
 `accessi_persi > 0`, a gravità 2.
 
+### Una riga eseguita non cambia coppia
+
+Deciso il 2026-11-09, nella 0.24.0. Una riga che il canale ha sigillato nella
+sua vita attuale governa la coppia su cui è stata eseguita: l'istanza, il
+progetto e la persona. Eseguita su un'altra coppia, lascerebbe la vecchia
+sull'istanza senza nessuna riga che la governi, perché il giro revoca solo ciò
+che una riga chiede di revocare; e una riga revocata spostata altrove
+toglierebbe un accesso che non ha mai governato. Il giro confronta quindi ogni
+riga sigillata, prima del piano, con la coppia della sua ultima esecuzione,
+letta dal log dei proprietari sotto l'ultimo sigillo del canale
+(`log_executed_values()`): `server` e `project_id` dalla creazione o
+dall'ultima modifica sotto il sigillo, il nome utente dalla porta delle
+identità, che lo scrive prima del sigillo nello stesso giro. Una scrittura
+sotto il sigillo che l'esecuzione non ha coperto, fatta mentre il giro girava,
+non è il valore eseguito, e si legge quella sotto. La regola è
+`pair_change()`, con due codici:
+
+- **`DATO_COPPIA_CAMBIATA`**, `data_error`: `server` o `project_id` diversi da
+  quelli eseguiti, oppure una scrittura dei campi della persona (nome,
+  cognome, indirizzo di contatto) per cui il giro servirebbe un altro account
+  o creerebbe una persona. Vale chiunque abbia scritto, il proprietario
+  compreso, e anche con un'approvazione: viene prima di `held`, che chiederebbe
+  un'approvazione che non può far passare niente, e prima dei codici
+  dell'identità. L'esito va al proprietario con IT in copia, dice che cosa la
+  riga chiede ora, su che cosa era eseguita e chi l'ha cambiata. Le uscite
+  sono due: riportare i campi ai valori eseguiti, e la riga torna com'era
+  (un campo riportato al valore eseguito non è una modifica); oppure, per
+  un'altra persona o un altro progetto, riportare i campi, revocare questa
+  richiesta e crearne una nuova. Una revoca senza i campi riportati resta
+  ferma, perché colpirebbe la coppia nuova.
+- **`TRASPORTO_IDENTITA_CAMBIATA`**, `transport_error`: il giro servirebbe un
+  altro account, o ne creerebbe uno, e nella riga nessuno ha scritto la
+  persona. È l'account che è cambiato su Entra: rinominato, cancellato, o con
+  nome o cognome corretti in modo che la riga non lo trova più. Fino alla
+  0.23.0 il giro eseguiva il nome nuovo senza dire niente, ricreava l'account
+  cancellato con lo stesso nome (che su REDCap ritrova tutti i diritti di
+  prima) o ne creava un secondo per la stessa persona. L'esito va al
+  proprietario con IT in copia, e dice che la riga non va modificata. La riga
+  riparte da sola quando la risoluzione ritrova l'account eseguito, per
+  esempio un account cancellato e ripristinato; per un account rinominato che
+  resta tale questa versione non ha un'uscita dal registro, e la decisione è
+  di IT.
+
+In tutti e due i casi sull'istanza non si scrive niente, nessuno nasce su
+Entra, il sigillo e il proprietario restano. Una riga sigillata la cui
+risoluzione non nomina nessuno, `ambiguous` o una collisione senza risposta,
+resta sul codice della sua identità come prima: non concede niente, e la
+correzione del referente la porta o alla stessa persona o a uno dei due casi.
+Le righe mai eseguite cambiano come prima.
+
+Che una persona sia stata scritta si legge nel log della riga, chiesto per
+ogni riga il cui sigillo si è mosso (`log_change_authors()` sui tre campi).
+Una riga il cui sigillo non si è mosso porta la persona eseguita: un account
+rinominato su Entra non muove il sigillo, perché il registro letto ha ancora
+il nome vecchio, ed è per questo che la coppia eseguita si legge dal log dei
+proprietari, che il giro ha già, e non dal log della riga.
+
+**Il doppione guarda anche le righe che il giro non serve.** La riga più
+vecchia di una coppia la tiene anche quando il giro la ferma: trattenuta,
+cieca, ferma sull'identità o per un cambio di coppia. La coppia che tiene è
+quella eseguita, se il log la dice, altrimenti quella che la riga nomina col
+nome utente risolto; una riga ferma per un cambio di coppia tiene quella
+eseguita. Una riga più recente sulla stessa coppia prende
+`DATO_COPPIA_DUPLICATA`. Fino alla 0.23.0 il confronto si faceva solo fra le
+righe servite, e la più recente si eseguiva con i diritti di chi l'aveva
+scritta finché la vecchia restava ferma.
+
+Nel modulo, `server` e `project_id` portano `@IF([applied_seal] <> "",
+@READONLY, "")`: di sola lettura quando la riga ha un sigillo. Il *Data Import
+Tool* resta aperto, ed è lì che agisce la regola. Il confronto del dizionario
+conta solo il `@READONLY` che vale su ogni riga, fuori da un `@IF`
+(`dictionary_readonly()`), quindi il pacchetto e il dizionario si aggiornano in
+qualunque ordine.
+
 ### Una persona da creare
 
 Il giro chiude creando due righe: quella il cui verdetto è `absent`, e dalla

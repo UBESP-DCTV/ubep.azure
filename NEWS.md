@@ -1,3 +1,94 @@
+# ubep.azure 0.24.0
+
+A request the channel has carried out keeps the pair it was carried out on:
+the instance, the project and the person.
+
+* **A row carried out does not change its pair.** Decided on 2026-11-09.
+  Until 0.23.0 a change made by the owner alone was carried out on the next
+  round with nobody asked, and so was an approved one: a row whose instance,
+  project or person changed after its execution was carried out on the new
+  pair, and the old one stayed on the instance with no row to govern it, out
+  of the monthly report and of the yearly review, since the round revokes
+  only what a row asks to revoke. A revoked row moved to another pair took
+  away an access it had never governed. Now every row the channel has sealed
+  in its current life is compared, before the plan, with the pair its last
+  execution carried out, which the owners' log holds below the channel's
+  last seal (`log_executed_values()`). When `server` or `project_id` differ,
+  or when somebody wrote the first name, the last name or the contact address
+  and the round would now serve another account or create a person, the row
+  takes `data_error` with `DATO_COPPIA_CAMBIATA` (`pair_change()`): nothing is
+  written on the instance, nobody is created, the row is not sealed again and
+  its owner does not change. It holds whoever wrote the change, the owner
+  included, and with an approval too: the code comes before `held`, since no
+  approval can let the change through, and before the codes of the identity.
+  Setting the fields back to the values carried out brings the row back as it
+  was, a field brought back being no change; another person or another
+  project is a new request, and this one is revoked once its fields are
+  back. A corrected name or address that still resolves to the same username
+  goes through as before. Rows never carried out are not concerned.
+
+* **An account changed on Entra stops a row carried out, for IT.** On a row
+  the channel has sealed, the round would serve another account than the one
+  carried out, or create one, while nobody wrote the person in the row. The
+  account was renamed: until 0.23.0 the round carried out the new name at
+  once, with no `held` and no message, and the old login stayed on the
+  instance. Or deleted: the round created it again under the same name, and
+  on REDCap the new account found every right of the old one, those given by
+  hand included, while Entra kept refusing the creation for as long as it
+  held the deleted one. Or its first or last name was corrected so that the
+  row no longer matched it: the round composed a free name and created a
+  second account for the same person, key to the owner and welcome to the
+  person. The row now takes `transport_error` with
+  `TRASPORTO_IDENTITA_CAMBIATA`, with nothing written on the instance and
+  nobody created. A revoked row whose person the tenant no longer holds took
+  `applied` with `absent`, which said the access was gone while it was still
+  on the instance: it takes the same code. The row goes on by itself when the
+  round finds the account carried out again, a deleted account restored for
+  instance; a rename that stays has no way out through the register in this
+  version. A row whose resolution names nobody, `ambiguous` or a collision
+  nobody answered, keeps the code of its identity as before.
+
+* **The outcome messages of the two codes.** Both go to the owner with IT in
+  copy, in Italian and in English. `DATO_COPPIA_CAMBIATA` says what the row
+  asks for now (another instance, project or person), what was carried out
+  (instance, project and username), who changed the row, that nothing moved
+  on the instance, the two ways out, and that an approval is not one of
+  them. `TRASPORTO_IDENTITA_CAMBIATA` says that the person of the request no
+  longer matches, on Entra, the account the access was given to, that
+  nothing changed on the instance, which account was carried out and which
+  the round finds now, that IT checks the account and that the row needs no
+  edit; it does not say that the row comes back by itself.
+
+* **The oldest row of a pair keeps it, served or not.** The rows filed after
+  the oldest on the same pair took `DATO_COPPIA_DUPLICATA` only among the rows
+  the round was serving: with the oldest held, blind or stopped on its
+  identity, a younger row on its pair was the oldest the round saw and was
+  carried out on its own authority, and when the oldest came back the access
+  followed whichever of the two stood. The rows the round does not serve now
+  hold their pair too, the one carried out when the log says it, otherwise
+  the one they name under the username the round resolved; a row stopped
+  because its pair moved holds the one it was carried out on.
+
+* **`server` and `project_id` are read-only on the form once a row is
+  applied.** The dictionary gives both `@IF([applied_seal] <> "", @READONLY,
+  "")`. The Data Import Tool is not locked by it, and there the round's rule
+  acts. The comparison of the dictionary counts only a `@READONLY` that holds
+  on every row, outside any `@IF` (`dictionary_readonly()`): the two fields
+  stay intent fields, inside the seal, and no seal moves. A `@READONLY` of an
+  outcome field wrapped in an `@IF` now reads as `DIZIONARIO_READONLY_CADUTO`.
+
+* **Shape of the release.** Package and dictionary go in either order: the
+  conditional tag is not compared, so 0.24.0 with the dictionary of 0.23.0,
+  and 0.23.0 with the dictionary of 0.24.0, both conform. Until the
+  dictionary is imported the two fields stay writable on the form, and the
+  round refuses the change all the same. The module and the contract do not
+  change. On the first round after the installation a row changes its
+  outcome only where the register already holds one of these cases: a row
+  carried out whose account was deleted or no longer matches the row, a
+  revoked row on a person the tenant no longer holds, a younger row on the
+  pair of an older one the round stops. An account renamed before 0.24.0 was
+  already carried out under its new name, and its row is not concerned.
+
 # ubep.azure 0.23.0
 
 Phase 2 of the monthly report to the referents. It closes the two limits
