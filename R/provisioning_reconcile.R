@@ -1746,7 +1746,10 @@ provisioning_reconcile <- function(register_url,
       # The seal the round believes for the row (from the owners' log, the
       # field when no log is read): empty on a row it never carried out. The
       # message of a collision on a row carried out sends the referent to IT
-      # instead of asking for an answer that would create nothing.
+      # instead of asking for an answer that would create nothing. With no
+      # log read the field is all there is, and an imported `applied_seal`
+      # reads as carried out: the owner is not known then either, the
+      # message goes to IT alone, and sending it to IT is the safe side.
       seal_carried = as.character(sealed),
       pair_changed = vapply(seq_along(record_ids), function(i) {
         if (moved[[i]]) paste(shifts[[i]][["changed"]], collapse = ",") else ""
