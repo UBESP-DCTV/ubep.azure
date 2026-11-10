@@ -17,6 +17,29 @@ identity_normalize <- function(values) {
 }
 
 
+#' Whether an address is in the tenant's domain
+#'
+#' Decision 12 in one line: an address in the domain **is** a UPN. The
+#' resolution reads it to tell an internal contact from an external one, the
+#' access message to decide where it goes (`mail_access_recipients()`), and
+#' `directory_mailboxes()` to tell an external address from an alias. Written
+#' once, so that what counts as internal cannot drift apart between the three.
+#'
+#' @param addresses A character vector, or anything coercible to one.
+#' @param domain The tenant's verified domain, defaulting as `compose_upn()`
+#'   does.
+#'
+#' @return A logical vector, `FALSE` on an empty or missing address.
+#'
+#' @keywords internal
+identity_internal <- function(addresses, domain = "ubep.unipd.it") {
+  addresses <- identity_normalize(addresses)
+  addresses[is.na(addresses)] <- ""
+  nzchar(addresses) &
+    endsWith(addresses, paste0("@", identity_normalize(domain)))
+}
+
+
 #' Is this row's identity confirmed enough to act on
 #'
 #' The gate the whole sub-project exists to install. The channel today decides
@@ -181,6 +204,80 @@ directory_identifiers <- function(account) {
     account[["officeLocation"]][[1L]]
   ))
   addresses[nzchar(addresses)]
+}
+
+
+#' Where the account an internal contact names reads its mail
+#'
+#' The access message of a row whose contact is internal does not go to that
+#' contact. By decision 12 it is the UPN, and for most accounts of the tenant
+#' the UPN has no mailbox behind it: Exchange Online refuses the message, and
+#' from then on the mail service suppresses the address and drops every later
+#' send to it in silence, after the person has been given a mailbox too.
+#' Decided on 2026-11-10: the message goes to two candidates instead, both
+#' read here from the sweep the round has already made, with no call of its
+#' own.
+#'
+#' `mailbox` is the account's `mail`, when it carries one: Exchange writes the
+#' primary address there when it gives the account a mailbox, and on about
+#' 6.400 of the 7.700 accounts it is empty. The UPN does not count as one.
+#'
+#' `external` is the first address the account carries outside the domain:
+#' the first of `otherMails`, otherwise `officeLocation`, the historical
+#' carrier of decision 9, which on many accounts holds a room instead and
+#' counts only when it has the form of an address. An alias in the domain is
+#' skipped, being the same mailbox or none.
+#'
+#' @param directory A directory frame as `directory_users()` returns.
+#' @param upns The UPN each row resolved to, as the resolution answered it.
+#'   A name that is not an account of the tenant, as a collision's proposal,
+#'   gets two empty strings.
+#' @param domain The tenant's verified domain, as `identity_internal()` takes
+#'   it.
+#'
+#' @return A data frame with `mailbox` and `external`, one row per UPN, the
+#'   addresses trimmed and otherwise as the directory writes them.
+#'
+#' @keywords internal
+directory_mailboxes <- function(directory, upns, domain = "ubep.unipd.it") {
+  stopifnot(
+    is.data.frame(directory),
+    all(
+      c("userPrincipalName", "mail", "otherMails", "officeLocation") %in%
+        names(directory)
+    ),
+    is.character(upns)
+  )
+
+  key <- identity_normalize(upns)
+  key[is.na(key)] <- ""
+  at <- match(key, identity_normalize(directory[["userPrincipalName"]]))
+  at[!nzchar(key)] <- NA_integer_
+
+  addresses <- function(values) {
+    values <- trimws(as.character(unlist(values)))
+    values[!is.na(values) & nzchar(values)]
+  }
+
+  mailbox <- vapply(at, function(j) {
+    if (is.na(j)) "" else c(addresses(directory[["mail"]][[j]]), "")[[1L]]
+  }, character(1))
+
+  external <- vapply(at, function(j) {
+    if (is.na(j)) {
+      return("")
+    }
+    carried <- addresses(c(
+      directory[["otherMails"]][[j]], directory[["officeLocation"]][[j]]
+    ))
+    carried <- carried[
+      grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", carried) &
+        !identity_internal(carried, domain)
+    ]
+    c(carried, "")[[1L]]
+  }, character(1))
+
+  data.frame(mailbox = mailbox, external = external, stringsAsFactors = FALSE)
 }
 
 
@@ -458,8 +555,7 @@ resolve_against_directory <- function(request,
     return(identity_verdict("", errors = "DATO_COGNOME_ASSENTE"))
   }
 
-  suffix <- paste0("@", identity_normalize(domain))
-  internal <- function(address) nzchar(address) && endsWith(address, suffix)
+  internal <- function(address) identity_internal(address, domain)
 
   # Decision 12, and it holds in both directions: whoever has an address in the
   # domain uses it, and that is where we write to them. An internal contact

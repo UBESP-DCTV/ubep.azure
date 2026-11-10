@@ -1165,3 +1165,97 @@ test_that("l'account nato da una risposta risolve created al giro dopo", {
   expect_equal(dopo("")[["identity"]], "existing")
   expect_equal(dopo("mario.rossi.3@ubep.unipd.it")[["identity"]], "existing")
 })
+
+
+# The two addresses the access message of a row with an internal contact goes
+# to, read from the account the row resolved to. Decided on 2026-11-10: the
+# UPN alone is no mailbox, and a send to an UPN without one is refused and then
+# suppressed for good by the mail service.
+caselle_di <- function(..., upn = "mario.rossi@ubep.unipd.it") {
+  directory_mailboxes(dir_frame(dir_user(...)), upn)
+}
+
+
+test_that("la casella e' il campo mail, l'esterno il primo otherMails fuori dominio", { # nolint: line_length_linter.
+  # eval
+  trovate <- caselle_di(
+    mail = "Mario.Rossi@ubep.unipd.it",
+    otherMails = I(c("mario.privato@example.org", "mario.altro@example.net"))
+  )
+
+  # test
+  expect_equal(trovate[["mailbox"]], "Mario.Rossi@ubep.unipd.it")
+  expect_equal(trovate[["external"]], "mario.privato@example.org")
+})
+
+
+test_that("senza mail resta l'esterno, senza esterno resta la casella", {
+  # eval
+  solo_mail <- caselle_di(
+    mail = "mario.rossi@ubep.unipd.it", officeLocation = ""
+  )
+  solo_altri <- caselle_di(
+    otherMails = I("mario.privato@example.org"), officeLocation = ""
+  )
+
+  # test
+  expect_equal(solo_mail[["mailbox"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(solo_mail[["external"]], "")
+  expect_equal(solo_altri[["mailbox"]], "")
+  expect_equal(solo_altri[["external"]], "mario.privato@example.org")
+})
+
+
+test_that("officeLocation vale come esterno solo se ha la forma di un indirizzo", { # nolint: line_length_linter.
+  # eval
+  indirizzo <- caselle_di(officeLocation = " mario.rossi@example.org ")
+  stanza <- caselle_di(officeLocation = "Stanza 12, secondo piano")
+
+  # test
+  # The historical carrier: on about 6.500 accounts it holds the address the
+  # old flow wrote there, and on others a room.
+  expect_equal(indirizzo[["external"]], "mario.rossi@example.org")
+  expect_equal(stanza[["external"]], "")
+  expect_equal(stanza[["mailbox"]], "")
+})
+
+
+test_that("un indirizzo nel dominio non e' un esterno, e si passa al seguente", { # nolint: line_length_linter.
+  # eval
+  trovate <- caselle_di(
+    otherMails = I("mario.alias@UBEP.unipd.it"),
+    officeLocation = "mario.rossi@example.org"
+  )
+  nessuno <- caselle_di(
+    otherMails = I("mario.alias@ubep.unipd.it"),
+    officeLocation = "mario.rossi@ubep.unipd.it"
+  )
+
+  # test
+  expect_equal(trovate[["external"]], "mario.rossi@example.org")
+  expect_equal(nessuno[["external"]], "")
+})
+
+
+test_that("un nome che non e' un account del tenant non ha caselle", {
+  # eval
+  # The second account has no UPN at all, which Graph never sends: it is
+  # here so that an empty name has something to match by mistake.
+  trovate <- directory_mailboxes(
+    dir_frame(
+      dir_user(mail = "mario.rossi@ubep.unipd.it"),
+      dir_user(
+        id = "00000000-0000-0000-0000-000000000002", userPrincipalName = "",
+        mail = "nessuno@ubep.unipd.it", officeLocation = "nessuno@example.org"
+      )
+    ),
+    c("mario.rossi.2@ubep.unipd.it", "", NA_character_,
+      " MARIO.ROSSI@ubep.unipd.it")
+  )
+
+  # test
+  # One answer per name, in order; a proposal of a collision, an empty name
+  # and a missing one name no account.
+  expect_equal(trovate[["mailbox"]], c("", "", "", "mario.rossi@ubep.unipd.it"))
+  expect_equal(trovate[["external"]], c("", "", "", "mario.rossi@example.org"))
+})
