@@ -7,15 +7,20 @@
 report_server_asks(register)
 }
 \arguments{
-\item{register}{The register, as \code{register_records()} answers.}
+\item{register}{The register, as \code{register_records()} answers, or with
+the names executed.}
 }
 \value{
 A named list: server to the usernames to ask it, without
 repetitions.
 }
 \description{
-For every server the register has rows on, the usernames of its active and
-applied rows and of the rows stopped on a disabled account
-(\code{report_stopped_rows()}). Blank servers and blank names are left out.
+For every server the register has rows on, the usernames of the rows the
+referents' reports count, of the rows stopped with an access executed and
+of the rows stopped on a disabled account (\code{report_scope()}). Read on the
+register with the names executed, \code{report_executed_register()}: a stopped
+row is asked about the account that has the access, and one whose name
+executed is not known about nobody. Blank servers and blank names are
+left out.
 }
 \keyword{internal}

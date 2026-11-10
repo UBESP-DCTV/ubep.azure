@@ -184,6 +184,43 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
 })
 
 
+test_that("il rapporto legge gli approvatori di IT come il giro e li passa", {
+  # Same limit as the guards above. The report reads the name a stopped row
+  # was executed with from the log, `log_executed_values()`, which needs the
+  # IT approvers to know which writes an approval covered: without them a
+  # change IT approved is passed over, and the name read is the one before.
+  # The reading is taken out of both scripts and run, so the two read the
+  # variable of the shared environment file the same way.
+  dev <- testthat::test_path("..", "..", "dev")
+  skip_if_not(dir.exists(dev), "dev/ is not in the built package")
+  legge <- function(nome, valore) {
+    codice <- as.list(parse(file.path(dev, nome), keep.source = FALSE))
+    lettura <- Filter(function(e) {
+      is.call(e) && identical(e[[1L]], as.name("<-")) &&
+        identical(e[[2L]], as.name("APPROVATORI_IT"))
+    }, codice)
+    withr::local_envvar(UBEP_APPROVATORI_IT = valore)
+    ambiente <- new.env(parent = baseenv())
+    for (e in lettura) {
+      eval(e, ambiente)
+    }
+    ambiente[["APPROVATORI_IT"]]
+  }
+  for (valore in c("", " it-uno , ,IT-Due,", "it-uno")) {
+    expect_identical(
+      legge("runner-rapporto.R", valore), legge("runner-canale.R", valore),
+      info = valore
+    )
+  }
+  expect_identical(legge("runner-rapporto.R", ""), character())
+  testo <- paste(
+    readLines(file.path(dev, "runner-rapporto.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  expect_match(testo, "approvers = APPROVATORI_IT", fixed = TRUE)
+})
+
+
 test_that("con la posta accesa il giro pretende la copia a IT", {
   # Same limit as the guards above. The outcome of a row whose owner is not
   # established goes to IT alone: without the copy it would leave for nobody,

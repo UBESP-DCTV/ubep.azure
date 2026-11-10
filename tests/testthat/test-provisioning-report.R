@@ -400,16 +400,17 @@ coppie <- function(upn = character(), server = rep("", length(upn))) {
 }
 
 
-test_that("only active and applied rows enter the report", {
+test_that("only active rows the channel has executed enter the report", {
   # eval
   registro <- registro_di(
     richiesta(record_id = "41"),
     # Revoked: the access is gone, and a revocation the round carried out
     # closes with `applied` too, so the filter is on the request.
     richiesta(record_id = "42", request_status = "revoked"),
-    # Not an access, and every change of outcome already has its mail.
-    richiesta(record_id = "43", outcome = "transport_error"),
-    richiesta(record_id = "44", outcome = "held")
+    # Never executed, so no access: every change of outcome already has its
+    # mail. A row executed and then stopped is another matter, below.
+    richiesta(record_id = "43", outcome = "transport_error", applied_seal = ""),
+    richiesta(record_id = "44", outcome = "held", applied_seal = "")
   )
   esecuzioni <- rep(list("2026-10-08 23:03"), 4L)
 
@@ -1522,11 +1523,12 @@ test_that("le scadenze sono quelle del mese in cui si manda, oggi escluso", {
     richiesta(record_id = "43", expiration = "2026-11-02"),
     richiesta(record_id = "44", expiration = "2026-12-01"),
     richiesta(record_id = "45", expiration = ""),
-    # Not an access any more, or not applied: no expiration to speak of.
+    # Not an access any more, or never executed: no expiration to speak of.
+    # One executed and then stopped is an access, below in this file.
     richiesta(record_id = "46", expiration = "2026-11-10",
               request_status = "revoked"),
     richiesta(record_id = "47", expiration = "2026-11-10",
-              outcome = "held")
+              outcome = "held", applied_seal = "")
   )
   mio <- assemblato(registro = registro)[["referenti"]][[referente]]
   righe <- report_expiring_lines(mio[["scadenze"]], novembre())
@@ -4679,5 +4681,702 @@ test_that("con l'account configurato una riga senza data non e' un log ambiguo",
       list(NA_character_), novembre(), channel_known = TRUE
     )[["data_motivo"]],
     "orario_illeggibile"
+  )
+})
+
+
+# --- rows executed and then stopped (0.25.0) ---------------------------------
+
+# A row whose seal is the one of its own fields: executed, and touched by
+# nobody since.
+intatta <- function(...) {
+  riga <- as.data.frame(richiesta(...), stringsAsFactors = FALSE)
+  riga[["applied_seal"]] <- request_seal(riga)
+  riga
+}
+
+bruno <- "bruno.fittizio@ubep.unipd.it"
+elena <- "elena.supposta@ubep.unipd.it"
+elena_nuova <- "elena.rinominata@ubep.unipd.it"
+
+# The log of a row the round executed in August for `nome`, newest first, with
+# `sopra` on top: what happened after the execution.
+log_eseguita <- function(record, nome, sigillo = "aaaaaaaaaaaa",
+                         sopra = NULL, creatore = referente) {
+  rbind(
+    sopra,
+    evento("2026-08-03 23:03", canale,
+           paste0("applied_seal = '", sigillo, "'"), record = record),
+    evento("2026-08-03 23:02", canale, paste0("username = '", nome, "'"),
+           record = record),
+    evento("2026-08-03 10:00", creatore,
+           "server = 'edc10', project_id = '9301', role_name = 'user'",
+           record = record, action = paste("Create record", record))
+  )
+}
+
+
+test_that("a row executed and then stopped stays in the report", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "42", outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    richiesta(record_id = "43", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"),
+    richiesta(record_id = "44", outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
+    richiesta(record_id = "45", outcome = "data_error",
+              outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    # Never executed: no access to look at, as before.
+    richiesta(record_id = "46", outcome = "data_error",
+              outcome_detail = "DATO_RUOLO_INESISTENTE", applied_seal = ""),
+    # Revoked and stopped: not the referent's, IT gets it if anybody.
+    richiesta(record_id = "47", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    # Stopped on a disabled account: IT's own section, as before.
+    ferma(record_id = "48")
+  )
+  esecuzioni <- rep(list("2026-08-03 23:03"), nrow(registro))
+
+  righe <- report_rows(
+    registro, rep(referente, nrow(registro)), esecuzioni, novembre()
+  )
+
+  # test
+  expect_equal(righe[["record_id"]], c("41", "42", "43", "44", "45"))
+  expect_equal(
+    righe[["outcome"]],
+    c("applied", "data_error", "held", "transport_error", "data_error")
+  )
+})
+
+
+test_that("the name executed comes from the register or from the log", {
+  # eval
+  registro <- registro_di(
+    # Applied: the register, as always.
+    richiesta(record_id = "41"),
+    # Stopped with its seal where it was: the register is what was executed.
+    intatta(record_id = "42", outcome = "data_error",
+            outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    # Held on a changed role: the seal moved, the name is read from the log
+    # and is the register's all the same.
+    richiesta(record_id = "43", role_name = "data_entry", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"),
+    # The account changed on Entra: the identity door wrote the new name, the
+    # one executed is the old one. The project was changed too, and the pair
+    # executed is the one of the log.
+    richiesta(record_id = "44", username = elena_nuova, first_name = "Elena",
+              last_name = "Supposta", outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA",
+              project_id = "9308"),
+    # A log with no name written below the seal does not say.
+    richiesta(record_id = "45", outcome = "data_error",
+              outcome_detail = "DATO_COPPIA_CAMBIATA", project_id = "9309")
+  )
+  logs <- list(
+    NULL,
+    log_eseguita("42", carla, sigillo = registro[["applied_seal"]][[2L]]),
+    log_eseguita("43", carla, sopra = evento(
+      "2026-10-20 10:00", referente, "role_name = 'data_entry'",
+      record = "43"
+    )),
+    log_eseguita("44", elena, sopra = evento(
+      "2026-11-05 04:02", canale, paste0("username = '", elena_nuova, "'"),
+      record = "44"
+    )),
+    evento("2026-08-03 23:03", canale, "applied_seal = 'aaaaaaaaaaaa'",
+           record = "45")
+  )
+
+  eseguito <- report_executed_register(
+    registro, logs, rep(referente, 5L), approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  expect_equal(
+    eseguito[["username"]], c(carla, carla, carla, elena, "")
+  )
+  expect_equal(
+    eseguito[["nome_eseguito"]], c("registro", "registro", "log", "log", "")
+  )
+  expect_equal(eseguito[["nome_motivo"]], c("", "", "", "", "log"))
+  expect_equal(eseguito[["username_registro"]][[4L]], elena_nuova)
+  # A name the log does not say leaves the row as the register holds it;
+  # otherwise the project is the one the log says was executed.
+  expect_equal(eseguito[["project_id"]], c(rep("9301", 4L), "9309"))
+})
+
+
+test_that("without the IT approvers a moved seal is a log that does not say", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "44", username = elena_nuova,
+              outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
+    intatta(record_id = "42", outcome = "data_error",
+            outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO")
+  )
+  logs <- list(
+    log_eseguita("44", elena),
+    log_eseguita("42", carla, sigillo = registro[["applied_seal"]][[2L]])
+  )
+
+  # A runner of the 0.24.0 passes no approvers: a change IT approved would
+  # be passed over as not covered, and the name read would be the one before.
+  eseguito <- report_executed_register(
+    registro, logs, rep(referente, 2L), approvers = NULL,
+    channel_account = canale
+  )
+
+  # test
+  expect_equal(eseguito[["username"]], c("", carla))
+  expect_equal(eseguito[["nome_eseguito"]], c("", "registro"))
+  expect_equal(eseguito[["nome_motivo"]], c("approvatori", ""))
+})
+
+
+test_that("the servers are asked the names executed, not the ones written", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "44", username = elena, outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
+    # A name the log does not say is asked of nobody.
+    richiesta(record_id = "45", username = "", outcome = "data_error",
+              outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    # Revoked on a pair that moved: the revocation was not carried out.
+    richiesta(record_id = "46", username = dario, server = "edc12",
+              request_status = "revoked", outcome = "data_error",
+              outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    # Never executed: nobody to ask about.
+    richiesta(record_id = "47", username = "nessuno.prova@ubep.unipd.it",
+              outcome = "data_error", applied_seal = "")
+  )
+  registro[["nome_eseguito"]] <- c("registro", "log", "", "log", "registro")
+
+  # test
+  expect_equal(
+    report_server_asks(registro),
+    list(edc10 = c(carla, elena), edc12 = dario)
+  )
+})
+
+
+test_that("IT gets the stopped rows, the revocations not carried out too", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "42", outcome = "held"),
+    richiesta(record_id = "43", request_status = "revoked",
+              outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
+    richiesta(record_id = "44", request_status = "revoked",
+              outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    # Revoked and stopped at the gate: not carried out either.
+    richiesta(record_id = "45", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    # Never executed, and stopped on a disabled account: elsewhere or nowhere.
+    richiesta(record_id = "46", outcome = "data_error", applied_seal = ""),
+    ferma(record_id = "47")
+  )
+
+  ferme <- report_held_rows(registro, owners = c(
+    referente, bruno, referente, bruno, referente, referente, referente
+  ))
+
+  # test
+  expect_equal(ferme[["record_id"]], c("42", "43", "44", "45"))
+  expect_equal(ferme[["creator"]], c(bruno, referente, bruno, referente))
+})
+
+
+test_that("the person is dated by the run of executions for that name", {
+  # eval
+  # Executed for Carla in August; the account was renamed on Entra and the
+  # door wrote the new name, the row stopped; the name came back, the seal
+  # with it, and the row is applied again without a new execution.
+  rinominata <- log_eseguita("41", carla, sopra = evento(
+    "2026-10-20 04:02", canale,
+    "username = 'carla.rinominata@ubep.unipd.it'"
+  ))
+  ritorno <- rbind(
+    evento("2026-11-03 04:02", canale, paste0("username = '", carla, "'")),
+    rinominata
+  )
+
+  # test
+  expect_equal(report_person_since(ritorno, "41", canale), "2026-08-03 23:03")
+  # Stopped on the new name: the name executed dates it, the new one has no
+  # execution at all.
+  expect_equal(
+    report_person_since(rinominata, "41", canale, username = carla),
+    "2026-08-03 23:03"
+  )
+  expect_equal(report_person_since(rinominata, "41", canale), character())
+})
+
+
+test_that("an expired row nobody revoked is counted and not judged", {
+  # eval
+  # Carla never entered edc10, and both rows expired in October: the one the
+  # round leaves applied from the 0.25.0, and the one the 0.24.0 stops on its
+  # date.
+  registro <- registro_di(
+    richiesta(record_id = "41", expiration = "2026-10-15"),
+    richiesta(record_id = "42", project_id = "9302",
+              expiration = "2026-10-15", outcome = "data_error",
+              outcome_detail = "DATO_SCADENZA_NON_VALIDA")
+  )
+  righe <- report_rows(
+    registro, rep(referente, 2L), rep(list("2026-08-03 23:03"), 2L),
+    novembre()
+  )
+
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto()),
+    held = report_held_rows(registro, owners = rep(referente, 2L))
+  )
+
+  # test
+  expect_equal(righe[["record_id"]], c("41", "42"))
+  expect_true(referente %in% names(rapporto[["referenti"]]))
+  expect_length(voci_b(rapporto), 0L)
+  expect_equal(
+    report_message(rapporto[["referenti"]][[referente]], novembre())[["forma"]],
+    "in_ordine"
+  )
+})
+
+
+test_that("a stopped row says its outcome where the referent sees it", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "42", outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    richiesta(record_id = "43", username = dario, first_name = "Dario",
+              last_name = "Ipotetico", project_id = "9302", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb",
+              expiration = "2026-11-20")
+  )
+  righe <- report_rows(
+    registro, rep(referente, 2L),
+    list("2026-08-03 23:03", "2026-10-08 23:03"), novembre()
+  )
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(dario)))
+  )
+
+  testo <- parti(report_message(
+    rapporto[["referenti"]][[referente]], novembre()
+  ))
+
+  # test
+  # Carla never entered: the item says the request is stopped.
+  expect_true(
+    "     Richiesta ferma: progetto 9301, esito data_error." %in% testo[["it"]]
+  )
+  expect_true(
+    "     Request stopped: project 9301, outcome data_error." %in% testo[["en"]]
+  )
+  # Dario's row expires this month and was activated in October.
+  expect_true(any(grepl(
+    "scade il 2026-11-20. Richiesta ferma, esito held.", testo[["it"]],
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "expires on 2026-11-20. Request stopped, outcome held.", testo[["en"]],
+    fixed = TRUE
+  )))
+  attivata <- testo[["it"]][startsWith(testo[["it"]], "- Dario")]
+  expect_length(attivata, 1L)
+  expect_match(attivata, "Richiesta ferma, esito held.$")
+})
+
+
+test_that("the mail to IT lists the stopped rows, with the access column", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "41"),
+    richiesta(record_id = "44", username = elena, first_name = "Elena",
+              last_name = "Supposta", outcome = "transport_error",
+              outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
+    richiesta(record_id = "45", username = dario, first_name = "Dario",
+              last_name = "Ipotetico", request_status = "revoked",
+              outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    richiesta(record_id = "46", username = "", first_name = "Fabio",
+              last_name = "Presunto", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb")
+  )
+  registro[["nome_eseguito"]] <- c("registro", "log", "log", "")
+  registro[["nome_motivo"]] <- c("", "", "", "log")
+  registro[["username_registro"]] <- c(
+    carla, elena_nuova, dario, "fabio.presunto@ubep.unipd.it"
+  )
+  righe <- report_rows(
+    registro, rep(referente, 4L), rep(list("2026-08-03 23:03"), 4L),
+    novembre()
+  )
+
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(
+      entrata_su(carla), entrata_su(dario)
+    )),
+    held = report_held_rows(registro, owners = rep(referente, 4L))
+  )
+  testo <- parti(report_it_message(rapporto[["it"]], novembre()))
+
+  # test
+  expect_equal(rapporto[["it"]][["ferme"]][["entrata"]], c("no", "si", ""))
+  # Fabio's name executed is not known: nobody judges an account for him.
+  non_giudicati <- vapply(
+    rapporto[["it"]][["non_giudicabili"]], `[[`, "", "nome"
+  )
+  expect_false("Fabio Presunto" %in% non_giudicati)
+  expect_true(any(grepl(
+    "Richieste ferme con un accesso eseguito (3)", testo[["it"]],
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "Stopped requests with an access executed (3)", testo[["en"]],
+    fixed = TRUE
+  )))
+  expect_true(paste0(
+    "   - Richiesta 44: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc10, progetto 9301. Esito transport_error, ",
+    "TRASPORTO_IDENTITA_CAMBIATA. La persona non e' mai entrata su edc10. ",
+    "Referente: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Richiesta 45: Dario Ipotetico, dario.ipotetico@ubep.unipd.it: ",
+    "edc10, progetto 9301. Esito data_error, DATO_COPPIA_CAMBIATA. ",
+    "Revocata, revoca non eseguita. La persona e' gia' entrata su edc10. ",
+    "Referente: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["it"]])
+  # The name the log does not say: no access column, and the reason.
+  expect_true(paste0(
+    "   - Richiesta 46: Fabio Presunto, nome eseguito non noto: ",
+    "edc10, progetto 9301. Esito held, SIGILLO_DIVERSO. Il registro degli ",
+    "eventi non dice con quale nome e' stata eseguita. ",
+    "Referente: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["it"]])
+  expect_true(paste0(
+    "   - Request 46: Fabio Presunto, name executed not known: ",
+    "edc10, project 9301. Outcome held, SIGILLO_DIVERSO. The event log ",
+    "does not say which name it was executed with. ",
+    "Referent: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["en"]])
+})
+
+
+test_that("a whole run reads the stopped rows and asks the name executed", {
+  # eval
+  # Row 44 is Bruno's: executed in August for Elena, whose account was then
+  # renamed on Entra. The door wrote the new name, and the row stopped.
+  dati <- scenario()
+  dati[["registro"]] <- rbind(
+    dati[["registro"]],
+    registro_di(richiesta(
+      record_id = "44", username = elena_nuova, first_name = "Elena",
+      last_name = "Supposta", requested_by = bruno,
+      outcome = "transport_error",
+      outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"
+    ))
+  )
+  dati[["creazioni"]] <- rbind(
+    evento("2026-08-03 10:00", bruno, "", record = "44",
+           action = "Create record 44"),
+    dati[["creazioni"]]
+  )
+  dati[["eventi"]] <- rbind(
+    dati[["eventi"]],
+    log_eseguita("44", elena, creatore = bruno, sigillo = "dddddddddddd",
+                 sopra = evento(
+                   "2026-11-01 00:02", canale,
+                   paste0("username = '", elena_nuova, "'"), record = "44"
+                 ))
+  )
+  dati[["conti"]][["edc10.example.org"]] <- c(
+    dati[["conti"]][["edc10.example.org"]],
+    list(entrata_su(elena))
+  )
+  chiamate <- doppie(dati)
+  posta <- posta_finta()
+
+  esito <- esegui(
+    withr::local_tempdir(), posta, channel_account = canale,
+    approvers = character()
+  )
+
+  # test
+  expect_true("44" %in% chiamate[["righe"]])
+  asked <- chiamate[["server"]][["edc10.example.org"]]
+  expect_true(elena %in% asked)
+  expect_false(elena_nuova %in% asked)
+  # Bruno is due a report now: his only row is stopped.
+  expect_true(bruno %in% esito[["dovuti"]])
+  mail <- posta[["inviate"]][["mail"]]
+  it <- mail[[match(it_prova, vapply(mail, `[[`, "", "to"))]][["body"]]
+  expect_match(it, "Richieste ferme con un accesso eseguito (1)", fixed = TRUE)
+  expect_match(
+    it, paste0(
+      "Richiesta 44: Elena Supposta, elena.supposta@ubep.unipd.it: edc10, ",
+      "progetto 9301. Esito transport_error, TRASPORTO_IDENTITA_CAMBIATA. ",
+      "La persona e' gia' entrata su edc10. Referente: ", bruno, "."
+    ), fixed = TRUE
+  )
+  # No new column in the record.
+  expect_equal(names(report_record(esito, posta = TRUE)), c(
+    "at", "mese", "giorno_di_invio", "registro_letto", "directory_letta",
+    "istanze_non_lette", "posta", "posta_dirottata", "referenti", "mandati",
+    "gia_mandati", "falliti", "in_ordine", "da_guardare", "voci_attivati",
+    "voci_senza_primo_accesso", "voci_senza_accessi", "senza_creatore",
+    "mese_completo", "in_ritardo", "errori"
+  ))
+})
+
+
+test_that("a run without the approvers asks nobody for a moved seal's name", {
+  # eval
+  dati <- scenario()
+  dati[["registro"]] <- rbind(
+    dati[["registro"]],
+    registro_di(richiesta(
+      record_id = "44", username = elena_nuova, first_name = "Elena",
+      last_name = "Supposta", outcome = "transport_error",
+      outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"
+    ))
+  )
+  dati[["creazioni"]] <- rbind(
+    evento("2026-08-03 10:00", referente, "", record = "44",
+           action = "Create record 44"),
+    dati[["creazioni"]]
+  )
+  dati[["eventi"]] <- rbind(
+    dati[["eventi"]], log_eseguita("44", elena, sigillo = "dddddddddddd")
+  )
+  chiamate <- doppie(dati)
+  posta <- posta_finta()
+
+  # The runner of the 0.24.0: no `approvers`.
+  esegui(withr::local_tempdir(), posta, channel_account = canale)
+
+  # test
+  asked <- chiamate[["server"]][["edc10.example.org"]]
+  expect_false(any(c(elena, elena_nuova) %in% asked))
+  mail <- posta[["inviate"]][["mail"]]
+  it <- mail[[match(it_prova, vapply(mail, `[[`, "", "to"))]][["body"]]
+  expect_match(
+    it, "La lavorazione del rapporto non riceve gli approvatori di IT",
+    fixed = TRUE
+  )
+})
+
+
+# --- corrections after the review (0.25.0) -----------------------------------
+
+test_that("a row in two sections of the mail to IT counts once", {
+  # eval
+  # Stopped, and with no owner established: in "Richieste senza un referente"
+  # and in "Richieste ferme" both.
+  registro <- registro_di(
+    richiesta(record_id = "42", outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    richiesta(record_id = "43", username = dario, first_name = "Dario",
+              last_name = "Ipotetico", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb")
+  )
+  righe <- report_rows(
+    registro, c("", referente), rep(list("2026-08-03 23:03"), 2L),
+    novembre()
+  )
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(carla), entrata_su(dario))),
+    held = report_held_rows(registro, owners = c("", referente))
+  )
+
+  messaggio <- report_it_message(rapporto[["it"]], novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(nrow(rapporto[["it"]][["senza_referente"]]), 1L)
+  expect_equal(nrow(rapporto[["it"]][["ferme"]]), 2L)
+  expect_equal(messaggio[["n"]], 2L)
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 2")
+  expect_match(messaggio[["subject"]], "^Da guardare [(]2[)]: ")
+  # The sections still list what they list.
+  expect_true(any(grepl(
+    "Richieste ferme con un accesso eseguito (2)", testo[["it"]],
+    fixed = TRUE
+  )))
+})
+
+
+
+test_that("the referent reads a name executed not known as such", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "46", username = "", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb")
+  )
+  registro[["nome_eseguito"]] <- ""
+  registro[["nome_motivo"]] <- "log"
+  righe <- report_rows(
+    registro, referente, list("2026-10-08 23:03"), novembre()
+  )
+  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+
+  testo <- parti(report_message(
+    rapporto[["referenti"]][[referente]], novembre()
+  ))
+
+  # test
+  expect_false(any(grepl("Carla Inventata, : ", unlist(testo), fixed = TRUE)))
+  expect_true(any(startsWith(
+    testo[["it"]], "- Carla Inventata, nome eseguito non noto: edc10, "
+  )))
+  expect_true(any(startsWith(
+    testo[["en"]], "- Carla Inventata, name executed not known: edc10, "
+  )))
+})
+
+
+
+test_that("a revocation of an executed row not carried out goes to IT", {
+  # eval
+  registro <- registro_di(
+    # Stopped at the gate: the owner lost User Rights and revoked.
+    richiesta(record_id = "45", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    # Waiting for the owner, revoked by somebody else.
+    richiesta(record_id = "46", request_status = "revoked", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"),
+    # Carried out: the access is gone.
+    richiesta(record_id = "47", request_status = "revoked"),
+    # Never executed: no access to take away.
+    richiesta(record_id = "48", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO",
+              applied_seal = ""),
+    # A disabled account stays in its own section, and nowhere twice.
+    ferma(record_id = "49"),
+    ferma(record_id = "50", request_status = "revoked")
+  )
+
+  ferme <- report_held_rows(registro, owners = rep(referente, 6L))
+
+  # test
+  expect_equal(ferme[["record_id"]], c("45", "46"))
+  expect_equal(report_stopped_rows(registro)[["record_id"]], "49")
+})
+
+
+test_that("a revocation stopped at the gate is listed with the pair executed", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "45", username = elena, first_name = "Elena",
+              last_name = "Supposta", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO")
+  )
+  logs <- list(log_eseguita("45", elena, sopra = evento(
+    "2026-11-05 10:00", referente, "request_status = 'revoked'",
+    record = "45"
+  )))
+  eseguito <- report_executed_register(
+    registro, logs, referente, approvers = character(),
+    channel_account = canale
+  )
+  rapporto <- report_assemble(
+    report_rows(eseguito, referente, list("2026-08-03 23:03"), novembre()),
+    rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(elena))),
+    held = report_held_rows(eseguito, owners = referente)
+  )
+
+  testo <- parti(report_it_message(rapporto[["it"]], novembre()))
+
+  # test
+  expect_equal(eseguito[["nome_eseguito"]], "log")
+  expect_equal(report_server_asks(eseguito), list(edc10 = elena))
+  expect_true(paste0(
+    "   - Richiesta 45: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc10, progetto 9301. Esito data_error, DATO_AMBITO_NON_AUTORIZZATO. ",
+    "Revocata, revoca non eseguita. La persona e' gia' entrata su edc10. ",
+    "Referente: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["it"]])
+})
+
+
+
+test_that("the report and the round read a written value with one reader", {
+  # eval
+  eventi <- rbind(
+    evento("2026-08-03 23:02", canale,
+           "username = 'luca.d'amico@ubep.unipd.it', identity = 'created'"),
+    evento("2026-08-03 23:01", canale, "identity = 'created'"),
+    evento("2026-08-03 23:00", canale, "username = 'ultimo@ubep.unipd.it'")
+  )
+
+  # test
+  expect_equal(
+    log_written_value(eventi, "username"),
+    c("luca.d'amico@ubep.unipd.it", NA, "ultimo@ubep.unipd.it")
+  )
+  expect_false(exists("report_written_value", mode = "function"))
+})
+
+
+test_that("a revocation carried out and then touched is not stopped", {
+  # eval
+  # Revoked by the owner and carried out on 10 September; on 5 November a
+  # referent who is not the owner writes the expiration, and the round holds
+  # the row because its seal moved. The access is gone.
+  eseguita <- intatta(
+    record_id = "45", username = elena, first_name = "Elena",
+    last_name = "Supposta", request_status = "revoked"
+  )
+  registro <- eseguita
+  registro[["expiration"]] <- "2026-12-31"
+  registro[["outcome"]] <- "held"
+  registro[["outcome_detail"]] <- "SIGILLO_DIVERSO:bbbbbbbbbbbb"
+  sigillo <- eseguita[["applied_seal"]][[1L]]
+  chiusa <- log_eseguita("45", elena, sopra = rbind(
+    evento("2026-11-05 10:00", bruno, "expiration = '2026-12-31'",
+           record = "45"),
+    evento("2026-09-10 23:03", canale,
+           paste0("applied_seal = '", sigillo, "'"), record = "45"),
+    evento("2026-09-09 10:00", referente, "request_status = 'revoked'",
+           record = "45")
+  ))
+  # The same revocation, never carried out: the log says nothing of it.
+  aperta <- log_eseguita("45", elena, sopra = evento(
+    "2026-11-05 10:00", referente, "request_status = 'revoked'",
+    record = "45"
+  ))
+
+  eseguito <- report_executed_register(
+    registro, list(chiusa), referente, approvers = character(),
+    channel_account = canale
+  )
+  ancora <- report_executed_register(
+    registro, list(aperta), referente, approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  expect_equal(nrow(report_held_rows(eseguito, owners = referente)), 0L)
+  expect_length(report_server_asks(eseguito), 0L)
+  expect_equal(
+    report_held_rows(ancora, owners = referente)[["record_id"]], "45"
   )
 })

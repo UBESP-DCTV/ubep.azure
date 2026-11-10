@@ -122,6 +122,18 @@ CANALE_UTENTE <- trimws(strsplit(
 )[[1L]])
 CANALE_UTENTE <- CANALE_UTENTE[nzchar(CANALE_UTENTE)]
 
+# Le utenze IT che approvano una modifica su qualunque riga, le stesse del
+# giro e lette dalla stessa variabile del file d'ambiente comune. Il rapporto
+# legge dal log il nome con cui e' stata eseguita una riga ferma col sigillo
+# mosso, e un'approvazione dice quali scritture l'esecuzione copriva: senza
+# l'elenco una modifica approvata da IT verrebbe saltata, e il nome letto
+# sarebbe quello di prima. Senza la variabile approva solo il proprietario,
+# come nel giro.
+APPROVATORI_IT <- trimws(strsplit(
+  Sys.getenv("UBEP_APPROVATORI_IT"), ",", fixed = TRUE
+)[[1L]])
+APPROVATORI_IT <- APPROVATORI_IT[nzchar(APPROVATORI_IT)]
+
 if (POSTA && !nzchar(POSTA_DA)) {
   stop(
     "UBEP_RAPPORTO_POSTA=1 senza UBEP_POSTA_DA: senza mittente ogni ",
@@ -243,6 +255,10 @@ mailer <- if (POSTA) {
   NULL
 }
 
+# `approvers` c'e' dalla 0.25.0: un pacchetto piu' vecchio rifiuta
+# l'argomento e la lavorazione esce con un errore, senza record. Per questo
+# si installa prima il pacchetto e poi questo file, e al ritorno il
+# contrario.
 esito <- ubep.azure:::provisioning_report(
   register_url = as.character(registro[["host"]]),
   register_token = registro_token,
@@ -256,7 +272,8 @@ esito <- ubep.azure:::provisioning_report(
   copy_to = if (nzchar(POSTA_COPIA)) POSTA_COPIA else NULL,
   channel_account = CANALE_UTENTE,
   hosts = host,
-  secrets = segreti
+  secrets = segreti,
+  approvers = APPROVATORI_IT
 )
 
 # Il record e' anche il riassunto sullo standard output: cio' che si stampa e

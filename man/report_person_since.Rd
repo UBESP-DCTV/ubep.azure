@@ -2,9 +2,9 @@
 % Please edit documentation in R/provisioning_report.R
 \name{report_person_since}
 \alias{report_person_since}
-\title{Since when the person a row names now has had its access}
+\title{Since when the person a row names has had its access}
 \usage{
-report_person_since(events, record, channel_account = NULL)
+report_person_since(events, record, channel_account = NULL, username = NULL)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -14,26 +14,37 @@ report_person_since(events, record, channel_account = NULL)
 \item{channel_account}{The REDCap usernames that hold the register's
 token, one or more, or \code{NULL} when they are not configured, for
 \code{log_channel_accounts()}.}
+
+\item{username}{The name to date: the name executed of a stopped row,
+read by \code{report_executed_register()}, which can differ from the newest
+one written; \code{NULL} for the newest one written, the register's.}
 }
 \value{
 One stamp, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome; \code{character()} when the
-username has been written and not executed since; \code{NA_character_} when
-the log cannot say.
+newest execution did not carry out that name, so it was written and not
+executed since; \code{NA_character_} when the log cannot say.
 }
 \description{
-The first execution by the channel after the newest write of \code{username} in
-the row's current life. The row's first execution dates the request; this
-dates the person. They differ when a modification changed \code{username}: the
-row was activated for somebody, and the person it names now got the access
-when the round executed it again. Dated by the row, that person would
-count months of somebody else's.
+The first execution by the channel of the newest run of executions carried
+out for that person's name, in the row's current life. The row's first
+execution dates the request; this dates the person. They differ when a
+modification changed \code{username}: the row was activated for somebody, and
+the person it names now got the access when the round executed it again.
+Dated by the row, that person would count months of somebody else's.
 }
 \details{
-The newest write of \code{username} is read from the order of the answer,
-newest first, like every other reading of the log here; the event that
-writes it counts as after it, in case one event wrote both. Every
-\code{username} write counts, the round's own included: the round writes back
-the name it resolved, in the same pass and before the seal, so on a row
-never modified the answer is its first execution.
+The name each execution carried out is the newest write of \code{username} at
+or below it, the event itself included, since the round writes back the
+name it resolved in the same pass and before the seal. A seal below any
+write of the name carried out a name the log does not say, and goes with
+any name. Read from the order of the answer, newest first, like every
+other reading of the log here.
+
+A run, and not the newest write of the name: a name written and then
+written back without an execution in between, the identity door's after an
+account renamed on Entra and restored, or a referent's who changed the
+name and changed it back, leaves the person with the access they had,
+and the row applied again with no new seal (L4). Dated from the newest
+write, that person would have no date and would no longer be judged.
 }
 \keyword{internal}

@@ -1173,8 +1173,6 @@ log_executed_values <- function(events, record, creator,
   }
 
   rows <- seq_len(nrow(mine))
-  details <- as.character(mine[["details"]])
-  details[is.na(details)] <- ""
   vapply(fields, function(field) {
     done <- which(
       log_wrote(mine, field) & rows > executed[[1L]] & !rows %in% open
@@ -1182,16 +1180,42 @@ log_executed_values <- function(events, record, creator,
     if (length(done) == 0L) {
       return(NA_character_)
     }
-    pattern <- paste0(
-      "\\b", field,
-      "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
-    )
-    hit <- regmatches(
-      details[[done[[1L]]]],
-      regexec(pattern, details[[done[[1L]]]], perl = TRUE)
-    )[[1L]]
-    if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
+    log_written_value(mine[done[[1L]], , drop = FALSE], field)
   }, character(1))
+}
+
+
+#' The value each event wrote into one field, read whole
+#'
+#' Up to the apostrophe that closes the value, the one followed by the next
+#' field or by the end of `details`: a UPN can hold an apostrophe, and cut at
+#' the first one `luca.d'amico` would read `luca.d`. Meant for `server`,
+#' `project_id` and `username`, whose values never hold the text
+#' `', name = '` that would end them early. The one reader of a whole value:
+#' `log_executed_values()` reads the pair executed with it, and the monthly
+#' report the name each execution carried out (`report_person_since()`), so
+#' that the names the two compare are read the same way.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param field One field name.
+#'
+#' @return A character vector, one value per event, `NA` where the event did
+#'   not write the field or the value does not read.
+#'
+#' @keywords internal
+log_written_value <- function(events, field) {
+  stopifnot(is.character(field), length(field) == 1L)
+
+  details <- as.character(events[["details"]])
+  details[is.na(details)] <- ""
+  pattern <- paste0(
+    "\\b", field,
+    "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+  )
+  vapply(details, function(said) {
+    hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]
+    if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
+  }, character(1), USE.NAMES = FALSE)
 }
 
 

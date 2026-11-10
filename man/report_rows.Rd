@@ -43,11 +43,17 @@ The kept rows of \code{register}, with \code{creator}, \code{attivata_il},
 added.
 }
 \description{
-A row counts while it is an access: \code{request_status} is \code{active} and
-\code{outcome} is \code{applied}. The filter is on the request and not on the
-outcome alone, because a revocation the round carried out closes with
-\code{applied} too; and any other outcome is not an access, and has had its own
-mail already.
+A row counts while it is an access, \code{conta} of \code{report_scope()}:
+\code{request_status} is \code{active} and the channel has executed it, whatever
+its outcome. The filter is on the request and not on the outcome alone,
+because a revocation the round carried out closes with \code{applied} too. A
+row executed and then stopped keeps its outcome in \code{outcome}, and the
+report says it beside the row wherever it lists it. A row past its
+expiration that nobody revoked counts as well, as long as it stands
+(decided on 2026-11-10): it is in force on the instance, and the referent
+is told to revoke what is no longer needed. \code{report_assemble()} does not
+judge it on its access. To leave it out from the month after its
+expiration, the place is the line of \code{keep} below.
 }
 \details{
 Of those, a row activated after the month covered waits for the next
