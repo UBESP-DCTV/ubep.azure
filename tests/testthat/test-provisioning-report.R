@@ -5178,3 +5178,45 @@ test_that("a run without the approvers asks nobody for a moved seal's name", {
     fixed = TRUE
   )
 })
+
+
+# --- corrections after the review (0.25.0) -----------------------------------
+
+test_that("a row in two sections of the mail to IT counts once", {
+  # eval
+  # Stopped, and with no owner established: in "Richieste senza un referente"
+  # and in "Richieste ferme" both.
+  registro <- registro_di(
+    richiesta(record_id = "42", outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    richiesta(record_id = "43", username = dario, first_name = "Dario",
+              last_name = "Ipotetico", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb")
+  )
+  righe <- report_rows(
+    registro, c("", referente), rep(list("2026-08-03 23:03"), 2L),
+    novembre()
+  )
+  rapporto <- report_assemble(
+    righe, rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(carla), entrata_su(dario))),
+    held = report_held_rows(registro, owners = c("", referente))
+  )
+
+  messaggio <- report_it_message(rapporto[["it"]], novembre())
+  testo <- parti(messaggio)
+
+  # test
+  expect_equal(nrow(rapporto[["it"]][["senza_referente"]]), 1L)
+  expect_equal(nrow(rapporto[["it"]][["ferme"]]), 2L)
+  expect_equal(messaggio[["n"]], 2L)
+  expect_equal(testo[["it"]][[1L]], "DA GUARDARE: 2")
+  expect_match(messaggio[["subject"]], "^Da guardare [(]2[)]: ")
+  # The sections still list what they list.
+  expect_true(any(grepl(
+    "Richieste ferme con un accesso eseguito (2)", testo[["it"]],
+    fixed = TRUE
+  )))
+})
+
+

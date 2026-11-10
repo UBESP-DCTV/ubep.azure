@@ -2228,8 +2228,8 @@ report_message <- function(report, period) {
 #' it is missing when the name executed is not known, and the owner). A row
 #' of the first or of the third section that is stopped says its outcome. It
 #' has the referents' form to review, and its number counts the rows, people
-#' and servers listed, a row in two sections twice. A section with nothing
-#' in it is not announced.
+#' and servers listed, a row once even when it is in two sections, by its
+#' `record_id`. A section with nothing in it is not announced.
 #'
 #' @param it The `it` part of what `report_assemble()` answered.
 #' @inheritParams report_message
@@ -2327,7 +2327,7 @@ report_it_message <- function(it, period) {
     )
     words <- with_outcome(row_words(orphans), orphans)
     sections[[length(sections) + 1L]] <- list(
-      n = nrow(orphans),
+      n = nrow(orphans), righe = value(orphans, "record_id"),
       it = c(
         paste0(
           "Richieste senza un referente a cui mandare il rapporto (",
@@ -2402,7 +2402,7 @@ report_it_message <- function(it, period) {
     reason <- value(undated, "data_motivo")
     words <- with_outcome(row_words(undated), undated)
     sections[[length(sections) + 1L]] <- list(
-      n = nrow(undated),
+      n = nrow(undated), righe = value(undated, "record_id"),
       it = c(
         paste0(
           "Richieste senza data di attivazione nel registro degli eventi (",
@@ -2525,7 +2525,7 @@ report_it_message <- function(it, period) {
     server <- value(stopped, "server")
     words <- row_words(stopped)
     sections[[length(sections) + 1L]] <- list(
-      n = nrow(stopped),
+      n = nrow(stopped), righe = value(stopped, "record_id"),
       it = c(
         paste0(
           "Richieste ferme su un account disattivato (", nrow(stopped), ")"
@@ -2573,7 +2573,7 @@ report_it_message <- function(it, period) {
     owner <- value(held, "creator")
     words <- row_words(held)
     sections[[length(sections) + 1L]] <- list(
-      n = nrow(held),
+      n = nrow(held), righe = value(held, "record_id"),
       it = c(
         paste0(
           "Richieste ferme con un accesso eseguito (", nrow(held), ")"
@@ -2642,7 +2642,13 @@ report_it_message <- function(it, period) {
     )
   }
 
-  count <- sum(vapply(sections, `[[`, 0L, "n"))
+  # A row counts once, in however many sections it is: a stopped row with no
+  # owner established is both without a referent and stopped. People and
+  # servers count as their sections say.
+  rows_of <- lapply(sections, `[[`, "righe")
+  of_rows <- !vapply(rows_of, is.null, logical(1))
+  count <- sum(vapply(sections[!of_rows], `[[`, 0L, "n")) +
+    length(unique(unlist(rows_of[of_rows])))
   numbered <- function(lang) {
     unlist(lapply(seq_along(sections), function(i) {
       lines <- sections[[i]][[lang]]

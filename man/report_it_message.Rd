@@ -27,7 +27,7 @@ revocation is the one that stopped, the same column of the access, or why
 it is missing when the name executed is not known, and the owner). A row
 of the first or of the third section that is stopped says its outcome. It
 has the referents' form to review, and its number counts the rows, people
-and servers listed, a row in two sections twice. A section with nothing
-in it is not announced.
+and servers listed, a row once even when it is in two sections, by its
+\code{record_id}. A section with nothing in it is not announced.
 }
 \keyword{internal}
