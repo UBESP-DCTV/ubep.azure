@@ -4,10 +4,13 @@
 \alias{mail_status_words}
 \title{Say what \code{applied} did, which is not the same thing twice}
 \usage{
-mail_status_words(request_status)
+mail_status_words(request_status, applied_as = "")
 }
 \arguments{
 \item{request_status}{The row's \code{request_status}.}
+
+\item{applied_as}{The row's read-back, \code{"absent"} when the pair is not on
+the instance. Empty when the caller does not say.}
 }
 \value{
 A character vector named \code{it} and \code{en}.
@@ -19,5 +22,11 @@ in \code{request_status}. The alert body had to print the vocabulary and ask the
 reader to apply it. The mail of record 9 in the field test is what this
 exists to prevent -- it said \code{applied} on a revocation, naming nobody, and
 whoever read it understood that an access had been granted.
+}
+\details{
+A third fact has the same word: an active row whose last day has passed,
+carried out and unchanged, and whose person somebody removed from the
+project. The round writes nothing and reads the pair back as absent, which
+is the row's own wish, and the message says that instead of a grant.
 }
 \keyword{internal}
