@@ -19,6 +19,6 @@ person is disabled: \code{transport_error} with \code{TRASPORTO_ACCOUNT_DISATTIV
 among its codes. \code{outcome_detail} can carry more than one code, so the code
 is looked for inside the field and not compared with it. These rows are not
 in the report, but their people are among the names the report asks the
-servers for, so that IT can see them.
+servers for, so that IT can see them. \code{disattivata} of \code{report_scope()}.
 }
 \keyword{internal}

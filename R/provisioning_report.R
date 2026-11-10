@@ -217,31 +217,74 @@ report_executions <- function(events, record, channel_account = NULL) {
 }
 
 
-#' Since when the person a row names now has had its access
+#' The value each event wrote into one field, read whole
 #'
-#' The first execution by the channel after the newest write of `username` in
-#' the row's current life. The row's first execution dates the request; this
-#' dates the person. They differ when a modification changed `username`: the
-#' row was activated for somebody, and the person it names now got the access
-#' when the round executed it again. Dated by the row, that person would
-#' count months of somebody else's.
+#' As `log_executed_values()` reads it: up to the apostrophe followed by the
+#' next field or by the end of `details`, since a UPN can hold an apostrophe.
+#' Meant for `username`.
 #'
-#' The newest write of `username` is read from the order of the answer,
-#' newest first, like every other reading of the log here; the event that
-#' writes it counts as after it, in case one event wrote both. Every
-#' `username` write counts, the round's own included: the round writes back
-#' the name it resolved, in the same pass and before the seal, so on a row
-#' never modified the answer is its first execution.
+#' @param events The event log, as `register_log()` returns it.
+#' @param field One field name.
 #'
-#' @inheritParams report_executions
-#'
-#' @return One stamp, `"%Y-%m-%d %H:%M"` in Rome; `character()` when the
-#'   username has been written and not executed since; `NA_character_` when
-#'   the log cannot say.
+#' @return A character vector, one value per event, `NA` where the event did
+#'   not write the field or the value does not read.
 #'
 #' @keywords internal
-report_person_since <- function(events, record, channel_account = NULL) {
-  stopifnot(is.data.frame(events))
+report_written_value <- function(events, field) {
+  stopifnot(is.character(field), length(field) == 1L)
+
+  details <- as.character(events[["details"]])
+  details[is.na(details)] <- ""
+  pattern <- paste0(
+    "\\b", field,
+    "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+  )
+  vapply(details, function(said) {
+    hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]
+    if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
+  }, character(1), USE.NAMES = FALSE)
+}
+
+
+#' Since when the person a row names has had its access
+#'
+#' The first execution by the channel of the newest run of executions carried
+#' out for that person's name, in the row's current life. The row's first
+#' execution dates the request; this dates the person. They differ when a
+#' modification changed `username`: the row was activated for somebody, and
+#' the person it names now got the access when the round executed it again.
+#' Dated by the row, that person would count months of somebody else's.
+#'
+#' The name each execution carried out is the newest write of `username` at
+#' or below it, the event itself included, since the round writes back the
+#' name it resolved in the same pass and before the seal. A seal below any
+#' write of the name carried out a name the log does not say, and goes with
+#' any name. Read from the order of the answer, newest first, like every
+#' other reading of the log here.
+#'
+#' A run, and not the newest write of the name: a name written and then
+#' written back without an execution in between, the identity door's after an
+#' account renamed on Entra and restored, or a referent's who changed the
+#' name and changed it back, leaves the person with the access they had,
+#' and the row applied again with no new seal (L4). Dated from the newest
+#' write, that person would have no date and would no longer be judged.
+#'
+#' @inheritParams report_executions
+#' @param username The name to date: the name executed of a stopped row,
+#'   read by `report_executed_register()`, which can differ from the newest
+#'   one written; `NULL` for the newest one written, the register's.
+#'
+#' @return One stamp, `"%Y-%m-%d %H:%M"` in Rome; `character()` when the
+#'   newest execution did not carry out that name, so it was written and not
+#'   executed since; `NA_character_` when the log cannot say.
+#'
+#' @keywords internal
+report_person_since <- function(events, record, channel_account = NULL,
+                                username = NULL) {
+  stopifnot(
+    is.data.frame(events),
+    is.null(username) || (is.character(username) && length(username) == 1L)
+  )
 
   mine <- log_of_record(events, record)
   channel <- log_channel_accounts(events, record, channel_account)
@@ -252,11 +295,36 @@ report_person_since <- function(events, record, channel_account = NULL) {
   authors <- trimws(as.character(mine[["username"]]))
   sealed <- log_wrote(mine, "applied_seal") & authors %in% channel &
     nzchar(log_value(mine, "applied_seal"))
-  moved <- which(log_wrote(mine, "username"))
-  if (length(moved) > 0L) {
-    sealed <- sealed & seq_len(nrow(mine)) <= moved[[1L]]
+  wrote <- log_wrote(mine, "username")
+  written <- report_written_value(mine, "username")
+
+  # Oldest first: the name in force at each seal.
+  carried <- rep(NA_character_, nrow(mine))
+  current <- NA_character_
+  for (k in rev(seq_len(nrow(mine)))) {
+    if (wrote[[k]] && !is.na(written[[k]])) {
+      current <- written[[k]]
+    }
+    if (sealed[[k]]) {
+      carried[[k]] <- current
+    }
   }
-  stamps <- trimws(as.character(mine[["timestamp"]][sealed]))
+
+  newest <- if (any(wrote)) written[[which(wrote)[[1L]]]] else NA_character_
+  target <- username %||% newest
+  same <- function(name) {
+    is.na(name) || is.na(target) ||
+      identical(tolower(trimws(name)), tolower(trimws(target)))
+  }
+
+  run <- integer()
+  for (k in which(sealed)) {
+    if (!same(carried[[k]])) {
+      break
+    }
+    run <- c(run, k)
+  }
+  stamps <- trimws(as.character(mine[["timestamp"]][run]))
 
   if (!all(log_stamp_reads(stamps))) {
     return(NA_character_)
@@ -442,13 +510,197 @@ report_expired <- function(expiration, today) {
 }
 
 
+#' Which rows of the register the report speaks about, and where
+#'
+#' Three sets, the one place that says them:
+#'
+#' - `conta`, the rows of the referents' reports: `request_status` is
+#'   `active` and the row is an access, `outcome` `applied` or a seal in
+#'   `applied_seal`, whatever the outcome (decided on 2026-11-10). A row the
+#'   channel executed and that then stopped, `held`, a `data_error` or a
+#'   `transport_error`, still has on the instance the access executed: the
+#'   round takes nothing away unless a row asks it to. The field is enough to
+#'   say the row was executed: the report grants nothing, and a seal somebody
+#'   imported is at most a row more. The rows stopped on a disabled account
+#'   are not in it: the person cannot sign in, and IT has them in a section
+#'   of its own, `disattivata`;
+#' - `ferma`, the rows the mail to IT lists as stopped with an access
+#'   executed: sealed, not `applied`, and either active or revoked on
+#'   `DATO_COPPIA_CAMBIATA` or `TRASPORTO_IDENTITA_CAMBIATA`, the two codes
+#'   on which a revocation stops before it is carried out and the account
+#'   that has the access is not the one the register names. Not those of
+#'   `disattivata`;
+#' - `disattivata`, the active rows stopped on a disabled account:
+#'   `transport_error` with `TRASPORTO_ACCOUNT_DISATTIVATO` among the codes
+#'   of `outcome_detail`, sealed or not.
+#'
+#' @param register The register as read.
+#'
+#' @return A list of three logical vectors as long as the register, `conta`,
+#'   `ferma` and `disattivata`.
+#'
+#' @keywords internal
+report_scope <- function(register) {
+  stopifnot(is.data.frame(register))
+
+  field <- function(name) {
+    value <- register[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(register)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  status <- field("request_status")
+  outcome <- field("outcome")
+  detail <- field("outcome_detail")
+  sealed <- nzchar(field("applied_seal"))
+
+  disattivata <- status == "active" & outcome == "transport_error" &
+    grepl("TRASPORTO_ACCOUNT_DISATTIVATO", detail, fixed = TRUE)
+  revoked_stuck <- status == "revoked" &
+    grepl("DATO_COPPIA_CAMBIATA|TRASPORTO_IDENTITA_CAMBIATA", detail)
+
+  list(
+    conta = status == "active" & (outcome == "applied" | sealed) &
+      !disattivata,
+    ferma = sealed & outcome != "applied" & !disattivata &
+      (status == "active" | revoked_stuck),
+    disattivata = disattivata
+  )
+}
+
+
+#' The register with the pair each stopped row executed
+#'
+#' A row that stopped after the channel executed it keeps on the instance
+#' the access executed, and the servers are asked about that one, not about
+#' the one the register holds now. Two ways of knowing it, as in the round:
+#'
+#' - **the seal did not move**: the register is what was executed. The seal
+#'   is the channel's last one in the row's log, `log_channel_seal()`, when
+#'   the channel's account is configured, as the round reads it; otherwise
+#'   the field;
+#' - **the seal moved**: the values the round last carried out, read from
+#'   the log by `log_executed_values()`, which needs the IT approvers to know
+#'   which writes an approval covered. A seal moves on a row `held` on its
+#'   role, and on a row the identity door rewrote after an account changed on
+#'   Entra, which stops on `TRASPORTO_IDENTITA_CAMBIATA` with the new name in
+#'   the register and the old one on the instance.
+#'
+#' Where the log does not say, or the caller gave no approvers (`NULL`, a
+#' runner older than this function: without them a change IT approved would
+#' be passed over and the name read would be the one before it), the name
+#' executed is not known: `username` is emptied, so that no server is asked
+#' about a name that may not be the one executed, and the row is not judged
+#' on its access. `server` and `project_id` stay the register's then.
+#'
+#' Applied rows, and every row outside `conta` and `ferma` of
+#' `report_scope()`, keep the register's values.
+#'
+#' @param register The register as read.
+#' @param logs One element per row, in the register's order: the row's log,
+#'   or `NULL` where it was not read.
+#' @param creators Who created each row, as `log_creators()` answers.
+#' @param approvers The IT accounts whose approval counts on any row, or
+#'   `NULL` when the caller does not know them.
+#' @param channel_account The REDCap usernames that hold the register's
+#'   token, or `NULL` when they are not configured.
+#'
+#' @return The register, with `server`, `project_id` and `username` the ones
+#'   executed, and three columns more: `username_registro`, the name the
+#'   register holds; `nome_eseguito`, `registro` or `log`, where the name
+#'   executed was read, `""` when it is not known; `nome_motivo`, why not:
+#'   `log` or `approvatori`, `""` when it is known.
+#'
+#' @keywords internal
+report_executed_register <- function(register, logs, creators,
+                                     approvers = NULL,
+                                     channel_account = NULL) {
+  stopifnot(
+    is.data.frame(register),
+    is.list(logs), length(logs) == nrow(register),
+    is.character(creators), length(creators) == nrow(register),
+    is.null(approvers) || is.character(approvers),
+    channel_account_valid(channel_account)
+  )
+
+  field <- function(name) {
+    value <- register[[name]]
+    if (is.null(value)) {
+      return(rep("", nrow(register)))
+    }
+    value <- trimws(as.character(value))
+    value[is.na(value)] <- ""
+    value
+  }
+
+  scope <- report_scope(register)
+  stopped <- (scope[["conta"]] | scope[["ferma"]]) &
+    nzchar(field("applied_seal")) & field("outcome") != "applied"
+  ids <- field("record_id")
+
+  out <- register
+  out[["server"]] <- field("server")
+  out[["project_id"]] <- field("project_id")
+  out[["username"]] <- field("username")
+  out[["username_registro"]] <- field("username")
+  out[["nome_eseguito"]] <- rep("registro", nrow(register))
+  out[["nome_motivo"]] <- rep("", nrow(register))
+
+  for (i in which(stopped)) {
+    log <- logs[[i]]
+    believed <- if (!is.null(channel_account) && !is.null(log)) {
+      log_channel_seal(log, ids[[i]], channel_account)
+    } else {
+      field("applied_seal")[[i]]
+    }
+    if (nzchar(believed) &&
+          identical(believed, request_seal(register[i, , drop = FALSE]))) {
+      next
+    }
+
+    values <- if (!is.null(log) && !is.null(approvers)) {
+      log_executed_values(
+        log, ids[[i]], creators[[i]], approvers = approvers,
+        channel_account = channel_account
+      )
+    }
+    if (is.null(values) || anyNA(values) || !nzchar(values[["username"]])) {
+      out[["username"]][[i]] <- ""
+      out[["nome_eseguito"]][[i]] <- ""
+      out[["nome_motivo"]][[i]] <- if (is.null(approvers)) {
+        "approvatori"
+      } else {
+        "log"
+      }
+      next
+    }
+    out[["server"]][[i]] <- values[["server"]]
+    out[["project_id"]][[i]] <- values[["project_id"]]
+    out[["username"]][[i]] <- values[["username"]]
+    out[["nome_eseguito"]][[i]] <- "log"
+  }
+
+  out
+}
+
+
 #' The rows a month's report speaks about, with their owner and their date
 #'
-#' A row counts while it is an access: `request_status` is `active` and
-#' `outcome` is `applied`. The filter is on the request and not on the
-#' outcome alone, because a revocation the round carried out closes with
-#' `applied` too; and any other outcome is not an access, and has had its own
-#' mail already.
+#' A row counts while it is an access, `conta` of `report_scope()`:
+#' `request_status` is `active` and the channel has executed it, whatever
+#' its outcome. The filter is on the request and not on the outcome alone,
+#' because a revocation the round carried out closes with `applied` too. A
+#' row executed and then stopped keeps its outcome in `outcome`, and the
+#' report says it beside the row wherever it lists it. A row past its
+#' expiration that nobody revoked counts as well, as long as it stands
+#' (decided on 2026-11-10): it is in force on the instance, and the referent
+#' is told to revoke what is no longer needed. `report_assemble()` does not
+#' judge it on its access. To leave it out from the month after its
+#' expiration, the place is the line of `keep` below.
 #'
 #' Of those, a row activated after the month covered waits for the next
 #' report, and every other one is kept. `nel_mese` says what the month did to
@@ -501,16 +753,6 @@ report_rows <- function(register, creators, executions, period,
     !is.na(channel_known)
   )
 
-  field <- function(name) {
-    value <- register[[name]]
-    if (is.null(value)) {
-      return(rep("", nrow(register)))
-    }
-    value <- trimws(as.character(value))
-    value[is.na(value)] <- ""
-    value
-  }
-
   month <- period[["mese"]]
   unread <- vapply(executions, is.null, logical(1))
   dated <- vapply(executions, function(stamps) {
@@ -527,7 +769,10 @@ report_rows <- function(register, creators, executions, period,
     length(s) > 1L && any(substr(s[-1L], 1L, 7L) == month)
   }, logical(1))
 
-  scope <- field("request_status") == "active" & field("outcome") == "applied"
+  scope <- report_scope(register)[["conta"]]
+  # An expired row stays while it stands. To leave it out from the month
+  # after its expiration, add here `& !before`, with `before` true where
+  # `expiration` is earlier than the first day of `month`.
   keep <- scope & !unread & (!dated | substr(first, 1L, 7L) <= month)
 
   news <- ifelse(
@@ -573,7 +818,7 @@ report_rows <- function(register, creators, executions, period,
 #' among its codes. `outcome_detail` can carry more than one code, so the code
 #' is looked for inside the field and not compared with it. These rows are not
 #' in the report, but their people are among the names the report asks the
-#' servers for, so that IT can see them.
+#' servers for, so that IT can see them. `disattivata` of `report_scope()`.
 #'
 #' @param register The register, as `register_records()` answers.
 #'
@@ -584,23 +829,40 @@ report_rows <- function(register, creators, executions, period,
 report_stopped_rows <- function(register) {
   stopifnot(is.data.frame(register))
 
-  field <- function(name) {
-    value <- register[[name]]
-    if (is.null(value)) {
-      return(rep("", nrow(register)))
-    }
-    value <- trimws(as.character(value))
-    value[is.na(value)] <- ""
-    value
-  }
+  rows <- register[report_scope(register)[["disattivata"]], , drop = FALSE]
+  rownames(rows) <- NULL
+  rows
+}
 
-  stopped <- field("request_status") == "active" &
-    field("outcome") == "transport_error" &
-    grepl(
-      "TRASPORTO_ACCOUNT_DISATTIVATO", field("outcome_detail"), fixed = TRUE
-    )
 
-  rows <- register[stopped, , drop = FALSE]
+#' The rows stopped with an access executed, for IT
+#'
+#' `ferma` of `report_scope()`: the rows the channel executed and that then
+#' stopped, active, or revoked on the two codes on which the revocation is
+#' not carried out. The access executed stays on the instance until the row
+#' is applied again or its revocation is. Read on the register with the
+#' names executed, `report_executed_register()`, so that each row names the
+#' account that has the access.
+#'
+#' @param register The register, with the names executed when known.
+#' @param owners Whom each row belongs to, in the register's order, as
+#'   `report_owners()` answers; `NULL` for nobody known.
+#'
+#' @return The rows, with `creator`, the owner, added.
+#'
+#' @keywords internal
+report_held_rows <- function(register, owners = NULL) {
+  stopifnot(
+    is.data.frame(register),
+    is.null(owners) ||
+      (is.character(owners) && length(owners) == nrow(register))
+  )
+
+  held <- report_scope(register)[["ferma"]]
+  owners <- trimws(owners %||% rep("", nrow(register)))
+  owners[is.na(owners)] <- ""
+  rows <- register[held, , drop = FALSE]
+  rows[["creator"]] <- owners[held]
   rownames(rows) <- NULL
   rows
 }
@@ -608,11 +870,16 @@ report_stopped_rows <- function(register) {
 
 #' The names to ask each server
 #'
-#' For every server the register has rows on, the usernames of its active and
-#' applied rows and of the rows stopped on a disabled account
-#' (`report_stopped_rows()`). Blank servers and blank names are left out.
+#' For every server the register has rows on, the usernames of the rows the
+#' referents' reports count, of the rows stopped with an access executed and
+#' of the rows stopped on a disabled account (`report_scope()`). Read on the
+#' register with the names executed, `report_executed_register()`: a stopped
+#' row is asked about the account that has the access, and one whose name
+#' executed is not known about nobody. Blank servers and blank names are
+#' left out.
 #'
-#' @param register The register, as `register_records()` answers.
+#' @param register The register, as `register_records()` answers, or with
+#'   the names executed.
 #'
 #' @return A named list: server to the usernames to ask it, without
 #'   repetitions.
@@ -631,14 +898,16 @@ report_server_asks <- function(register) {
     value
   }
 
-  applied <- register[
-    field(register, "request_status") == "active" &
-      field(register, "outcome") == "applied", ,
-    drop = FALSE
-  ]
-  stopped <- report_stopped_rows(register)
-  server <- c(field(applied, "server"), field(stopped, "server"))
-  username <- c(field(applied, "username"), field(stopped, "username"))
+  scope <- report_scope(register)
+  known <- if (is.null(register[["nome_eseguito"]])) {
+    rep(TRUE, nrow(register))
+  } else {
+    nzchar(field(register, "nome_eseguito"))
+  }
+  asked <- (scope[["conta"]] | scope[["ferma"]] | scope[["disattivata"]]) &
+    known
+  server <- field(register, "server")[asked]
+  username <- field(register, "username")[asked]
   keep <- nzchar(server) & nzchar(username)
 
   asks <- split(username[keep], factor(server[keep], unique(server[keep])))
@@ -718,6 +987,14 @@ report_server_asks <- function(register) {
 #' the people of that referent the report could not judge, and those of the
 #' rows the log does not date.
 #'
+#' A row executed and then stopped is in `rows` like an applied one, and is
+#' judged like one: the entries of the first sign-in and of the year without
+#' access carry `ferme`, a frame of `server`, `project_id` and `esito` (the
+#' row's `outcome`) for their stopped rows, for the mail to say the request
+#' is stopped. A row whose name executed is not known (`nome_eseguito` empty,
+#' `report_executed_register()`) is not judged on its access: nobody knows
+#' which account to look at.
+#'
 #' @param rows What `report_rows()` answered.
 #' @param directory A directory frame, as `directory_users()` returns it.
 #' @param period What `report_month()` answered.
@@ -734,6 +1011,10 @@ report_server_asks <- function(register) {
 #' @param stopped The rows stopped on a disabled account, as
 #'   `report_stopped_rows()` answers, or `NULL` for none. They are not in the
 #'   referents' reports: IT gets them.
+#' @param held The rows stopped with an access executed, as
+#'   `report_held_rows()` answers, or `NULL` for none. IT gets them all, with
+#'   whether the person has entered the server; the active ones are in their
+#'   referent's report as well, through `rows`.
 #'
 #' @return A list with `referenti`, one report per referent named after them,
 #'   each a list of `referente`, `attivati` (rows), `scadenze` (the rows of
@@ -755,10 +1036,12 @@ report_server_asks <- function(register) {
 #'   referent's report on the strength of Entra, and `non_controllate`, how
 #'   many were candidates for the year without access and could not be
 #'   checked; one row for each server that was asked and not read, whether
-#'   the rows on it are applied or stopped, also with none) and
+#'   the rows on it are applied or stopped, also with none),
 #'   `disattivati` (the rows of `stopped`, with `entrata`: `"si"` or `"no"`,
 #'   whether the person has entered the server, when it was read, `""` when
-#'   it was not); and `senza_creatore`, how
+#'   it was not) and `ferme` (the rows of `held`, with `entrata` as for
+#'   `disattivati`, `""` also when the name executed is not known); and
+#'   `senza_creatore`, how
 #'   many rows have no referent to go to. Since rows can pass, that means
 #'   without an established owner and not only without a creator; the name
 #'   stays, because it is a column of `UbepRapporto_CL`, and a renamed
@@ -768,11 +1051,12 @@ report_server_asks <- function(register) {
 #' @keywords internal
 report_assemble <- function(rows, directory, period, previous = list(),
                             unread = character(), servers = list(),
-                            stopped = NULL) {
+                            stopped = NULL, held = NULL) {
   stopifnot(
     is.data.frame(rows), is.data.frame(directory), is.list(period),
     is.list(previous), is.character(unread), is.list(servers),
-    is.null(stopped) || is.data.frame(stopped)
+    is.null(stopped) || is.data.frame(stopped),
+    is.null(held) || is.data.frame(held)
   )
 
   text <- function(name) {
@@ -840,8 +1124,30 @@ report_assemble <- function(rows, directory, period, previous = list(),
   days <- rep(NA_integer_, nrow(rows))
   dated <- nzchar(start)
   days[dated] <- as.integer(today - as.Date(substr(start[dated], 1L, 10L)))
-  judged <- own & !report_expired(text("expiration"), today) &
+  # A stopped row whose name executed is not known is not judged: the
+  # account to look at is the one executed, and nobody knows which.
+  known <- if (is.null(rows[["nome_eseguito"]])) {
+    rep(TRUE, nrow(rows))
+  } else {
+    nzchar(text("nome_eseguito"))
+  }
+  judged <- own & known & !report_expired(text("expiration"), today) &
     !is.na(days) & days >= report_grace_days()
+
+  # The rows executed and then stopped, which each entry names with their
+  # outcome. A frame without `outcome` holds applied rows only.
+  stopped_row <- if (is.null(rows[["outcome"]])) {
+    rep(FALSE, nrow(rows))
+  } else {
+    text("outcome") != "applied"
+  }
+  stopped_of <- function(at) {
+    at <- at[stopped_row[at]]
+    data.frame(
+      server = text("server")[at], project_id = text("project_id")[at],
+      esito = text("outcome")[at], stringsAsFactors = FALSE
+    )
+  }
 
   # The expirations of the month, for information: after the day of the
   # reading, which is already expired, and up to the last day of its month.
@@ -1014,7 +1320,8 @@ report_assemble <- function(rows, directory, period, previous = list(),
                   server = server,
                   progetti = projects(at),
                   ultimo = last,
-                  attivata_il = substr(start[[first]], 1L, 10L)
+                  attivata_il = substr(start[[first]], 1L, 10L),
+                  ferme = stopped_of(at)
                 )
               }
             }
@@ -1048,7 +1355,8 @@ report_assemble <- function(rows, directory, period, previous = list(),
           storia_nota = is.null(unknown_until) ||
             as.Date(substr(start[[first]], 1L, 10L)) >= unknown_until,
           fonte = if (isTRUE(seen[["letto"]])) "server" else "entra",
-          limite = limit
+          limite = limit,
+          ferme = stopped_of(at)
         )
       }
 
@@ -1105,7 +1413,9 @@ report_assemble <- function(rows, directory, period, previous = list(),
   }))
   # Every server the report asked and did not read, whoever the rows are: the
   # applied ones, the stopped ones, or only the readings that were made.
-  stopped_servers <- trimws(as.character(stopped[["server"]]))
+  stopped_servers <- trimws(as.character(c(
+    stopped[["server"]], held[["server"]]
+  )))
   asked <- c(names(servers), text("server"), stopped_servers)
   asked <- sort(unique(asked[!is.na(asked) & nzchar(asked)]))
   asked <- asked[!vapply(
@@ -1145,15 +1455,36 @@ report_assemble <- function(rows, directory, period, previous = list(),
     if (identical(access[["stato"]], "entrata")) "si" else "no"
   }, "")
 
+  # The rows stopped with an access executed, with the same column, said only
+  # by a server that was read and only for a name executed that is known.
+  ferme <- held %||% data.frame()
+  rownames(ferme) <- NULL
+  ferme[["entrata"]] <- vapply(seq_len(nrow(ferme)), function(i) {
+    name <- trimws(as.character(ferme[["username"]][[i]]))
+    said <- ferme[["nome_eseguito"]]
+    if (is.na(name) || !nzchar(name) ||
+          (!is.null(said) && !nzchar(trimws(as.character(said[[i]]))))) {
+      return("")
+    }
+    seen <- reading(trimws(as.character(ferme[["server"]][[i]])))
+    if (!isTRUE(seen[["letto"]])) {
+      return("")
+    }
+    access <- report_server_access(seen[["conti"]], name)
+    if (identical(access[["stato"]], "entrata")) "si" else "no"
+  }, "")
+
   for_it <- nrow(senza_referente) + length(non_giudicabili) +
-    nrow(senza_data) + nrow(server_non_letti) + nrow(disattivati)
+    nrow(senza_data) + nrow(server_non_letti) + nrow(disattivati) +
+    nrow(ferme)
   it <- if (for_it > 0L) {
     list(
       senza_referente = senza_referente,
       non_giudicabili = non_giudicabili,
       senza_data = senza_data,
       server_non_letti = server_non_letti,
-      disattivati = disattivati
+      disattivati = disattivati,
+      ferme = ferme
     )
   }
 
@@ -1217,11 +1548,69 @@ report_projects_words <- function(projects) {
 }
 
 
+#' What a line says of a row executed and then stopped, in both languages
+#'
+#' The outcome, after the rest of the line: the access executed stands, and
+#' the request does not say what the instance holds.
+#'
+#' @param rows Rows of a referent's report, with `outcome`.
+#'
+#' @return A list of two character vectors as long as `rows`, `it` and `en`,
+#'   `""` for a row applied or without `outcome`.
+#'
+#' @keywords internal
+report_stopped_words <- function(rows) {
+  outcome <- rows[["outcome"]]
+  if (is.null(outcome)) {
+    outcome <- rep("applied", nrow(rows))
+  }
+  outcome <- trimws(as.character(outcome))
+  outcome[is.na(outcome)] <- ""
+  stopped <- outcome != "applied"
+  list(
+    it = ifelse(stopped, paste0("Richiesta ferma, esito ", outcome, "."), ""),
+    en = ifelse(
+      stopped, paste0("Request stopped, outcome ", outcome, "."), ""
+    )
+  )
+}
+
+
+#' The lines of the entries' stopped rows, in both languages
+#'
+#' One line for each row of an entry of the first sign-in or of the year
+#' without access whose request is stopped, `ferme` as `report_assemble()`
+#' builds it.
+#'
+#' @param stopped The `ferme` of an entry, or `NULL`.
+#'
+#' @return A list of two character vectors, `it` and `en`, empty without
+#'   stopped rows.
+#'
+#' @keywords internal
+report_stopped_lines <- function(stopped) {
+  if (is.null(stopped) || nrow(stopped) == 0L) {
+    return(list(it = character(), en = character()))
+  }
+  project <- as.character(stopped[["project_id"]])
+  outcome <- as.character(stopped[["esito"]])
+  list(
+    it = paste0(
+      "     Richiesta ferma: progetto ", project, ", esito ", outcome, "."
+    ),
+    en = paste0(
+      "     Request stopped: project ", project, ", outcome ", outcome, "."
+    )
+  )
+}
+
+
 #' The lines of the accesses activated in the month, in both languages
 #'
 #' A new request says whether its account was new, from the `account` column
 #' `report_assemble()` computes on the date Entra made the account; a
-#' modified one says it was modified.
+#' modified one says it was modified. A stopped one says its outcome,
+#' `report_stopped_words()`.
 #'
 #' @param rows The `attivati` of a referent's report.
 #'
@@ -1273,6 +1662,9 @@ report_activated_lines <- function(rows) {
     ifelse(account == "nuovo", "New account.",
            ifelse(account == "esistente", "Existing account.", ""))
   )
+  stopped <- report_stopped_words(rows)
+  tail_it <- trimws(paste(tail_it, stopped[["it"]]))
+  tail_en <- trimws(paste(tail_en, stopped[["en"]]))
 
   list(
     it = c(
@@ -1368,6 +1760,7 @@ report_people_lines <- function(people, period, to_it = 0L) {
     limit <- as.character(person[["limite"]] %||% "")
     from_entra <- identical(person[["fonte"]], "entra")
     past <- nzchar(limit) && limit < today
+    stopped <- report_stopped_lines(person[["ferme"]])
     list(
       it = c(
         paste0(
@@ -1387,6 +1780,7 @@ report_people_lines <- function(people, period, to_it = 0L) {
             )
           }
         ),
+        stopped[["it"]],
         if (past) {
           paste0(
             "     Non e' mai entrata con l'account UBEP: la data per il ",
@@ -1422,6 +1816,7 @@ report_people_lines <- function(people, period, to_it = 0L) {
             paste0(" Also reported on ", report_join(earlier, "and"), ".")
           }
         ),
+        stopped[["en"]],
         if (past) {
           paste0(
             "     Has never signed in with the UBEP account: the date for ",
@@ -1532,20 +1927,23 @@ report_idle_lines <- function(report) {
   each <- lapply(pairs, function(pair) {
     projects <- report_projects_words(pair[["progetti"]])
     who <- paste0("   - ", pair[["nome"]], ", ", pair[["upn"]], ": ")
+    stopped <- report_stopped_lines(pair[["ferme"]])
     list(
       it = c(
         paste0(
           who, "attivata il ", pair[["attivata_il"]], "; ultimo accesso il ",
           pair[["ultimo"]], "."
         ),
-        paste0("     ", projects[["it"]], ".")
+        paste0("     ", projects[["it"]], "."),
+        stopped[["it"]]
       ),
       en = c(
         paste0(
           who, "activated on ", pair[["attivata_il"]], "; last access on ",
           pair[["ultimo"]], "."
         ),
-        paste0("     ", projects[["en"]], ".")
+        paste0("     ", projects[["en"]], "."),
+        stopped[["en"]]
       )
     )
   })
@@ -1642,14 +2040,16 @@ report_expiring_lines <- function(rows, period) {
   }
 
   month <- report_month_words(format(period[["oggi"]], "%Y-%m"))
-  each <- function(project, verb) {
+  stopped <- report_stopped_words(rows)
+  each <- function(project, verb, tail) {
     vapply(seq_len(nrow(rows)), function(i) {
       paste0(
         "   - ", trimws(paste(rows[["first_name"]][[i]],
                               rows[["last_name"]][[i]])),
         ": ", rows[["server"]][[i]], ", ", project, " ",
         rows[["project_id"]][[i]], ", ", verb, " ",
-        trimws(rows[["expiration"]][[i]]), "."
+        trimws(rows[["expiration"]][[i]]), ".",
+        if (nzchar(tail[[i]])) paste0(" ", tail[[i]]) else ""
       )
     }, "")
   }
@@ -1660,14 +2060,14 @@ report_expiring_lines <- function(rows, period) {
         "3. Scadono entro ", sub(" .*", "", month[["it"]]), " (", nrow(rows),
         "), per informazione"
       ),
-      each("progetto", "scade il")
+      each("progetto", "scade il", stopped[["it"]])
     ),
     en = c(
       paste0(
         "3. Expiring by the end of ", sub(" .*", "", month[["en"]]), " (",
         nrow(rows), "), for information"
       ),
-      each("project", "expires on")
+      each("project", "expires on", stopped[["en"]])
     )
   )
 }
@@ -1816,15 +2216,20 @@ report_message <- function(report, period) {
 
 #' Compose the monthly mail to IT
 #'
-#' One mail, and only when there is something in it. Five sections, numbered
+#' One mail, and only when there is something in it. Six sections, numbered
 #' in this order: the rows with no referent to send them to, the people the
 #' report cannot judge, the rows the log does not date, the servers that were
 #' not read (with the reason, and how many pairs of person and server fell
-#' back on Entra or could not be checked for the year without access), and
-#' the rows stopped on a disabled account (with whether the person has ever
-#' entered the server, when the server was read). It has the referents' form
-#' to review, and its number counts the rows, people and servers listed. A
-#' section with nothing in it is not announced.
+#' back on Entra or could not be checked for the year without access), the
+#' rows stopped on a disabled account (with whether the person has ever
+#' entered the server, when the server was read), and the rows stopped with
+#' an access executed (with the outcome and its codes, whether the
+#' revocation is the one that stopped, the same column of the access, or why
+#' it is missing when the name executed is not known, and the owner). A row
+#' of the first or of the third section that is stopped says its outcome. It
+#' has the referents' form to review, and its number counts the rows, people
+#' and servers listed, a row in two sections twice. A section with nothing
+#' in it is not announced.
 #'
 #' @param it The `it` part of what `report_assemble()` answered.
 #' @inheritParams report_message
@@ -1847,19 +2252,44 @@ report_it_message <- function(it, period) {
     found[is.na(found)] <- ""
     found
   }
+  # A row whose name executed is not known says so in place of the name.
   row_words <- function(rows) {
-    head <- paste0(
-      trimws(paste(value(rows, "first_name"), value(rows, "last_name"))),
-      ", ", value(rows, "username"), ": ", value(rows, "server")
-    )
+    said <- if (is.null(rows[["nome_eseguito"]])) {
+      rep(TRUE, nrow(rows))
+    } else {
+      nzchar(value(rows, "nome_eseguito"))
+    }
+    person <- trimws(paste(value(rows, "first_name"), value(rows, "last_name")))
+    head <- function(unknown) {
+      paste0(
+        person, ", ", ifelse(said, value(rows, "username"), unknown), ": ",
+        value(rows, "server")
+      )
+    }
     list(
       it = paste0(
-        "   - Richiesta ", value(rows, "record_id"), ": ", head, ", progetto ",
+        "   - Richiesta ", value(rows, "record_id"), ": ",
+        head("nome eseguito non noto"), ", progetto ",
         value(rows, "project_id"), "."
       ),
       en = paste0(
-        "   - Request ", value(rows, "record_id"), ": ", head, ", project ",
+        "   - Request ", value(rows, "record_id"), ": ",
+        head("name executed not known"), ", project ",
         value(rows, "project_id"), "."
+      )
+    )
+  }
+  # The outcome of a stopped row, after its words, or nothing.
+  with_outcome <- function(words, rows) {
+    stopped <- report_stopped_words(rows)
+    list(
+      it = paste0(
+        words[["it"]], ifelse(nzchar(stopped[["it"]]),
+                              paste0(" ", stopped[["it"]]), "")
+      ),
+      en = paste0(
+        words[["en"]], ifelse(nzchar(stopped[["en"]]),
+                              paste0(" ", stopped[["en"]]), "")
       )
     )
   }
@@ -1895,7 +2325,7 @@ report_it_message <- function(it, period) {
         ))
       )
     )
-    words <- row_words(orphans)
+    words <- with_outcome(row_words(orphans), orphans)
     sections[[length(sections) + 1L]] <- list(
       n = nrow(orphans),
       it = c(
@@ -1970,7 +2400,7 @@ report_it_message <- function(it, period) {
     # two accounts of which only one can be the channel (without the
     # account configured), or a seal of the channel whose time does not read.
     reason <- value(undated, "data_motivo")
-    words <- row_words(undated)
+    words <- with_outcome(row_words(undated), undated)
     sections[[length(sections) + 1L]] <- list(
       n = nrow(undated),
       it = c(
@@ -2120,6 +2550,93 @@ report_it_message <- function(it, period) {
           ), ifelse(entered == "no", paste0(
             " The person has never entered ", server, "."
           ), " The server did not answer."))
+        )
+      )
+    )
+  }
+
+  held <- it[["ferme"]]
+  if (!is.null(held) && nrow(held) > 0L) {
+    entered <- value(held, "entrata")
+    server <- value(held, "server")
+    outcome <- value(held, "outcome")
+    # The codes, without what a code carries after its colon: the seal a held
+    # row asks its owner to paste is for the owner, not for IT.
+    codes <- gsub(",", ", ", gsub(":[^,]*", "", value(held, "outcome_detail")))
+    known <- if (is.null(held[["nome_eseguito"]])) {
+      rep(TRUE, nrow(held))
+    } else {
+      nzchar(value(held, "nome_eseguito"))
+    }
+    no_approvers <- value(held, "nome_motivo") == "approvatori"
+    revoked <- value(held, "request_status") == "revoked"
+    owner <- value(held, "creator")
+    words <- row_words(held)
+    sections[[length(sections) + 1L]] <- list(
+      n = nrow(held),
+      it = c(
+        paste0(
+          "Richieste ferme con un accesso eseguito (", nrow(held), ")"
+        ),
+        paste0(
+          "   Il canale le ha eseguite, poi si sono fermate: l'accesso ",
+          "eseguito resta sull'istanza."
+        ),
+        paste0(
+          words[["it"]], " Esito ", outcome,
+          ifelse(nzchar(codes), paste0(", ", codes), ""), ".",
+          ifelse(revoked, " Revocata, revoca non eseguita.", ""),
+          ifelse(
+            !known,
+            ifelse(
+              no_approvers,
+              paste0(
+                " La lavorazione del rapporto non riceve gli approvatori di ",
+                "IT, e il nome eseguito non si legge."
+              ),
+              paste0(
+                " Il registro degli eventi non dice con quale nome e' stata ",
+                "eseguita."
+              )
+            ),
+            ifelse(entered == "si", paste0(
+              " La persona e' gia' entrata su ", server, "."
+            ), ifelse(entered == "no", paste0(
+              " La persona non e' mai entrata su ", server, "."
+            ), " Il server non ha risposto."))
+          ),
+          " Referente: ", ifelse(nzchar(owner), owner, "non stabilito"), "."
+        )
+      ),
+      en = c(
+        paste0(
+          "Stopped requests with an access executed (", nrow(held), ")"
+        ),
+        paste0(
+          "   The channel executed them, then they stopped: the access ",
+          "executed stays on the instance."
+        ),
+        paste0(
+          words[["en"]], " Outcome ", outcome,
+          ifelse(nzchar(codes), paste0(", ", codes), ""), ".",
+          ifelse(revoked, " Revoked, revocation not carried out.", ""),
+          ifelse(
+            !known,
+            ifelse(
+              no_approvers,
+              paste0(
+                " The report's job is not given the IT approvers, and the ",
+                "name executed cannot be read."
+              ),
+              " The event log does not say which name it was executed with."
+            ),
+            ifelse(entered == "si", paste0(
+              " The person has entered ", server, "."
+            ), ifelse(entered == "no", paste0(
+              " The person has never entered ", server, "."
+            ), " The server did not answer."))
+          ),
+          " Referent: ", ifelse(nzchar(owner), owner, "not established"), "."
         )
       )
     )
@@ -2873,7 +3390,8 @@ report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
 #' It also asks the instances, `accounts` only, through `report_server_reads()`:
 #' once the register and the directory have read whole, each server the
 #' register has rows on is asked for the people of those rows, the rows stopped
-#' on a disabled account included. A server that is not read stops nothing
+#' on a disabled account included, and a row executed and then stopped by the
+#' name it was executed with. A server that is not read stops nothing
 #' and is not an error: it is counted in `istanze_non_lette`, and the report
 #' goes on without what that server would have said.
 #'
@@ -2961,6 +3479,15 @@ report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
 #' @param hosts,secrets Named character vectors, server name to host and to
 #'   the secret of its module. A server missing from either, or with an `NA`
 #'   secret, is not read.
+#' @param approvers The IT accounts whose approval of a change counts on any
+#'   row, as the round has them: the report reads from the log the name a
+#'   stopped row whose seal moved was executed with,
+#'   `report_executed_register()`, and an approval decides which writes the
+#'   execution covered. The runner reads them from `UBEP_APPROVATORI_IT`, as
+#'   the round's does; `character()` when the list is empty. `NULL`, the
+#'   default, is a caller that does not pass them, a runner older than the
+#'   argument: those rows enter without the name executed, and the mail to IT
+#'   says why.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due and per late report, with the `mese`
@@ -2983,14 +3510,16 @@ provisioning_report <- function(register_url,
                                 copy_to = NULL,
                                 channel_account = NULL,
                                 hosts = character(),
-                                secrets = character()) {
+                                secrets = character(),
+                                approvers = NULL) {
   stopifnot(
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
     is.character(ledger_dir), length(ledger_dir) == 1L, nzchar(ledger_dir),
     is.null(mailer) || is.function(mailer),
     channel_account_valid(channel_account),
-    is.character(hosts), is.character(secrets)
+    is.character(hosts), is.character(secrets),
+    is.null(approvers) || is.character(approvers)
   )
 
   period <- report_month(now, month)
@@ -3047,31 +3576,22 @@ provisioning_report <- function(register_url,
   if (register_read && directory_read) {
     register <- reading[["records"]]
     ids <- as.character(register[["record_id"]] %||% character())
-    field <- function(name) {
-      value <- register[[name]] %||% rep("", nrow(register))
-      value <- trimws(as.character(value))
-      value[is.na(value)] <- ""
-      value
-    }
     creators <- log_creators(creations[["log"]], ids)
     born <- report_born(creations[["log"]], ids)
 
-    # One call per active row, and no window: the first execution can be
-    # months old. Today that is one call; past five hundred rows it is worth
-    # looking at again.
+    # One call per row the report speaks about, and no window: the first
+    # execution can be months old. Those are the rows of the referents'
+    # reports, applied or executed and then stopped, and the revoked rows
+    # stopped with an access executed. Today that is one call; past five
+    # hundred rows it is worth looking at again.
     executions <- rep(list(NULL), nrow(register))
-    since <- rep(list(NULL), nrow(register))
     logs <- rep(list(NULL), nrow(register))
-    active <- field("request_status") == "active" &
-      field("outcome") == "applied"
-    for (i in which(active)) {
+    scope <- report_scope(register)
+    for (i in which(scope[["conta"]] | scope[["ferma"]])) {
       answer <- register_log(register_url, register_token, record = ids[[i]])
       if (isTRUE(answer[["ok"]])) {
         executions[i] <- list(
           report_executions(answer[["log"]], ids[[i]], channel_account)
-        )
-        since[i] <- list(
-          report_person_since(answer[["log"]], ids[[i]], channel_account)
         )
         logs[i] <- list(answer[["log"]])
       } else {
@@ -3080,27 +3600,46 @@ provisioning_report <- function(register_url,
       }
     }
 
+    # The pair each stopped row executed: the servers are asked about the
+    # account that has the access, and the person is dated by that name.
+    executed <- report_executed_register(
+      register, logs, creators, approvers = approvers,
+      channel_account = channel_account
+    )
+    since <- lapply(seq_len(nrow(register)), function(i) {
+      if (is.null(logs[[i]])) {
+        return(NULL)
+      }
+      name <- if (identical(executed[["nome_eseguito"]][[i]], "log")) {
+        executed[["username"]][[i]]
+      }
+      report_person_since(logs[[i]], ids[[i]], channel_account, name)
+    })
+
     # The servers are asked after the register and the directory have read
     # whole, for the people of the rows it has on each. A server that is not
     # read is not an error and is not a reading that failed: it is counted,
     # and the pairs of that server fall back on what the directory says.
     servers <- report_server_reads(
-      report_server_asks(register), hosts, secrets
+      report_server_asks(executed), hosts, secrets
     )
     unread_servers <- sum(!vapply(servers, `[[`, NA, "letto"))
 
     # The owner as the month covered ended, and not today's. The rows whose
     # log is not read keep their creator: none of them enters the report.
     channel_known <- !is.null(channel_account)
+    owners <- report_owners(
+      logs, ids, creators, period[["mese"]], channel_account
+    )
     rows <- report_rows(
-      register,
-      report_owners(logs, ids, creators, period[["mese"]], channel_account),
-      executions, period, since, born, channel_known = channel_known
+      executed, owners, executions, period, since, born,
+      channel_known = channel_known
     )
     assembled <- report_assemble(
       rows, sweep[["users"]], period, previous[["invii"]],
       previous[["illeggibili"]], servers = servers,
-      stopped = report_stopped_rows(register)
+      stopped = report_stopped_rows(register),
+      held = report_held_rows(executed, owners)
     )
 
     # The reports of the months lost, from the same readings and the owners
@@ -3115,7 +3654,7 @@ provisioning_report <- function(register_url,
       )
       lost_assembled <- report_assemble(
         report_rows(
-          register,
+          executed,
           report_owners(logs, ids, creators, item[["mese"]], channel_account),
           executions, lost_period, since, born, channel_known = channel_known
         ),

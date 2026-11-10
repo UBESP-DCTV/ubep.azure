@@ -11,7 +11,8 @@ report_assemble(
   previous = list(),
   unread = character(),
   servers = list(),
-  stopped = NULL
+  stopped = NULL,
+  held = NULL
 )
 }
 \arguments{
@@ -37,6 +38,11 @@ accounts, is a server that was not read.}
 \item{stopped}{The rows stopped on a disabled account, as
 \code{report_stopped_rows()} answers, or \code{NULL} for none. They are not in the
 referents' reports: IT gets them.}
+
+\item{held}{The rows stopped with an access executed, as
+\code{report_held_rows()} answers, or \code{NULL} for none. IT gets them all, with
+whether the person has entered the server; the active ones are in their
+referent's report as well, through \code{rows}.}
 }
 \value{
 A list with \code{referenti}, one report per referent named after them,
@@ -59,10 +65,12 @@ nothing for IT, otherwise a list of \code{senza_referente} (rows, with
 referent's report on the strength of Entra, and \code{non_controllate}, how
 many were candidates for the year without access and could not be
 checked; one row for each server that was asked and not read, whether
-the rows on it are applied or stopped, also with none) and
+the rows on it are applied or stopped, also with none),
 \code{disattivati} (the rows of \code{stopped}, with \code{entrata}: \code{"si"} or \code{"no"},
 whether the person has entered the server, when it was read, \code{""} when
-it was not); and \code{senza_creatore}, how
+it was not) and \code{ferme} (the rows of \code{held}, with \code{entrata} as for
+\code{disattivati}, \code{""} also when the name executed is not known); and
+\code{senza_creatore}, how
 many rows have no referent to go to. Since rows can pass, that means
 without an established owner and not only without a creator; the name
 stays, because it is a column of \code{UbepRapporto_CL}, and a renamed
@@ -141,5 +149,13 @@ many, in the report itself: the principle of the all-clear, which must not
 cover an item nobody measured. \code{non_giudicati} counts them, a person once:
 the people of that referent the report could not judge, and those of the
 rows the log does not date.
+
+A row executed and then stopped is in \code{rows} like an applied one, and is
+judged like one: the entries of the first sign-in and of the year without
+access carry \code{ferme}, a frame of \code{server}, \code{project_id} and \code{esito} (the
+row's \code{outcome}) for their stopped rows, for the mail to say the request
+is stopped. A row whose name executed is not known (\code{nome_eseguito} empty,
+\code{report_executed_register()}) is not judged on its access: nobody knows
+which account to look at.
 }
 \keyword{internal}

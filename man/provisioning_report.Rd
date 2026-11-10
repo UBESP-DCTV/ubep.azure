@@ -17,7 +17,8 @@ provisioning_report(
   copy_to = NULL,
   channel_account = NULL,
   hosts = character(),
-  secrets = character()
+  secrets = character(),
+  approvers = NULL
 )
 }
 \arguments{
@@ -55,6 +56,16 @@ separated by commas, which it requires.}
 \item{hosts, secrets}{Named character vectors, server name to host and to
 the secret of its module. A server missing from either, or with an \code{NA}
 secret, is not read.}
+
+\item{approvers}{The IT accounts whose approval of a change counts on any
+row, as the round has them: the report reads from the log the name a
+stopped row whose seal moved was executed with,
+\code{report_executed_register()}, and an approval decides which writes the
+execution covered. The runner reads them from \code{UBEP_APPROVATORI_IT}, as
+the round's does; \code{character()} when the list is empty. \code{NULL}, the
+default, is a caller that does not pass them, a runner older than the
+argument: those rows enter without the name executed, and the mail to IT
+says why.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus
@@ -76,7 +87,8 @@ outside the channel's path, as a job of its own.
 It also asks the instances, \code{accounts} only, through \code{report_server_reads()}:
 once the register and the directory have read whole, each server the
 register has rows on is asked for the people of those rows, the rows stopped
-on a disabled account included. A server that is not read stops nothing
+on a disabled account included, and a row executed and then stopped by the
+name it was executed with. A server that is not read stops nothing
 and is not an error: it is counted in \code{istanze_non_lette}, and the report
 goes on without what that server would have said.
 
