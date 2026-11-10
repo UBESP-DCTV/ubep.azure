@@ -4,7 +4,7 @@
 \alias{round_observed}
 \title{What the instance showed for one written pair}
 \usage{
-round_observed(reread, entry)
+round_observed(reread, entry, any_case = FALSE)
 }
 \arguments{
 \item{reread}{The \code{results} of the post-write \code{state} call, or \code{NULL} when
@@ -12,6 +12,11 @@ this was a simulation and there is nothing to read back.}
 
 \item{entry}{One entry of a write response's \code{results}, carrying
 \code{username}, \code{project_id} and the response's own \code{after}.}
+
+\item{any_case}{Whether to find the pair without regard to the case of
+the username, as REDCap does (\code{round_present()}): what a revoke's
+read-back asks, since a person still held under another case of the name
+is still on the project.}
 }
 \value{
 The matching row from \code{reread}, the entry's own \code{after} when

@@ -1298,13 +1298,12 @@ provisioning_reconcile <- function(register_url,
     # still there stays refused: removing it is the gate's to allow. Still
     # there in any capitals, as REDCap matches usernames (`round_present()`).
     results <- state[["payload"]][["results"]] %||% list()
-    present <- function(e) length(round_actual(results, list(e))) > 0L
+    present <- function(e) round_present(results, e)
     vacated <- character()
     for (e in revoked) {
       id <- as.character(e[["record_id"]])
       if (identical(refused[[id]], "DATO_AMBITO_NON_AUTORIZZATO") &&
-            isTRUE(vacatable[[match(id, record_ids)]]) &&
-            !round_present(results, e)) {
+            isTRUE(vacatable[[match(id, record_ids)]]) && !present(e)) {
         refused[[id]] <- NULL
         vacated <- c(vacated, id)
       }
@@ -1423,6 +1422,11 @@ provisioning_reconcile <- function(register_url,
     to_apply <- Filter(
       function(e) isTRUE(acted(e) %in% c("creato", "aggiornato")), wanted
     )
+    # Whether a pair to revoke is still there is asked as REDCap matches the
+    # username, without regard to case (`round_present()`). Matched as
+    # written, a person whose username changed on Entra in its capitals alone
+    # read as gone, and the revocation closed with the person still on the
+    # project.
     to_revoke <- Filter(present, revoked)
     already_gone <- Filter(Negate(present), revoked)
 
@@ -1530,7 +1534,12 @@ provisioning_reconcile <- function(register_url,
               function(error) as.character(error[["code"]]),
               character(1)
             )
-            observed <- round_observed(reread, entry)
+            # A revoke is confirmed by absence, and absence in any capitals:
+            # the person REDCap still holds under another case of the name is
+            # still on the project. A grant is read back as written.
+            observed <- round_observed(
+              reread, entry, any_case = identical(batch[["op"]], "revoke")
+            )
             # A write with no error code has said only that nothing went
             # wrong sending it -- the same thing the four spike cases said
             # while doing something else. Only the re-read settles it: an

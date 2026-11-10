@@ -7176,3 +7176,37 @@ test_that("una revoca senza diritti risigillata con altre maiuscole non resta ch
   expect_false(esito_di(esito, "1")[["outcome"]] == "applied")
   expect_length(revoche(), 0L)
 })
+
+
+test_that("una revoca con i diritti su un nome che l'istanza tiene con altre maiuscole non si chiude senza toglierlo", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca(
+    istanza = do.call(istanza_doppia, con_mario(list(user_rights = 1L))),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  # Mario is on the project under the name REDCap stored: the revoke is sent,
+  # and a read-back that still shows him, in any capitals, is no removal.
+  # Matched as written, the pair read as gone and the row closed `applied`
+  # with Mario still there.
+  expect_length(revoche(), 1L)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "transport_error")
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "TRASPORTO_SCRITTURA_NON_CONFERMATA"
+  )
+})
+
+
+test_that("una revoca su un nome con altre maiuscole si chiude quando la rilettura non lo mostra piu'", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca(
+    istanza = istanza_che_revoca(),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  expect_length(revoche(), 1L)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+})

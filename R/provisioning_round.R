@@ -209,17 +209,21 @@ round_present <- function(results, request) {
 #'   this was a simulation and there is nothing to read back.
 #' @param entry One entry of a write response's `results`, carrying
 #'   `username`, `project_id` and the response's own `after`.
+#' @param any_case Whether to find the pair without regard to the case of
+#'   the username, as REDCap does (`round_present()`): what a revoke's
+#'   read-back asks, since a person still held under another case of the name
+#'   is still on the project.
 #'
 #' @return The matching row from `reread`, the entry's own `after` when
 #'   `reread` is `NULL`, or `NULL` when a real re-read ran and did not find
 #'   the pair.
 #'
 #' @keywords internal
-round_observed <- function(reread, entry) {
+round_observed <- function(reread, entry, any_case = FALSE) {
   if (is.null(reread)) {
     return(entry[["after"]])
   }
-  found <- round_actual(reread, list(entry))
+  found <- round_actual(reread, list(entry), any_case = any_case)
   if (length(found) == 0L) NULL else found[[1]]
 }
 
