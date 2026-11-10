@@ -155,7 +155,9 @@ allineato. Il costo accettato in cambio è che una notifica possa arrivare **due
 volte**, mai che si perda.
 
 **La posta del giro va al proprietario della riga.** Il benvenuto e la mail di
-accesso vanno alla persona, a `contact_email`. L'esito, qualunque sia, e la
+accesso vanno alla persona, a `contact_email`; la mail di accesso di un
+recapito interno va invece dove l'account riceve la posta (§4, «La mail di
+accesso»). L'esito, qualunque sia, e la
 chiave di un account appena nato vanno al referente, e il referente è il
 **proprietario** della riga, che il giro legge dal registro degli eventi
 (`log_owner()`, §4): il creatore finché la riga non passa a un altro. Non
@@ -1093,10 +1095,29 @@ scadenza prorogata a mano nel progetto torna come nella riga, e l'accesso si
 chiude. Fino alla 0.24.0 la riga andava in `DATO_SCADENZA_NON_VALIDA` al primo
 giro dopo la scadenza, e la WI diceva di scrivere una data non passata o di
 svuotare il campo: tutte e due riaprivano l'accesso. Una coppia che l'istanza
-non ha più, perché qualcuno ha tolto la persona dopo la scadenza, resta
-rifiutata come prima (`lapsed`): riscritta, sarebbe un accesso già finito e
-una mail di accesso alla persona. Una data che non è una data è rifiutata su
-ogni riga.
+non ha più sotto nessuna grafia del nome utente (REDCap lo confronta senza
+maiuscole, `present()`), perché qualcuno ha tolto la persona dopo la scadenza
+(lo può fare chi governa il progetto), non si riscrive: sarebbe un accesso già
+finito e una mail di accesso alla persona. Il giro la lascia fuori dalle
+scritture (`lapsed`) e chiude la riga `applied` con *Read back as* `absent`,
+come una revoca già eseguita: niente scritto, nessuna mail alla persona, e a
+ogni giro dopo lo stesso esito, senza mail. Al proprietario arriva una mail
+d'esito, una volta, che dice che la persona non è più sul progetto e che il
+canale non ha scritto niente (`mail_status_words()`); per una riga che la
+0.24.0 aveva fermato su `DATO_SCADENZA_NON_VALIDA` è la mail che sostituisce
+l'errore. Il sigillo non si muove: la riga è intatta e non c'è niente da
+riscrivere. Se qualcuno rimette la persona a mano, il giro la confronta con la
+riga: stessa scadenza, `noop`; un'altra, riportata a quella della riga, e
+l'accesso si chiude. Per riaprire l'accesso il referente sposta la data: la
+riga è allora cambiata dopo il sigillo, e la persona viene creata di nuovo e
+riceve la mail d'accesso. Una riga cambiata dopo il sigillo o mai eseguita
+resta rifiutata su una data passata, con la persona sul progetto o senza. Una
+persona ancora sul progetto con un nome utente che differisce solo nelle
+maiuscole, perché su Entra è cambiato, non è una persona tolta: la riga prende
+`DATO_SCADENZA_NON_VALIDA` come prima (`recased`). Una data che non è una data
+è rifiutata su ogni riga. Il rapporto mensile continua a contare la riga,
+come ogni riga scaduta e non revocata, finché nessuno la revoca (`keep` di
+`report_rows()` e `conta` di `report_scope()`).
 
 **La revoca senza nessuno con i diritti.** Una revoca rifiutata dal cancello
 con `DATO_AMBITO_NON_AUTORIZZATO` (il proprietario ha perso *User Rights*, o il
@@ -1306,10 +1327,40 @@ parte; il giro dopo, se il diritto c'è, trova la coppia a posto (`noop`) e non
 ha niente da mandare. Non si conta in `accessi_persi`, perché nessun invio è
 fallito: la persona non viene avvisata, e lo dice solo quel codice sulla riga.
 
-**Va alla persona, a `contact_email`, e a nessun altro**: niente copia al
-referente, niente copia a IT. Con un indirizzo vuoto la mail è persa, come per
-il benvenuto. Il dirottamento e la prova a secco valgono come per gli altri
-messaggi. L'oggetto è `Accesso a REDCap / REDCap access: <istanza>, progetto
+**Va alla persona, e a nessun altro**: niente copia al referente, niente copia
+a IT. Con un recapito esterno va a `contact_email`; con un indirizzo vuoto la
+mail è persa, come per il benvenuto. Con un recapito interno, cioè lo UPN per
+la decisione 12, no: per molti account lo UPN non ha una casella, Exchange
+Online rifiuta con «550 5.4.1 Recipient address rejected: Access denied», e da
+quel momento SendGrid mette l'indirizzo in soppressione e scarta in silenzio
+ogni invio successivo, anche dopo che la persona ha ricevuto una casella,
+mentre risponde 202 e `accessi_recapitati` sale. La mail di un recapito interno
+va a due candidati, letti dalla spazzata che il giro ha già fatto, senza
+chiamate nuove a Graph (`directory_mailboxes()`, `mail_access_recipients()`):
+la casella dell'account, il campo `mail` se non è vuoto (lo UPN da solo non
+conta); il primo indirizzo esterno, cioè il primo di `otherMails` fuori dal
+dominio, altrimenti `officeLocation`; ciascuno letto con `directory_address()`,
+che toglie gli spazi (anche quello non separabile), le parentesi, il `mailto:`
+in testa, virgola, punto e virgola e punto in coda, le virgolette solo a coppie
+attorno all'intero valore, e niente che possa farne un altro indirizzo; lo
+tiene, in minuscolo, solo se ha la forma stretta di un indirizzo (il campo è
+testo libero, scritto dal flusso storico com'era nel foglio), e fuori dal
+dominio. Con tutti e due il messaggio è uno solo con due destinatari, lo stesso
+indirizzo una volta sola; con uno solo va a quello. Senza nessuno dei due va al
+proprietario della riga con in testa, in italiano e in inglese, una riga che gli
+chiede di avvisare la persona; senza proprietario va a `UBEP_POSTA_COPIA` e la
+prima riga lo dice, come nell'esito. Anche questi contano in
+`accessi_recapitati`. Se il servizio di posta rifiuta il messaggio ai due
+destinatari (basta un indirizzo che non accetta per rifiutare tutta la
+richiesta), il giro lo ritenta alla sola casella, il destinatario che lo
+riceveva prima; i due tentativi contano come un messaggio, recapitato o perso.
+Solo su un rifiuto del servizio (`TRASPORTO_POSTA_RIFIUTATA`): un trasporto che
+non risponde può essere caduto dopo che il servizio ha preso il messaggio, e un
+secondo invio lo recapiterebbe due volte; e mai con `UBEP_POSTA_A`, dove l'unico
+destinatario era l'indirizzo di prova. Una riga di cui il giro non ha letto gli
+indirizzi dell'account perde la mail, come una riga senza indirizzo, invece di
+mandarla al proprietario con una frase che nessuno ha verificato. Il
+dirottamento e la prova a secco valgono come per gli altri messaggi. L'oggetto è `Accesso a REDCap / REDCap access: <istanza>, progetto
 <PID>`; il corpo, italiano sopra e inglese sotto, in testo semplice, dice:
 
 - su quale istanza e a quale indirizzo si apre REDCap (la riga manca se
@@ -1738,7 +1789,10 @@ scrive, con l'istanza, l'indirizzo, il numero del progetto, il ruolo e l'ultimo
 giorno di accesso, che stanno sulla riga del registro. Per sapere perché non è
 partita, guardare la riga: un `contact_email` vuoto spiega il caso da solo;
 altrimenti il journal della lavorazione riporta la risposta del servizio di
-posta. Non trattiene niente, e la riga è `applied`.
+posta. Non trattiene niente, e la riga è `applied`. Una persona con recapito
+interno che dice di non aver ricevuto la mail: guardare `mail`, `otherMails` e
+`officeLocation` dell'account su Entra; senza casella né esterno la mail è
+andata al proprietario.
 
 **Credenziale persa (gravità 1).** Un'utenza è nata e la sua chiave non è
 arrivata a nessuno: `credenziali_perse` è maggiore di zero. Dalla 0.19.0 conta
