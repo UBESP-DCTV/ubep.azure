@@ -6764,3 +6764,250 @@ test_that("una riga eseguita e scaduta non ricrea l'accesso tolto a mano", {
   destinatari <- unlist(lapply(posta[["mandate"]](), function(m) m[["to"]]))
   expect_false(mario %in% destinatari)
 })
+
+
+# ---- A revocation on a pair already gone, past the gate (0.25.0) ----
+
+# Mario's row, carried out while active under `sigillo_eseguito()` and then
+# revoked by Anna. On the instance Anna has lost User Rights; Mario is no
+# longer on the project unless the test puts him there.
+senza_anna <- function(...) {
+  istanza_doppia(list(user_rights = 0L), ...)
+}
+giro_revoca <- function(cambi = list(),
+                        storia = list(
+                          cambio(anna, "request_status = 'revoked'")
+                        ),
+                        istanza = senza_anna(),
+                        eseguita = carried_out(sigillo_eseguito()),
+                        dry_run = FALSE,
+                        directory = directory_doppia(),
+                        ...) {
+  riga <- utils::modifyList(
+    eseguita_row(
+      request_status = "revoked", applied_seal = sigillo_eseguito()
+    ),
+    cambi
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, eseguita),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza,
+    directory = directory,
+    dry_run = dry_run,
+    ...
+  )
+}
+sigillo_revocata_1 <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, request_status = "revoked"
+  ))
+}
+
+
+test_that("la revoca di una coppia che non c'e' piu' si chiude anche senza diritti", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca()
+
+  # test
+  # Decided on 2026-11-10: there is nothing to take away, so no right is
+  # needed to settle it. The row is one the channel carried out and the
+  # revocation is the only change since, so the pair the instance was asked
+  # about is the one carried out. Before, it stayed `DATO_AMBITO_NON_
+  # AUTORIZZATO` for good: nobody could close it.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(revoche(), 0L)
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_revocata_1()
+  )
+  # Settled, not carried out on anybody's authority: the row stays Anna's.
+  expect_null(proprietari_scritti())
+})
+
+
+test_that("la revoca chiusa senza diritti resta chiusa al giro dopo", {
+  # eval
+  # The round above left the row sealed as revoked, settled `absent`.
+  posta <- posta_raccolta()
+  esito <- giro_revoca(
+    cambi = list(applied_seal = sigillo_revocata_1(), applied_as = "absent"),
+    storia = list(
+      list(
+        timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0(
+          "applied_seal = '", sigillo_revocata_1(), "', seal_state = 'intact'"
+        )
+      ),
+      cambio(
+        anna, "request_status = 'revoked'", timestamp = "2026-10-19 10:00"
+      )
+    ),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # The seal has not moved since the revocation was settled. Read only as
+  # "the seal with the revocation undone", the row would fall back to the
+  # refusal one round after it closed, with a message each way.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_length(posta[["mandate"]](), 0L)
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("la revoca di una coppia ancora presente resta ferma sul cancello", {
+  # eval
+  esito <- giro_revoca(
+    istanza = do.call(istanza_doppia, con_mario(list(user_rights = 0L)))
+  )
+
+  # test
+  # Mario is still on the project: taking him away is a removal, and only
+  # somebody who manages the project may ask for it. IT removes him by hand,
+  # and the round after closes the row by itself.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("la revoca di una riga mai sigillata resta ferma sul cancello", {
+  # eval
+  esito <- giro_revoca(
+    cambi = list(applied_seal = "", outcome = "", applied_as = ""),
+    eseguita = carried_out(sigillo_eseguito())[2]
+  )
+
+  # test
+  # A row the channel never carried out: settled without the gate, it would
+  # tell somebody without rights whether the person is on the project.
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("la revoca insieme a un cambio di ruolo resta ferma sul cancello", {
+  # eval
+  esito <- giro_revoca(
+    cambi = list(role_name = "read only"),
+    storia = list(cambio(
+      anna, "request_status = 'revoked', role_name = 'read only'"
+    ))
+  )
+
+  # test
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("la revoca senza diritti con i permessi illeggibili resta in coda", {
+  # eval
+  esito <- giro_revoca(istanza = istanza_doppia(list(user_rights = NULL)))
+
+  # test
+  # Nobody knows who has rights: ours to look at, as on any row.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "transport_error")
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "TRASPORTO_PERMESSO_NON_LEGGIBILE"
+  )
+})
+
+
+test_that("la revoca senza diritti su una coppia assente in un giro simulato", {
+  # eval
+  esito <- giro_revoca(dry_run = TRUE)
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "simulated")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(revoche(), 0L)
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("la revoca di un altro referente senza diritti aspetta il proprietario anche su una coppia assente", { # nolint: line_length_linter.
+  # eval
+  istanza <- senza_anna(list(username = bruno, user_rights = 0L))
+  trattenuta <- giro_revoca(
+    storia = list(cambio(bruno, "request_status = 'revoked'")),
+    istanza = istanza
+  )
+  scritte_trattenuta <- scritture()
+  approvata <- giro_revoca(
+    cambi = list(approved_seal = sigillo_revocata_1()),
+    storia = list(
+      approvazione(anna, sigillo_revocata_1()),
+      cambio(bruno, "request_status = 'revoked'")
+    ),
+    istanza = istanza
+  )
+
+  # test
+  # Bruno's revocation of Anna's row waits for Anna, whatever the instance
+  # holds: the rule on a change by somebody else is not the gate's to lift.
+  # Approved, it reaches the gate on Bruno's rights, and the pair being gone
+  # settles it. Settled and not carried out, it does not pass the row to
+  # Bruno, whom the gate refused.
+  expect_equal(esito_di(trattenuta, "1")[["outcome"]], "held")
+  expect_length(scritte_trattenuta, 0L)
+  expect_equal(esito_di(approvata, "1")[["outcome"]], "applied")
+  expect_equal(as.character(approvata[["esiti"]][["applied_as"]]), "absent")
+  expect_length(revoche(), 0L)
+  expect_false(isTRUE(bruno %in% proprietari_scritti()[["owned_by"]]))
+})
+
+
+test_that("la revoca senza diritti non si chiude su uno username che il registro non ha eseguito", { # nolint: line_length_linter.
+  # eval
+  # Mario's account was renamed on Entra, and the log does not say which
+  # name was carried out: the round would ask the instance about the new
+  # name, which is not there, while the old one still is.
+  rinominato <- graph_user(userPrincipalName = "mario.rossi2@ubep.unipd.it")
+  esito <- giro_revoca(
+    istanza = do.call(istanza_doppia, con_mario(list(user_rights = 0L))),
+    eseguita = carried_out(sigillo_eseguito())[1],
+    directory = directory_doppia(rinominato)
+  )
+
+  # test
+  expect_false(esito_di(esito, "1")[["outcome"]] == "applied")
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("una revoca chiusa senza cancello non passa la riga a chi il cancello ha rifiutato", { # nolint: line_length_linter.
+  # eval
+  # Bruno moved the role and put it back, then revoked; Anna approved. The
+  # seal with the revocation undone is the one carried out, and Bruno, who
+  # does not manage the project, wrote more than a revocation.
+  esito <- giro_revoca(
+    cambi = list(approved_seal = sigillo_revocata_1()),
+    storia = list(
+      approvazione(anna, sigillo_revocata_1()),
+      cambio(bruno, "request_status = 'revoked', role_name = 'data entry'"),
+      cambio(bruno, "role_name = 'read only'")
+    ),
+    istanza = senza_anna(list(username = bruno, user_rights = 0L))
+  )
+
+  # test
+  # The gate let nobody's change through, so the row does not pass: carried
+  # out, the version would make Bruno its owner.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_false(isTRUE(bruno %in% proprietari_scritti()[["owned_by"]]))
+})

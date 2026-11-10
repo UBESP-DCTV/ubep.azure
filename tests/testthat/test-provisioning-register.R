@@ -3329,3 +3329,27 @@ test_that("un nome utente eseguito vuoto non e' un'altra persona", {
     ""
   )
 })
+
+
+test_that("seal_holds_but_revocation sees a revocation and nothing else", {
+  # eval
+  active <- register_row()
+  revoked <- register_row(request_status = "revoked")
+  carried <- request_seal(active)
+  register <- rbind(
+    revoked,
+    revoked,
+    register_row(request_status = "revoked", role_name = "read only"),
+    active,
+    revoked
+  )
+  sealed <- c(carried, request_seal(revoked), carried, carried, "")
+  holds <- seal_holds_but_revocation(register, sealed)
+
+  # test
+  # Row 1: carried out while active, and the revocation is the one change
+  # since. Row 2: the revocation was carried out too, and the seal has not
+  # moved at all. Row 3: the role moved with it. Row 4 asks for no
+  # revocation. Row 5 the channel never sealed.
+  expect_equal(holds, c(TRUE, TRUE, FALSE, FALSE, FALSE))
+})

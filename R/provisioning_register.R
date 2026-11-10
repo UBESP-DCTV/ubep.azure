@@ -260,6 +260,42 @@ request_seal <- function(register) {
 }
 
 
+#' Whether a revocation is all that changed since the channel's seal
+#'
+#' `request_status` is an intent field, so a revocation always moves the
+#' seal, and a row whose seal moved has its pair read from the log. This asks
+#' the narrower question the seal can answer by itself: is the row as read
+#' the version carried out, with at most its revocation added. It is, when
+#' the seal of the row with `request_status` back to `active` is the
+#' channel's, or when the seal has not moved at all, the revocation having
+#' been carried out or settled already. Either way the instance, the project
+#' and the username the register holds are the ones carried out, since the
+#' seal covers them.
+#'
+#' @param register The register as read, one row per request.
+#' @param sealed The seal the round believes for each row, the channel's
+#'   own, `""` where there is none.
+#'
+#' @return A logical vector, one per row: `TRUE` only for a row that asks for
+#'   `revoked` and that the channel sealed as above.
+#'
+#' @keywords internal
+seal_holds_but_revocation <- function(register, sealed) {
+  stopifnot(
+    is.data.frame(register), "request_status" %in% names(register),
+    is.character(sealed), length(sealed) == nrow(register)
+  )
+
+  status <- trimws(as.character(register[["request_status"]]))
+  revoked <- !is.na(status) & status == "revoked"
+  reopened <- register
+  reopened[["request_status"]] <- "active"
+
+  revoked & !is.na(sealed) & nzchar(sealed) &
+    (sealed == request_seal(register) | sealed == request_seal(reopened))
+}
+
+
 #' The closed vocabulary of what the round thinks of a row
 #'
 #' Named here for the reason `outcome_vocabulary()` is: the CSV holds a copy,

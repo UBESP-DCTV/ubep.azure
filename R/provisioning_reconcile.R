@@ -951,6 +951,22 @@ provisioning_reconcile <- function(register_url,
   plan <- register_to_desired(resolved, executed = intact)
   asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
 
+  # The revocations the gate may leave alone when the instance no longer
+  # holds the pair, decided on 2026-11-10: nothing is taken away and nothing
+  # granted, so nobody's rights are needed to settle them. Only a row the
+  # channel carried out whose revocation is all that changed since, by its
+  # seal (`seal_holds_but_revocation()`): its instance, project and username
+  # are the ones carried out, and whoever reads the outcome knew already that
+  # the access had been granted. Never a pair read from the log, which is
+  # what a moved seal would leave, and never under a username the round
+  # resolved differently from the one the register holds: the instance would
+  # be asked about a name that was never carried out, find it absent, and the
+  # name carried out would stay with no row to govern it.
+  as_read <- identity_normalize(register[["username"]] %||% "")
+  as_read[is.na(as_read)] <- ""
+  vacatable <- seal_holds_but_revocation(register, sealed) &
+    nzchar(as_read) & as_read == identity_normalize(resolved_names)
+
   # The rights a provisional withdrawal is judged on are those of whoever had a
   # hand in it, and the instance answers only for the pairs it is asked about.
   #
@@ -1254,6 +1270,26 @@ provisioning_reconcile <- function(register_url,
       }
     }
 
+    # A revocation refused for want of rights, on a pair this instance does
+    # not hold, of a row whose revocation is all that changed since the
+    # channel carried it out (`vacatable`): there is nothing to take away,
+    # and the row goes on to be settled as `already_gone` settles any other.
+    # Read off the state the instance gave before the gate, which holds every
+    # pair the round asks to revoke. A permission nobody could read stays
+    # ours, a withdrawal waiting for its owner keeps waiting, and a pair
+    # still there stays refused: removing it is the gate's to allow.
+    results <- state[["payload"]][["results"]] %||% list()
+    present <- function(e) length(round_actual(results, list(e))) > 0L
+    vacated <- character()
+    for (e in revoked) {
+      id <- as.character(e[["record_id"]])
+      if (identical(refused[[id]], "DATO_AMBITO_NON_AUTORIZZATO") &&
+            isTRUE(vacatable[[match(id, record_ids)]]) && !present(e)) {
+        refused[[id]] <- NULL
+        vacated <- c(vacated, id)
+      }
+    }
+
     in_scope <- function(e) {
       !as.character(e[["record_id"]]) %in% c(names(refused), waits)
     }
@@ -1330,8 +1366,6 @@ provisioning_reconcile <- function(register_url,
       unlist(lapply(rehearsals, function(r) r[["fit"]]))
     )
 
-    results <- state[["payload"]][["results"]] %||% list()
-
     # 7. the diff, against the real rows somebody asked about and no others
     diff <- provisioning_diff(wanted, round_actual(results, wanted))
     # A list, not a character vector: `[[` on an unmatched character subscript
@@ -1369,7 +1403,6 @@ provisioning_reconcile <- function(register_url,
     to_apply <- Filter(
       function(e) isTRUE(acted(e) %in% c("creato", "aggiornato")), wanted
     )
-    present <- function(e) length(round_actual(results, list(e))) > 0L
     to_revoke <- Filter(present, revoked)
     already_gone <- Filter(Negate(present), revoked)
 
@@ -1539,6 +1572,9 @@ provisioning_reconcile <- function(register_url,
       in_scope = setdiff(ids, c(names(refused), waits, unready)),
       # The withdrawals the gate sent back to wait for their owner.
       trattenute = waits,
+      # The revocations settled on a pair already gone, which the gate had
+      # refused: nobody's authority carried them out.
+      chiuse_senza_cancello = vacated,
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -1718,9 +1754,14 @@ provisioning_reconcile <- function(register_url,
   # the round did not carry out this pass stays with the owner of today,
   # and so does one whose next owner the log cannot say, which is the
   # direction that does not grant. A simulated round carries nothing out,
-  # so it passes nothing on.
+  # so it passes nothing on; nor does a revocation settled on a pair already
+  # gone after the gate had refused it, since the gate let nobody's change
+  # through.
+  unguarded <- record_ids %in% unlist(
+    lapply(per_instance, function(a) a[["chiuse_senza_cancello"]])
+  )
   owner_after <- vapply(seq_along(record_ids), function(i) {
-    if (!(applied[[i]] && checked[[i]])) {
+    if (!(applied[[i]] && checked[[i]]) || unguarded[[i]]) {
       return(owners_now[[i]])
     }
     next_owner <- log_next_owner(
