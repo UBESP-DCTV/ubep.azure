@@ -7108,3 +7108,71 @@ test_that("la revoca di una riga che il canale non ha mai eseguito attiva resta 
   )
   expect_length(revoche(), 0L)
 })
+
+
+# Mario's username corrected on Entra in its capitals alone, after the row was
+# carried out for `mario.rossi@`. REDCap compares usernames without regard to
+# case (`*_ci` collation): asked about `Mario.Rossi@`, the module's state read
+# answers with the row it holds, `mario.rossi@`. The double answers with the
+# rows it has whatever pair it is asked about, which is what the real query
+# does on a difference of capitals alone.
+maiuscolo <- "Mario.Rossi@ubep.unipd.it"
+sigillo_maiuscolo <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = maiuscolo, request_status = "revoked"
+  ))
+}
+
+
+test_that("una revoca senza diritti non si chiude su un nome che l'istanza tiene con altre maiuscole", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca(
+    istanza = do.call(istanza_doppia, con_mario(list(user_rights = 0L))),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  # Mario is still on the project, under the name REDCap stored: the
+  # revocation is a removal, and stays at the gate.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("una revoca senza diritti risigillata con altre maiuscole non resta chiusa con la persona sul progetto", { # nolint: line_length_linter.
+  # eval
+  # The round after a closure under the new capitals: the register holds
+  # `Mario.Rossi@` and the channel sealed the revoked row with it.
+  esito <- giro_revoca(
+    cambi = list(
+      username = maiuscolo, applied_seal = sigillo_maiuscolo(),
+      applied_as = "absent"
+    ),
+    storia = list(
+      list(
+        timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0(
+          "applied_seal = '", sigillo_maiuscolo(), "', seal_state = 'intact'"
+        )
+      ),
+      list(
+        timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0("username = '", maiuscolo, "'")
+      ),
+      cambio(
+        anna, "request_status = 'revoked'", timestamp = "2026-10-19 10:00"
+      )
+    ),
+    istanza = do.call(istanza_doppia, con_mario(list(user_rights = 0L))),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  expect_false(esito_di(esito, "1")[["outcome"]] == "applied")
+  expect_length(revoche(), 0L)
+})

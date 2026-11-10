@@ -1295,14 +1295,16 @@ provisioning_reconcile <- function(register_url,
     # Read off the state the instance gave before the gate, which holds every
     # pair the round asks to revoke. A permission nobody could read stays
     # ours, a withdrawal waiting for its owner keeps waiting, and a pair
-    # still there stays refused: removing it is the gate's to allow.
+    # still there stays refused: removing it is the gate's to allow. Still
+    # there in any capitals, as REDCap matches usernames (`round_present()`).
     results <- state[["payload"]][["results"]] %||% list()
     present <- function(e) length(round_actual(results, list(e))) > 0L
     vacated <- character()
     for (e in revoked) {
       id <- as.character(e[["record_id"]])
       if (identical(refused[[id]], "DATO_AMBITO_NON_AUTORIZZATO") &&
-            isTRUE(vacatable[[match(id, record_ids)]]) && !present(e)) {
+            isTRUE(vacatable[[match(id, record_ids)]]) &&
+            !round_present(results, e)) {
         refused[[id]] <- NULL
         vacated <- c(vacated, id)
       }

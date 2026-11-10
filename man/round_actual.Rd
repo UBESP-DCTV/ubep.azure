@@ -4,12 +4,15 @@
 \alias{round_actual}
 \title{The real rows somebody actually asked about}
 \usage{
-round_actual(results, requests)
+round_actual(results, requests, any_case = FALSE)
 }
 \arguments{
 \item{results}{The \code{results} of a \code{state} reply.}
 
 \item{requests}{The requests this instance was asked to satisfy.}
+
+\item{any_case}{Whether to match usernames without regard to case, as
+REDCap does (\code{round_present()}). The default matches them as written.}
 }
 \value{
 The subset of \code{results} whose pair appears in \code{requests}.

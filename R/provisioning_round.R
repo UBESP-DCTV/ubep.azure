@@ -152,14 +152,19 @@ round_rights <- function(server, state) {
 #'
 #' @param results The `results` of a `state` reply.
 #' @param requests The requests this instance was asked to satisfy.
+#' @param any_case Whether to match usernames without regard to case, as
+#'   REDCap does (`round_present()`). The default matches them as written.
 #'
 #' @return The subset of `results` whose pair appears in `requests`.
 #'
 #' @keywords internal
-round_actual <- function(results, requests) {
+round_actual <- function(results, requests, any_case = FALSE) {
+  stopifnot(is.logical(any_case), length(any_case) == 1L, !is.na(any_case))
+
   key_of <- function(row) {
+    name <- trimws(as.character(row[["username"]]))
     paste(
-      trimws(as.character(row[["username"]])),
+      if (any_case) identity_normalize(name) else name,
       suppressWarnings(as.integer(row[["project_id"]])),
       sep = "\r"
     )
@@ -167,6 +172,27 @@ round_actual <- function(results, requests) {
 
   wanted <- vapply(requests, key_of, character(1))
   Filter(function(row) key_of(row) %in% wanted, results)
+}
+
+
+#' Whether the instance holds a pair, whatever the capitals of the username
+#'
+#' REDCap compares usernames without regard to case: its tables use a `_ci`
+#' collation, so the module's state read asked about `Mario.Rossi@` answers
+#' with the row it stores, `mario.rossi@`, and the person is on the project
+#' under either. `round_actual()` matches the names as written, and asked
+#' "is the person still there" it would answer no on a difference of
+#' capitals alone: a revocation settled on that answer leaves the person on
+#' the project, with the row closed and nobody told.
+#'
+#' @param results The `results` of a `state` reply.
+#' @param request One request, carrying `username` and `project_id`.
+#'
+#' @return `TRUE` when `results` holds the pair in any case.
+#'
+#' @keywords internal
+round_present <- function(results, request) {
+  length(round_actual(results, list(request), any_case = TRUE)) > 0L
 }
 
 
