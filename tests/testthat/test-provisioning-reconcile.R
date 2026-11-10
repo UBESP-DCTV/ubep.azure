@@ -6968,6 +6968,36 @@ test_that("una riga scaduta cambiata dopo il sigillo resta in errore sulla data 
 })
 
 
+test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiuscole non si chiude sulla persona tolta", { # nolint: line_length_linter.
+  # eval
+  # The username changed on Entra in its capitals alone: the row is intact,
+  # and Mario is still on the project, which REDCap matches without regard to
+  # case. The diff, read as written, calls the pair absent.
+  maiuscolo <- "Mario.Rossi@ubep.unipd.it"
+  posta <- posta_raccolta()
+  esito <- giro_scaduta(
+    istanza = istanza_scaduta(),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Closed as absent it would tell the owner the person is gone from the
+  # project when he is on it. The row is refused on its last day as it was
+  # before the pair was let through, and nothing is written.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_false(identical(
+    as.character(esito[["esiti"]][["applied_as"]]), "absent"
+  ))
+  expect_length(scritture(), 0L)
+  corpi <- vapply(posta[["mandate"]](), function(m) m[["body"]], "")
+  expect_false(any(grepl(
+    "la persona non e' piu' sul progetto", corpi, fixed = TRUE
+  )))
+})
+
+
 test_that("una data che non e' una data e' rifiutata anche su una riga eseguita senza la persona", { # nolint: line_length_linter.
   # eval
   esito <- giro_scaduta(

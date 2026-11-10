@@ -1413,13 +1413,21 @@ provisioning_reconcile <- function(register_url,
     # and read back as absent, with no mail to the person. Refused on its last
     # day, the row would send the referent to write a date that has not passed,
     # or none, and either would reopen the access.
-    lapsed <- Filter(function(e) {
+    #
+    # Gone as REDCap reads the name, without regard to case (`present()`): the
+    # diff reads it as written, so a person whose username changed on Entra in
+    # its capitals alone, still on the project, reads as `creato` here. Closed
+    # as absent it would tell the owner that the person is gone when they are
+    # not. That row keeps the refusal of before.
+    expired <- Filter(function(e) {
       identical(acted(e), "creato") &&
         as.character(e[["record_id"]]) %in% plan[["lapsed"]]
     }, wanted)
+    lapsed <- Filter(Negate(present), expired)
+    recased <- Filter(present, expired)
     wanted <- Filter(function(e) {
       !as.character(e[["record_id"]]) %in%
-        vapply(lapsed, function(l) as.character(l[["record_id"]]), "")
+        vapply(expired, function(l) as.character(l[["record_id"]]), "")
     }, wanted)
 
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
@@ -1471,6 +1479,13 @@ provisioning_reconcile <- function(register_url,
           as.character(e[["record_id"]]),
           round_outcome_kind(character(), dry_run), at = at,
           applied_as = round_applied_as(NULL)
+        )
+      }),
+      lapply(recased, function(e) {
+        outcome_payload(
+          as.character(e[["record_id"]]),
+          round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),
+          detail = "DATO_SCADENZA_NON_VALIDA", at = at
         )
       })
     ))
