@@ -1074,7 +1074,66 @@ Nel modulo, `server` e `project_id` portano `@IF([applied_seal] <> "",
 Tool* resta aperto, ed è lì che agisce la regola. Il confronto del dizionario
 conta solo il `@READONLY` che vale su ogni riga, fuori da un `@IF`
 (`dictionary_readonly()`), quindi il pacchetto e il dizionario si aggiornano in
-qualunque ordine.
+qualunque ordine. Dalla 0.25.0 conta anche solo il tag nudo: `@READONLY-SURVEY`
+vale solo sul questionario, sul modulo il campo resta scrivibile, e non conta.
+
+### La scadenza naturale e la revoca di una coppia già tolta
+
+Deciso il 2026-11-10, nella 0.25.0. Due righe che il canale ha eseguito non
+vanno più in errore per un fatto che non chiede niente a nessuno.
+
+**L'ultimo giorno passato.** Il controllo della data passata
+(`validate_request()`) vale solo per una riga che scriverebbe una scadenza
+nuova: mai eseguita, o cambiata dopo il sigillo. Una riga eseguita e intatta,
+cioè col sigillo del canale presente e fermo, entra nel piano con la sua data
+anche quando è passata (`register_to_desired(executed = )`): la scadenza la
+applica REDCap sull'accesso, e il giro confronta l'istanza con la riga come
+ogni notte. Stessa scadenza: `applied`, niente scritto, nessuna mail. Una
+scadenza prorogata a mano nel progetto torna come nella riga, e l'accesso si
+chiude. Fino alla 0.24.0 la riga andava in `DATO_SCADENZA_NON_VALIDA` al primo
+giro dopo la scadenza, e la WI diceva di scrivere una data non passata o di
+svuotare il campo: tutte e due riaprivano l'accesso. Una coppia che l'istanza
+non ha più, perché qualcuno ha tolto la persona dopo la scadenza, resta
+rifiutata come prima (`lapsed`): riscritta, sarebbe un accesso già finito e
+una mail di accesso alla persona. Una data che non è una data è rifiutata su
+ogni riga.
+
+**La revoca senza nessuno con i diritti.** Una revoca rifiutata dal cancello
+con `DATO_AMBITO_NON_AUTORIZZATO` (il proprietario ha perso *User Rights*, o il
+suo accesso al progetto è scaduto) si chiude `applied` con `absent`, senza
+nessuna chiamata di revoca, quando lo stato letto prima del cancello non ha la
+coppia e la revoca è l'unico cambio della riga eseguita
+(`seal_holds_but_revocation()`): il sigillo del canale coincide con quello
+della riga con `request_status` rimesso ad `active`, o con quello della riga
+com'è, perché una revoca chiusa viene risigillata come `revoked` e al giro dopo
+deve restare chiusa. Il sigillo copre istanza, progetto e nome utente, quindi
+la coppia chiesta all'istanza è quella eseguita; il giro controlla anche che il
+nome utente risolto sia quello del registro, perché un account rinominato su
+Entra farebbe chiedere all'istanza un nome mai eseguito. Mai su una coppia
+letta dal log. Solo col sigillo del canale letto dal log, con l'utenza del
+canale configurata, e solo se il canale ha sigillato la riga attiva almeno una
+volta (`log_channel_seals()`): una richiesta ritirata prima che la persona
+nascesse è sigillata senza aver concesso niente, e il campo `applied_seal` da
+solo lo scrive anche un import. La coppia si cerca senza guardare le maiuscole
+del nome utente, come fa REDCap (`round_present()`). Non si toglie e non si
+concede niente, e chi legge l'esito sapeva già che l'accesso era stato
+concesso. La coppia ancora presente resta ferma: la toglie IT a mano, e al giro
+dopo la revoca si chiude da sé. La revoca di un altro referente che non gestisce
+il progetto aspetta il proprietario come prima; approvata, arriva al cancello
+sui diritti di chi l'ha scritta, e la coppia assente la chiude. Una revoca
+chiusa così non passa la riga a nessuno: il cancello non ha fatto passare la
+modifica di nessuno.
+
+**Il nome della revoca.** La revoca si manda col nome utente che l'istanza
+tiene, letto dallo stato che il giro ha già, non con quello del registro: il
+modulo pianifica la revoca su una chiave esatta (`Planner::planRevoke()`),
+mentre REDCap tiene gli utenti senza guardare le maiuscole. Un account
+cambiato su Entra solo nelle maiuscole, con la revoca mandata come scritta nel
+registro, dava `noop` sull'istanza e una riga chiusa in falso. Se l'istanza ne
+tenesse due che differiscono nelle maiuscole, va prima quello scritto come nel
+registro. Le concessioni si confrontano come prima. La rilettura di una revoca
+cerca anch'essa la coppia senza maiuscole: se mostra ancora la persona, la
+riga prende `TRASPORTO_SCRITTURA_NON_CONFERMATA`.
 
 ### Una persona da creare
 
@@ -1162,6 +1221,18 @@ regole tengono la risposta legata alla domanda:
 - **si legge solo su `collision`.** Su ogni altro verdetto il campo è ignorato,
   senza codice: dopo la creazione resta pieno, uguale allo UPN, come traccia
   della risposta, e un codice lo segnalerebbe per sempre.
+
+Questa risposta vale per una richiesta che il canale non ha ancora eseguito. Per
+una richiesta già eseguita (dalla 0.25.0) la mail di collisione non propone
+nessun nome e rimanda a IT: scrivere un nome diverso nella riga non crea un
+account, e il giro si ferma su `TRASPORTO_IDENTITA_CAMBIATA`. Il messaggio dice
+il nome composto e l'account di altri, che la richiesta è già eseguita e che un
+altro nome scritto nella riga non cambia l'esito, e chiede di non modificare la
+riga e di scrivere a IT, che verifica l'account su Entra. La riga è eseguita
+per il sigillo che il giro crede (`seal_carried`), quello del canale nel log con
+l'utenza configurata, altrimenti il campo: un sigillo che il canale non ha
+scritto, con l'utenza configurata, la lascia fra le righe mai eseguite e vale
+la mail di sempre.
 
 Resta scoperto un caso, raro: il nome occupato passa a un'altra persona fra la
 domanda e la risposta, cancellato e riusato in poche ore, con la proposta
@@ -1869,9 +1940,35 @@ e con il proprietario «di oggi» l'elenco potrebbe cambiare fra un tentativo e
 l'altro: una riga passata il 3 si sposterebbe dal rapporto di un referente a
 quello di un altro dopo che uno dei due è già partito. Una persona chiesta da
 due referenti compare nel rapporto di ciascuno, con le sole righe sue. Contano
-le righe con `request_status = active` e `outcome = applied`; riceve il
-rapporto chi ne ha almeno una attivata entro la fine del mese coperto, e un
-«tutto in ordine» è un rapporto anche lui.
+le righe con `request_status = active` che il canale ha eseguito,
+`outcome = applied` oppure `applied_seal` non vuoto, qualunque sia l'esito
+(`report_scope()`, dalla 0.25.0): una riga eseguita e poi ferma ha ancora
+sull'istanza l'accesso eseguito, perché il giro toglie solo ciò che una riga
+chiede di togliere. Restano fuori le righe ferme su
+`TRASPORTO_ACCOUNT_DISATTIVATO`, che hanno una sezione nella mail a IT, e le
+righe mai eseguite. Per decidere che una riga è stata eseguita basta il campo:
+il rapporto non concede niente. Riceve il rapporto chi ne ha almeno una
+attivata entro la fine del mese coperto, e un «tutto in ordine» è un rapporto
+anche lui. Una riga scaduta che nessuno ha revocato resta nel conteggio finché
+c'è, senza giudizio sul primo accesso né sull'anno senza accessi: per
+escluderla dal mese dopo la scadenza il punto è la riga `keep` di
+`report_rows()`.
+
+**Il nome eseguito.** Ai server si chiede l'account che ha l'accesso, non quello
+che il registro porta adesso (`report_executed_register()`). Col sigillo fermo
+è il registro; col sigillo mosso (una riga `held`, una riga su cui la porta
+delle identità ha scritto il nome nuovo dopo un account cambiato su Entra)
+sono i valori che `log_executed_values()` legge sotto l'ultimo sigillo del
+canale, istanza e progetto compresi. Il sigillo creduto è quello del log,
+come nel giro, quando l'utenza del canale è configurata.
+`log_executed_values()` ha bisogno degli approvatori di IT: la lavorazione li
+legge da `UBEP_APPROVATORI_IT`, la stessa variabile del giro nel file
+d'ambiente comune. Se il log non dice il nome, o la lavorazione non passa gli
+approvatori, la riga conta senza giudizio e senza domande ai server, e la mail
+a IT dice quale dei due. Accanto a ogni riga ferma le voci scrivono l'esito. Una
+revoca eseguita dal giro e poi toccata da qualcuno ha il sigillo mosso ma
+l'accesso tolto: il log lo dice (`log_executed_values()` su
+`request_status`) e la riga non è ferma.
 
 Nella voce A una richiesta nuova dice se l'account era nuovo: lo è quando
 Entra l'ha creato non prima del minuto in cui è nata la riga, entrambe le ore
@@ -1932,12 +2029,24 @@ mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
   `forceChangePasswordNextSignIn`, e il permesso meno privilegiato per farlo è
   di scrittura; le due date di Entra non bastano, perché la regola dei 60
   giorni sostituisce la chiave prima di disattivare. Il perché di una
-  disattivazione lo sa IT, che la fa.
+  disattivazione lo sa IT, che la fa;
+- **le richieste ferme con un accesso eseguito** (dalla 0.25.0): le righe
+  sigillate e non `applied`, attive, o revocate e non eseguite (ferme sul
+  cancello, in attesa del proprietario, o su un cambio di coppia o di
+  account: `DATO_AMBITO_NON_AUTORIZZATO`, `held`, `DATO_COPPIA_CAMBIATA`,
+  `TRASPORTO_IDENTITA_CAMBIATA`). Per ciascuna l'esito con i codici (senza il
+  sigillo che `SIGILLO_DIVERSO` porta per il proprietario), se è revocata, se
+  la persona è mai entrata sul server col nome eseguito, oppure perché quel
+  nome non si sa, e il proprietario. Non una revoca che il log dice eseguita e
+  poi toccata, né una riga con `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici,
+  che ha la sua sezione. Una riga può stare anche fra quelle senza referente, e
+  conta una volta in N.
 
 L'oggetto e la prima riga della mail a IT hanno la stessa forma di quella dei
 referenti (`Da guardare (N): rapporto REDCap per IT`), con N le righe
-elencate: un server è una riga, una richiesta ferma è una riga. La mail a IT
-parte anche con la sola sezione dei server non letti o delle richieste ferme.
+elencate: un server è una riga, una richiesta ferma è una riga, e una riga che
+sta in due sezioni conta una volta. La mail a IT parte anche con la sola
+sezione dei server non letti o delle richieste ferme.
 
 La colonna `senza_creatore` di `UbepRapporto_CL` **non si è rinominata**, e
 dalla 0.21.0 vuol dire «senza proprietario stabilito»: rinominarla sarebbe un
@@ -1956,6 +2065,12 @@ dall'utenza del canale, e non `outcome_at`: l'esito si riscrive a ogni esito, e
 una riga passata da `applied` a `transport_error` e tornata `applied`
 sembrerebbe attivata due volte. Una riga rieseguita dopo una modifica scrive un
 sigillo nuovo, e la voce A la elenca come modificata.
+
+La persona è datata dalla prima esecuzione della serie più recente di
+esecuzioni fatte per quel nome utente (`report_person_since()`, dalla 0.25.0),
+non dalla prima dopo l'ultima scrittura di `username`: un nome che la porta
+delle identità o un referente ha scritto e poi riscritto com'era, senza un
+sigillo nuovo, non lascia più la persona senza data e fuori dal primo accesso.
 
 Tre cose da sapere quando si legge il codice:
 
@@ -2294,6 +2409,20 @@ smetterebbe di applicare. In quest'ordine:
    primo sopra zero e il secondo falso;
 5. per ultima la posta: tolto il dirottamento, `UBEP_RAPPORTO_POSTA=1`.
 
+**La 0.25.0 non tocca il modulo né il dizionario, e l'ordine resta fra il
+pacchetto e la lavorazione.** Prima il pacchetto, poi la lavorazione in `/opt`,
+che passa gli approvatori di IT a `provisioning_report(approvers = )`: la
+lavorazione nuova con il pacchetto vecchio si ferma sull'argomento sconosciuto
+(il timer registra il fallimento e manca il record del giorno), mentre la
+lavorazione vecchia con il pacchetto nuovo fa girare il rapporto senza il nome
+eseguito delle righe col sigillo mosso, e la mail a IT lo dice riga per riga.
+Al ritorno, il contrario. Il record ha le stesse colonne. Il collaudo col mese
+forzato si legge dalla posta dirottata: con le righe tutte `applied` e nessuna
+ferma non compare nessuna sezione nuova per IT, e i dovuti e gli N sono quelli
+di prima, salvo una riga in `transport_error` passeggero al momento della
+lettura (entra come ferma) e una persona il cui nome è stato riscritto e
+ripristinato (ora è datata, e può entrare nella voce 1).
+
 ## Che cosa questa guida non copre
 
 - **La fine di un account.** Il canale crea gli account (§4, «Una persona da
@@ -2325,7 +2454,10 @@ smetterebbe di applicare. In quest'ordine:
   Dalla 0.24.0 un permesso con la scadenza dell'utente sul progetto già
   raggiunta vale come nessun permesso: la scadenza di REDCap è il primo giorno
   senza accesso, quindi chi scade oggi è già fuori, e la data è quella del
-  client, come nella validazione della scadenza di una richiesta.
+  client, come nella validazione della scadenza di una richiesta. Fa
+  eccezione, dalla 0.25.0, la revoca di una riga eseguita su una coppia che
+  l'istanza non ha più: si chiude senza il cancello (§4, «La scadenza naturale
+  e la revoca di una coppia già tolta»).
   **È in catena**: il giro lo interroga per ogni istanza che ha risposto, e una
   guardia nega qualunque funzione del pacchetto che sappia scrivere su
   un'istanza senza nominarlo. Il cancello si interroga sulle risposte e mai
