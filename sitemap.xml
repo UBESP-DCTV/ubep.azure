@@ -28,6 +28,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/creation_failure.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/creation_shares.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_choices.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_contacts.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_create_user.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_credential.html</loc></url>
@@ -58,6 +59,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_unknown.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_current_life.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_executions.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_fields.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_frame.html</loc></url>
@@ -99,6 +101,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/outcome_payload.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/outcome_vocabulary.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/owner_payload.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/parse_module_response.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_audit.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_diff.html</loc></url>

@@ -123,8 +123,11 @@ somebody, and the next day tries again. Such a day also does not know
 who is due, so it judges the month on the reports the last whole reading
 found due, kept beside the ledger
 ([`report_due_read()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_due_read.md));
-with none on record it says nothing is due, and the alarm on absence is
-the one that speaks.
+with none on record it counts nothing, and from the second day calls the
+month late
+([`report_late()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_late.md)):
+the alarm on absence watches the register and the directory, not the
+logs.
 
 On the 1st the run moves on to the month just ended. A month whose
 reports did not all leave is not given up: the first run that can send

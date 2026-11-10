@@ -42,11 +42,12 @@ months lost count in `mandati` and `falliti` of the record, and not in
 the completeness of the month, which a recovery of two of three would
 otherwise make look whole. A day that cannot read judges the month on
 the last whole reading, so a reading that fails after the month was sent
-does not make it late; with no whole reading on record nothing is due,
-and the month is not called late on a guess. `in_ritardo` is
+does not make it late; with no whole reading on record nothing is
+counted, and `mese_completo` is true on nothing. `in_ritardo` is
 [`report_late()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_late.md):
-from day 2 with the month not complete, or while a month lost still
-misses a report (`mesi_persi`).
+from day 2 with the month not complete or with no whole reading on
+record (`dovuti_sconosciuti`), or while a month lost still misses a
+report (`mesi_persi`).
 
 `istanze_non_lette` counts the servers the report asked and could not
 read. `voci_senza_accessi` counts the pairs of person and server listed

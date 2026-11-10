@@ -1,5 +1,150 @@
 # Changelog
 
+## ubep.azure 0.24.0
+
+A request the channel has carried out keeps the pair it was carried out
+on: the instance, the project and the person.
+
+- **A row carried out does not change its pair.** Decided on 2026-11-09.
+  Until 0.23.0 a change made by the owner alone was carried out on the
+  next round with nobody asked, and so was an approved one: a row whose
+  instance, project or person changed after its execution was carried
+  out on the new pair, and the old one stayed on the instance with no
+  row to govern it, out of the monthly report and of the yearly review,
+  since the round revokes only what a row asks to revoke. A revoked row
+  moved to another pair took away an access it had never governed. Now
+  every row the channel has sealed in its current life is compared,
+  before the plan, with the pair its last execution carried out: the row
+  as read when its seal did not move, since the channel’s seal covers
+  it, and otherwise the values the owners’ log holds below the channel’s
+  last seal
+  ([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)).
+  When `server` or `project_id` differ, or when somebody wrote the first
+  name, the last name or the contact address and the round would now
+  serve another account or create a person, the row takes `data_error`
+  with `DATO_COPPIA_CAMBIATA`
+  ([`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md)):
+  nothing is written on the instance, nobody is created, the row is not
+  sealed again and its owner does not change. It holds whoever wrote the
+  change, the owner included, and with an approval too: the code comes
+  before `held`, since no approval can let the change through, and
+  before the codes of the identity. Setting the fields back to the
+  values carried out brings the row back as it was, a field brought back
+  being no change; another person or another project is a new request,
+  and this one is revoked once its fields are back. A corrected name or
+  address that still resolves to the same username goes through as
+  before. Rows never carried out are not concerned.
+
+- **An account changed on Entra stops a row carried out, for IT.** On a
+  row the channel has sealed, the round would serve another account than
+  the one carried out, or create one, while nobody wrote the person in
+  the row. The account was renamed: until 0.23.0 the round carried out
+  the new name at once, with no `held` and no message, and the old login
+  stayed on the instance. Or deleted: the round created it again under
+  the same name, and on REDCap the new account found every right of the
+  old one, those given by hand included, while Entra kept refusing the
+  creation for as long as it held the deleted one. Or its first or last
+  name was corrected so that the row no longer matched it: the round
+  composed a free name and created a second account for the same person,
+  key to the owner and welcome to the person. The row now takes
+  `transport_error` with `TRASPORTO_IDENTITA_CAMBIATA`, with nothing
+  written on the instance and nobody created. A revoked row that
+  resolves to another account that exists takes it too: revoking that
+  account would take away an access the row never gave. A revoked row
+  whose person the tenant no longer holds, with nobody having written
+  the person, closes as before, `applied` with `absent`, before any
+  instance is asked: there is nobody to take the access from and nobody
+  to create. The row goes on by itself when the round finds the account
+  carried out again, a deleted account restored for instance; a rename
+  that stays has no way out through the register in this version. A row
+  whose resolution names nobody, `ambiguous` or a collision nobody
+  answered, keeps the code of its identity as before.
+
+- **The outcome messages of the two codes.** Both go to the owner with
+  IT in copy, in Italian and in English. `DATO_COPPIA_CAMBIATA` says
+  what the row asks for now (another instance, project or person), what
+  was carried out (instance, project and username), who changed the row,
+  that nothing moved on the instance, the two ways out, and that an
+  approval is not one of them. `TRASPORTO_IDENTITA_CAMBIATA` says that
+  the person of the request no longer matches, on Entra, the account the
+  access was given to, that nothing changed on the instance, which
+  account was carried out and which the round finds now, that IT checks
+  the account and that the row needs no edit; it does not say that the
+  row comes back by itself.
+
+- **The oldest row of a pair keeps it, served or not.** The rows filed
+  after the oldest on the same pair took `DATO_COPPIA_DUPLICATA` only
+  among the rows the round was serving: with the oldest held, blind or
+  stopped on its identity, a younger row on its pair was the oldest the
+  round saw and was carried out on its own authority, and when the
+  oldest came back the access followed whichever of the two stood. The
+  rows the round does not serve now hold their pair too, the one carried
+  out when it is known, otherwise the one they name under the username
+  the round resolved; a row stopped because its pair moved holds the one
+  it was carried out on. A revocation closed on a person the tenant no
+  longer holds holds no pair: a request filed for that person when they
+  come back creates them, as before.
+
+- **`server` and `project_id` are read-only on the form once a row is
+  applied.** The dictionary gives both
+  `@IF([applied_seal] <> "", @READONLY, "")`. The Data Import Tool is
+  not locked by it, and there the round’s rule acts. The comparison of
+  the dictionary counts only a `@READONLY` that holds on every row,
+  outside any `@IF`
+  ([`dictionary_readonly()`](https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.md)):
+  the two fields stay intent fields, inside the seal, and no seal moves.
+  A `@READONLY` of an outcome field wrapped in an `@IF` now reads as
+  `DIZIONARIO_READONLY_CADUTO`.
+
+- **A revoked row whose last day of access has passed is revoked.** The
+  expiration of a revocation is no longer validated, since the
+  revocation does not write it:
+  [`register_to_desired()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_to_desired.md)
+  drops `expiration` from a revoked row before validating it. Until
+  0.23.0 the row took `DATO_SCADENZA_NON_VALIDA` at every round and the
+  access stayed. An active row whose last day has passed is refused as
+  before.
+
+- **The monthly report is late from day 2 also when the month never had
+  a whole reading.** For instance, when the log of an active row can
+  never be read. Until 0.23.0 `referenti` was 0, the month read as
+  complete and no alarm said otherwise. Now `dovuti_sconosciuti` holds
+  when today’s reading is not whole and the file of the month’s dues is
+  missing or does not read, and
+  [`report_late()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_late.md)
+  applies it from day 2 of the month, in Rome’s calendar. The record
+  does not change.
+
+- **The scope gate takes a User Rights whose expiration on the project
+  has been reached as no rights.** REDCap’s expiration is the first day
+  without access, so a permission expiring today or earlier is refused
+  with `DATO_AMBITO_NON_AUTORIZZATO`: a referent whose access to the
+  project expired cannot authorize requests through the channel,
+  revocations of somebody else’s row included, as they could not by
+  hand.
+  [`round_rights()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_rights.md)
+  carries `expiration` from the module’s `state`, of the current
+  contract; an empty one is no expiration, and one that does not read as
+  a date, on a permission that would grant, is
+  `TRASPORTO_PERMESSO_NON_LEGGIBILE`.
+
+- **Shape of the release.** Package and dictionary go in either order:
+  the conditional tag is not compared, so 0.24.0 with the dictionary of
+  0.23.0, and 0.23.0 with the dictionary of 0.24.0, both conform. Until
+  the dictionary is imported the two fields stay writable on the form,
+  and the round refuses the change all the same. The module and the
+  contract do not change. On the first round after the installation a
+  row changes its outcome only where the register already holds one of
+  these cases: an active row carried out whose account was deleted or no
+  longer matches the row, a younger row on the pair of an older one the
+  round stops, a revoked row whose last day of access has passed
+  (revoked now), a row whose author or owner has an expired access to
+  the project (`DATO_AMBITO_NON_AUTORIZZATO`). An account renamed before
+  0.24.0 was already carried out under its new name, and its row is not
+  concerned. A row whose last execution carried out a change with no
+  approval above it in the log, as before 2026-10-14 or by a correction
+  of IT, is not concerned either while its seal does not move.
+
 ## ubep.azure 0.23.0
 
 Phase 2 of the monthly report to the referents. It closes the two limits

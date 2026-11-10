@@ -25,9 +25,10 @@ scope_errors(register, rights)
 - rights:
 
   The rights read from the instances, as a data frame with `server`,
-  `project_id`, `username` and `user_rights`. The caller assembles it
-  from each instance's answer, because a `state` reply names its server
-  once at the top and not on every row.
+  `project_id`, `username`, `user_rights` and, when known, `expiration`
+  (`YYYY-MM-DD`, empty or `NA` for none). The caller assembles it from
+  each instance's answer, because a `state` reply names its server once
+  at the top and not on every row.
 
 ## Value
 
@@ -48,7 +49,9 @@ cases — every one of them is "the permission was not read as granting":
 - the requester holds no rights at all on that project, so there is no
   row;
 
-- the permission was read and does not grant;
+- the permission was read and does not grant, or grants past its
+  expiration, since REDCap's expiration is the first day without access
+  and the referent could not use the permission by hand either;
 
 - the permission could not be read, which is the case that decides the
   direction of the whole function. An instance answered by a module too

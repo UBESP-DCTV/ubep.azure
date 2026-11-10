@@ -1094,6 +1094,100 @@ e lo si vede anche dal giro fermato prima di agire.
 Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla
 colonna `accessi_persi > 0`, a gravità 2.
 
+### Una riga eseguita non cambia coppia
+
+Deciso il 2026-11-09, nella 0.24.0. Una riga che il canale ha sigillato
+nella sua vita attuale governa la coppia su cui è stata eseguita:
+l’istanza, il progetto e la persona. Eseguita su un’altra coppia,
+lascerebbe la vecchia sull’istanza senza nessuna riga che la governi,
+perché il giro revoca solo ciò che una riga chiede di revocare; e una
+riga revocata spostata altrove toglierebbe un accesso che non ha mai
+governato. Il giro confronta quindi ogni riga sigillata, prima del
+piano, con la coppia della sua ultima esecuzione. Se il sigillo non si è
+mosso, la coppia eseguita è la riga come letta: il sigillo del canale la
+copre. Altrimenti si legge dal log dei proprietari sotto l’ultimo
+sigillo del canale
+([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)):
+`server` e `project_id` dalla creazione o dall’ultima modifica sotto il
+sigillo, il nome utente dalla porta delle identità, che lo scrive prima
+del sigillo nello stesso giro. Una scrittura sotto il sigillo che
+l’esecuzione non ha coperto, fatta mentre il giro girava, non è il
+valore eseguito, e si legge quella sotto. Letta dal log, una modifica
+eseguita senza un’approvazione sopra (lo storico di prima del
+2026-10-14, o una correzione di IT) passerebbe per scoperta: è per
+questo che col sigillo fermo conta la riga. La regola è
+[`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md),
+con due codici:
+
+- **`DATO_COPPIA_CAMBIATA`**, `data_error`: `server` o `project_id`
+  diversi da quelli eseguiti, oppure una scrittura dei campi della
+  persona (nome, cognome, indirizzo di contatto) per cui il giro
+  servirebbe un altro account o creerebbe una persona. Vale chiunque
+  abbia scritto, il proprietario compreso, e anche con un’approvazione:
+  viene prima di `held`, che chiederebbe un’approvazione che non può far
+  passare niente, e prima dei codici dell’identità. L’esito va al
+  proprietario con IT in copia, dice che cosa la riga chiede ora, su che
+  cosa era eseguita e chi l’ha cambiata. Le uscite sono due: riportare i
+  campi ai valori eseguiti, e la riga torna com’era (un campo riportato
+  al valore eseguito non è una modifica); oppure, per un’altra persona o
+  un altro progetto, riportare i campi, revocare questa richiesta e
+  crearne una nuova. Una revoca senza i campi riportati resta ferma,
+  perché colpirebbe la coppia nuova.
+- **`TRASPORTO_IDENTITA_CAMBIATA`**, `transport_error`: il giro
+  servirebbe un altro account, o ne creerebbe uno, e nella riga nessuno
+  ha scritto la persona. È l’account che è cambiato su Entra:
+  rinominato, cancellato, o con nome o cognome corretti in modo che la
+  riga non lo trova più. Fino alla 0.23.0 il giro eseguiva il nome nuovo
+  senza dire niente, ricreava l’account cancellato con lo stesso nome
+  (che su REDCap ritrova tutti i diritti di prima) o ne creava un
+  secondo per la stessa persona. L’esito va al proprietario con IT in
+  copia, e dice che la riga non va modificata. Lo prende anche una riga
+  revocata che risolve un altro account esistente: revocarlo toglierebbe
+  un accesso che la riga non ha mai dato. Una riga revocata la cui
+  persona non è più nel tenant, senza che nessuno l’abbia scritta, si
+  chiude invece come prima, `applied` con `absent`, prima delle istanze
+  (deciso il 2026-11-10): non c’è nessuno a cui togliere l’accesso e
+  nessuno da creare. La riga riparte da sola quando la risoluzione
+  ritrova l’account eseguito, per esempio un account cancellato e
+  ripristinato; per un account rinominato che resta tale questa versione
+  non ha un’uscita dal registro, e la decisione è di IT.
+
+In tutti e due i casi sull’istanza non si scrive niente, nessuno nasce
+su Entra, il sigillo e il proprietario restano. Una riga sigillata la
+cui risoluzione non nomina nessuno, `ambiguous` o una collisione senza
+risposta, resta sul codice della sua identità come prima: non concede
+niente, e la correzione del referente la porta o alla stessa persona o a
+uno dei due casi. Le righe mai eseguite cambiano come prima.
+
+Che una persona sia stata scritta si legge nel log della riga, chiesto
+per ogni riga il cui sigillo si è mosso
+([`log_change_authors()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_change_authors.md)
+sui tre campi). Una riga il cui sigillo non si è mosso porta la persona
+eseguita: un account rinominato su Entra non muove il sigillo, perché il
+registro letto ha ancora il nome vecchio, ed è per questo che la coppia
+eseguita si legge dal log dei proprietari, che il giro ha già, e non dal
+log della riga.
+
+**Il doppione guarda anche le righe che il giro non serve.** La riga più
+vecchia di una coppia la tiene anche quando il giro la ferma:
+trattenuta, cieca, ferma sull’identità o per un cambio di coppia. La
+coppia che tiene è quella eseguita, se è nota, altrimenti quella che la
+riga nomina col nome utente risolto; una riga ferma per un cambio di
+coppia tiene quella eseguita. Una revoca chiusa su una persona che il
+tenant non tiene più non tiene nessuna coppia: la richiesta nuova per
+quella persona, quando torna, la crea. Una riga più recente sulla stessa
+coppia prende `DATO_COPPIA_DUPLICATA`. Fino alla 0.23.0 il confronto si
+faceva solo fra le righe servite, e la più recente si eseguiva con i
+diritti di chi l’aveva scritta finché la vecchia restava ferma.
+
+Nel modulo, `server` e `project_id` portano
+`@IF([applied_seal] <> "", @READONLY, "")`: di sola lettura quando la
+riga ha un sigillo. Il *Data Import Tool* resta aperto, ed è lì che
+agisce la regola. Il confronto del dizionario conta solo il `@READONLY`
+che vale su ogni riga, fuori da un `@IF`
+([`dictionary_readonly()`](https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.md)),
+quindi il pacchetto e il dizionario si aggiornano in qualunque ordine.
+
 ### Una persona da creare
 
 Il giro chiude creando due righe: quella il cui verdetto è `absent`, e
@@ -2353,7 +2447,11 @@ tre sono da capire prima di leggere un allarme:
   tre dovuti del mese risulterebbe completo;
 - `in_ritardo` si calcola nel pacchetto e non nella query, così lo copre
   un test: dal giorno 2 del mese con il mese non completo, **oppure
-  finché resta un mese perso non recuperato**.
+  finché resta un mese perso non recuperato**. Dalla 0.24.0 anche dal
+  giorno 2 di un mese che non ha mai avuto una lettura intera: senza
+  dovuti `referenti` vale 0 e `mese_completo` risulta vero su niente, e
+  un mese il cui log di una riga attiva non si legge mai, che l’allarme
+  d’assenza non vede, non risultava mai in ritardo.
 
 `giorno_di_invio` resta «oggi è dovuto il rapporto del mese corrente»:
 un giro di soli recuperi ha `mandati` sopra zero e `giorno_di_invio`
@@ -2468,12 +2566,16 @@ quest’ordine:
   che rifiuta una richiesta il cui autore non detiene il permesso
   `user_rights` sul progetto che la richiesta nomina — la regola è che
   il canale non deve permettere a nessuno ciò che non potrebbe già fare
-  a mano. **È in catena**: il giro lo interroga per ogni istanza che ha
-  risposto, e una guardia nega qualunque funzione del pacchetto che
-  sappia scrivere su un’istanza senza nominarlo. Il cancello si
-  interroga sulle risposte e mai sulle assenze, e la distinzione ha una
-  grana precisa. Un’istanza irraggiungibile torna con il proprio codice
-  di trasporto — quello che riporta
+  a mano. Dalla 0.24.0 un permesso con la scadenza dell’utente sul
+  progetto già raggiunta vale come nessun permesso: la scadenza di
+  REDCap è il primo giorno senza accesso, quindi chi scade oggi è già
+  fuori, e la data è quella del client, come nella validazione della
+  scadenza di una richiesta. **È in catena**: il giro lo interroga per
+  ogni istanza che ha risposto, e una guardia nega qualunque funzione
+  del pacchetto che sappia scrivere su un’istanza senza nominarlo. Il
+  cancello si interroga sulle risposte e mai sulle assenze, e la
+  distinzione ha una grana precisa. Un’istanza irraggiungibile torna con
+  il proprio codice di trasporto — quello che riporta
   [`module_state()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_state.md),
   oppure `TRASPORTO_ISTANZA_SENZA_MODULO` o
   `TRASPORTO_SEGRETO_NON_LEGGIBILE` se non è nemmeno stata interrogata;

@@ -59,7 +59,10 @@ The codes it can report, and why each is not cosmetic:
   gone;
 
 - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
-  outcome, and the register carries a success nobody produced;
+  outcome, and the register carries a success nobody produced. Only the
+  tag that holds on every row is compared,
+  [`dictionary_readonly()`](https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.md):
+  one inside an `@IF` is not;
 
 - `DIZIONARIO_COLONNA_ASSENTE` — the dictionary is malformed, and
   without this code it would read as conforming rather than as

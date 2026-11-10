@@ -25,7 +25,12 @@ round_rights(server, state)
   [`module_state()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_state.md)
   returned.
 
+  The expiration travels with the permission, because a management
+  permission past its expiration does not grant
+  ([`scope_errors()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_errors.md)).
+  A null is no expiration, and reads as `NA`.
+
 ## Value
 
 A data frame with `server`, `project_id`, `username`, and `user_rights`
-only when it was reported.
+and `expiration` only when the permission was reported.
