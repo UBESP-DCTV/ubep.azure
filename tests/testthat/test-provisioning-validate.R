@@ -23,7 +23,7 @@ test_that("validate_request accepts a complete request", {
     project_id = 9003L,
     role_name = "data entry",
     dag_name = "centro-01",
-    expiration = "2026-12-31"
+    expiration = as.character(Sys.Date() + 30L)
   )
 
   # test

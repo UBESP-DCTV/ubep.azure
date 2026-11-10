@@ -9,6 +9,11 @@ form_field_value <- function(value) {
   utils::URLdecode(as.character(value))
 }
 
+# A last day of access still ahead whenever the tests run: the rounds that
+# carry out a change refuse a date that has passed, and a fixed one would
+# turn the tests red the day it does.
+scadenza_futura <- as.character(Sys.Date() + 90L)
+
 
 # One mock stands in for all three adapters and dispatches on the URL: the
 # register speaks to /api/ with a token in the body, the instances to the
@@ -2874,13 +2879,13 @@ test_that("chi ha creato la riga la cambia dopo una modifica approvata ed esegui
   # and sealed 111111111111; then Anna changed the expiration.
   esito <- giro_cambiata(
     list(
-      cambio(anna, "expiration = '2027-01-31'"),
+      cambio(anna, paste0("expiration = '", scadenza_futura, "'")),
       esecuzione("111111111111"),
       approvazione(anna, "111111111111"),
       cambio(bruno)
     ),
     riga = riga_cambiata(
-      expiration = "2027-01-31", applied_seal = "111111111111"
+      expiration = scadenza_futura, applied_seal = "111111111111"
     )
   )
 
@@ -3117,13 +3122,13 @@ test_that("un'esecuzione approvata da IT copre la modifica che ha eseguito", {
   it <- "it.redcap@ubep.unipd.it"
   esito <- giro_cambiata(
     list(
-      cambio(anna, "expiration = '2027-01-31'"),
+      cambio(anna, paste0("expiration = '", scadenza_futura, "'")),
       esecuzione("111111111111"),
       approvazione(it, "111111111111"),
       cambio(bruno)
     ),
     riga = riga_cambiata(
-      expiration = "2027-01-31", applied_seal = "111111111111"
+      expiration = scadenza_futura, applied_seal = "111111111111"
     ),
     approvers = it
   )
@@ -4019,9 +4024,11 @@ dopo_passaggio <- function(...) {
 test_that("dopo il passaggio la modifica dell'ultimo si esegue subito", {
   # eval
   esito <- giro_cambiata(
-    dopo_passaggio(cambio(bruno, "expiration = '2027-01-31'")),
+    dopo_passaggio(
+      cambio(bruno, paste0("expiration = '", scadenza_futura, "'"))
+    ),
     riga = riga_cambiata(
-      expiration = "2027-01-31", applied_seal = "111111111111"
+      expiration = scadenza_futura, applied_seal = "111111111111"
     ),
     istanza = istanza_che_scrive(richiedenti = bruno)
   )
@@ -4534,7 +4541,7 @@ test_that("il cancello giudica ogni autore della modifica, non solo il primo", {
   # would carry out, Bruno last, so he is the first author the log names.
   riga <- list(
     record_id = "1", username = "mario.rossi@ubep.unipd.it",
-    identity = "existing", role_name = "read only", expiration = "2027-01-31"
+    identity = "existing", role_name = "read only", expiration = scadenza_futura
   )
   approvato <- request_seal(do.call(riga_come_registro, riga))
   giro_con <- function(richiedenti) {
@@ -4547,7 +4554,10 @@ test_that("il cancello giudica ogni autore della modifica, non solo il primo", {
             details = paste0("approved_seal = '", approvato, "'")
           ),
           list(username = bruno, details = "role_name = 'read only'"),
-          list(username = anna, details = "expiration = '2027-01-31'")
+          list(
+            username = anna,
+            details = paste0("expiration = '", scadenza_futura, "'")
+          )
         )
       ),
       istanza_che_scrive(richiedenti = richiedenti),
@@ -4959,7 +4969,7 @@ test_that("dopo il cambio dell'account il passaggio scritto dal vecchio resta cr
     utils::modifyList(evento, list(username = vecchio))
   }
   storia <- list(
-    cambio(bruno, "expiration = '2027-01-31'"),
+    cambio(bruno, paste0("expiration = '", scadenza_futura, "'")),
     dal_vecchio(esecuzione("111111111111")), dal_vecchio(passaggio(bruno)),
     approvazione(anna, "111111111111"), cambio(bruno),
     dal_vecchio(esecuzione())
@@ -4968,7 +4978,7 @@ test_that("dopo il cambio dell'account il passaggio scritto dal vecchio resta cr
     giro(
       registro_con_log(
         record_json(riga_cambiata(
-          expiration = "2027-01-31", applied_seal = "111111111111"
+          expiration = scadenza_futura, applied_seal = "111111111111"
         )),
         storia = storia
       ),
