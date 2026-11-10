@@ -116,9 +116,11 @@ name the round composed, which a collision's message names; <code>owner</code>, 
 the log says the row belongs to, where the outcome and the key go
 (<code><a href="mail_referent.html">mail_referent()</a></code>); <code>passed</code>, whether the change applied this round
 handed the row over; <code>edited_by</code>, who changed a held row since
-it was applied, as the row's log says. <code>register</code> is the register as read,
-on purpose; this is how the message names what the round has just
-established rather than what the referent typed.</p></dd>
+it was applied, as the row's log says; <code>mailbox</code> and <code>external</code>, where
+the account the row resolved to reads mail (<code><a href="directory_mailboxes.html">directory_mailboxes()</a></code>),
+which the access message of an internal contact goes to. <code>register</code> is
+the register as read, on purpose; this is how the message names what
+the round has just established rather than what the referent typed.</p></dd>
 
 
 <dt id="arg-hosts">hosts<a class="anchor" aria-label="anchor" href="#arg-hosts"></a></dt>
@@ -163,6 +165,19 @@ with nobody in copy. The outcome and the key go
 to the referent, <code><a href="mail_referent.html">mail_referent()</a></code>: the owner <code>identified</code> carries. The
 outcome of a row without one goes to <code>copy_to</code> alone, with a line saying
 so; its key goes nowhere.</p>
+<p>The access message of a row whose contact is internal, the UPN, is the
+exception: it goes to the account's mailbox and its first external
+address (<code><a href="mail_access_recipients.html">mail_access_recipients()</a></code>), in one message, and when the
+account has neither, to the referent with a line asking them to tell the
+person, or to <code>copy_to</code> when the row has no owner. Either counts as
+delivered. A message to the two that the mail service refuses
+(<code>TRASPORTO_POSTA_RIFIUTATA</code>) is tried once more to the mailbox alone, the
+recipient it reached before; the two tries count as one message, delivered
+or lost. Not on a transport that failed, which may have failed after the
+service took the message, and not under <code>redirect_to</code>, where the one
+recipient was the test address. A row whose <code>mailbox</code> and <code>external</code>
+<code>identified</code> does not carry loses the message, as a row without an
+address does: the round did not read where the account reads mail.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

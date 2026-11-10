@@ -29,6 +29,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/creation_shares.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_choices.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_address.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_contacts.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_create_user.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_credential.html</loc></url>
@@ -38,10 +39,12 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_frame.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_identifiers.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_is_candidate.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_mailboxes.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_named.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_page.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/directory_users.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_actionable.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_internal.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_normalize.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_payload.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/identity_stop_codes.html</loc></url>
@@ -77,6 +80,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_written_value.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_wrote.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_message.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_contact.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.html</loc></url>

@@ -57,7 +57,7 @@ whoever read it understood that an access had been granted.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_status_words</span><span class="op">(</span><span class="va">request_status</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_status_words</span><span class="op">(</span><span class="va">request_status</span>, applied_as <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -67,10 +67,22 @@ whoever read it understood that an access had been granted.</p>
 <dl><dt id="arg-request-status">request_status<a class="anchor" aria-label="anchor" href="#arg-request-status"></a></dt>
 <dd><p>The row's <code>request_status</code>.</p></dd>
 
+
+<dt id="arg-applied-as">applied_as<a class="anchor" aria-label="anchor" href="#arg-applied-as"></a></dt>
+<dd><p>The row's read-back, <code>"absent"</code> when the pair is not on
+the instance. Empty when the caller does not say.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A character vector named <code>it</code> and <code>en</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>A third fact has the same word: an active row whose last day has passed,
+carried out and unchanged, and whose person somebody removed from the
+project. The round writes nothing and reads the pair back as absent, which
+is the row's own wish, and the message says that instead of a grant.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

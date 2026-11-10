@@ -65,5 +65,6 @@ that has passed,
 the expiration is REDCap's to apply. Its id is returned in `lapsed`,
 because such a row may be compared with the instance and brought back to
 what it says, and never written as a new access: on a pair the instance
-no longer holds, the round refuses its last day as before
+no longer holds, the round writes nothing and closes the row as a
+revocation already done is closed, `applied` and read back as absent
 ([`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md)).

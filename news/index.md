@@ -4,9 +4,12 @@
 
 A row the channel has carried out stays in view when it stops, and two
 of the things that stopped it for nothing no longer do: the last day of
-access passing, and the revocation of a pair the instance no longer
-holds. The monthly report counts the rows executed and then stopped, and
-the round settles by itself what asks nothing of anybody.
+access passing, also when the person is taken off the project
+afterwards, and the revocation of a pair the instance no longer holds.
+The monthly report counts the rows executed and then stopped, and the
+round settles by itself what asks nothing of anybody. The access e-mail
+of a person whose contact is their UBEP address goes to their mailbox
+and external address, or to the owner.
 
 - **The monthly report sees the rows executed and then stopped.**
   Decided on 2026-11-10. Until 0.24.0 the report counted only the rows
@@ -78,10 +81,28 @@ the round settles by itself what asks nothing of anybody.
   on every round: the same expiration is `applied` with nothing written
   and no message, and an expiration extended by hand on the project is
   written back to the row’s, which closes the access. On a pair the
-  instance no longer holds, somebody having removed the person after the
-  last day, the row is refused as before: written again it would create
-  an access already ended, and tell the person they have one. A date
-  that is not a date is refused on every row.
+  instance no longer holds under any capitalization of the username,
+  somebody having removed the person after the last day, the row closes
+  `applied` with *Read back as* `absent`, as a revocation already
+  carried out does: nothing is written on the instance, no access is
+  created and the person is told nothing, and at every round after it is
+  the same row, with nothing written and no message. The owner gets one
+  outcome message when the row settles so, which says that the person is
+  no longer on the project and that the channel wrote nothing, not that
+  an access was granted
+  ([`mail_status_words()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_status_words.md));
+  for a row 0.24.0 had stopped on `DATO_SCADENZA_NON_VALIDA` it is the
+  message that replaces the error. If somebody puts the person back by
+  hand, the round compares the pair with the row: the same expiration is
+  `noop`, another one is written back to the row’s, and the access
+  closes. A row changed after its seal, or never carried out, is refused
+  on a last day that has passed as before, whether or not the person is
+  on the project. A date that is not a date is refused on every row. A
+  person still on the project under a username that differs only in
+  capitals, because it changed on Entra, is not a person removed: that
+  row is refused on its last day as before. The monthly report keeps
+  counting the row, as any expired row nobody revoked, until it is
+  revoked.
 
 - **A revocation on a pair already gone closes without the gate.**
   Decided on 2026-11-10. A revocation the gate refused with
@@ -138,16 +159,58 @@ the round settles by itself what asks nothing of anybody.
   stays writable, and the comparison took it for locked. The dictionary
   of the package gives the same nine read-only fields as before.
 
+- **The access e-mail of an internal contact goes where the account
+  reads mail.** Decided on 2026-11-10. A *Contact e-mail* in the
+  tenant’s domain is the UPN (decision 12), and for most accounts the
+  UPN has no mailbox: Exchange Online refused the access e-mail with
+  “550 5.4.1 Recipient address rejected: Access denied”, and from then
+  on the mail service suppressed the address and dropped every later
+  e-mail to it in silence, also after the person got a mailbox, while it
+  answered 202 and `accessi_recapitati` counted it. The access e-mail of
+  such a row now goes to the account’s `mail`, when it is not empty, and
+  to its first address outside the domain: the first of `otherMails`,
+  otherwise `officeLocation`, each read with
+  [`directory_address()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_address.md):
+  spaces, brackets, a `mailto:` in front, a trailing comma, semicolon or
+  full stop, and quotes in pairs around the whole value are taken off,
+  and what is left counts only when it has the strict form of an
+  address, in lower case; nothing is taken off that could turn the value
+  into another address
+  ([`directory_mailboxes()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_mailboxes.md),
+  [`mail_access_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.md)).
+  Both come from the sweep the round already makes, with no new call to
+  Graph; one message, both recipients, the same address once. With
+  neither, it goes to the owner of the row, with a first line in each
+  language asking them to tell the person, and to `UBEP_POSTA_COPIA`
+  when the row has no owner, saying so. Either counts in
+  `accessi_recapitati`. A message to the two recipients that the mail
+  service refuses (`TRASPORTO_POSTA_RIFIUTATA`) is tried once more to
+  the mailbox alone, the recipient it reached before; the two tries
+  count as one message. Not on a transport that failed, which may have
+  failed after the service took the message, and not under `redirect_to`
+  (`UBEP_POSTA_A`). A row whose addresses the round did not read loses
+  the message, counted as `accessi_persi` with `POSTA_ACCESSO_PERSA`,
+  rather than tell the owner the account has nowhere to receive it.
+  [`mail_send()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_send.md)
+  takes more than one recipient. The access e-mail of an external
+  contact, the welcome, the key and the outcomes are unchanged, and so
+  are `redirect_to` and `dry_run`.
+
 - **Shape of the release.** No dictionary, module or rule changes.
   Package first, then the report’s job in `/opt`; the reverse order
   stops the job on the unknown argument `approvers`. On the first round,
   an active row carried out whose last day has passed and that is in
   `data_error` with `DATO_SCADENZA_NON_VALIDA` goes back to `applied`,
-  and a revoked row carried out that is in `data_error` with
+  read back as `absent` when the person is no longer on the project, and
+  a revoked row carried out that is in `data_error` with
   `DATO_AMBITO_NON_AUTORIZZATO` on a pair already gone closes `applied`
-  with `absent`, each with one outcome message. The first monthly report
-  after the installation can list rows the one before did not: the rows
-  executed and then stopped.
+  with `absent`, each with one outcome message to its owner. From the
+  first round, the access e-mail of a row whose *Contact e-mail* is the
+  person’s UBEP address goes to the account’s mailbox and external
+  address, or to the owner when the account has neither; access e-mails
+  already sent are not sent again. The first monthly report after the
+  installation can list rows the one before did not: the rows executed
+  and then stopped.
 
 ## ubep.azure 0.24.0
 

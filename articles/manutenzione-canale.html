@@ -216,22 +216,23 @@ allineato. Il costo accettato in cambio è che una notifica possa
 arrivare <strong>due volte</strong>, mai che si perda.</p>
 <p><strong>La posta del giro va al proprietario della riga.</strong> Il
 benvenuto e la mail di accesso vanno alla persona, a
-<code>contact_email</code>. L’esito, qualunque sia, e la chiave di un
-account appena nato vanno al referente, e il referente è il
-<strong>proprietario</strong> della riga, che il giro legge dal registro
-degli eventi (<code><a href="../reference/log_owner.html">log_owner()</a></code>, §4): il creatore finché la riga
-non passa a un altro. Non <code>requested_by</code> e non il valore di
-<code>owned_by</code>: dal form <code>@USERNAME</code> riempie il primo,
-ma il <em>Data Import Tool</em> li scrive com’è nel CSV
-(<code>requested_by</code> misurato il 2026-09-02 e di nuovo il
-2026-10-16), e il giro non li riscrive; il proprietario viaggia in
-memoria, come per il cancello. Fino alla 0.20.0 un import con il campo
-vuoto perdeva la chiave (<code>POSTA_CREDENZIALE_PERSA</code>), e uno
-con un altro indirizzo mandava lì chiave ed esiti; dalla 0.20.1 la posta
-andava al creatore, dalla 0.21.0 va al proprietario. Il cancello
-dell’ambito legge lo stesso proprietario, ma lo giudica solo quando
-nessuno ha cambiato la riga; altrimenti giudica chi ha scritto ciò che
-il giro esegue.</p>
+<code>contact_email</code>; la mail di accesso di un recapito interno va
+invece dove l’account riceve la posta (§4, «La mail di accesso»).
+L’esito, qualunque sia, e la chiave di un account appena nato vanno al
+referente, e il referente è il <strong>proprietario</strong> della riga,
+che il giro legge dal registro degli eventi (<code><a href="../reference/log_owner.html">log_owner()</a></code>,
+§4): il creatore finché la riga non passa a un altro. Non
+<code>requested_by</code> e non il valore di <code>owned_by</code>: dal
+form <code>@USERNAME</code> riempie il primo, ma il <em>Data Import
+Tool</em> li scrive com’è nel CSV (<code>requested_by</code> misurato il
+2026-09-02 e di nuovo il 2026-10-16), e il giro non li riscrive; il
+proprietario viaggia in memoria, come per il cancello. Fino alla 0.20.0
+un import con il campo vuoto perdeva la chiave
+(<code>POSTA_CREDENZIALE_PERSA</code>), e uno con un altro indirizzo
+mandava lì chiave ed esiti; dalla 0.20.1 la posta andava al creatore,
+dalla 0.21.0 va al proprietario. Il cancello dell’ambito legge lo stesso
+proprietario, ma lo giudica solo quando nessuno ha cambiato la riga;
+altrimenti giudica chi ha scritto ciò che il giro esegue.</p>
 <p><strong>Dalla 0.21.0 il ripiego su <code>requested_by</code> non c’è
 più.</strong> Una riga può cambiare mano, e il ripiego avrebbe scritto a
 un ex proprietario, la sola persona che non deve più sentirne parlare.
@@ -1309,11 +1310,35 @@ mail. Una scadenza prorogata a mano nel progetto torna come nella riga,
 e l’accesso si chiude. Fino alla 0.24.0 la riga andava in
 <code>DATO_SCADENZA_NON_VALIDA</code> al primo giro dopo la scadenza, e
 la WI diceva di scrivere una data non passata o di svuotare il campo:
-tutte e due riaprivano l’accesso. Una coppia che l’istanza non ha più,
-perché qualcuno ha tolto la persona dopo la scadenza, resta rifiutata
-come prima (<code>lapsed</code>): riscritta, sarebbe un accesso già
-finito e una mail di accesso alla persona. Una data che non è una data è
-rifiutata su ogni riga.</p>
+tutte e due riaprivano l’accesso. Una coppia che l’istanza non ha più
+sotto nessuna grafia del nome utente (REDCap lo confronta senza
+maiuscole, <code>present()</code>), perché qualcuno ha tolto la persona
+dopo la scadenza (lo può fare chi governa il progetto), non si riscrive:
+sarebbe un accesso già finito e una mail di accesso alla persona. Il
+giro la lascia fuori dalle scritture (<code>lapsed</code>) e chiude la
+riga <code>applied</code> con <em>Read back as</em> <code>absent</code>,
+come una revoca già eseguita: niente scritto, nessuna mail alla persona,
+e a ogni giro dopo lo stesso esito, senza mail. Al proprietario arriva
+una mail d’esito, una volta, che dice che la persona non è più sul
+progetto e che il canale non ha scritto niente
+(<code><a href="../reference/mail_status_words.html">mail_status_words()</a></code>); per una riga che la 0.24.0 aveva
+fermato su <code>DATO_SCADENZA_NON_VALIDA</code> è la mail che
+sostituisce l’errore. Il sigillo non si muove: la riga è intatta e non
+c’è niente da riscrivere. Se qualcuno rimette la persona a mano, il giro
+la confronta con la riga: stessa scadenza, <code>noop</code>; un’altra,
+riportata a quella della riga, e l’accesso si chiude. Per riaprire
+l’accesso il referente sposta la data: la riga è allora cambiata dopo il
+sigillo, e la persona viene creata di nuovo e riceve la mail d’accesso.
+Una riga cambiata dopo il sigillo o mai eseguita resta rifiutata su una
+data passata, con la persona sul progetto o senza. Una persona ancora
+sul progetto con un nome utente che differisce solo nelle maiuscole,
+perché su Entra è cambiato, non è una persona tolta: la riga prende
+<code>DATO_SCADENZA_NON_VALIDA</code> come prima (<code>recased</code>).
+Una data che non è una data è rifiutata su ogni riga. Il rapporto
+mensile continua a contare la riga, come ogni riga scaduta e non
+revocata, finché nessuno la revoca (<code>keep</code> di
+<code><a href="../reference/report_rows.html">report_rows()</a></code> e <code>conta</code> di
+<code><a href="../reference/report_scope.html">report_scope()</a></code>).</p>
 <p><strong>La revoca senza nessuno con i diritti.</strong> Una revoca
 rifiutata dal cancello con <code>DATO_AMBITO_NON_AUTORIZZATO</code> (il
 proprietario ha perso <em>User Rights</em>, o il suo accesso al progetto
@@ -1576,10 +1601,47 @@ giro dopo, se il diritto c’è, trova la coppia a posto
 (<code>noop</code>) e non ha niente da mandare. Non si conta in
 <code>accessi_persi</code>, perché nessun invio è fallito: la persona
 non viene avvisata, e lo dice solo quel codice sulla riga.</p>
-<p><strong>Va alla persona, a <code>contact_email</code>, e a nessun
-altro</strong>: niente copia al referente, niente copia a IT. Con un
-indirizzo vuoto la mail è persa, come per il benvenuto. Il dirottamento
-e la prova a secco valgono come per gli altri messaggi. L’oggetto è
+<p><strong>Va alla persona, e a nessun altro</strong>: niente copia al
+referente, niente copia a IT. Con un recapito esterno va a
+<code>contact_email</code>; con un indirizzo vuoto la mail è persa, come
+per il benvenuto. Con un recapito interno, cioè lo UPN per la decisione
+12, no: per molti account lo UPN non ha una casella, Exchange Online
+rifiuta con «550 5.4.1 Recipient address rejected: Access denied», e da
+quel momento SendGrid mette l’indirizzo in soppressione e scarta in
+silenzio ogni invio successivo, anche dopo che la persona ha ricevuto
+una casella, mentre risponde 202 e <code>accessi_recapitati</code> sale.
+La mail di un recapito interno va a due candidati, letti dalla spazzata
+che il giro ha già fatto, senza chiamate nuove a Graph
+(<code><a href="../reference/directory_mailboxes.html">directory_mailboxes()</a></code>,
+<code><a href="../reference/mail_access_recipients.html">mail_access_recipients()</a></code>): la casella dell’account, il
+campo <code>mail</code> se non è vuoto (lo UPN da solo non conta); il
+primo indirizzo esterno, cioè il primo di <code>otherMails</code> fuori
+dal dominio, altrimenti <code>officeLocation</code>; ciascuno letto con
+<code><a href="../reference/directory_address.html">directory_address()</a></code>, che toglie gli spazi (anche quello non
+separabile), le parentesi, il <code>mailto:</code> in testa, virgola,
+punto e virgola e punto in coda, le virgolette solo a coppie attorno
+all’intero valore, e niente che possa farne un altro indirizzo; lo
+tiene, in minuscolo, solo se ha la forma stretta di un indirizzo (il
+campo è testo libero, scritto dal flusso storico com’era nel foglio), e
+fuori dal dominio. Con tutti e due il messaggio è uno solo con due
+destinatari, lo stesso indirizzo una volta sola; con uno solo va a
+quello. Senza nessuno dei due va al proprietario della riga con in
+testa, in italiano e in inglese, una riga che gli chiede di avvisare la
+persona; senza proprietario va a <code>UBEP_POSTA_COPIA</code> e la
+prima riga lo dice, come nell’esito. Anche questi contano in
+<code>accessi_recapitati</code>. Se il servizio di posta rifiuta il
+messaggio ai due destinatari (basta un indirizzo che non accetta per
+rifiutare tutta la richiesta), il giro lo ritenta alla sola casella, il
+destinatario che lo riceveva prima; i due tentativi contano come un
+messaggio, recapitato o perso. Solo su un rifiuto del servizio
+(<code>TRASPORTO_POSTA_RIFIUTATA</code>): un trasporto che non risponde
+può essere caduto dopo che il servizio ha preso il messaggio, e un
+secondo invio lo recapiterebbe due volte; e mai con
+<code>UBEP_POSTA_A</code>, dove l’unico destinatario era l’indirizzo di
+prova. Una riga di cui il giro non ha letto gli indirizzi dell’account
+perde la mail, come una riga senza indirizzo, invece di mandarla al
+proprietario con una frase che nessuno ha verificato. Il dirottamento e
+la prova a secco valgono come per gli altri messaggi. L’oggetto è
 <code>Accesso a REDCap / REDCap access: &lt;istanza&gt;, progetto &lt;PID&gt;</code>;
 il corpo, italiano sopra e inglese sotto, in testo semplice, dice:</p>
 <ul>
@@ -2122,7 +2184,11 @@ l’ultimo giorno di accesso, che stanno sulla riga del registro. Per
 sapere perché non è partita, guardare la riga: un
 <code>contact_email</code> vuoto spiega il caso da solo; altrimenti il
 journal della lavorazione riporta la risposta del servizio di posta. Non
-trattiene niente, e la riga è <code>applied</code>.</p>
+trattiene niente, e la riga è <code>applied</code>. Una persona con
+recapito interno che dice di non aver ricevuto la mail: guardare
+<code>mail</code>, <code>otherMails</code> e <code>officeLocation</code>
+dell’account su Entra; senza casella né esterno la mail è andata al
+proprietario.</p>
 <p><strong>Credenziale persa (gravità 1).</strong> Un’utenza è nata e la
 sua chiave non è arrivata a nessuno: <code>credenziali_perse</code> è
 maggiore di zero. Dalla 0.19.0 conta anche la creazione di cui si è

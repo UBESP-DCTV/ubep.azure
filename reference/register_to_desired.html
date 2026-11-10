@@ -102,8 +102,9 @@ up to four hours old, instead of a fact about the row.</p>
 has passed, <code><a href="validate_request.html">validate_request()</a></code>: the expiration is REDCap's to apply. Its
 id is returned in <code>lapsed</code>, because such a row may be compared with the
 instance and brought back to what it says, and never written as a new
-access: on a pair the instance no longer holds, the round refuses its last
-day as before (<code><a href="provisioning_reconcile.html">provisioning_reconcile()</a></code>).</p>
+access: on a pair the instance no longer holds, the round writes nothing
+and closes the row as a revocation already done is closed, <code>applied</code> and
+read back as absent (<code><a href="provisioning_reconcile.html">provisioning_reconcile()</a></code>).</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

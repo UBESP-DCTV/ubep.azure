@@ -10,7 +10,7 @@ which says none of this.
 ## Usage
 
 ``` r
-mail_access_message(row, url = NULL)
+mail_access_message(row, url = NULL, relay = NULL)
 ```
 
 ## Arguments
@@ -24,6 +24,11 @@ mail_access_message(row, url = NULL)
   The address the row's instance opens at, from
   [`mail_instance_url()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_instance_url.md);
   `NULL`, `NA` or empty leaves the line out.
+
+- relay:
+
+  `NULL` for the message to the person; `"referent"` or `"it"` for the
+  one that goes to whoever has to tell them.
 
 ## Value
 
@@ -48,3 +53,11 @@ one the line is left out and the closing sentence describes the referent
 instead
 ([`mail_first_contact()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_contact.md)),
 so a missing owner costs no message.
+
+A person whose account has neither a mailbox nor an external address
+([`mail_access_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.md))
+cannot be written to, and the message goes to somebody who can tell
+them: the referent, or IT when the row has no owner. `relay` says which,
+and puts on top of each language a line naming the person and asking the
+reader to tell them; the message below it is the one the person would
+have received.

@@ -67,7 +67,11 @@ uses.</p>
 
 
 <dt id="arg-to">to<a class="anchor" aria-label="anchor" href="#arg-to"></a></dt>
-<dd><p>Recipient address.</p></dd>
+<dd><p>Recipient addresses: one, or more for the access message of a
+row whose contact is internal (<code><a href="mail_access_recipients.html">mail_access_recipients()</a></code>). All go in
+one personalization, so the service sends one message that names them
+all; an address repeated in it is refused, which is why the caller drops
+duplicates first.</p></dd>
 
 
 <dt id="arg-subject-body">subject, body<a class="anchor" aria-label="anchor" href="#arg-subject-body"></a></dt>

@@ -24,7 +24,12 @@ mail_send(api_key, from, to, subject, body, cc = NULL, reply_to = NULL)
 
 - to:
 
-  Recipient address.
+  Recipient addresses: one, or more for the access message of a row
+  whose contact is internal
+  ([`mail_access_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.md)).
+  All go in one personalization, so the service sends one message that
+  names them all; an address repeated in it is refused, which is why the
+  caller drops duplicates first.
 
 - subject, body:
 

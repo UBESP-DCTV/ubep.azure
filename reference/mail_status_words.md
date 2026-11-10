@@ -11,7 +11,7 @@ had been granted.
 ## Usage
 
 ``` r
-mail_status_words(request_status)
+mail_status_words(request_status, applied_as = "")
 ```
 
 ## Arguments
@@ -20,6 +20,19 @@ mail_status_words(request_status)
 
   The row's `request_status`.
 
+- applied_as:
+
+  The row's read-back, `"absent"` when the pair is not on the instance.
+  Empty when the caller does not say.
+
 ## Value
 
 A character vector named `it` and `en`.
+
+## Details
+
+A third fact has the same word: an active row whose last day has passed,
+carried out and unchanged, and whose person somebody removed from the
+project. The round writes nothing and reads the pair back as absent,
+which is the row's own wish, and the message says that instead of a
+grant.

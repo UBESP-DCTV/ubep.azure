@@ -54,7 +54,7 @@ none of this.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_access_message</span><span class="op">(</span><span class="va">row</span>, url <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_access_message</span><span class="op">(</span><span class="va">row</span>, url <span class="op">=</span> <span class="cn">NULL</span>, relay <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -68,6 +68,11 @@ none of this.</p>
 <dt id="arg-url">url<a class="anchor" aria-label="anchor" href="#arg-url"></a></dt>
 <dd><p>The address the row's instance opens at, from
 <code><a href="mail_instance_url.html">mail_instance_url()</a></code>; <code>NULL</code>, <code>NA</code> or empty leaves the line out.</p></dd>
+
+
+<dt id="arg-relay">relay<a class="anchor" aria-label="anchor" href="#arg-relay"></a></dt>
+<dd><p><code>NULL</code> for the message to the person; <code>"referent"</code> or <code>"it"</code>
+for the one that goes to whoever has to tell them.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -88,6 +93,12 @@ fetching it would add a call to REDCap to a message whose job is to leave.</p>
 <p>The owner, when there is one, is named as the project's contact; without
 one the line is left out and the closing sentence describes the referent
 instead (<code><a href="mail_first_contact.html">mail_first_contact()</a></code>), so a missing owner costs no message.</p>
+<p>A person whose account has neither a mailbox nor an external address
+(<code><a href="mail_access_recipients.html">mail_access_recipients()</a></code>) cannot be written to, and the message goes to
+somebody who can tell them: the referent, or IT when the row has no owner.
+<code>relay</code> says which, and puts on top of each language a line naming the
+person and asking the reader to tell them; the message below it is the one
+the person would have received.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

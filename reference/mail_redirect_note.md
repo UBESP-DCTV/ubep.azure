@@ -19,7 +19,8 @@ mail_redirect_note(body, to, cc)
 
 - to, cc:
 
-  Who the message was addressed to before the redirect.
+  Who the message was addressed to before the redirect; `to` can name
+  more than one address.
 
 ## Value
 
