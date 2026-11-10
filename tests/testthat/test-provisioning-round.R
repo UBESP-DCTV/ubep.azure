@@ -181,6 +181,23 @@ test_that("a real row nobody asked about never reaches the diff", {
 })
 
 
+test_that("round_present finds a pair whatever the capitals of the username", {
+  # eval
+  results <- list(
+    list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L)
+  )
+  capitals <- entry_of(username = "Mario.Rossi@ubep.unipd.it")
+
+  # test
+  # REDCap holds the row as it stored it and matches names without regard to
+  # case; matched as written, the person would read as gone.
+  expect_true(round_present(results, capitals))
+  expect_false(round_present(results, entry_of(project_id = "9004")))
+  expect_false(round_present(list(), capitals))
+  expect_length(round_actual(results, list(capitals)), 0L)
+})
+
+
 test_that("the schema gate stops on what changes the reading and not on the rest", { # nolint: line_length_linter.
   # eval
   blocking <- round_schema_verdict(c(

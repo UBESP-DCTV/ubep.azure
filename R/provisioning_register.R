@@ -260,6 +260,85 @@ request_seal <- function(register) {
 }
 
 
+#' Whether a revocation is all that changed since the channel's seal
+#'
+#' `request_status` is an intent field, so a revocation always moves the
+#' seal, and a row whose seal moved has its pair read from the log. This asks
+#' the narrower question the seal can answer by itself: is the row as read
+#' the version carried out, with at most its revocation added. It is, when
+#' the seal of the row with `request_status` back to `active` is the
+#' channel's, or when the seal has not moved at all, the revocation having
+#' been carried out or settled already. Either way the instance, the project
+#' and the username the register holds are the ones carried out, since the
+#' seal covers them.
+#'
+#' And only when the channel carried that version out while it was active:
+#' the seal of the row back to `active` is among the seals the channel wrote
+#' in the row's current life. The round seals a revocation it closes without
+#' asking any instance too, the request withdrawn before its person was
+#' created; that row never granted anything, and its seal unmoved says
+#' nothing about an access.
+#'
+#' @param register The register as read, one row per request.
+#' @param sealed The seal the round believes for each row, the channel's
+#'   own, `""` where there is none.
+#' @param seals A list as long as the rows of `register`, each element the
+#'   seals the channel wrote on that row in its current life,
+#'   `log_channel_seals()`.
+#'
+#' @return A logical vector, one per row: `TRUE` only for a row that asks for
+#'   `revoked` and that the channel sealed as above.
+#'
+#' @keywords internal
+seal_holds_but_revocation <- function(register, sealed, seals) {
+  stopifnot(
+    is.data.frame(register), "request_status" %in% names(register),
+    is.character(sealed), length(sealed) == nrow(register),
+    is.list(seals), length(seals) == nrow(register)
+  )
+
+  status <- trimws(as.character(register[["request_status"]]))
+  revoked <- !is.na(status) & status == "revoked"
+  reopened <- register
+  reopened[["request_status"]] <- "active"
+  active <- request_seal(reopened)
+  once_active <- vapply(seq_along(active), function(i) {
+    active[[i]] %in% as.character(seals[[i]])
+  }, logical(1))
+
+  revoked & !is.na(sealed) & nzchar(sealed) & once_active &
+    (sealed == request_seal(register) | sealed == active)
+}
+
+
+#' Every seal the channel wrote on a row
+#'
+#' The values of `applied_seal` at the channel's executions in the row's
+#' current life, `log_executions()`, newest first: the first is
+#' `log_channel_seal()`. What `seal_holds_but_revocation()` asks to know
+#' whether the channel ever carried the row out while it was active.
+#'
+#' @param events The owners' log, `logtype = "record"`.
+#' @param record The record id.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them any account's seal would count.
+#'
+#' @return A character vector, empty when the channel never sealed the row.
+#'
+#' @keywords internal
+log_channel_seals <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  log_value(mine[executed, , drop = FALSE], "applied_seal")
+}
+
+
 #' The closed vocabulary of what the round thinks of a row
 #'
 #' Named here for the reason `outcome_vocabulary()` is: the CSV holds a copy,
@@ -2457,19 +2536,31 @@ request_from_row <- function(row) {
 #' identity gate's: it would ask the `outcome` the register carries, a verdict
 #' up to four hours old, instead of a fact about the row.
 #'
+#' A row the round carried out and nobody changed since keeps a last day that
+#' has passed, `validate_request()`: the expiration is REDCap's to apply. Its
+#' id is returned in `lapsed`, because such a row may be compared with the
+#' instance and brought back to what it says, and never written as a new
+#' access: on a pair the instance no longer holds, the round refuses its last
+#' day as before (`provisioning_reconcile()`).
+#'
 #' @param register The register as a data frame, one row per pair, carrying at
 #'   least `record_id` and `request_status`.
+#' @param executed The `record_id`s of the rows the round carried out and
+#'   nobody changed since: the channel's seal is there and has not moved.
 #'
-#' @return A list with `desired`, `revoked` and `errors`. The first two hold
-#'   requests that already went through `intake_request()`, each carrying its
-#'   `record_id` so the outcome knows where to go back. `errors` is named by
-#'   `record_id`.
+#' @return A list with `desired`, `revoked`, `errors` and `lapsed`. The first
+#'   two hold requests that already went through `intake_request()`, each
+#'   carrying its `record_id` so the outcome knows where to go back. `errors`
+#'   is named by `record_id`. `lapsed` holds the `record_id`s of the rows in
+#'   `desired` whose last day has passed, admitted because they are in
+#'   `executed`.
 #'
 #' @keywords internal
-register_to_desired <- function(register) {
+register_to_desired <- function(register, executed = character()) {
   stopifnot(
     is.data.frame(register),
-    all(c("record_id", "request_status") %in% names(register))
+    all(c("record_id", "request_status") %in% names(register)),
+    is.character(executed)
   )
 
   ids <- as.character(register[["record_id"]])
@@ -2546,6 +2637,7 @@ register_to_desired <- function(register) {
   desired <- list()
   revoked <- list()
   errors <- list()
+  lapsed <- character()
 
   for (i in seq_along(requests)) {
     if (!is_pair[[i]]) {
@@ -2568,7 +2660,11 @@ register_to_desired <- function(register) {
       request[["expiration"]] <- NULL
     }
 
-    taken <- intake_request(request)
+    # A row carried out and unchanged keeps the last day it was carried out
+    # with, passed or not. The question asked twice, so that the round knows
+    # which rows passed only because of it.
+    carried <- ids[[i]] %in% executed
+    taken <- intake_request(request, executed = carried)
     if (length(taken[["errors"]]) > 0L) {
       errors[[ids[[i]]]] <- taken[["errors"]]
       next
@@ -2580,10 +2676,13 @@ register_to_desired <- function(register) {
       revoked[[length(revoked) + 1L]] <- entry
     } else {
       desired[[length(desired) + 1L]] <- entry
+      if (carried && length(validate_request(request)) > 0L) {
+        lapsed <- c(lapsed, ids[[i]])
+      }
     }
   }
 
-  list(desired = desired, revoked = revoked, errors = errors)
+  list(desired = desired, revoked = revoked, errors = errors, lapsed = lapsed)
 }
 
 

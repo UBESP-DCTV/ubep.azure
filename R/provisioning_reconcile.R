@@ -938,8 +938,52 @@ provisioning_reconcile <- function(register_url,
   })
 
   # 4. the pure layer
-  plan <- register_to_desired(resolved)
+  #
+  # A row the round carried out and nobody changed since keeps a last day that
+  # has passed, decided on 2026-11-10: the expiration is REDCap's to apply on
+  # the access, and the round compares the instance with the row as it does
+  # every night. Refused, the row came back to its referent as an error that
+  # asked for a date not yet passed, or none, and either reopened the access.
+  # A row changed after its seal, or never carried out, would write a last
+  # day anew, and is refused on it as before. The seal is the one the round
+  # believes: with the channel's account configured, the channel's own in the
+  # owners' log; without it, the field, as everywhere else in the round.
+  intact <- record_ids[nzchar(sealed) & !tampered]
+  plan <- register_to_desired(resolved, executed = intact)
   asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
+
+  # The revocations the gate may leave alone when the instance no longer
+  # holds the pair, decided on 2026-11-10: nothing is taken away and nothing
+  # granted, so nobody's rights are needed to settle them. Only a row the
+  # channel carried out whose revocation is all that changed since, by its
+  # seal (`seal_holds_but_revocation()`): its instance, project and username
+  # are the ones carried out, and whoever reads the outcome knew already that
+  # the access had been granted. Never a pair read from the log, which is
+  # what a moved seal would leave, and never under a username the round
+  # resolved differently from the one the register holds: the instance would
+  # be asked about a name that was never carried out, find it absent, and the
+  # name carried out would stay with no row to govern it.
+  #
+  # And only on the channel's own seal, read from the owners' log with the
+  # channel's account configured. Without the account the round believes the
+  # field, which an import writes as any other: a seal typed there would close
+  # a revocation past the gate, and tell whoever typed it whether the person
+  # is on the project. The channel has to have sealed the row active once,
+  # too, which is what having granted the access means: a request withdrawn
+  # before its person was created is closed and sealed without any instance,
+  # and its seal stays put once the person exists.
+  channel_sealed <- !is.null(channel_account) && !is.null(owners_log)
+  seals <- lapply(seq_along(record_ids), function(i) {
+    if (!channel_sealed || !revoked_now[[i]]) {
+      return(character())
+    }
+    log_channel_seals(owners_log, record_ids[[i]], channel_account)
+  })
+  as_read <- identity_normalize(register[["username"]] %||% "")
+  as_read[is.na(as_read)] <- ""
+  vacatable <- channel_sealed &
+    seal_holds_but_revocation(register, sealed, seals) &
+    nzchar(as_read) & as_read == identity_normalize(resolved_names)
 
   # The rights a provisional withdrawal is judged on are those of whoever had a
   # hand in it, and the instance answers only for the pairs it is asked about.
@@ -1244,6 +1288,27 @@ provisioning_reconcile <- function(register_url,
       }
     }
 
+    # A revocation refused for want of rights, on a pair this instance does
+    # not hold, of a row whose revocation is all that changed since the
+    # channel carried it out (`vacatable`): there is nothing to take away,
+    # and the row goes on to be settled as `already_gone` settles any other.
+    # Read off the state the instance gave before the gate, which holds every
+    # pair the round asks to revoke. A permission nobody could read stays
+    # ours, a withdrawal waiting for its owner keeps waiting, and a pair
+    # still there stays refused: removing it is the gate's to allow. Still
+    # there in any capitals, as REDCap matches usernames (`round_present()`).
+    results <- state[["payload"]][["results"]] %||% list()
+    present <- function(e) round_present(results, e)
+    vacated <- character()
+    for (e in revoked) {
+      id <- as.character(e[["record_id"]])
+      if (identical(refused[[id]], "DATO_AMBITO_NON_AUTORIZZATO") &&
+            isTRUE(vacatable[[match(id, record_ids)]]) && !present(e)) {
+        refused[[id]] <- NULL
+        vacated <- c(vacated, id)
+      }
+    }
+
     in_scope <- function(e) {
       !as.character(e[["record_id"]]) %in% c(names(refused), waits)
     }
@@ -1320,8 +1385,6 @@ provisioning_reconcile <- function(register_url,
       unlist(lapply(rehearsals, function(r) r[["fit"]]))
     )
 
-    results <- state[["payload"]][["results"]] %||% list()
-
     # 7. the diff, against the real rows somebody asked about and no others
     diff <- provisioning_diff(wanted, round_actual(results, wanted))
     # A list, not a character vector: `[[` on an unmatched character subscript
@@ -1341,12 +1404,46 @@ provisioning_reconcile <- function(register_url,
       )]]
     }
 
+    # A row whose last day has passed, carried out and unchanged, on a pair the
+    # instance no longer holds: somebody removed the person after the access
+    # ended. Written again it would be an access created already ended, and
+    # the person told they have one. Its last day is refused as it was before
+    # such a row was let through, and nothing is written.
+    lapsed <- Filter(function(e) {
+      identical(acted(e), "creato") &&
+        as.character(e[["record_id"]]) %in% plan[["lapsed"]]
+    }, wanted)
+    wanted <- Filter(function(e) {
+      !as.character(e[["record_id"]]) %in%
+        vapply(lapsed, function(l) as.character(l[["record_id"]]), "")
+    }, wanted)
+
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
     to_apply <- Filter(
       function(e) isTRUE(acted(e) %in% c("creato", "aggiornato")), wanted
     )
-    present <- function(e) length(round_actual(results, list(e))) > 0L
-    to_revoke <- Filter(present, revoked)
+    # Whether a pair to revoke is still there is asked as REDCap matches the
+    # username, without regard to case (`round_present()`). Matched as
+    # written, a person whose username changed on Entra in its capitals alone
+    # read as gone, and the revocation closed with the person still on the
+    # project.
+    #
+    # And the revoke is sent under the name the instance holds, read off the
+    # same state. The module plans a revoke on the name as written
+    # (`Planner::planRevoke()`), so one sent under the register's capitals is
+    # a `noop` there, and the row stayed on an error of ours that never
+    # cleared. REDCap allows one user per name in any capitals, so the row
+    # found is the person's; should the instance ever hold two, the one
+    # written as in the register goes first. Only revokes: a grant goes as
+    # before.
+    to_revoke <- lapply(Filter(present, revoked), function(e) {
+      held <- round_actual(results, list(e))
+      if (length(held) == 0L) {
+        held <- round_actual(results, list(e), any_case = TRUE)
+      }
+      e[["username"]] <- as.character(held[[1L]][["username"]])
+      e
+    })
     already_gone <- Filter(Negate(present), revoked)
 
     settled <- do.call(rbind, c(
@@ -1363,6 +1460,13 @@ provisioning_reconcile <- function(register_url,
           as.character(e[["record_id"]]),
           round_outcome_kind(character(), dry_run), at = at,
           applied_as = round_applied_as(NULL)
+        )
+      }),
+      lapply(lapsed, function(e) {
+        outcome_payload(
+          as.character(e[["record_id"]]),
+          round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),
+          detail = "DATO_SCADENZA_NON_VALIDA", at = at
         )
       })
     ))
@@ -1446,7 +1550,12 @@ provisioning_reconcile <- function(register_url,
               function(error) as.character(error[["code"]]),
               character(1)
             )
-            observed <- round_observed(reread, entry)
+            # A revoke is confirmed by absence, and absence in any capitals:
+            # the person REDCap still holds under another case of the name is
+            # still on the project. A grant is read back as written.
+            observed <- round_observed(
+              reread, entry, any_case = identical(batch[["op"]], "revoke")
+            )
             # A write with no error code has said only that nothing went
             # wrong sending it -- the same thing the four spike cases said
             # while doing something else. Only the re-read settles it: an
@@ -1508,6 +1617,9 @@ provisioning_reconcile <- function(register_url,
       in_scope = setdiff(ids, c(names(refused), waits, unready)),
       # The withdrawals the gate sent back to wait for their owner.
       trattenute = waits,
+      # The revocations settled on a pair already gone, which the gate had
+      # refused: nobody's authority carried them out.
+      chiuse_senza_cancello = vacated,
       esiti = do.call(rbind, c(
         list(empty_outcomes),
         # The gate refuses for more than one reason and they do not all belong
@@ -1687,9 +1799,14 @@ provisioning_reconcile <- function(register_url,
   # the round did not carry out this pass stays with the owner of today,
   # and so does one whose next owner the log cannot say, which is the
   # direction that does not grant. A simulated round carries nothing out,
-  # so it passes nothing on.
+  # so it passes nothing on; nor does a revocation settled on a pair already
+  # gone after the gate had refused it, since the gate let nobody's change
+  # through.
+  unguarded <- record_ids %in% unlist(
+    lapply(per_instance, function(a) a[["chiuse_senza_cancello"]])
+  )
   owner_after <- vapply(seq_along(record_ids), function(i) {
-    if (!(applied[[i]] && checked[[i]])) {
+    if (!(applied[[i]] && checked[[i]]) || unguarded[[i]]) {
       return(owners_now[[i]])
     }
     next_owner <- log_next_owner(

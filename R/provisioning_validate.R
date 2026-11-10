@@ -40,12 +40,24 @@ compose_upn <- function(first_name, last_name, domain = "ubep.unipd.it") {
 #' Errors that need the instance to be answered — a project, role or DAG that
 #' does not exist there — cannot be decided here and are left to the module.
 #'
+#' A last day of access in the past is refused on a request that would write
+#' a new one, and only there. A request the round carried out and nobody
+#' changed since had a valid last day when it was carried out: its passing is
+#' the expiration REDCap applies on the access, decided on 2026-11-10, and
+#' refusing it sent the referent to write a date that has not passed, or none,
+#' which reopened the access the expiration had closed. A value that is not a
+#' date is refused either way.
+#'
 #' @param request A named list, one request as described in the spec.
+#' @param executed Whether the round carried this request out and nobody
+#'   changed it since: the channel's seal is there and has not moved.
 #'
 #' @return A character vector of error codes; empty when the request is valid.
 #'
 #' @keywords internal
-validate_request <- function(request) {
+validate_request <- function(request, executed = FALSE) {
+  stopifnot(is.logical(executed), length(executed) == 1L, !is.na(executed))
+
   errors <- character()
 
   upn <- request[["username"]]
@@ -72,8 +84,9 @@ validate_request <- function(request) {
     # REDCap needs to keep access open through today). The comparison uses
     # the client's date while REDCap uses the server's, which runs UTC: at
     # most a one-day boundary, and it errs towards refusing rather than
-    # granting.
-    if (is.na(parsed) || parsed < Sys.Date()) {
+    # granting. A request already carried out keeps its last day once it has
+    # passed: the date is the one the round wrote, not a new one.
+    if (is.na(parsed) || (!executed && parsed < Sys.Date())) {
       errors <- c(errors, "DATO_SCADENZA_NON_VALIDA")
     }
   }
@@ -115,13 +128,16 @@ to_redcap_expiration <- function(last_day) {
 #' speaks the value REDCap stores. The request speaks what a person means.
 #'
 #' @param request A named list, one request as described in the spec.
+#' @param executed Whether the round carried this request out and nobody
+#'   changed it since, for `validate_request()`. The conversion is the same:
+#'   the round compares the instance with the value REDCap stores.
 #'
 #' @return A list with `errors` and `request`; `request` is `NULL` when
 #'   `errors` is not empty.
 #'
 #' @keywords internal
-intake_request <- function(request) {
-  errors <- validate_request(request)
+intake_request <- function(request, executed = FALSE) {
+  errors <- validate_request(request, executed = executed)
   if (length(errors) > 0L) {
     return(list(errors = errors, request = NULL))
   }

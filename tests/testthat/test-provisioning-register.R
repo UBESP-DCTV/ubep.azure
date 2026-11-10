@@ -303,6 +303,47 @@ test_that("a revoked row is not refused for a last day that has passed", {
 })
 
 
+test_that("a row carried out and unchanged keeps a last day that has passed", {
+  # eval
+  yesterday <- as.character(Sys.Date() - 1L)
+  register <- rbind(
+    register_row(record_id = "1", expiration = yesterday),
+    register_row(record_id = "2", project_id = "9004", expiration = yesterday),
+    register_row(
+      record_id = "3", project_id = "9005", expiration = "31/12/2026"
+    )
+  )
+  split <- register_to_desired(register, executed = c("1", "3"))
+
+  # test
+  # Row 1 was carried out with that last day and nobody changed it since: the
+  # day passing is the expiration REDCap applies, and the row goes on to be
+  # compared with the instance, converted as any other. Row 2 was never
+  # carried out and is refused as before; row 3 was, and a value that is not
+  # a date is refused all the same.
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "1")
+  expect_equal(
+    split[["desired"]][[1]][["expiration"]], as.character(Sys.Date())
+  )
+  expect_null(split[["errors"]][["1"]])
+  expect_equal(split[["errors"]][["2"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_equal(split[["errors"]][["3"]], "DATO_SCADENZA_NON_VALIDA")
+  # Named, so that the round can tell a lapsed access it must not create
+  # again from one it may compare.
+  expect_equal(split[["lapsed"]], "1")
+})
+
+
+test_that("register_to_desired with no executed rows names no lapsed one", {
+  # eval
+  split <- register_to_desired(register_row())
+
+  # test
+  expect_equal(split[["lapsed"]], character())
+})
+
+
 test_that("the last day of access is converted once, at the border", {
   # eval
   last_day <- Sys.Date() + 30L
@@ -3287,4 +3328,58 @@ test_that("un nome utente eseguito vuoto non e' un'altra persona", {
     )[["code"]],
     ""
   )
+})
+
+
+test_that("seal_holds_but_revocation sees a revocation and nothing else", {
+  # eval
+  active <- register_row()
+  revoked <- register_row(request_status = "revoked")
+  carried <- request_seal(active)
+  closed <- request_seal(revoked)
+  register <- rbind(
+    revoked,
+    revoked,
+    register_row(request_status = "revoked", role_name = "read only"),
+    active,
+    revoked,
+    revoked
+  )
+  sealed <- c(carried, closed, carried, carried, "", closed)
+  seals <- list(
+    carried, c(closed, carried), carried, carried, character(), closed
+  )
+  holds <- seal_holds_but_revocation(register, sealed, seals)
+
+  # test
+  # Row 1: carried out while active, and the revocation is the one change
+  # since. Row 2: the revocation was carried out too, and the seal has not
+  # moved at all. Row 3: the role moved with it. Row 4 asks for no
+  # revocation. Row 5 the channel never sealed. Row 6: the seal has not
+  # moved, but the channel only ever sealed the row revoked: a request
+  # withdrawn before its person was created, which never granted anything.
+  expect_equal(holds, c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE))
+})
+
+
+test_that("log_channel_seals reads every seal of the channel, newest first", {
+  # eval
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  eventi <- eventi_finti(
+    list(
+      username = canale,
+      details = "applied_seal = '111111111111', seal_state = 'intact'"
+    ),
+    sigillo_di(bruno),
+    applicata
+  )
+
+  # test
+  # The seal Bruno imported is not one of the channel's.
+  expect_equal(
+    log_channel_seals(eventi, "1", canale), c("111111111111", "000000000000")
+  )
+  expect_equal(log_channel_seals(eventi_finti(sigillo_di(bruno)), "1", canale),
+               character())
+  expect_error(log_channel_seals(eventi, "1", NULL))
 })
