@@ -5220,3 +5220,32 @@ test_that("a row in two sections of the mail to IT counts once", {
 })
 
 
+
+test_that("the referent reads a name executed not known as such", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "46", username = "", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb")
+  )
+  registro[["nome_eseguito"]] <- ""
+  registro[["nome_motivo"]] <- "log"
+  righe <- report_rows(
+    registro, referente, list("2026-10-08 23:03"), novembre()
+  )
+  rapporto <- report_assemble(righe, rubrica_mensile(), novembre())
+
+  testo <- parti(report_message(
+    rapporto[["referenti"]][[referente]], novembre()
+  ))
+
+  # test
+  expect_false(any(grepl("Carla Inventata, : ", unlist(testo), fixed = TRUE)))
+  expect_true(any(startsWith(
+    testo[["it"]], "- Carla Inventata, nome eseguito non noto: edc10, "
+  )))
+  expect_true(any(startsWith(
+    testo[["en"]], "- Carla Inventata, name executed not known: edc10, "
+  )))
+})
+
+

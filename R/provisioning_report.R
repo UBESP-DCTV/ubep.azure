@@ -1610,7 +1610,8 @@ report_stopped_lines <- function(stopped) {
 #' A new request says whether its account was new, from the `account` column
 #' `report_assemble()` computes on the date Entra made the account; a
 #' modified one says it was modified. A stopped one says its outcome,
-#' `report_stopped_words()`.
+#' `report_stopped_words()`, and one whose name executed is not known
+#' (`nome_eseguito` empty) says so in place of the name, as the mail to IT.
 #'
 #' @param rows The `attivati` of a referent's report.
 #'
@@ -1642,9 +1643,12 @@ report_activated_lines <- function(rows) {
   modified <- value("nel_mese") == "modificata"
   account <- value("account")
 
-  line <- function(project, role, group, until, none, tail) {
+  # A row whose name executed is not known says so, as the mail to IT does.
+  unknown <- !is.null(rows[["nome_eseguito"]]) & !nzchar(value("nome_eseguito"))
+  line <- function(project, role, group, until, none, tail, no_name) {
     paste0(
-      "- ", name, ", ", value("username"), ": ", value("server"), ", ",
+      "- ", name, ", ", ifelse(unknown, no_name, value("username")), ": ",
+      value("server"), ", ",
       project, " ", value("project_id"), ", ", role, " ", value("role_name"),
       ifelse(nzchar(dag), paste0(", ", group, " ", dag), ""), ", ",
       ifelse(nzchar(expiration), paste(until, expiration), none), ".",
@@ -1669,7 +1673,8 @@ report_activated_lines <- function(rows) {
   list(
     it = c(
       paste0("Accessi attivati nel mese (", count, "), per informazione:"),
-      line("progetto", "ruolo", "DAG", "scadenza", "senza scadenza", tail_it),
+      line("progetto", "ruolo", "DAG", "scadenza", "senza scadenza", tail_it,
+           "nome eseguito non noto"),
       paste(
         "Non serve fare niente.",
         if (count == 1L) {
@@ -1682,7 +1687,8 @@ report_activated_lines <- function(rows) {
     ),
     en = c(
       paste0("Access granted this month (", count, "), for information:"),
-      line("project", "role", "DAG", "last day", "no end date", tail_en),
+      line("project", "role", "DAG", "last day", "no end date", tail_en,
+           "name executed not known"),
       paste(
         "Nothing to do.",
         if (count == 1L) {

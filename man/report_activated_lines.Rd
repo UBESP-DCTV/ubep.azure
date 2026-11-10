@@ -16,6 +16,7 @@ A list of two character vectors, \code{it} and \code{en}.
 A new request says whether its account was new, from the \code{account} column
 \code{report_assemble()} computes on the date Entra made the account; a
 modified one says it was modified. A stopped one says its outcome,
-\code{report_stopped_words()}.
+\code{report_stopped_words()}, and one whose name executed is not known
+(\code{nome_eseguito} empty) says so in place of the name, as the mail to IT.
 }
 \keyword{internal}
