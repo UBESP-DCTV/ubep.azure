@@ -141,3 +141,55 @@ test_that("today is a valid last day of access", {
   expect_equal(today[["request"]][["expiration"]], as.character(Sys.Date() + 1))
   expect_true("DATO_SCADENZA_NON_VALIDA" %in% yesterday[["errors"]])
 })
+
+
+test_that("a request already carried out keeps a last day that has passed", {
+  # eval
+  request <- list(
+    username = "mario.rossi@ubep.unipd.it",
+    project_id = 9003L,
+    expiration = as.character(Sys.Date() - 1L)
+  )
+  carried <- intake_request(request, executed = TRUE)
+
+  # test
+  # The last day was valid when the round carried the request out, and the
+  # request has not changed since: its passing is the expiration doing its
+  # job, not a mistake to send back. The conversion still happens, so the
+  # round compares the instance with the value REDCap stores.
+  expect_equal(validate_request(request, executed = TRUE), character())
+  expect_equal(carried[["errors"]], character())
+  expect_equal(carried[["request"]][["expiration"]], as.character(Sys.Date()))
+})
+
+
+test_that("a request carried out still refuses a last day that is not a date", {
+  # eval
+  malformed <- validate_request(
+    list(
+      username = "mario.rossi@ubep.unipd.it",
+      project_id = 9003L,
+      expiration = "31/12/2026"
+    ),
+    executed = TRUE
+  )
+
+  # test
+  expect_equal(malformed, "DATO_SCADENZA_NON_VALIDA")
+})
+
+
+test_that("without the flag a last day that has passed is refused as before", {
+  # eval
+  request <- list(
+    username = "mario.rossi@ubep.unipd.it",
+    project_id = 9003L,
+    expiration = as.character(Sys.Date() - 1L)
+  )
+
+  # test
+  expect_equal(validate_request(request), "DATO_SCADENZA_NON_VALIDA")
+  expect_equal(
+    intake_request(request)[["errors"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+})

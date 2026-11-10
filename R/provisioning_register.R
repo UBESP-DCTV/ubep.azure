@@ -2423,19 +2423,31 @@ request_from_row <- function(row) {
 #' identity gate's: it would ask the `outcome` the register carries, a verdict
 #' up to four hours old, instead of a fact about the row.
 #'
+#' A row the round carried out and nobody changed since keeps a last day that
+#' has passed, `validate_request()`: the expiration is REDCap's to apply. Its
+#' id is returned in `lapsed`, because such a row may be compared with the
+#' instance and brought back to what it says, and never written as a new
+#' access: on a pair the instance no longer holds, the round refuses its last
+#' day as before (`provisioning_reconcile()`).
+#'
 #' @param register The register as a data frame, one row per pair, carrying at
 #'   least `record_id` and `request_status`.
+#' @param executed The `record_id`s of the rows the round carried out and
+#'   nobody changed since: the channel's seal is there and has not moved.
 #'
-#' @return A list with `desired`, `revoked` and `errors`. The first two hold
-#'   requests that already went through `intake_request()`, each carrying its
-#'   `record_id` so the outcome knows where to go back. `errors` is named by
-#'   `record_id`.
+#' @return A list with `desired`, `revoked`, `errors` and `lapsed`. The first
+#'   two hold requests that already went through `intake_request()`, each
+#'   carrying its `record_id` so the outcome knows where to go back. `errors`
+#'   is named by `record_id`. `lapsed` holds the `record_id`s of the rows in
+#'   `desired` whose last day has passed, admitted because they are in
+#'   `executed`.
 #'
 #' @keywords internal
-register_to_desired <- function(register) {
+register_to_desired <- function(register, executed = character()) {
   stopifnot(
     is.data.frame(register),
-    all(c("record_id", "request_status") %in% names(register))
+    all(c("record_id", "request_status") %in% names(register)),
+    is.character(executed)
   )
 
   ids <- as.character(register[["record_id"]])
@@ -2512,6 +2524,7 @@ register_to_desired <- function(register) {
   desired <- list()
   revoked <- list()
   errors <- list()
+  lapsed <- character()
 
   for (i in seq_along(requests)) {
     if (!is_pair[[i]]) {
@@ -2534,7 +2547,11 @@ register_to_desired <- function(register) {
       request[["expiration"]] <- NULL
     }
 
-    taken <- intake_request(request)
+    # A row carried out and unchanged keeps the last day it was carried out
+    # with, passed or not. The question asked twice, so that the round knows
+    # which rows passed only because of it.
+    carried <- ids[[i]] %in% executed
+    taken <- intake_request(request, executed = carried)
     if (length(taken[["errors"]]) > 0L) {
       errors[[ids[[i]]]] <- taken[["errors"]]
       next
@@ -2546,10 +2563,13 @@ register_to_desired <- function(register) {
       revoked[[length(revoked) + 1L]] <- entry
     } else {
       desired[[length(desired) + 1L]] <- entry
+      if (carried && length(validate_request(request)) > 0L) {
+        lapsed <- c(lapsed, ids[[i]])
+      }
     }
   }
 
-  list(desired = desired, revoked = revoked, errors = errors)
+  list(desired = desired, revoked = revoked, errors = errors, lapsed = lapsed)
 }
 
 

@@ -4,17 +4,22 @@
 \alias{register_to_desired}
 \title{Turn the register into the desired state}
 \usage{
-register_to_desired(register)
+register_to_desired(register, executed = character())
 }
 \arguments{
 \item{register}{The register as a data frame, one row per pair, carrying at
 least \code{record_id} and \code{request_status}.}
+
+\item{executed}{The \code{record_id}s of the rows the round carried out and
+nobody changed since: the channel's seal is there and has not moved.}
 }
 \value{
-A list with \code{desired}, \code{revoked} and \code{errors}. The first two hold
-requests that already went through \code{intake_request()}, each carrying its
-\code{record_id} so the outcome knows where to go back. \code{errors} is named by
-\code{record_id}.
+A list with \code{desired}, \code{revoked}, \code{errors} and \code{lapsed}. The first
+two hold requests that already went through \code{intake_request()}, each
+carrying its \code{record_id} so the outcome knows where to go back. \code{errors}
+is named by \code{record_id}. \code{lapsed} holds the \code{record_id}s of the rows in
+\code{desired} whose last day has passed, admitted because they are in
+\code{executed}.
 }
 \description{
 The register declares requests; it does not describe reality. A pair that
@@ -44,5 +49,12 @@ Age is the \code{record_id} and nothing else. "The row already served wins" woul
 name the right row more precisely and is refused on the same ground as the
 identity gate's: it would ask the \code{outcome} the register carries, a verdict
 up to four hours old, instead of a fact about the row.
+
+A row the round carried out and nobody changed since keeps a last day that
+has passed, \code{validate_request()}: the expiration is REDCap's to apply. Its
+id is returned in \code{lapsed}, because such a row may be compared with the
+instance and brought back to what it says, and never written as a new
+access: on a pair the instance no longer holds, the round refuses its last
+day as before (\code{provisioning_reconcile()}).
 }
 \keyword{internal}

@@ -6600,3 +6600,167 @@ test_that("riattivare una riga eseguita su un account cancellato non lo ricrea",
   )
   expect_length(creazioni(), 0L)
 })
+
+
+# ---- The natural expiration of a row carried out (0.25.0) ----
+
+ieri <- as.character(Sys.Date() - 1L)
+
+# Mario's row, carried out with a last day that has passed since: REDCap
+# holds the day after it, today, and no longer lets him in. Nobody touched
+# the row; the instance holds what the execution wrote.
+scaduta_row <- function(...) {
+  eseguita_row(
+    expiration = ieri,
+    applied_as = paste0(
+      "role_name=data entry; dag_name=; expiration=", Sys.Date()
+    ),
+    ...
+  )
+}
+sigillo_scaduta <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, expiration = ieri
+  ))
+}
+istanza_scaduta <- function(expiration = as.character(Sys.Date())) {
+  istanza_doppia(
+    list(),
+    list(
+      username = mario, role_name = "data entry", expiration = expiration,
+      user_rights = 0L
+    )
+  )
+}
+giro_scaduta <- function(cambi = list(),
+                         storia = list(),
+                         istanza = istanza_scaduta(),
+                         eseguita = carried_out(sigillo_scaduta()),
+                         ...) {
+  riga <- utils::modifyList(
+    scaduta_row(applied_seal = sigillo_scaduta()), cambi
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, eseguita),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+
+test_that("una riga eseguita e intatta resta applied dopo il suo ultimo giorno", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_scaduta(mailer = posta[["mailer"]], copy_to = "it@example.org")
+
+  # test
+  # The last day passing is the expiration doing its job: REDCap applies it
+  # on the access, and the round finds the instance as the row asks. Sent
+  # back as an error, the row told the referent to write a date that has not
+  # passed, or none, and either reopened the access.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_equal(
+    as.character(esito[["esiti"]][["applied_as"]]),
+    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+  )
+  expect_length(scritture(), 0L)
+  expect_length(posta[["mandate"]](), 0L)
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("una riga scaduta e cambiata dopo il sigillo va in errore sulla data", { # nolint: line_length_linter.
+  # eval
+  ruolo <- giro_scaduta(
+    list(role_name = "read only"), list(cambio(anna, "role_name = 'read only'"))
+  )
+  scritte_ruolo <- scritture()
+  data <- giro_scaduta(
+    list(expiration = "2020-01-01"),
+    list(cambio(anna, "expiration = '2020-01-01'"))
+  )
+
+  # test
+  # A change after the seal is a request the round would carry out anew, and
+  # a last day in the past is refused on it as on a new one.
+  expect_equal(esito_di(ruolo, "1")[["outcome"]], "data_error")
+  expect_equal(esito_di(ruolo, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_length(scritte_ruolo, 0L)
+  expect_equal(esito_di(data, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una riga mai eseguita con l'ultimo giorno passato va in errore", {
+  # eval
+  mai <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1", expiration = ieri)),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_scaduta(),
+    dry_run = FALSE
+  )
+  # The same row with the seal of the execution imported by somebody else:
+  # only the channel's seal says the row was carried out. The channel wrote
+  # the username, so its account is one the log knows.
+  importato <- giro_scaduta(
+    eseguita = c(
+      list(list(
+        timestamp = "2026-08-12 05:00", username = bruno,
+        action = "Update record (API) 1", record = "1",
+        details = paste0("applied_seal = '", sigillo_scaduta(), "'")
+      )),
+      carried_out(sigillo_scaduta())[2]
+    )
+  )
+
+  # test
+  expect_equal(esito_di(mai, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_false(esito_di(importato, "1")[["outcome"]] == "applied")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una riga eseguita e intatta riporta la sua scadenza su un'istanza cambiata a mano", { # nolint: line_length_linter.
+  # eval
+  # Somebody extended Mario's access on the project by hand.
+  esito <- giro_scaduta(
+    istanza = istanza_scaduta(as.character(Sys.Date() + 30L))
+  )
+
+  # test
+  # An access of the channel changed by hand goes back to what the row says,
+  # and the row says the access ended: the round writes the day REDCap
+  # stores, today, and the access closes.
+  expect_length(scritture(), 1L)
+  richiesta <- scritture()[[1]][["body"]][["data"]][["requests"]][[1]]
+  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+})
+
+
+test_that("una riga eseguita e scaduta non ricrea l'accesso tolto a mano", {
+  # eval
+  # Somebody removed Mario from the project after his last day.
+  posta <- posta_raccolta()
+  esito <- giro_scaduta(
+    istanza = istanza_doppia(list()), mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Writing it again would create an access that has already ended, and send
+  # Mario a message that he has one. The row stays where it was before
+  # 0.25.0: the last day is refused, nothing is written.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_length(scritture(), 0L)
+  destinatari <- unlist(lapply(posta[["mandate"]](), function(m) m[["to"]]))
+  expect_false(mario %in% destinatari)
+})

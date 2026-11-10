@@ -4,10 +4,14 @@
 \alias{intake_request}
 \title{Take a request in, validated and normalized, or not at all}
 \usage{
-intake_request(request)
+intake_request(request, executed = FALSE)
 }
 \arguments{
 \item{request}{A named list, one request as described in the spec.}
+
+\item{executed}{Whether the round carried this request out and nobody
+changed it since, for \code{validate_request()}. The conversion is the same:
+the round compares the instance with the value REDCap stores.}
 }
 \value{
 A list with \code{errors} and \code{request}; \code{request} is \code{NULL} when

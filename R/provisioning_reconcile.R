@@ -938,7 +938,17 @@ provisioning_reconcile <- function(register_url,
   })
 
   # 4. the pure layer
-  plan <- register_to_desired(resolved)
+  #
+  # A row the round carried out and nobody changed since keeps a last day that
+  # has passed, decided on 2026-11-10: the expiration is REDCap's to apply on
+  # the access, and the round compares the instance with the row as it does
+  # every night. Refused, the row came back to its referent as an error that
+  # asked for a date not yet passed, or none, and either reopened the access.
+  # A row changed after its seal, or never carried out, would write a last
+  # day anew, and is refused on it as before. The seal is the one the round
+  # believes, the channel's own in the owners' log.
+  intact <- record_ids[nzchar(sealed) & !tampered]
+  plan <- register_to_desired(resolved, executed = intact)
   asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
 
   # The rights a provisional withdrawal is judged on are those of whoever had a
@@ -1341,6 +1351,20 @@ provisioning_reconcile <- function(register_url,
       )]]
     }
 
+    # A row whose last day has passed, carried out and unchanged, on a pair the
+    # instance no longer holds: somebody removed the person after the access
+    # ended. Written again it would be an access created already ended, and
+    # the person told they have one. Its last day is refused as it was before
+    # such a row was let through, and nothing is written.
+    lapsed <- Filter(function(e) {
+      identical(acted(e), "creato") &&
+        as.character(e[["record_id"]]) %in% plan[["lapsed"]]
+    }, wanted)
+    wanted <- Filter(function(e) {
+      !as.character(e[["record_id"]]) %in%
+        vapply(lapsed, function(l) as.character(l[["record_id"]]), "")
+    }, wanted)
+
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
     to_apply <- Filter(
       function(e) isTRUE(acted(e) %in% c("creato", "aggiornato")), wanted
@@ -1363,6 +1387,13 @@ provisioning_reconcile <- function(register_url,
           as.character(e[["record_id"]]),
           round_outcome_kind(character(), dry_run), at = at,
           applied_as = round_applied_as(NULL)
+        )
+      }),
+      lapply(lapsed, function(e) {
+        outcome_payload(
+          as.character(e[["record_id"]]),
+          round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),
+          detail = "DATO_SCADENZA_NON_VALIDA", at = at
         )
       })
     ))

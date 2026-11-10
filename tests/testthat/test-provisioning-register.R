@@ -303,6 +303,47 @@ test_that("a revoked row is not refused for a last day that has passed", {
 })
 
 
+test_that("a row carried out and unchanged keeps a last day that has passed", {
+  # eval
+  yesterday <- as.character(Sys.Date() - 1L)
+  register <- rbind(
+    register_row(record_id = "1", expiration = yesterday),
+    register_row(record_id = "2", project_id = "9004", expiration = yesterday),
+    register_row(
+      record_id = "3", project_id = "9005", expiration = "31/12/2026"
+    )
+  )
+  split <- register_to_desired(register, executed = c("1", "3"))
+
+  # test
+  # Row 1 was carried out with that last day and nobody changed it since: the
+  # day passing is the expiration REDCap applies, and the row goes on to be
+  # compared with the instance, converted as any other. Row 2 was never
+  # carried out and is refused as before; row 3 was, and a value that is not
+  # a date is refused all the same.
+  expect_length(split[["desired"]], 1L)
+  expect_equal(split[["desired"]][[1]][["record_id"]], "1")
+  expect_equal(
+    split[["desired"]][[1]][["expiration"]], as.character(Sys.Date())
+  )
+  expect_null(split[["errors"]][["1"]])
+  expect_equal(split[["errors"]][["2"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_equal(split[["errors"]][["3"]], "DATO_SCADENZA_NON_VALIDA")
+  # Named, so that the round can tell a lapsed access it must not create
+  # again from one it may compare.
+  expect_equal(split[["lapsed"]], "1")
+})
+
+
+test_that("register_to_desired with no executed rows names no lapsed one", {
+  # eval
+  split <- register_to_desired(register_row())
+
+  # test
+  expect_equal(split[["lapsed"]], character())
+})
+
+
 test_that("the last day of access is converted once, at the border", {
   # eval
   last_day <- Sys.Date() + 30L
