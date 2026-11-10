@@ -4,13 +4,17 @@
 \alias{seal_holds_but_revocation}
 \title{Whether a revocation is all that changed since the channel's seal}
 \usage{
-seal_holds_but_revocation(register, sealed)
+seal_holds_but_revocation(register, sealed, seals)
 }
 \arguments{
 \item{register}{The register as read, one row per request.}
 
 \item{sealed}{The seal the round believes for each row, the channel's
 own, \code{""} where there is none.}
+
+\item{seals}{A list as long as the rows of \code{register}, each element the
+seals the channel wrote on that row in its current life,
+\code{log_channel_seals()}.}
 }
 \value{
 A logical vector, one per row: \code{TRUE} only for a row that asks for
@@ -26,5 +30,13 @@ channel's, or when the seal has not moved at all, the revocation having
 been carried out or settled already. Either way the instance, the project
 and the username the register holds are the ones carried out, since the
 seal covers them.
+}
+\details{
+And only when the channel carried that version out while it was active:
+the seal of the row back to \code{active} is among the seals the channel wrote
+in the row's current life. The round seals a revocation it closes without
+asking any instance too, the request withdrawn before its person was
+created; that row never granted anything, and its seal unmoved says
+nothing about an access.
 }
 \keyword{internal}

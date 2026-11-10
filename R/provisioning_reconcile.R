@@ -968,12 +968,21 @@ provisioning_reconcile <- function(register_url,
   # channel's account configured. Without the account the round believes the
   # field, which an import writes as any other: a seal typed there would close
   # a revocation past the gate, and tell whoever typed it whether the person
-  # is on the project.
+  # is on the project. The channel has to have sealed the row active once,
+  # too, which is what having granted the access means: a request withdrawn
+  # before its person was created is closed and sealed without any instance,
+  # and its seal stays put once the person exists.
   channel_sealed <- !is.null(channel_account) && !is.null(owners_log)
+  seals <- lapply(seq_along(record_ids), function(i) {
+    if (!channel_sealed || !revoked_now[[i]]) {
+      return(character())
+    }
+    log_channel_seals(owners_log, record_ids[[i]], channel_account)
+  })
   as_read <- identity_normalize(register[["username"]] %||% "")
   as_read[is.na(as_read)] <- ""
   vacatable <- channel_sealed &
-    seal_holds_but_revocation(register, sealed) &
+    seal_holds_but_revocation(register, sealed, seals) &
     nzchar(as_read) & as_read == identity_normalize(resolved_names)
 
   # The rights a provisional withdrawal is judged on are those of whoever had a

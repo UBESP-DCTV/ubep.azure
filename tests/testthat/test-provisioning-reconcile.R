@@ -7057,3 +7057,54 @@ test_that("con l'utenza del canale un sigillo importato da un altro non chiude l
   )
   expect_length(revoche(), 0L)
 })
+
+
+# Anna asked for Mario Rossi, whose composed name was taken; she answered the
+# collision with the proposal and revoked the row before the round created
+# the account. The round closed it `applied`/`absent` without asking any
+# instance, and sealed it under the proposal. The account was born later, for
+# another request.
+ritirata <- function(...) {
+  in_collisione(
+    request_status = "revoked", outcome = "applied", outcome_detail = "",
+    applied_as = "absent", seal_state = "intact", ...
+  )
+}
+sigillo_ritirata <- function() {
+  request_seal(do.call(riga_come_registro, ritirata()))
+}
+
+
+test_that("la revoca di una riga che il canale non ha mai eseguito attiva resta ferma sul cancello", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_collisione(
+    righe = list(ritirata(applied_seal = sigillo_ritirata())),
+    storia = list(
+      list(
+        timestamp = "2026-08-14 03:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0(
+          "applied_seal = '", sigillo_ritirata(), "', seal_state = 'intact'"
+        )
+      ),
+      cambio(
+        anna, "request_status = 'revoked'", timestamp = "2026-08-14 02:30",
+        record = "1"
+      ),
+      risposta_data(), proposta_scritta()
+    ),
+    istanza = senza_anna(),
+    directory = occupata(nata()),
+    dry_run = FALSE
+  )
+
+  # test
+  # The seal has not moved, and the username is the one resolved; but the
+  # channel only ever sealed the row revoked, and it never granted anything.
+  # Whoever reads the outcome did not know already whether the person was on
+  # the project, which is what lets a revocation close past the gate.
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})

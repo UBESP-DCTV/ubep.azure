@@ -3336,20 +3336,50 @@ test_that("seal_holds_but_revocation sees a revocation and nothing else", {
   active <- register_row()
   revoked <- register_row(request_status = "revoked")
   carried <- request_seal(active)
+  closed <- request_seal(revoked)
   register <- rbind(
     revoked,
     revoked,
     register_row(request_status = "revoked", role_name = "read only"),
     active,
+    revoked,
     revoked
   )
-  sealed <- c(carried, request_seal(revoked), carried, carried, "")
-  holds <- seal_holds_but_revocation(register, sealed)
+  sealed <- c(carried, closed, carried, carried, "", closed)
+  seals <- list(
+    carried, c(closed, carried), carried, carried, character(), closed
+  )
+  holds <- seal_holds_but_revocation(register, sealed, seals)
 
   # test
   # Row 1: carried out while active, and the revocation is the one change
   # since. Row 2: the revocation was carried out too, and the seal has not
   # moved at all. Row 3: the role moved with it. Row 4 asks for no
-  # revocation. Row 5 the channel never sealed.
-  expect_equal(holds, c(TRUE, TRUE, FALSE, FALSE, FALSE))
+  # revocation. Row 5 the channel never sealed. Row 6: the seal has not
+  # moved, but the channel only ever sealed the row revoked: a request
+  # withdrawn before its person was created, which never granted anything.
+  expect_equal(holds, c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE))
+})
+
+
+test_that("log_channel_seals reads every seal of the channel, newest first", {
+  # eval
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  eventi <- eventi_finti(
+    list(
+      username = canale,
+      details = "applied_seal = '111111111111', seal_state = 'intact'"
+    ),
+    sigillo_di(bruno),
+    applicata
+  )
+
+  # test
+  # The seal Bruno imported is not one of the channel's.
+  expect_equal(
+    log_channel_seals(eventi, "1", canale), c("111111111111", "000000000000")
+  )
+  expect_equal(log_channel_seals(eventi_finti(sigillo_di(bruno)), "1", canale),
+               character())
+  expect_error(log_channel_seals(eventi, "1", NULL))
 })

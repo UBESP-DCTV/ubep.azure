@@ -272,27 +272,70 @@ request_seal <- function(register) {
 #' and the username the register holds are the ones carried out, since the
 #' seal covers them.
 #'
+#' And only when the channel carried that version out while it was active:
+#' the seal of the row back to `active` is among the seals the channel wrote
+#' in the row's current life. The round seals a revocation it closes without
+#' asking any instance too, the request withdrawn before its person was
+#' created; that row never granted anything, and its seal unmoved says
+#' nothing about an access.
+#'
 #' @param register The register as read, one row per request.
 #' @param sealed The seal the round believes for each row, the channel's
 #'   own, `""` where there is none.
+#' @param seals A list as long as the rows of `register`, each element the
+#'   seals the channel wrote on that row in its current life,
+#'   `log_channel_seals()`.
 #'
 #' @return A logical vector, one per row: `TRUE` only for a row that asks for
 #'   `revoked` and that the channel sealed as above.
 #'
 #' @keywords internal
-seal_holds_but_revocation <- function(register, sealed) {
+seal_holds_but_revocation <- function(register, sealed, seals) {
   stopifnot(
     is.data.frame(register), "request_status" %in% names(register),
-    is.character(sealed), length(sealed) == nrow(register)
+    is.character(sealed), length(sealed) == nrow(register),
+    is.list(seals), length(seals) == nrow(register)
   )
 
   status <- trimws(as.character(register[["request_status"]]))
   revoked <- !is.na(status) & status == "revoked"
   reopened <- register
   reopened[["request_status"]] <- "active"
+  active <- request_seal(reopened)
+  once_active <- vapply(seq_along(active), function(i) {
+    active[[i]] %in% as.character(seals[[i]])
+  }, logical(1))
 
-  revoked & !is.na(sealed) & nzchar(sealed) &
-    (sealed == request_seal(register) | sealed == request_seal(reopened))
+  revoked & !is.na(sealed) & nzchar(sealed) & once_active &
+    (sealed == request_seal(register) | sealed == active)
+}
+
+
+#' Every seal the channel wrote on a row
+#'
+#' The values of `applied_seal` at the channel's executions in the row's
+#' current life, `log_executions()`, newest first: the first is
+#' `log_channel_seal()`. What `seal_holds_but_revocation()` asks to know
+#' whether the channel ever carried the row out while it was active.
+#'
+#' @param events The owners' log, `logtype = "record"`.
+#' @param record The record id.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them any account's seal would count.
+#'
+#' @return A character vector, empty when the channel never sealed the row.
+#'
+#' @keywords internal
+log_channel_seals <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  log_value(mine[executed, , drop = FALSE], "applied_seal")
 }
 
 
