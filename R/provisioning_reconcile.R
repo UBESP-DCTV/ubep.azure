@@ -1406,9 +1406,13 @@ provisioning_reconcile <- function(register_url,
 
     # A row whose last day has passed, carried out and unchanged, on a pair the
     # instance no longer holds: somebody removed the person after the access
-    # ended. Written again it would be an access created already ended, and
-    # the person told they have one. Its last day is refused as it was before
-    # such a row was let through, and nothing is written.
+    # ended, which whoever governs the project may do. Written again it would
+    # be an access created already ended, and the person told they have one,
+    # so nothing is written; and the row asks for no access any longer, so it
+    # closes as a revocation already done does (decided on 2026-11-10): applied
+    # and read back as absent, with no mail to the person. Refused on its last
+    # day, the row would send the referent to write a date that has not passed,
+    # or none, and either would reopen the access.
     lapsed <- Filter(function(e) {
       identical(acted(e), "creato") &&
         as.character(e[["record_id"]]) %in% plan[["lapsed"]]
@@ -1465,8 +1469,8 @@ provisioning_reconcile <- function(register_url,
       lapply(lapsed, function(e) {
         outcome_payload(
           as.character(e[["record_id"]]),
-          round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),
-          detail = "DATO_SCADENZA_NON_VALIDA", at = at
+          round_outcome_kind(character(), dry_run), at = at,
+          applied_as = round_applied_as(NULL)
         )
       })
     ))

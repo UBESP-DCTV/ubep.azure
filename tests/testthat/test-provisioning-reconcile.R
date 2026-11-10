@@ -6781,23 +6781,203 @@ test_that("una riga eseguita e intatta riporta la sua scadenza su un'istanza cam
 })
 
 
-test_that("una riga eseguita e scaduta non ricrea l'accesso tolto a mano", {
+# The instance no longer holds Mario: somebody removed him from the project
+# after his last day.
+istanza_senza_mario <- function() istanza_doppia(list())
+
+# Who the messages of a round went to.
+a_chi_e_arrivata <- function(posta) {
+  unlist(lapply(posta[["mandate"]](), function(m) m[["to"]]))
+}
+
+
+test_that("una riga eseguita e scaduta con la persona tolta a mano si chiude applied e absent", { # nolint: line_length_linter.
   # eval
   # Somebody removed Mario from the project after his last day.
   posta <- posta_raccolta()
   esito <- giro_scaduta(
-    istanza = istanza_doppia(list()), mailer = posta[["mailer"]]
+    istanza = istanza_senza_mario(), mailer = posta[["mailer"]],
+    copy_to = "it@example.org"
   )
 
   # test
-  # Writing it again would create an access that has already ended, and send
-  # Mario a message that he has one. The row stays where it was before
-  # 0.25.0: the last day is refused, nothing is written.
+  # Decided on 2026-11-10: the person is not on the project and the row says
+  # the access ended, so the two agree and the row closes as a revocation
+  # already done does. Nothing is written (written again it would be an access
+  # created already ended), Mario is told nothing, and the row is no error:
+  # it used to be `DATO_SCADENZA_NON_VALIDA`, which asked the referent for a
+  # date not yet passed, or none, and either reopened the access.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_false(mario %in% a_chi_e_arrivata(posta))
+  # The seal is the row's own and has not moved: nothing to write.
+  expect_null(sigilli_scritti())
+  # One message, to the owner.
+  expect_equal(a_chi_e_arrivata(posta), anna)
+})
+
+
+test_that("la riga scaduta chiusa sulla persona tolta resta cosi' ai giri dopo", { # nolint: line_length_linter.
+  # eval
+  # The register as the round above left it: applied, read back as absent.
+  posta <- posta_raccolta()
+  primo <- giro_scaduta(
+    list(applied_as = "absent"),
+    istanza = istanza_senza_mario(), mailer = posta[["mailer"]]
+  )
+  scritte_primo <- scritture()
+  secondo <- giro_scaduta(
+    list(applied_as = "absent"),
+    istanza = istanza_senza_mario(), mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The same row, the same instance, twice: applied and absent each time,
+  # and nothing written, sent or sealed.
+  for (esito in list(primo, secondo)) {
+    expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+    expect_equal(esito_di(esito, "1")[["detail"]], "")
+    expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  }
+  expect_length(scritte_primo, 0L)
+  expect_length(scritture(), 0L)
+  expect_length(posta[["mandate"]](), 0L)
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("la riga scaduta che era in errore sulla data si chiude alla prima occasione", { # nolint: line_length_linter.
+  # eval
+  # The row the 0.25.0 round before this one refused.
+  posta <- posta_raccolta()
+  esito <- giro_scaduta(
+    list(
+      outcome = "data_error", outcome_detail = "DATO_SCADENZA_NON_VALIDA",
+      applied_as = ""
+    ),
+    istanza = istanza_senza_mario(), mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(scritture(), 0L)
+  expect_equal(a_chi_e_arrivata(posta), anna)
+})
+
+
+test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la persona e' rimessa", { # nolint: line_length_linter.
+  # eval
+  # Somebody put Mario back by hand, with the day the row says...
+  stessa <- giro_scaduta(list(applied_as = "absent"))
+  scritte_stessa <- scritture()
+  # ...and with another one.
+  altra <- giro_scaduta(
+    list(applied_as = "absent"),
+    istanza = istanza_scaduta(as.character(Sys.Date() + 30L))
+  )
+
+  # test
+  # The same day: the pair is `noop`, read back as it stands and nothing is
+  # written. Another day: the round brings the access back to what the row
+  # says, as it does on any instance changed by hand, and the access ends.
+  expect_equal(esito_di(stessa, "1")[["outcome"]], "applied")
+  expect_equal(
+    as.character(stessa[["esiti"]][["applied_as"]]),
+    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+  )
+  expect_length(scritte_stessa, 0L)
+  expect_equal(esito_di(altra, "1")[["outcome"]], "applied")
+  expect_length(scritture(), 1L)
+  richiesta <- scritture()[[1]][["body"]][["data"]][["requests"]][[1]]
+  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+})
+
+
+test_that("un giro simulato sulla persona tolta non scrive e non sigilla", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(scaduta_row(applied_seal = sigillo_scaduta())),
+      storia = carried_out(sigillo_scaduta()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_senza_mario(),
+    dry_run = TRUE
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "simulated")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(scritture(), 0L)
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("una riga scaduta cambiata dopo il sigillo resta in errore sulla data anche se la persona non c'e'", { # nolint: line_length_linter.
+  # eval
+  # Changed after the seal, the row would write a last day anew, and the pair
+  # is not there to be left alone: refused as before.
+  ruolo <- giro_scaduta(
+    list(role_name = "read only"),
+    list(cambio(anna, "role_name = 'read only'")),
+    istanza = istanza_senza_mario()
+  )
+  data <- giro_scaduta(
+    list(expiration = "2020-01-01"),
+    list(cambio(anna, "expiration = '2020-01-01'")),
+    istanza = istanza_senza_mario()
+  )
+  # Never carried out.
+  mai <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1", expiration = ieri)),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_senza_mario(),
+    dry_run = FALSE
+  )
+  # The seal of the execution imported by somebody else.
+  importato <- giro_scaduta(
+    istanza = istanza_senza_mario(),
+    eseguita = c(
+      list(list(
+        timestamp = "2026-08-12 05:00", username = bruno,
+        action = "Update record (API) 1", record = "1",
+        details = paste0("applied_seal = '", sigillo_scaduta(), "'")
+      )),
+      carried_out(sigillo_scaduta())[2]
+    )
+  )
+
+  # test
+  expect_equal(esito_di(ruolo, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_equal(esito_di(data, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_equal(esito_di(mai, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+  expect_false(esito_di(importato, "1")[["outcome"]] == "applied")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una data che non e' una data e' rifiutata anche su una riga eseguita senza la persona", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_scaduta(
+    list(expiration = "domani"), list(), istanza = istanza_senza_mario(),
+    eseguita = carried_out(
+      request_seal(riga_come_registro(
+        record_id = "1", username = mario, expiration = "domani"
+      ))
+    )
+  )
+
+  # test
   expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
   expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
   expect_length(scritture(), 0L)
-  destinatari <- unlist(lapply(posta[["mandate"]](), function(m) m[["to"]]))
-  expect_false(mario %in% destinatari)
 })
 
 
