@@ -999,13 +999,17 @@ progetto e la persona. Eseguita su un'altra coppia, lascerebbe la vecchia
 sull'istanza senza nessuna riga che la governi, perché il giro revoca solo ciò
 che una riga chiede di revocare; e una riga revocata spostata altrove
 toglierebbe un accesso che non ha mai governato. Il giro confronta quindi ogni
-riga sigillata, prima del piano, con la coppia della sua ultima esecuzione,
-letta dal log dei proprietari sotto l'ultimo sigillo del canale
-(`log_executed_values()`): `server` e `project_id` dalla creazione o
-dall'ultima modifica sotto il sigillo, il nome utente dalla porta delle
-identità, che lo scrive prima del sigillo nello stesso giro. Una scrittura
-sotto il sigillo che l'esecuzione non ha coperto, fatta mentre il giro girava,
-non è il valore eseguito, e si legge quella sotto. La regola è
+riga sigillata, prima del piano, con la coppia della sua ultima esecuzione.
+Se il sigillo non si è mosso, la coppia eseguita è la riga come letta: il
+sigillo del canale la copre. Altrimenti si legge dal log dei proprietari
+sotto l'ultimo sigillo del canale (`log_executed_values()`): `server` e
+`project_id` dalla creazione o dall'ultima modifica sotto il sigillo, il nome
+utente dalla porta delle identità, che lo scrive prima del sigillo nello
+stesso giro. Una scrittura sotto il sigillo che l'esecuzione non ha coperto,
+fatta mentre il giro girava, non è il valore eseguito, e si legge quella
+sotto. Letta dal log, una modifica eseguita senza un'approvazione sopra (lo
+storico di prima del 2026-10-14, o una correzione di IT) passerebbe per
+scoperta: è per questo che col sigillo fermo conta la riga. La regola è
 `pair_change()`, con due codici:
 
 - **`DATO_COPPIA_CAMBIATA`**, `data_error`: `server` o `project_id` diversi da
@@ -1057,10 +1061,11 @@ proprietari, che il giro ha già, e non dal log della riga.
 **Il doppione guarda anche le righe che il giro non serve.** La riga più
 vecchia di una coppia la tiene anche quando il giro la ferma: trattenuta,
 cieca, ferma sull'identità o per un cambio di coppia. La coppia che tiene è
-quella eseguita, se il log la dice, altrimenti quella che la riga nomina col
-nome utente risolto; una riga ferma per un cambio di coppia tiene quella
-eseguita. Una riga più recente sulla stessa coppia prende
-`DATO_COPPIA_DUPLICATA`. Fino alla 0.23.0 il confronto si faceva solo fra le
+quella eseguita, se è nota, altrimenti quella che la riga nomina col nome
+utente risolto; una riga ferma per un cambio di coppia tiene quella eseguita.
+Una revoca chiusa su una persona che il tenant non tiene più non tiene
+nessuna coppia: la richiesta nuova per quella persona, quando torna, la crea.
+Una riga più recente sulla stessa coppia prende `DATO_COPPIA_DUPLICATA`. Fino alla 0.23.0 il confronto si faceva solo fra le
 righe servite, e la più recente si eseguiva con i diritti di chi l'aveva
 scritta finché la vecchia restava ferma.
 

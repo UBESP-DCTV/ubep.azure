@@ -12,8 +12,9 @@ the instance, the project and the person.
   only what a row asks to revoke. A revoked row moved to another pair took
   away an access it had never governed. Now every row the channel has sealed
   in its current life is compared, before the plan, with the pair its last
-  execution carried out, which the owners' log holds below the channel's
-  last seal (`log_executed_values()`). When `server` or `project_id` differ,
+  execution carried out: the row as read when its seal did not move, since
+  the channel's seal covers it, and otherwise the values the owners' log
+  holds below the channel's last seal (`log_executed_values()`). When `server` or `project_id` differ,
   or when somebody wrote the first name, the last name or the contact address
   and the round would now serve another account or create a person, the row
   takes `data_error` with `DATO_COPPIA_CAMBIATA` (`pair_change()`): nothing is
@@ -67,9 +68,11 @@ the instance, the project and the person.
   identity, a younger row on its pair was the oldest the round saw and was
   carried out on its own authority, and when the oldest came back the access
   followed whichever of the two stood. The rows the round does not serve now
-  hold their pair too, the one carried out when the log says it, otherwise
-  the one they name under the username the round resolved; a row stopped
-  because its pair moved holds the one it was carried out on.
+  hold their pair too, the one carried out when it is known, otherwise the
+  one they name under the username the round resolved; a row stopped because
+  its pair moved holds the one it was carried out on. A revocation closed on
+  a person the tenant no longer holds holds no pair: a request filed for that
+  person when they come back creates them, as before.
 
 * **`server` and `project_id` are read-only on the form once a row is
   applied.** The dictionary gives both `@IF([applied_seal] <> "", @READONLY,
@@ -116,7 +119,10 @@ the instance, the project and the person.
   row whose last day of access has passed (revoked now), a row whose author
   or owner has an expired access to the project
   (`DATO_AMBITO_NON_AUTORIZZATO`). An account renamed before 0.24.0 was
-  already carried out under its new name, and its row is not concerned.
+  already carried out under its new name, and its row is not concerned. A
+  row whose last execution carried out a change with no approval above it in
+  the log, as before 2026-10-14 or by a correction of IT, is not concerned
+  either while its seal does not move.
 
 # ubep.azure 0.23.0
 
