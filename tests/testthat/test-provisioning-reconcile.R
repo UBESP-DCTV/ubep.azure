@@ -7264,3 +7264,21 @@ test_that("una revoca su un nome con altre maiuscole parte col nome che l'istanz
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
   expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
 })
+
+
+test_that("una revoca parte col nome scritto uguale, se l'istanza ne tiene due che differiscono nelle maiuscole", { # nolint: line_length_linter.
+  # eval
+  # A state REDCap's `_ci` keys should not allow, kept as a guard: the name
+  # sent must not be another row's because it came first in the reply.
+  esito <- giro_revoca(
+    istanza = istanza_doppia(
+      list(user_rights = 1L),
+      list(username = mario, role_name = "data entry", user_rights = 0L),
+      list(username = maiuscolo, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  expect_equal(nomi_revocati(), maiuscolo)
+})

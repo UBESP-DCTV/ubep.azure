@@ -1433,10 +1433,15 @@ provisioning_reconcile <- function(register_url,
     # (`Planner::planRevoke()`), so one sent under the register's capitals is
     # a `noop` there, and the row stayed on an error of ours that never
     # cleared. REDCap allows one user per name in any capitals, so the row
-    # found is the person's. Only revokes: a grant goes as before.
+    # found is the person's; should the instance ever hold two, the one
+    # written as in the register goes first. Only revokes: a grant goes as
+    # before.
     to_revoke <- lapply(Filter(present, revoked), function(e) {
-      held <- round_actual(results, list(e), any_case = TRUE)[[1]]
-      e[["username"]] <- as.character(held[["username"]])
+      held <- round_actual(results, list(e))
+      if (length(held) == 0L) {
+        held <- round_actual(results, list(e), any_case = TRUE)
+      }
+      e[["username"]] <- as.character(held[[1L]][["username"]])
       e
     })
     already_gone <- Filter(Negate(present), revoked)
