@@ -390,6 +390,32 @@ test_that("una revoca eseguita non dice che un accesso e' stato concesso", {
 })
 
 
+test_that("una riga scaduta chiusa sulla persona tolta non dice che un accesso e' stato concesso", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(riga_di_prova(
+    outcome = "applied", outcome_detail = "",
+    request_status = "active", applied_as = "absent"
+  ))[["body"]]
+  concesso <- mail_outcome_message(riga_di_prova(
+    outcome = "applied", outcome_detail = "",
+    request_status = "active",
+    applied_as = "role_name=data entry; dag_name=; expiration="
+  ))[["body"]]
+
+  # test
+  expect_match(
+    detto, "la persona non e' piu' sul progetto", fixed = TRUE
+  )
+  expect_match(
+    detto, "the person is no longer on the project", fixed = TRUE
+  )
+  expect_false(grepl("l'accesso e' stato concesso", detto, fixed = TRUE))
+  expect_false(grepl("has been granted", detto, fixed = TRUE))
+  # An access that was granted still says so.
+  expect_match(concesso, "l'accesso e' stato concesso", fixed = TRUE)
+})
+
+
 test_that("l'ora nel corpo e' quella italiana, e nomina il fuso", {
   # eval
   detto <- mail_outcome_message(riga_di_prova())[["body"]]

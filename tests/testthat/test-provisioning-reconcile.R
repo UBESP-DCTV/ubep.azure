@@ -6815,8 +6815,13 @@ test_that("una riga eseguita e scaduta con la persona tolta a mano si chiude app
   expect_false(mario %in% a_chi_e_arrivata(posta))
   # The seal is the row's own and has not moved: nothing to write.
   expect_null(sigilli_scritti())
-  # One message, to the owner.
+  # One message, to the owner, which says what happened and not that an
+  # access has been granted.
   expect_equal(a_chi_e_arrivata(posta), anna)
+  corpo <- posta[["mandate"]]()[[1]][["body"]]
+  expect_match(corpo, "Letto sull'istanza: absent", fixed = TRUE)
+  expect_no_match(corpo, "concesso", fixed = TRUE)
+  expect_no_match(corpo, "granted", fixed = TRUE)
 })
 
 
