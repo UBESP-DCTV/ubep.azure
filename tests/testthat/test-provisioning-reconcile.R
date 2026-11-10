@@ -6513,3 +6513,90 @@ test_that("una revoca chiusa su una persona assente resta chiusa quando la perso
   expect_length(scritture(), 0L)
 })
 
+
+
+# Row 5, Mario's on edc10, project 9003: carried out, then revoked while his
+# account was there, and the account deleted since. Row 12 is filed for him
+# on the same pair when he comes back.
+sigillo_revocata <- function() {
+  request_seal(riga_come_registro(
+    record_id = "5", username = mario, request_status = "revoked"
+  ))
+}
+revocata_poi <- function() {
+  c(
+    list(list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 5", record = "5",
+      details = paste0(
+        "applied_seal = '", sigillo_revocata(), "', seal_state = 'intact'"
+      )
+    )),
+    list(cambio(
+      anna, "request_status = 'revoked'", record = "5",
+      timestamp = "2026-10-19 10:00"
+    )),
+    carried_out(sigillo_eseguito("5"), id = "5")
+  )
+}
+
+
+test_that("una persona che torna nasce con la riga nuova sulla coppia revocata", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(
+          "5", applied_seal = sigillo_revocata(), request_status = "revoked",
+          applied_as = "absent"
+        ),
+        list(record_id = "12")
+      ),
+      storia = revocata_poi(),
+      creazioni = creazioni_finte(creata_da_anna("12"), creata_da_anna("5"))
+    ),
+    istanza_doppia(list()),
+    directory = directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Row 5 closed as revoked on a person the tenant no longer holds, and it
+  # governs nothing: row 12 is no duplicate of it, and Mario is created, as
+  # before 0.24.0.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "12")[["detail"]], "")
+  expect_length(creazioni(), 1L)
+})
+
+
+test_that("riattivare una riga eseguita su un account cancellato non lo ricrea", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(
+        "5", applied_seal = sigillo_revocata(), request_status = "active",
+        applied_as = "absent"
+      )),
+      storia = c(
+        list(cambio(anna, "request_status = 'active'", record = "5")),
+        revocata_poi()
+      ),
+      creazioni = creazioni_finte(creata_da_anna("5"))
+    ),
+    istanza_doppia(list()),
+    directory = directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # A row carried out creates nobody: created again under the same name, the
+  # account would find on REDCap every right it had. The way back is a new
+  # request, the test above.
+  expect_equal(
+    esito_di(esito, "5")[["detail"]], "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_length(creazioni(), 0L)
+})

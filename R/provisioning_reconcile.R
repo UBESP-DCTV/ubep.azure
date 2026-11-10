@@ -112,11 +112,12 @@
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
-#' still holds its pair, the one carried out when the log says it, and a
+#' still holds its pair, the one carried out when it is known, and a
 #' younger row on that pair takes `DATO_COPPIA_DUPLICATA` as it would beside
 #' an older row the round serves. Otherwise the younger one was carried out
 #' on its own authority while the older waited, and the access followed
-#' whichever of the two stood.
+#' whichever of the two stood. A revocation closed on a person the tenant no
+#' longer holds holds no pair.
 #'
 #' **Step 3 is a step of this round and not a job of its own** — decision 2 of
 #' the design — and the reason is latency: resolving and acting have the same
@@ -1017,8 +1018,11 @@ provisioning_reconcile <- function(register_url,
   # stood. So the rows the round does not serve hold their pair too: the one
   # carried out, when the log says it, and otherwise the one the row names
   # under the username the resolution found. A row stopped because its pair
-  # moved holds the pair it was carried out on, which is still its own. Age is
-  # the `record_id`, as there.
+  # moved holds the pair it was carried out on, which is still its own. A
+  # revocation closed on a person the tenant no longer holds governs nothing
+  # any more, and holds no pair: a request filed for that person when they
+  # come back creates them, as before 0.24.0. Age is the `record_id`, as
+  # there.
   claim_of <- function(server, project, username) {
     paste(
       trimws(server), trimws(project), identity_normalize(username),
@@ -1030,7 +1034,7 @@ provisioning_reconcile <- function(register_url,
     if (length(value) != 1L || is.na(value)) "" else value
   }
   claims <- vapply(seq_along(record_ids), function(i) {
-    if (standing[[i]]) {
+    if (standing[[i]] || (withdrawn[[i]] && !moved[[i]])) {
       return(NA_character_)
     }
     carried_pair <- executed_pair[[i]]
