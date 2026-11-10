@@ -2135,6 +2135,9 @@ log_answer_stands <- function(events, record, proposal,
 #' inside quotes, since a condition can hold a parenthesis of its own; an
 #' `@IF` nested in another goes with it. A tag after the `@IF` still counts.
 #'
+#' Only the bare tag counts: `@READONLY-SURVEY` is read-only on the survey
+#' and writable on the form, so it is not one of these fields.
+#'
 #' @param dictionary A data dictionary, with `Variable / Field Name` and
 #'   `Field Annotation`.
 #'
@@ -2178,7 +2181,12 @@ dictionary_readonly <- function(dictionary) {
     }
   }, character(1), USE.NAMES = FALSE)
 
-  dictionary[["Variable / Field Name"]][grepl("@READONLY", unconditional)]
+  # The bare tag only: `@READONLY-SURVEY` locks the field on the survey and
+  # leaves it writable on the form, which is where the channel's fields are
+  # read, so a tag followed by a hyphen or a letter is another tag.
+  dictionary[["Variable / Field Name"]][
+    grepl("@READONLY(?![-A-Za-z])", unconditional, perl = TRUE)
+  ]
 }
 
 

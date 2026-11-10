@@ -26,5 +26,8 @@ has not imported the tag yet, and the round would stop.
 The \verb{@IF} is cut with its parentheses balanced, skipping what stands
 inside quotes, since a condition can hold a parenthesis of its own; an
 \verb{@IF} nested in another goes with it. A tag after the \verb{@IF} still counts.
+
+Only the bare tag counts: \verb{@READONLY-SURVEY} is read-only on the survey
+and writable on the form, so it is not one of these fields.
 }
 \keyword{internal}
