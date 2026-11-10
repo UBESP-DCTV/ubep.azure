@@ -5317,3 +5317,20 @@ test_that("a revocation stopped at the gate is listed with the pair executed", {
 })
 
 
+
+test_that("the report and the round read a written value with one reader", {
+  # eval
+  eventi <- rbind(
+    evento("2026-08-03 23:02", canale,
+           "username = 'luca.d'amico@ubep.unipd.it', identity = 'created'"),
+    evento("2026-08-03 23:01", canale, "identity = 'created'"),
+    evento("2026-08-03 23:00", canale, "username = 'ultimo@ubep.unipd.it'")
+  )
+
+  # test
+  expect_equal(
+    log_written_value(eventi, "username"),
+    c("luca.d'amico@ubep.unipd.it", NA, "ultimo@ubep.unipd.it")
+  )
+  expect_false(exists("report_written_value", mode = "function"))
+})

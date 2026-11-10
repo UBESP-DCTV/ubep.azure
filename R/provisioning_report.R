@@ -217,35 +217,6 @@ report_executions <- function(events, record, channel_account = NULL) {
 }
 
 
-#' The value each event wrote into one field, read whole
-#'
-#' As `log_executed_values()` reads it: up to the apostrophe followed by the
-#' next field or by the end of `details`, since a UPN can hold an apostrophe.
-#' Meant for `username`.
-#'
-#' @param events The event log, as `register_log()` returns it.
-#' @param field One field name.
-#'
-#' @return A character vector, one value per event, `NA` where the event did
-#'   not write the field or the value does not read.
-#'
-#' @keywords internal
-report_written_value <- function(events, field) {
-  stopifnot(is.character(field), length(field) == 1L)
-
-  details <- as.character(events[["details"]])
-  details[is.na(details)] <- ""
-  pattern <- paste0(
-    "\\b", field,
-    "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
-  )
-  vapply(details, function(said) {
-    hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]
-    if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
-  }, character(1), USE.NAMES = FALSE)
-}
-
-
 #' Since when the person a row names has had its access
 #'
 #' The first execution by the channel of the newest run of executions carried
@@ -296,7 +267,7 @@ report_person_since <- function(events, record, channel_account = NULL,
   sealed <- log_wrote(mine, "applied_seal") & authors %in% channel &
     nzchar(log_value(mine, "applied_seal"))
   wrote <- log_wrote(mine, "username")
-  written <- report_written_value(mine, "username")
+  written <- log_written_value(mine, "username")
 
   # Oldest first: the name in force at each seal.
   carried <- rep(NA_character_, nrow(mine))
