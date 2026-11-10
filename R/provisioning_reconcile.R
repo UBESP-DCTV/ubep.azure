@@ -1833,6 +1833,15 @@ provisioning_reconcile <- function(register_url,
   edited_by <- vapply(pending, function(authors) {
     if (anyNA(authors)) "" else paste(authors, collapse = ", ")
   }, character(1))
+  # Where the account each row resolved to reads mail, from the sweep this
+  # round already made: the access message of an internal contact goes
+  # there and not to the UPN (`mail_access_recipients()`). Only on a verdict
+  # the gate admits, the only rows that can be granted: on any other the
+  # `username` is a declaration or a proposal, not an account found.
+  mailboxes <- directory_mailboxes(
+    sweep[["users"]],
+    ifelse(identity_actionable(verdicts), resolved_names, "")
+  )
   carried_field <- function(field) {
     vapply(seq_along(record_ids), function(i) {
       value <- if (moved[[i]]) executed_pair[[i]][[field]] else ""
@@ -1854,6 +1863,8 @@ provisioning_reconcile <- function(register_url,
       owner = owner_after,
       passed = passed,
       edited_by = edited_by,
+      mailbox = mailboxes[["mailbox"]],
+      external = mailboxes[["external"]],
       # What a row that moved was carried out on, which its message names so
       # that the referent knows what to set the fields back to; and what
       # moved. Empty on every other row.

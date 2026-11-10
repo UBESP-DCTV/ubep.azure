@@ -2243,3 +2243,192 @@ test_that("il messaggio di un account cambiato su Entra va a IT e non chiede nie
     grepl("returns to the queue by itself", rinominato, fixed = TRUE)
   )
 })
+
+
+# The access message of a row whose contact is the person's UBEP address, the
+# UPN by decision 12. `identified` carries what the sweep read on the account
+# the row resolved to: `mailbox`, its `mail`, and `external`, its first
+# address outside the tenant's domain.
+accesso_interno <- function(mailbox = "",
+                            external = "",
+                            owner = "cinzia@ubep.unipd.it",
+                            contact_email = "sara.collaudozeta@ubep.unipd.it",
+                            copy_to = "it@example.org",
+                            redirect_to = NULL) {
+  registro <- registro_di_prova(contact_email = contact_email)
+  posta <- raccoglitore()
+  detto <- mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    copy_to = copy_to, redirect_to = redirect_to, granted = "16",
+    identified = data.frame(
+      record_id = "16", username = "sara.collaudozeta@ubep.unipd.it",
+      identity = "existing", owner = owner,
+      mailbox = mailbox, external = external,
+      stringsAsFactors = FALSE
+    )
+  )
+  list(mandate = posta[["mandate"]](), detto = detto)
+}
+
+
+test_that("un recapito interno manda l'accesso alla casella e all'esterno insieme", { # nolint: line_length_linter.
+  # eval
+  esito <- accesso_interno(
+    mailbox = "sara.collaudozeta@ubep.unipd.it",
+    external = "sara.privata@example.org"
+  )
+
+  # test
+  # One message, two recipients: the person reads it wherever they read.
+  expect_length(esito[["mandate"]], 1L)
+  expect_equal(
+    esito[["mandate"]][[1L]][["to"]],
+    c("sara.collaudozeta@ubep.unipd.it", "sara.privata@example.org")
+  )
+  expect_null(esito[["mandate"]][[1L]][["cc"]])
+  expect_match(esito[["mandate"]][[1L]][["body"]], "^Ciao Sara,")
+  expect_identical(esito[["detto"]][["contatori"]][["accessi_recapitati"]], 1L)
+})
+
+
+test_that("con una sola delle due l'accesso va a quella", {
+  # eval
+  casella <- accesso_interno(mailbox = "sara.collaudozeta@ubep.unipd.it")
+  esterno <- accesso_interno(external = "sara.privata@example.org")
+
+  # test
+  expect_equal(
+    casella[["mandate"]][[1L]][["to"]], "sara.collaudozeta@ubep.unipd.it"
+  )
+  expect_equal(esterno[["mandate"]][[1L]][["to"]], "sara.privata@example.org")
+})
+
+
+test_that("la casella uguale all'esterno riceve l'accesso una volta sola", {
+  # eval
+  esito <- accesso_interno(
+    mailbox = "Sara.Privata@example.org", external = "sara.privata@example.org "
+  )
+
+  # test
+  # The mail service refuses a personalization that names the same address
+  # twice, and the person would read the message twice.
+  expect_length(esito[["mandate"]], 1L)
+  expect_equal(esito[["mandate"]][[1L]][["to"]], "Sara.Privata@example.org")
+})
+
+
+test_that("senza casella ne' esterno l'accesso va al referente, che avvisa la persona", { # nolint: line_length_linter.
+  # eval
+  esito <- accesso_interno()
+  messaggio <- esito[["mandate"]][[1L]]
+
+  # test
+  # Never to the UPN alone: without a mailbox the tenant refuses it, and the
+  # mail service then drops every later message to it in silence.
+  expect_length(esito[["mandate"]], 1L)
+  expect_equal(messaggio[["to"]], "cinzia@ubep.unipd.it")
+  expect_null(messaggio[["cc"]])
+  expect_match(messaggio[["subject"]], "^Accesso a REDCap")
+  # The request comes first, in each language, and names the person.
+  parti <- strsplit(messaggio[["body"]], "\n---\n", fixed = TRUE)[[1L]]
+  expect_match(parti[[1L]], "^Avvisa tu ", perl = TRUE)
+  expect_match(parti[[2L]], "^\nPlease tell ", perl = TRUE)
+  for (parte in parti) {
+    expect_match(parte, "sara.collaudozeta@ubep.unipd.it", fixed = TRUE)
+    expect_match(parte, "Sara Collaudozeta", fixed = TRUE)
+  }
+  # The message to the person follows unchanged.
+  expect_match(parti[[1L]], "Ciao Sara,", fixed = TRUE)
+  expect_match(parti[[1L]], "ora hai accesso in REDCap", fixed = TRUE)
+  # Recapitato: the referent is who the message is for now.
+  expect_identical(esito[["detto"]][["contatori"]][["accessi_recapitati"]], 1L)
+  expect_identical(esito[["detto"]][["contatori"]][["accessi_persi"]], 0L)
+  expect_equal(esito[["detto"]][["errori"]], character())
+})
+
+
+test_that("senza casella, esterno ne' proprietario l'accesso va a IT e lo dice", { # nolint: line_length_linter.
+  # eval
+  esito <- accesso_interno(owner = "")
+  messaggio <- esito[["mandate"]][[1L]]
+
+  # test
+  expect_length(esito[["mandate"]], 1L)
+  expect_equal(messaggio[["to"]], "it@example.org")
+  expect_null(messaggio[["cc"]])
+  parti <- strsplit(messaggio[["body"]], "\n---\n", fixed = TRUE)[[1L]]
+  expect_match(parti[[1L]], "^Referente della riga non stabilito", perl = TRUE)
+  expect_match(parti[[2L]], "^\nWhoever owns the row", perl = TRUE)
+  expect_match(parti[[1L]], "sara.collaudozeta@ubep.unipd.it", fixed = TRUE)
+  expect_identical(esito[["detto"]][["contatori"]][["accessi_recapitati"]], 1L)
+})
+
+
+test_that("un recapito esterno riceve l'accesso come prima, qualunque casella abbia l'account", { # nolint: line_length_linter.
+  # eval
+  esito <- accesso_interno(
+    contact_email = "sara.esterna@example.org",
+    mailbox = "sara.collaudozeta@ubep.unipd.it",
+    external = "sara.privata@example.org"
+  )
+
+  # test
+  expect_length(esito[["mandate"]], 1L)
+  expect_equal(esito[["mandate"]][[1L]][["to"]], "sara.esterna@example.org")
+  expect_match(esito[["mandate"]][[1L]][["body"]], "^Ciao Sara,")
+})
+
+
+test_that("redirect_to vince anche sui destinatari dell'accesso interno", {
+  # eval
+  due <- accesso_interno(
+    mailbox = "sara.collaudozeta@ubep.unipd.it",
+    external = "sara.privata@example.org",
+    redirect_to = "prova@example.org"
+  )
+  referente <- accesso_interno(redirect_to = "prova@example.org")
+
+  # test
+  expect_equal(due[["mandate"]][[1L]][["to"]], "prova@example.org")
+  expect_match(
+    due[["mandate"]][[1L]][["body"]],
+    paste0(
+      "[PROVA] Sarebbe andato a: sara.collaudozeta@ubep.unipd.it, ",
+      "sara.privata@example.org\n"
+    ),
+    fixed = TRUE
+  )
+  expect_equal(referente[["mandate"]][[1L]][["to"]], "prova@example.org")
+  expect_match(
+    referente[["mandate"]][[1L]][["body"]],
+    "[PROVA] Sarebbe andato a: cinzia@ubep.unipd.it\n", fixed = TRUE
+  )
+})
+
+
+test_that("il servizio di posta riceve piu' destinatari in un messaggio solo", {
+  # eval
+  catturata <- NULL
+  detto <- httr2::with_mocked_responses(
+    function(req) {
+      catturata <<- req # nolint: assignment_linter.
+      httr2::response(status_code = 202L)
+    },
+    mail_send(
+      api_key = finti[["chiave"]], from = "mittente@example.org",
+      to = c("uno@example.org", "due@example.org"),
+      subject = "oggetto", body = "corpo"
+    )
+  )
+  inviato <- httr2::req_get_body(catturata)
+
+  # test
+  expect_true(detto[["ok"]])
+  expect_length(inviato[["personalizations"]], 1L)
+  expect_equal(
+    vapply(inviato[["personalizations"]][[1L]][["to"]], `[[`, "", "email"),
+    c("uno@example.org", "due@example.org")
+  )
+})

@@ -4,13 +4,16 @@
 \alias{mail_access_message}
 \title{Tell a person they now have access to a project}
 \usage{
-mail_access_message(row, url = NULL)
+mail_access_message(row, url = NULL, relay = NULL)
 }
 \arguments{
 \item{row}{One register row as a list.}
 
 \item{url}{The address the row's instance opens at, from
 \code{mail_instance_url()}; \code{NULL}, \code{NA} or empty leaves the line out.}
+
+\item{relay}{\code{NULL} for the message to the person; \code{"referent"} or \code{"it"}
+for the one that goes to whoever has to tell them.}
 }
 \value{
 A list with \code{subject} and \code{body}.
@@ -37,5 +40,12 @@ fetching it would add a call to REDCap to a message whose job is to leave.
 The owner, when there is one, is named as the project's contact; without
 one the line is left out and the closing sentence describes the referent
 instead (\code{mail_first_contact()}), so a missing owner costs no message.
+
+A person whose account has neither a mailbox nor an external address
+(\code{mail_access_recipients()}) cannot be written to, and the message goes to
+somebody who can tell them: the referent, or IT when the row has no owner.
+\code{relay} says which, and puts on top of each language a line naming the
+person and asking the reader to tell them; the message below it is the one
+the person would have received.
 }
 \keyword{internal}

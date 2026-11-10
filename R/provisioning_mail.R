@@ -811,6 +811,50 @@ mail_referent <- function(row) {
 }
 
 
+#' Say where the access message reaches the person
+#'
+#' To `contact_email`, as the welcome, when it is outside the tenant's
+#' domain. When it is inside, decision 12 makes it the UPN, and the UPN is not
+#' where the person reads mail: for most accounts of the tenant it has no
+#' mailbox, Exchange Online refuses the message ("550 5.4.1 Recipient address
+#' rejected: Access denied"), and the mail service then suppresses the
+#' address and drops every later send to it in silence, while it still
+#' answers 202 and `accessi_recapitati` still counts it. So the message goes,
+#' decided on 2026-11-10, to the account's mailbox and to its first external
+#' address, both read by the sweep (`directory_mailboxes()`) and carried here
+#' by `identified`: to both in one message when both are there, the same
+#' address once.
+#'
+#' Nothing when neither is: the caller then sends the message to the
+#' referent, who tells the person (`mail_access_message()`). Never the UPN
+#' alone, for the reason above.
+#'
+#' @param row One register row as a list, with `mailbox` and `external` as
+#'   the round settled them; a row without them has neither.
+#' @param domain The tenant's verified domain, as `identity_internal()` takes
+#'   it.
+#'
+#' @return A character vector: the contact as written when it is external,
+#'   possibly empty; otherwise the mailbox and the external address that are
+#'   there, without duplicates, possibly none.
+#'
+#' @keywords internal
+mail_access_recipients <- function(row, domain = "ubep.unipd.it") {
+  stopifnot(is.list(row))
+
+  contact <- mail_said_or(row[["contact_email"]], "")
+  if (!identity_internal(contact, domain)) {
+    return(contact)
+  }
+
+  candidates <- trimws(c(
+    mail_said_or(row[["mailbox"]], ""), mail_said_or(row[["external"]], "")
+  ))
+  candidates <- candidates[nzchar(candidates)]
+  candidates[!duplicated(tolower(candidates))]
+}
+
+
 #' Say where an instance opens, from the host the inventory names
 #'
 #' The host is the one `provisioning_reconcile()` already holds, read from the
@@ -1115,15 +1159,85 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
 #' one the line is left out and the closing sentence describes the referent
 #' instead (`mail_first_contact()`), so a missing owner costs no message.
 #'
+#' A person whose account has neither a mailbox nor an external address
+#' (`mail_access_recipients()`) cannot be written to, and the message goes to
+#' somebody who can tell them: the referent, or IT when the row has no owner.
+#' `relay` says which, and puts on top of each language a line naming the
+#' person and asking the reader to tell them; the message below it is the one
+#' the person would have received.
+#'
 #' @param row One register row as a list.
 #' @param url The address the row's instance opens at, from
 #'   `mail_instance_url()`; `NULL`, `NA` or empty leaves the line out.
+#' @param relay `NULL` for the message to the person; `"referent"` or `"it"`
+#'   for the one that goes to whoever has to tell them.
 #'
 #' @return A list with `subject` and `body`.
 #'
 #' @keywords internal
-mail_access_message <- function(row, url = NULL) {
-  stopifnot(is.list(row), is.null(url) || length(url) == 1L)
+mail_access_message <- function(row, url = NULL, relay = NULL) {
+  stopifnot(
+    is.list(row), is.null(url) || length(url) == 1L,
+    is.null(relay) || (length(relay) == 1L && relay %in% c("referent", "it"))
+  )
+
+  # Who the message is for, by name and by the address the request gave,
+  # which is the UPN: the reader has to know whom to tell.
+  persona <- paste0(
+    trimws(paste(
+      mail_said_or(row[["first_name"]], ""),
+      mail_said_or(row[["last_name"]], "")
+    )),
+    " (", mail_said_or(row[["contact_email"]], ""), ")"
+  )
+  inoltro <- if (is.null(relay)) {
+    list(it = NULL, en = NULL)
+  } else if (identical(relay, "referent")) {
+    list(
+      it = c(
+        paste0(
+          "Avvisa tu ", persona, " che l'accesso e' pronto: il messaggio qui ",
+          "sotto e' per questa persona, ma sul suo account UBEP non c'e' ne' ",
+          "una casella di posta ne' un indirizzo esterno a cui mandarlo. Lo ",
+          "ricevi tu, come referente della richiesta."
+        ),
+        ""
+      ),
+      en = c(
+        paste0(
+          "Please tell ", persona, " that the access is ready: the message ",
+          "below is for them, but their UBEP account has neither a mailbox ",
+          "nor an external address to send it to. It reaches you as the ",
+          "referent of the request."
+        ),
+        ""
+      )
+    )
+  } else {
+    list(
+      it = c(
+        "Referente della riga non stabilito: questo messaggio va solo a IT.",
+        paste0(
+          "Il messaggio qui sotto e' per ", persona, ", ma sul suo account ",
+          "UBEP non c'e' ne' una casella di posta ne' un indirizzo esterno a ",
+          "cui mandarlo: avvisate la persona che l'accesso e' pronto."
+        ),
+        ""
+      ),
+      en = c(
+        paste0(
+          "Whoever owns the row is not established: this message goes to IT ",
+          "only."
+        ),
+        paste0(
+          "The message below is for ", persona, ", but their UBEP account ",
+          "has neither a mailbox nor an external address to send it to: ",
+          "please tell them the access is ready."
+        ),
+        ""
+      )
+    )
+  }
 
   referente <- mail_said_or(mail_referent(row), "")
   contatto <- mail_first_contact(referente, "accesso")
@@ -1134,6 +1248,7 @@ mail_access_message <- function(row, url = NULL) {
   indirizzo <- !(is.null(url) || is.na(url) || !nzchar(url))
 
   it <- c(
+    inoltro[["it"]],
     paste0("Ciao ", row[["first_name"]], ","),
     "",
     paste0("ora hai accesso in REDCap al progetto ", pid, " su ", server, "."),
@@ -1158,6 +1273,7 @@ mail_access_message <- function(row, url = NULL) {
   )
 
   en <- c(
+    inoltro[["en"]],
     paste0("Hello ", row[["first_name"]], ","),
     "",
     paste0(
@@ -1334,7 +1450,11 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #'
 #' @param api_key The service key, which the runner reads from Key Vault.
 #' @param from The verified sender identity.
-#' @param to Recipient address.
+#' @param to Recipient addresses: one, or more for the access message of a
+#'   row whose contact is internal (`mail_access_recipients()`). All go in
+#'   one personalization, so the service sends one message that names them
+#'   all; an address repeated in it is refused, which is why the caller drops
+#'   duplicates first.
 #' @param subject,body The composed message.
 #' @param cc Optional address in copy.
 #' @param reply_to Optional address replies should reach.
@@ -1352,12 +1472,12 @@ mail_send <- function(api_key,
   stopifnot(
     is.character(api_key), length(api_key) == 1L, nzchar(api_key),
     is.character(from), length(from) == 1L, nzchar(from),
-    is.character(to), length(to) == 1L, nzchar(to),
+    is.character(to), length(to) >= 1L, all(!is.na(to) & nzchar(to)),
     is.character(subject), length(subject) == 1L,
     is.character(body), length(body) == 1L
   )
 
-  destinatari <- list(to = list(list(email = to)))
+  destinatari <- list(to = lapply(to, function(address) list(email = address)))
   if (!is.null(cc) && nzchar(cc)) {
     destinatari[["cc"]] <- list(list(email = cc))
   }
@@ -1427,7 +1547,8 @@ mail_send <- function(api_key,
 #' from being silent.
 #'
 #' @param body The composed body.
-#' @param to,cc Who the message was addressed to before the redirect.
+#' @param to,cc Who the message was addressed to before the redirect; `to`
+#'   can name more than one address.
 #'
 #' @return The body, with the declaration on top.
 #'
@@ -1436,7 +1557,7 @@ mail_redirect_note <- function(body, to, cc) {
   paste(
     c(
       "[PROVA] Questo messaggio e' stato dirottato.",
-      paste0("[PROVA] Sarebbe andato a: ", to),
+      paste0("[PROVA] Sarebbe andato a: ", paste(to, collapse = ", ")),
       if (!is.null(cc) && nzchar(cc)) paste0("[PROVA] In copia a: ", cc),
       "",
       body
@@ -1478,6 +1599,13 @@ mail_redirect_note <- function(body, to, cc) {
 #' outcome of a row without one goes to `copy_to` alone, with a line saying
 #' so; its key goes nowhere.
 #'
+#' The access message of a row whose contact is internal, the UPN, is the
+#' exception: it goes to the account's mailbox and its first external
+#' address (`mail_access_recipients()`), in one message, and when the
+#' account has neither, to the referent with a line asking them to tell the
+#' person, or to `copy_to` when the row has no owner. Either counts as
+#' delivered.
+#'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
 #'   name.
@@ -1499,9 +1627,11 @@ mail_redirect_note <- function(body, to, cc) {
 #'   the log says the row belongs to, where the outcome and the key go
 #'   (`mail_referent()`); `passed`, whether the change applied this round
 #'   handed the row over; `edited_by`, who changed a held row since
-#'   it was applied, as the row's log says. `register` is the register as read,
-#'   on purpose; this is how the message names what the round has just
-#'   established rather than what the referent typed.
+#'   it was applied, as the row's log says; `mailbox` and `external`, where
+#'   the account the row resolved to reads mail (`directory_mailboxes()`),
+#'   which the access message of an internal contact goes to. `register` is
+#'   the register as read, on purpose; this is how the message names what
+#'   the round has just established rather than what the referent typed.
 #' @param hosts Named character vector, instance name to host, as
 #'   `provisioning_reconcile()` receives it from the inventory. Only the
 #'   welcome and the access message read it, to say where the row's
@@ -1594,8 +1724,12 @@ mail_round <- function(changed,
     riga
   }
 
+  # `to` is one address, or more for the access message of an internal
+  # contact; an empty or missing one is nobody.
   consegna <- function(to, cc, message) {
-    if (is.null(to) || is.na(to) || !nzchar(to)) {
+    to <- as.character(to)
+    to <- to[!is.na(to) & nzchar(to)]
+    if (length(to) == 0L) {
       return(list(ok = FALSE, errors = "POSTA_SENZA_DESTINATARIO"))
     }
     corpo <- message[["body"]]
@@ -1689,15 +1823,31 @@ mail_round <- function(changed,
   # welcome first. Not retried, like the welcome: the right exists and the
   # next round finds nothing to do. A row the register does not hold, or one
   # without an address, loses the message the way a failed send does.
+  #
+  # An internal contact is the UPN, and the message goes where the account
+  # reads mail instead (`mail_access_recipients()`). An account that reads
+  # it nowhere has the message go to the referent, who tells the person, and
+  # to IT when the row has no owner, as its outcome does: delivered either
+  # way, since somebody who can tell the person has it.
   for (id in granted) {
     riga <- riga_di(id)
     accesso <- if (is.null(riga)) {
       list(ok = FALSE)
     } else {
-      consegna(
-        riga[["contact_email"]], NULL,
-        mail_access_message(riga, url = indirizzo_di(riga[["server"]]))
-      )
+      url <- indirizzo_di(riga[["server"]])
+      persona <- mail_access_recipients(riga)
+      if (length(persona) > 0L) {
+        consegna(persona, NULL, mail_access_message(riga, url = url))
+      } else if (nzchar(mail_referent(riga))) {
+        consegna(
+          mail_referent(riga), NULL,
+          mail_access_message(riga, url = url, relay = "referent")
+        )
+      } else {
+        consegna(
+          copy_to, NULL, mail_access_message(riga, url = url, relay = "it")
+        )
+      }
     }
     if (isTRUE(accesso[["ok"]])) {
       conto[["accessi_recapitati"]] <- conto[["accessi_recapitati"]] + 1L
