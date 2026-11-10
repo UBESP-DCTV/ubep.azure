@@ -5753,6 +5753,31 @@ test_that("il messaggio di una collisione dal giro nomina il nome occupato", {
 })
 
 
+test_that("il messaggio di una collisione su una riga eseguita dal giro non invita a incollare", { # nolint: line_length_linter.
+  # eval
+  # A row the round carried out, and whose person now composes a name an
+  # account that is somebody else holds: the seal comes from the log.
+  eseguita <- in_collisione(
+    username = "mario.rossi@ubep.unipd.it", identity = "existing",
+    outcome = "applied", outcome_detail = "", distinct_username = ""
+  )
+  sigillo <- request_seal(do.call(riga_come_registro, eseguita))
+  posta <- posta_raccolta()
+  giro_collisione(
+    righe = list(utils::modifyList(eseguita, list(applied_seal = sigillo))),
+    storia = list(esecuzione(sigillo)),
+    dry_run = FALSE, mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+
+  # test
+  expect_false(grepl("incolla", corpo, ignore.case = TRUE))
+  expect_false(grepl("distinct_username", corpo, fixed = TRUE))
+  expect_match(corpo, "La richiesta e' gia' stata eseguita", fixed = TRUE)
+  expect_match(corpo, "scrivi a IT", fixed = TRUE)
+})
+
+
 # ---- A row carried out does not change its pair (decided on 2026-11-09) ----
 
 mario <- "mario.rossi@ubep.unipd.it"

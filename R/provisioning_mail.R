@@ -408,6 +408,8 @@ mail_outcome_message <- function(row) {
   # and the referent who wrote it early finds the proposal already in the
   # field: the message says to empty it and paste it again, since REDCap logs
   # no write that leaves a value as it was.
+  # A row the channel already carried out gets no such invitation (L5 of the
+  # 0.24.0 notes): it is sent to IT.
   collisione <- if ("DATO_IDENTITA_IN_COLLISIONE" %in% nomi_codici) {
     codice <- codici[nomi_codici == "DATO_IDENTITA_IN_COLLISIONE"][[1L]]
     proposta <- if (grepl(":", codice, fixed = TRUE)) {
@@ -417,64 +419,109 @@ mail_outcome_message <- function(row) {
     }
     occupato <- mail_said_or(row[["composed"]], "")
     tra_virgole <- if (nzchar(occupato)) paste0(", ", occupato, ",") else ""
-    list(
-      it = c(
-        "",
-        paste0(
-          "Il nome utente composto da nome e cognome della riga",
-          tra_virgole, " e' di un account con nome o cognome diversi. Se ",
-          "quell'account non e' la persona di questa riga, incolla il nome ",
-          "utente proposto"
+    # A row the channel has already carried out takes no such answer: with
+    # the proposal pasted in, the round would not create the account, it
+    # would find the row's account changed and stop on
+    # `TRASPORTO_IDENTITA_CAMBIATA` with nothing made. The seal the round
+    # believes, from the owners' log, comes as `seal_carried`; a caller that
+    # does not say falls back on the field of the register.
+    eseguita_dal_canale <- nzchar(mail_said_or(
+      row[["seal_carried"]] %||% row[["applied_seal"]], ""
+    ))
+    if (eseguita_dal_canale) {
+      list(
+        it = c(
+          "",
+          paste0(
+            "Il nome utente composto da nome e cognome della riga",
+            tra_virgole, " e' di un account con nome o cognome diversi. La ",
+            "richiesta e' gia' stata eseguita: il canale non crea un altro ",
+            "account per una richiesta eseguita, e un altro nome utente ",
+            "scritto nella riga non cambia l'esito."
+          ),
+          "",
+          paste0(
+            "Non modificare la riga: scrivi a IT, che verifica l'account ",
+            "su Entra e dice come procedere."
+          )
         ),
-        "",
-        paste0("    ", proposta),
-        "",
-        paste0(
-          "nel campo \"Another person: create this username\" ",
-          "(distinct_username) della riga: al giro successivo il canale crea ",
-          "l'account con quel nome, manda a te la chiave e alla persona il ",
-          "benvenuto. La risposta vale solo per questa proposta: se la ",
-          "proposta cambia, arriva un messaggio con quella nuova. Se il ",
-          "campo porta gia' questo nome, scritto prima di questo messaggio, ",
-          "non vale: svuotalo, salva la riga e incollalo di nuovo. Scritta ",
-          "da un altro referente, aspetta l'approvazione del referente della ",
-          "riga, oppure di IT."
-        ),
-        "",
-        paste0(
-          "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
-          "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
-        )
-      ),
-      en = c(
-        "",
-        paste0(
-          "The username composed from the row's first and last name",
-          tra_virgole, " belongs to an account with a different first or ",
-          "last name. If that account is not the person this row is for, ",
-          "paste the proposed username"
-        ),
-        "",
-        paste0("    ", proposta),
-        "",
-        paste0(
-          "into the row's \"Another person: create this username\" field ",
-          "(distinct_username): on the next round the channel creates the ",
-          "account with that name, and sends you the key and the person the ",
-          "welcome. The answer holds for this proposal only: if the proposal ",
-          "changes, a message with the new one follows. If the field already ",
-          "holds this name, written before this message, it does not count: ",
-          "empty it, save the row and paste it again. Written by another ",
-          "referent, it waits for the approval of whoever owns the row, or ",
-          "of IT."
-        ),
-        "",
-        paste0(
-          "If it is the same person, leave the field blank: correct the ",
-          "row's first or last name, or write to IT if the account is wrong."
+        en = c(
+          "",
+          paste0(
+            "The username composed from the row's first and last name",
+            tra_virgole, " belongs to an account with a different first or ",
+            "last name. The request has already been carried out: the ",
+            "channel does not create another account for a request carried ",
+            "out, and another username written in the row does not change ",
+            "the outcome."
+          ),
+          "",
+          paste0(
+            "Do not edit the row: write to IT, who checks the account on ",
+            "Entra and says how to proceed."
+          )
         )
       )
-    )
+    } else {
+      list(
+        it = c(
+          "",
+          paste0(
+            "Il nome utente composto da nome e cognome della riga",
+            tra_virgole, " e' di un account con nome o cognome diversi. Se ",
+            "quell'account non e' la persona di questa riga, incolla il nome ",
+            "utente proposto"
+          ),
+          "",
+          paste0("    ", proposta),
+          "",
+          paste0(
+            "nel campo \"Another person: create this username\" ",
+            "(distinct_username) della riga: al giro successivo il canale ",
+            "crea l'account con quel nome, manda a te la chiave e alla ",
+            "persona il benvenuto. La risposta vale solo per questa ",
+            "proposta: se la proposta cambia, arriva un messaggio con ",
+            "quella nuova. Se il campo porta gia' questo nome, scritto ",
+            "prima di questo messaggio, non vale: svuotalo, salva la riga ",
+            "e incollalo di nuovo. Scritta da un altro referente, aspetta ",
+            "l'approvazione del referente della riga, oppure di IT."
+          ),
+          "",
+          paste0(
+            "Se e' la stessa persona, lascia vuoto il campo: correggi nome o ",
+            "cognome della riga, oppure scrivi a IT se e' sbagliato l'account."
+          )
+        ),
+        en = c(
+          "",
+          paste0(
+            "The username composed from the row's first and last name",
+            tra_virgole, " belongs to an account with a different first or ",
+            "last name. If that account is not the person this row is for, ",
+            "paste the proposed username"
+          ),
+          "",
+          paste0("    ", proposta),
+          "",
+          paste0(
+            "into the row's \"Another person: create this username\" field ",
+            "(distinct_username): on the next round the channel creates the ",
+            "account with that name, and sends you the key and the person the ",
+            "welcome. The answer holds for this proposal only: if the ",
+            "proposal changes, a message with the new one follows. If the ",
+            "field already holds this name, written before this message, it ",
+            "does not count: empty it, save the row and paste it again. ",
+            "Written by another referent, it waits for the approval of ",
+            "whoever owns the row, or of IT."
+          ),
+          "",
+          paste0(
+            "If it is the same person, leave the field blank: correct the ",
+            "row's first or last name, or write to IT if the account is wrong."
+          )
+        )
+      )
+    }
   } else {
     list(it = NULL, en = NULL)
   }

@@ -135,6 +135,50 @@ test_that("un @READONLY dentro un @IF non rende il campo di sola lettura", {
 })
 
 
+test_that("un suffisso di @READONLY non rende il campo di sola lettura sul modulo", { # nolint: line_length_linter.
+  # eval
+  dizionario <- data.frame(
+    `Variable / Field Name` = paste0("f", 1:8),
+    `Field Annotation` = c(
+      "@READONLY-SURVEY",
+      "@READONLY-FORM",
+      "@READONLY-SURVEY @READONLY",
+      "@READONLY @READONLY-SURVEY",
+      "@READONLY",
+      "@HIDDEN @READONLY",
+      "@READONLYX",
+      "@READONLY-SURVEY @HIDDEN"
+    ),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+
+  # test
+  # REDCap applies `@READONLY-SURVEY` to the survey alone: on the form the
+  # field stays writable. Only the bare tag counts, wherever it stands in the
+  # annotation, and a name that merely starts with it is another tag.
+  expect_equal(dictionary_readonly(dizionario), c("f3", "f4", "f5", "f6"))
+})
+
+
+test_that("il dizionario del pacchetto da lo stesso insieme di sola lettura di prima", { # nolint: line_length_linter.
+  # eval
+  marked <- dictionary_readonly(register_dictionary())
+
+  # test
+  # The live dictionary carries `@IF([applied_seal] <> "", @READONLY, "")` on
+  # `server` and `project_id`, as the packaged one does: they stay out, and
+  # the set is the one before the suffix was excluded. A different set would
+  # stop the round on `DIZIONARIO_READONLY_CADUTO`.
+  expect_equal(
+    marked,
+    c(
+      "identity", "requested_by", "owned_by", "outcome", "outcome_detail",
+      "outcome_at", "applied_as", "applied_seal", "seal_state"
+    )
+  )
+})
+
+
 test_that("server e project_id sono di sola lettura dopo la prima esecuzione", {
   # eval
   dizionario <- register_dictionary()

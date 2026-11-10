@@ -232,6 +232,63 @@ test_that("il messaggio di una collisione spiega le due risposte e nomina il cam
 })
 
 
+test_that("il messaggio di una collisione su una riga eseguita non invita a incollare e rimanda a IT", { # nolint: line_length_linter.
+  # eval
+  # The seal the round believes comes as `seal_carried`; the field of the
+  # register, `applied_seal`, stands when the round did not say.
+  dal_giro <- mail_outcome_message(do.call(
+    riga_di_prova, c(collisione_di_prova, list(seal_carried = "a1b2c3d4e5f6"))
+  ))[["body"]]
+  dal_campo <- mail_outcome_message(do.call(
+    riga_di_prova, c(collisione_di_prova, list(applied_seal = "a1b2c3d4e5f6"))
+  ))[["body"]]
+  mai_eseguita <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_di_prova)
+  )[["body"]]
+  # The field holds a seal the channel never wrote: the round says so with
+  # an empty `seal_carried`, and the row is as one never carried out.
+  dal_campo_altrui <- mail_outcome_message(do.call(
+    riga_di_prova, c(
+      collisione_di_prova,
+      list(applied_seal = "a1b2c3d4e5f6", seal_carried = "")
+    )
+  ))[["body"]]
+
+  # test
+  # Pasting the proposal into a row already carried out ends on
+  # `TRASPORTO_IDENTITA_CAMBIATA` and creates nothing: the message sends the
+  # referent to IT and does not ask for a paste.
+  for (corpo in list(dal_giro, dal_campo)) {
+    expect_false(grepl("incolla", corpo, ignore.case = TRUE))
+    expect_false(grepl("paste", corpo, ignore.case = TRUE))
+    expect_false(grepl("distinct_username", corpo, fixed = TRUE))
+    expect_false(
+      grepl("
+    sara.collaudozeta.2@ubep.unipd.it
+", corpo)
+    )
+    expect_match(
+      corpo, "e' di un account con nome o cognome diversi", fixed = TRUE
+    )
+    expect_match(corpo, "belongs to an account with a different", fixed = TRUE)
+    expect_match(corpo, "La richiesta e' gia' stata eseguita", fixed = TRUE)
+    expect_match(
+      corpo, "The request has already been carried out", fixed = TRUE
+    )
+    expect_match(corpo, "scrivi a IT", fixed = TRUE)
+    expect_match(corpo, "write to IT", fixed = TRUE)
+  }
+  # The rows never carried out keep the message they had.
+  for (corpo in list(mai_eseguita, dal_campo_altrui)) {
+    expect_match(corpo, "paste the proposed username", fixed = TRUE)
+    expect_match(corpo, "distinct_username", fixed = TRUE)
+    expect_false(
+      grepl("La richiesta e' gia' stata eseguita", corpo, fixed = TRUE)
+    )
+  }
+})
+
+
 test_that("il messaggio di una collisione dice di riscrivere una risposta data prima della proposta", { # nolint: line_length_linter.
   # eval
   detto <- mail_outcome_message(
