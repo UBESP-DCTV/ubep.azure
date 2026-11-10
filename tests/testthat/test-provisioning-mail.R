@@ -2605,3 +2605,70 @@ test_that("i campi assenti non sono campi vuoti", {
     mail_access_recipients(riga_di_prova()), "sara.esterna@example.org"
   )
 })
+
+
+# A mailer that answers each call with the next answer of its script, and
+# repeats the last one past its end.
+posta_a_copione <- function(...) {
+  risposte <- list(...)
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, cc = cc, subject = subject, body = body
+      )
+      risposte[[min(length(mandate), length(risposte))]]
+    },
+    mandate = function() mandate
+  )
+}
+
+
+test_that("un trasporto non raggiungibile non fa ritentare la casella", {
+  # eval
+  # The connection can fail after the service has taken the message: a 202
+  # nobody read. A second send would deliver it to the mailbox twice.
+  posta <- posta_a_copione(
+    list(ok = FALSE, errors = "TRASPORTO_POSTA_NON_RAGGIUNGIBILE"),
+    list(ok = TRUE, errors = character())
+  )
+  detto <- accesso_ritentato(
+    posta, interno_di_prova, "sara.privata@example.org"
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 1L)
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+  expect_identical(detto[["contatori"]][["accessi_recapitati"]], 0L)
+  expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
+})
+
+
+test_that("con redirect_to un rifiuto non si ritenta", {
+  # eval
+  # Redirected, the message has one recipient, the test address: a refusal
+  # of it cannot come from the external address, and a second send would go
+  # to the same test address again.
+  posta <- posta_a_copione(
+    list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA"),
+    list(ok = TRUE, errors = character())
+  )
+  registro <- registro_di_prova(contact_email = interno_di_prova)
+  detto <- mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    redirect_to = "prova@example.org", copy_to = "it@example.org",
+    granted = "16",
+    identified = data.frame(
+      record_id = "16", username = interno_di_prova, identity = "existing",
+      owner = "cinzia@ubep.unipd.it", mailbox = interno_di_prova,
+      external = "sara.privata@example.org", stringsAsFactors = FALSE
+    )
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 1L)
+  expect_equal(posta[["mandate"]]()[[1L]][["to"]], "prova@example.org")
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+  expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
+})

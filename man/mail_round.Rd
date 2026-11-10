@@ -104,9 +104,12 @@ exception: it goes to the account's mailbox and its first external
 address (\code{mail_access_recipients()}), in one message, and when the
 account has neither, to the referent with a line asking them to tell the
 person, or to \code{copy_to} when the row has no owner. Either counts as
-delivered. A message to the two that is refused is tried once more to the
-mailbox alone, the recipient it reached before; the two tries count as
-one message, delivered or lost. A row whose \code{mailbox} and \code{external}
+delivered. A message to the two that the mail service refuses
+(\code{TRASPORTO_POSTA_RIFIUTATA}) is tried once more to the mailbox alone, the
+recipient it reached before; the two tries count as one message, delivered
+or lost. Not on a transport that failed, which may have failed after the
+service took the message, and not under \code{redirect_to}, where the one
+recipient was the test address. A row whose \code{mailbox} and \code{external}
 \code{identified} does not carry loses the message, as a row without an
 address does: the round did not read where the account reads mail.
 }

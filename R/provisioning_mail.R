@@ -1618,9 +1618,12 @@ mail_redirect_note <- function(body, to, cc) {
 #' address (`mail_access_recipients()`), in one message, and when the
 #' account has neither, to the referent with a line asking them to tell the
 #' person, or to `copy_to` when the row has no owner. Either counts as
-#' delivered. A message to the two that is refused is tried once more to the
-#' mailbox alone, the recipient it reached before; the two tries count as
-#' one message, delivered or lost. A row whose `mailbox` and `external`
+#' delivered. A message to the two that the mail service refuses
+#' (`TRASPORTO_POSTA_RIFIUTATA`) is tried once more to the mailbox alone, the
+#' recipient it reached before; the two tries count as one message, delivered
+#' or lost. Not on a transport that failed, which may have failed after the
+#' service took the message, and not under `redirect_to`, where the one
+#' recipient was the test address. A row whose `mailbox` and `external`
 #' `identified` does not carry loses the message, as a row without an
 #' address does: the round did not read where the account reads mail.
 #'
@@ -1866,7 +1869,15 @@ mail_round <- function(changed,
         # travelled with it: one more try to it alone, counted as one
         # message either way.
         casella <- trimws(mail_said_or(riga[["mailbox"]], ""))
-        ritenta <- !isTRUE(inviato[["ok"]]) && length(persona) > 1L
+        # Only on a refusal the service answered: a transport that failed
+        # may have failed after the service took the message, and a second
+        # send would deliver it twice. Not when redirected either: then the
+        # one recipient was the test address, and the refusal was not the
+        # external address's.
+        rifiutato <- identical(
+          as.character(inviato[["errors"]]), "TRASPORTO_POSTA_RIFIUTATA"
+        )
+        ritenta <- rifiutato && length(persona) > 1L && is.null(redirect_to)
         if (ritenta && nzchar(casella)) {
           inviato <- consegna(casella, NULL, messaggio)
         }
