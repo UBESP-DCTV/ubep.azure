@@ -10,7 +10,7 @@ not what the write claimed a moment ago.
 ## Usage
 
 ``` r
-round_observed(reread, entry)
+round_observed(reread, entry, any_case = FALSE)
 ```
 
 ## Arguments
@@ -24,6 +24,14 @@ round_observed(reread, entry)
 
   One entry of a write response's `results`, carrying `username`,
   `project_id` and the response's own `after`.
+
+- any_case:
+
+  Whether to find the pair without regard to the case of the username,
+  as REDCap does
+  ([`round_present()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_present.md)):
+  what a revoke's read-back asks, since a person still held under
+  another case of the name is still on the project.
 
 ## Value
 

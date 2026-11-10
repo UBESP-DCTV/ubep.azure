@@ -1,10 +1,18 @@
 # The rows a month's report speaks about, with their owner and their date
 
-A row counts while it is an access: `request_status` is `active` and
-`outcome` is `applied`. The filter is on the request and not on the
-outcome alone, because a revocation the round carried out closes with
-`applied` too; and any other outcome is not an access, and has had its
-own mail already.
+A row counts while it is an access, `conta` of
+[`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md):
+`request_status` is `active` and the channel has executed it, whatever
+its outcome. The filter is on the request and not on the outcome alone,
+because a revocation the round carried out closes with `applied` too. A
+row executed and then stopped keeps its outcome in `outcome`, and the
+report says it beside the row wherever it lists it. A row past its
+expiration that nobody revoked counts as well, as long as it stands
+(decided on 2026-11-10): it is in force on the instance, and the
+referent is told to revoke what is no longer needed.
+[`report_assemble()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_assemble.md)
+does not judge it on its access. To leave it out from the month after
+its expiration, the place is the line of `keep` below.
 
 ## Usage
 

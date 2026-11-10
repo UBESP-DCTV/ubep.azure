@@ -15,7 +15,7 @@ outside the channel's path, as a job of its own."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,7 +67,8 @@ outside the channel's path, as a job of its own.</p>
 <span>  copy_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  channel_account <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  hosts <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  secrets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  secrets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  approvers <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -129,6 +130,18 @@ separated by commas, which it requires.</p></dd>
 the secret of its module. A server missing from either, or with an <code>NA</code>
 secret, is not read.</p></dd>
 
+
+<dt id="arg-approvers">approvers<a class="anchor" aria-label="anchor" href="#arg-approvers"></a></dt>
+<dd><p>The IT accounts whose approval of a change counts on any
+row, as the round has them: the report reads from the log the name a
+stopped row whose seal moved was executed with,
+<code><a href="report_executed_register.html">report_executed_register()</a></code>, and an approval decides which writes the
+execution covered. The runner reads them from <code>UBEP_APPROVATORI_IT</code>, as
+the round's does; <code><a href="https://rdrr.io/r/base/character.html" class="external-link">character()</a></code> when the list is empty. <code>NULL</code>, the
+default, is a caller that does not pass them, a runner older than the
+argument: those rows enter without the name executed, and the mail to IT
+says why.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -145,7 +158,8 @@ missing a report after the round.</p>
     <p>It also asks the instances, <code>accounts</code> only, through <code><a href="report_server_reads.html">report_server_reads()</a></code>:
 once the register and the directory have read whole, each server the
 register has rows on is asked for the people of those rows, the rows stopped
-on a disabled account included. A server that is not read stops nothing
+on a disabled account included, and a row executed and then stopped by the
+name it was executed with. A server that is not read stops nothing
 and is not an error: it is counted in <code>istanze_non_lette</code>, and the report
 goes on without what that server would have said.</p>
 <p>The job runs every day, because an alarm on logs looks back two days at

@@ -10,7 +10,7 @@ diff would propose revoking the referents.
 ## Usage
 
 ``` r
-round_actual(results, requests)
+round_actual(results, requests, any_case = FALSE)
 ```
 
 ## Arguments
@@ -22,6 +22,12 @@ round_actual(results, requests)
 - requests:
 
   The requests this instance was asked to satisfy.
+
+- any_case:
+
+  Whether to match usernames without regard to case, as REDCap does
+  ([`round_present()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_present.md)).
+  The default matches them as written.
 
 ## Value
 

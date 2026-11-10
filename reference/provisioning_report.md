@@ -22,7 +22,8 @@ provisioning_report(
   copy_to = NULL,
   channel_account = NULL,
   hosts = character(),
-  secrets = character()
+  secrets = character(),
+  approvers = NULL
 )
 ```
 
@@ -83,6 +84,19 @@ provisioning_report(
   module. A server missing from either, or with an `NA` secret, is not
   read.
 
+- approvers:
+
+  The IT accounts whose approval of a change counts on any row, as the
+  round has them: the report reads from the log the name a stopped row
+  whose seal moved was executed with,
+  [`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md),
+  and an approval decides which writes the execution covered. The runner
+  reads them from `UBEP_APPROVATORI_IT`, as the round's does;
+  [`character()`](https://rdrr.io/r/base/character.html) when the list
+  is empty. `NULL`, the default, is a caller that does not pass them, a
+  runner older than the argument: those rows enter without the name
+  executed, and the mail to IT says why.
+
 ## Value
 
 A list that
@@ -102,9 +116,10 @@ It also asks the instances, `accounts` only, through
 [`report_server_reads()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_server_reads.md):
 once the register and the directory have read whole, each server the
 register has rows on is asked for the people of those rows, the rows
-stopped on a disabled account included. A server that is not read stops
-nothing and is not an error: it is counted in `istanze_non_lette`, and
-the report goes on without what that server would have said.
+stopped on a disabled account included, and a row executed and then
+stopped by the name it was executed with. A server that is not read
+stops nothing and is not an error: it is counted in `istanze_non_lette`,
+and the report goes on without what that server would have said.
 
 The job runs every day, because an alarm on logs looks back two days at
 most and a monthly job cannot be watched by the absence of a record.

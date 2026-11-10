@@ -6,7 +6,8 @@ its person is disabled: `transport_error` with
 carry more than one code, so the code is looked for inside the field and
 not compared with it. These rows are not in the report, but their people
 are among the names the report asks the servers for, so that IT can see
-them.
+them. `disattivata` of
+[`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md).
 
 ## Usage
 

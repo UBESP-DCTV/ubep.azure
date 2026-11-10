@@ -1,5 +1,154 @@
 # Changelog
 
+## ubep.azure 0.25.0
+
+A row the channel has carried out stays in view when it stops, and two
+of the things that stopped it for nothing no longer do: the last day of
+access passing, and the revocation of a pair the instance no longer
+holds. The monthly report counts the rows executed and then stopped, and
+the round settles by itself what asks nothing of anybody.
+
+- **The monthly report sees the rows executed and then stopped.**
+  Decided on 2026-11-10. Until 0.24.0 the report counted only the rows
+  `active` and `applied`: a row the channel had executed and that then
+  stopped, `held`, a `data_error` such as `DATO_AMBITO_NON_AUTORIZZATO`
+  after its owner lost *User Rights*, a `transport_error` such as
+  `TRASPORTO_IDENTITA_CAMBIATA`, left the report the month after, while
+  the access executed stayed on the instance. Now every active row the
+  channel has sealed counts, whatever its outcome
+  ([`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md)),
+  and the report says the outcome beside it wherever an item lists it.
+  The servers are asked about the account executed: the register’s when
+  the seal did not move, otherwise the values
+  [`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
+  reads below the channel’s last seal
+  ([`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md));
+  where the log does not say, the row counts without being judged on its
+  access. The mail to IT has a sixth section, “Richieste ferme con un
+  accesso eseguito”, with every sealed row that is not `applied`: the
+  active ones, and the revoked ones whose revocation was not carried
+  out, stopped at the gate, `held`, or on `DATO_COPPIA_CAMBIATA` or
+  `TRASPORTO_IDENTITA_CAMBIATA`. Each comes with its outcome, whether
+  the person has entered the server under the name executed, and the
+  owner. A revocation the log says was carried out and then touched is
+  not in it: the access is gone. Rows stopped on
+  `TRASPORTO_ACCOUNT_DISATTIVATO` stay in their own section and out of
+  the referents’ reports. The rows of an owner who left UBEP come back
+  in “Richieste senza un referente”; a row listed in two sections of the
+  mail to IT counts once in its subject and its first line. More
+  referents can receive a report, and N and the all-clear can change.
+
+- **An expired row nobody revoked stays in the count while it stands.**
+  It is in force on the instance, and it is not judged on its first
+  sign-in or on its year without access. To leave it out from the month
+  after its expiration, the place is the `keep` line of
+  [`report_rows()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_rows.md).
+
+- **The report’s job passes the IT approvers.** `dev/runner-rapporto.R`
+  reads `UBEP_APPROVATORI_IT` as the round’s runner does and passes it
+  to `provisioning_report(approvers = )`: an approval decides which
+  writes an execution covered. The job in `/opt` is replaced, after the
+  package. A runner of 0.24.0 with this package reports those rows
+  without the name executed, and the mail to IT says why; this runner
+  with a package of 0.24.0 stops on the unknown argument.
+  `UbepRapporto_CL` keeps its columns.
+
+- **The person’s date survives a name written back.**
+  [`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md)
+  dates the person from the newest run of executions carried out for
+  that name, not from the newest write of `username`: a name the
+  identity door or a referent wrote and then wrote back, with no new
+  seal, no longer leaves the person undated and out of the first
+  sign-in.
+  [`log_written_value()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_written_value.md)
+  is the one reader of a field’s value in the log, for the report and
+  for the round.
+
+- **The natural expiration of a row carried out is not an error.**
+  Decided on 2026-11-10. Until 0.24.0 every round refused an active row
+  whose *Last day of access* had passed, `DATO_SCADENZA_NON_VALIDA`,
+  with a message to the owner and IT in copy, although the row had been
+  carried out with that day and REDCap was already applying it on the
+  access; the work instruction then asked for a date not yet passed, or
+  none, and either reopened the access. The check now applies only to a
+  row that would write a last day anew: never carried out, or changed
+  after its seal. A row the channel carried out and nobody changed since
+  (`validate_request(executed = TRUE)`,
+  `register_to_desired(executed = )`) is compared with the instance as
+  on every round: the same expiration is `applied` with nothing written
+  and no message, and an expiration extended by hand on the project is
+  written back to the row’s, which closes the access. On a pair the
+  instance no longer holds, somebody having removed the person after the
+  last day, the row is refused as before: written again it would create
+  an access already ended, and tell the person they have one. A date
+  that is not a date is refused on every row.
+
+- **A revocation on a pair already gone closes without the gate.**
+  Decided on 2026-11-10. A revocation the gate refused with
+  `DATO_AMBITO_NON_AUTORIZZATO`, the owner having lost User Rights on
+  the project or its access to it having expired, stayed there for good,
+  also once the person was no longer on the project. It now closes
+  `applied` with *Read back as* `absent`, with no call to the instance,
+  when the state the instance gave before the gate does not hold the
+  pair and the row is one the channel carried out whose revocation is
+  all that changed since: its seal, with `request_status` back to
+  `active` or as it is, is the channel’s
+  ([`seal_holds_but_revocation()`](https://ubesp-dctv.github.io/ubep.azure/reference/seal_holds_but_revocation.md)),
+  the channel sealed the row while it was active
+  ([`log_channel_seals()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_seals.md)),
+  and the username the round resolved is the one the register holds. The
+  seal is the channel’s own in the owners’ log, with the channel’s
+  account configured: the field alone, which an import writes, closes
+  nothing. A request withdrawn before its person was created was sealed
+  without ever granting an access, and stays at the gate. A pair still
+  on the instance, a row never carried out, a revocation that also
+  changes another field, or a username resolved differently stay as
+  before; so does a revocation by another referent who does not manage
+  the project, which waits for the owner, and once approved closes the
+  same way. A revocation closed so does not pass the row to anybody. IT
+  removes by hand a person still on the project, and the round after
+  closes the row.
+
+- **A revocation looks for the person whatever the capitals of the
+  username.** REDCap compares usernames without regard to case, and the
+  module’s state read answers with the name it stored. Matched as
+  written, a person whose username changed on Entra in its capitals
+  alone read as gone, and the revocation closed `applied` with the
+  person still on the project. Whether the pair is there, and whether a
+  revoke’s read-back still shows it, are now asked in any case
+  ([`round_present()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_present.md)),
+  and the revoke is sent under the name the instance holds, which the
+  module plans on as written; if the instance holds two names that
+  differ in capitals, the one written as in the register goes first. A
+  revoke whose read-back still shows the person takes
+  `TRASPORTO_SCRITTURA_NON_CONFERMATA`. Grants are compared as before.
+
+- **The collision mail of a row already carried out sends to IT.** The
+  mail no longer asks the owner to paste the username proposed into
+  `distinct_username`: on a row the channel has carried out the round
+  would stop on `TRASPORTO_IDENTITA_CAMBIATA` without creating the
+  account. It says that the request is carried out, that another name
+  written in the row changes nothing, and to write to IT, who checks the
+  account on Entra. The seal read for it is the one the round believes
+  (`seal_carried`). Rows never carried out get the mail of before.
+
+- **`@READONLY-SURVEY` is not `@READONLY`.**
+  [`dictionary_readonly()`](https://ubesp-dctv.github.io/ubep.azure/reference/dictionary_readonly.md)
+  counts only the bare tag: on the form a field with `@READONLY-SURVEY`
+  stays writable, and the comparison took it for locked. The dictionary
+  of the package gives the same nine read-only fields as before.
+
+- **Shape of the release.** No dictionary, module or rule changes.
+  Package first, then the report’s job in `/opt`; the reverse order
+  stops the job on the unknown argument `approvers`. On the first round,
+  an active row carried out whose last day has passed and that is in
+  `data_error` with `DATO_SCADENZA_NON_VALIDA` goes back to `applied`,
+  and a revoked row carried out that is in `data_error` with
+  `DATO_AMBITO_NON_AUTORIZZATO` on a pair already gone closes `applied`
+  with `absent`, each with one outcome message. The first monthly report
+  after the installation can list rows the one before did not: the rows
+  executed and then stopped.
+
 ## ubep.azure 0.24.0
 
 A request the channel has carried out keeps the pair it was carried out

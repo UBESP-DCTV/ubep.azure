@@ -11,7 +11,7 @@ badly filled in, not badly transported."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@ badly filled in, not badly transported.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_request</span><span class="op">(</span><span class="va">request</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_request</span><span class="op">(</span><span class="va">request</span>, executed <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -57,6 +57,11 @@ badly filled in, not badly transported.</p>
 
 <dl><dt id="arg-request">request<a class="anchor" aria-label="anchor" href="#arg-request"></a></dt>
 <dd><p>A named list, one request as described in the spec.</p></dd>
+
+
+<dt id="arg-executed">executed<a class="anchor" aria-label="anchor" href="#arg-executed"></a></dt>
+<dd><p>Whether the round carried this request out and nobody
+changed it since: the channel's seal is there and has not moved.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -67,6 +72,13 @@ badly filled in, not badly transported.</p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Errors that need the instance to be answered — a project, role or DAG that
 does not exist there — cannot be decided here and are left to the module.</p>
+<p>A last day of access in the past is refused on a request that would write
+a new one, and only there. A request the round carried out and nobody
+changed since had a valid last day when it was carried out: its passing is
+the expiration REDCap applies on the access, decided on 2026-11-10, and
+refusing it sent the referent to write a date that has not passed, or none,
+which reopened the access the expiration had closed. A value that is not a
+date is refused either way.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -21,7 +21,8 @@ report_assemble(
   previous = list(),
   unread = character(),
   servers = list(),
-  stopped = NULL
+  stopped = NULL,
+  held = NULL
 )
 ```
 
@@ -74,6 +75,14 @@ report_assemble(
   answers, or `NULL` for none. They are not in the referents' reports:
   IT gets them.
 
+- held:
+
+  The rows stopped with an access executed, as
+  [`report_held_rows()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_held_rows.md)
+  answers, or `NULL` for none. IT gets them all, with whether the person
+  has entered the server; the active ones are in their referent's report
+  as well, through `rows`.
+
 ## Value
 
 A list with `referenti`, one report per referent named after them, each
@@ -95,14 +104,16 @@ frame of `server`, `motivo`, `entra`, how many pairs of that server went
 into a referent's report on the strength of Entra, and
 `non_controllate`, how many were candidates for the year without access
 and could not be checked; one row for each server that was asked and not
-read, whether the rows on it are applied or stopped, also with none) and
+read, whether the rows on it are applied or stopped, also with none),
 `disattivati` (the rows of `stopped`, with `entrata`: `"si"` or `"no"`,
 whether the person has entered the server, when it was read, `""` when
-it was not); and `senza_creatore`, how many rows have no referent to go
-to. Since rows can pass, that means without an established owner and not
-only without a creator; the name stays, because it is a column of
-`UbepRapporto_CL`, and a renamed column would keep the table's history
-under one name and the new records under another.
+it was not) and `ferme` (the rows of `held`, with `entrata` as for
+`disattivati`, `""` also when the name executed is not known); and
+`senza_creatore`, how many rows have no referent to go to. Since rows
+can pass, that means without an established owner and not only without a
+creator; the name stays, because it is a column of `UbepRapporto_CL`,
+and a renamed column would keep the table's history under one name and
+the new records under another.
 
 ## Details
 
@@ -180,3 +191,12 @@ many, in the report itself: the principle of the all-clear, which must
 not cover an item nobody measured. `non_giudicati` counts them, a person
 once: the people of that referent the report could not judge, and those
 of the rows the log does not date.
+
+A row executed and then stopped is in `rows` like an applied one, and is
+judged like one: the entries of the first sign-in and of the year
+without access carry `ferme`, a frame of `server`, `project_id` and
+`esito` (the row's `outcome`) for their stopped rows, for the mail to
+say the request is stopped. A row whose name executed is not known
+(`nome_eseguito` empty,
+[`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md))
+is not judged on its access: nobody knows which account to look at.

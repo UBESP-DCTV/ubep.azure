@@ -31,3 +31,8 @@ The `@IF` is cut with its parentheses balanced, skipping what stands
 inside quotes, since a condition can hold a parenthesis of its own; an
 `@IF` nested in another goes with it. A tag after the `@IF` still
 counts.
+
+Only the bare tag counts: `@READONLY-SURVEY` is read-only on the survey
+and writable on the form, so it is not one of these fields; nor is
+`@READONLY-FORM`, read-only on the form and writable on the survey. A
+field some page can write is not a field only the round writes.

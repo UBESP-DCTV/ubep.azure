@@ -8,7 +8,7 @@ function never produces a revocation that a person did not ask for: only
 ## Usage
 
 ``` r
-register_to_desired(register)
+register_to_desired(register, executed = character())
 ```
 
 ## Arguments
@@ -18,13 +18,20 @@ register_to_desired(register)
   The register as a data frame, one row per pair, carrying at least
   `record_id` and `request_status`.
 
+- executed:
+
+  The `record_id`s of the rows the round carried out and nobody changed
+  since: the channel's seal is there and has not moved.
+
 ## Value
 
-A list with `desired`, `revoked` and `errors`. The first two hold
-requests that already went through
+A list with `desired`, `revoked`, `errors` and `lapsed`. The first two
+hold requests that already went through
 [`intake_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/intake_request.md),
 each carrying its `record_id` so the outcome knows where to go back.
-`errors` is named by `record_id`.
+`errors` is named by `record_id`. `lapsed` holds the `record_id`s of the
+rows in `desired` whose last day has passed, admitted because they are
+in `executed`.
 
 ## Details
 
@@ -51,3 +58,12 @@ would name the right row more precisely and is refused on the same
 ground as the identity gate's: it would ask the `outcome` the register
 carries, a verdict up to four hours old, instead of a fact about the
 row.
+
+A row the round carried out and nobody changed since keeps a last day
+that has passed,
+[`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md):
+the expiration is REDCap's to apply. Its id is returned in `lapsed`,
+because such a row may be compared with the instance and brought back to
+what it says, and never written as a new access: on a pair the instance
+no longer holds, the round refuses its last day as before
+([`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md)).

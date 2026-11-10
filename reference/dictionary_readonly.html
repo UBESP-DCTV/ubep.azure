@@ -19,7 +19,7 @@ has not imported the tag yet, and the round would stop."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,6 +81,10 @@ has not imported the tag yet, and the round would stop.</p>
     <p>The <code>@IF</code> is cut with its parentheses balanced, skipping what stands
 inside quotes, since a condition can hold a parenthesis of its own; an
 <code>@IF</code> nested in another goes with it. A tag after the <code>@IF</code> still counts.</p>
+<p>Only the bare tag counts: <code>@READONLY-SURVEY</code> is read-only on the survey
+and writable on the form, so it is not one of these fields; nor is
+<code>@READONLY-FORM</code>, read-only on the form and writable on the survey. A
+field some page can write is not a field only the round writes.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

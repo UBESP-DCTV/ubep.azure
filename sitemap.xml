@@ -56,6 +56,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_accounts.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_seal.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_seals.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_unknown.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_creators.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_current_life.html</loc></url>
@@ -73,6 +74,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_uncovered_authors.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_uncovered_writes.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_value.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_written_value.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/log_wrote.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_message.html</loc></url>
@@ -137,6 +139,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_due_path.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_due_read.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_due_write.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_executions.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_expired.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_expiring_lines.html</loc></url>
@@ -144,6 +147,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_first_month.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_grace_days.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_graph_time.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_held_rows.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_idle_lines.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_it_key.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_it_message.html</loc></url>
@@ -169,11 +173,14 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_record.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_recover.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_rows.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_server_access.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_server_asks.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_server_reads.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_shift_month.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_stopped_lines.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_stopped_rows.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_stopped_words.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_tolerance.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/report_write_json.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/request_for.html</loc></url>
@@ -187,6 +194,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_changed.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_observed.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_outcome_kind.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_present.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_record.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_rights.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/round_schema_verdict.html</loc></url>
@@ -207,6 +215,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/scope_pairs.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/scope_withdrawal.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/seal_approved.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/seal_holds_but_revocation.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/seal_needs_approval.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/seal_payload.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/seal_state_vocabulary.html</loc></url>

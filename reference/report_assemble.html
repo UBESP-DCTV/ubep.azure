@@ -21,7 +21,7 @@ by two referents is in both reports, each with their own rows."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,8 @@ by two referents is in both reports, each with their own rows.</p>
 <span>  previous <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  unread <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  servers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  stopped <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  stopped <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  held <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -114,6 +115,13 @@ accounts, is a server that was not read.</p></dd>
 <code><a href="report_stopped_rows.html">report_stopped_rows()</a></code> answers, or <code>NULL</code> for none. They are not in the
 referents' reports: IT gets them.</p></dd>
 
+
+<dt id="arg-held">held<a class="anchor" aria-label="anchor" href="#arg-held"></a></dt>
+<dd><p>The rows stopped with an access executed, as
+<code><a href="report_held_rows.html">report_held_rows()</a></code> answers, or <code>NULL</code> for none. IT gets them all, with
+whether the person has entered the server; the active ones are in their
+referent's report as well, through <code>rows</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -137,10 +145,12 @@ nothing for IT, otherwise a list of <code>senza_referente</code> (rows, with
 referent's report on the strength of Entra, and <code>non_controllate</code>, how
 many were candidates for the year without access and could not be
 checked; one row for each server that was asked and not read, whether
-the rows on it are applied or stopped, also with none) and
+the rows on it are applied or stopped, also with none),
 <code>disattivati</code> (the rows of <code>stopped</code>, with <code>entrata</code>: <code>"si"</code> or <code>"no"</code>,
 whether the person has entered the server, when it was read, <code>""</code> when
-it was not); and <code>senza_creatore</code>, how
+it was not) and <code>ferme</code> (the rows of <code>held</code>, with <code>entrata</code> as for
+<code>disattivati</code>, <code>""</code> also when the name executed is not known); and
+<code>senza_creatore</code>, how
 many rows have no referent to go to. Since rows can pass, that means
 without an established owner and not only without a creator; the name
 stays, because it is a column of <code>UbepRapporto_CL</code>, and a renamed
@@ -205,6 +215,13 @@ many, in the report itself: the principle of the all-clear, which must not
 cover an item nobody measured. <code>non_giudicati</code> counts them, a person once:
 the people of that referent the report could not judge, and those of the
 rows the log does not date.</p>
+<p>A row executed and then stopped is in <code>rows</code> like an applied one, and is
+judged like one: the entries of the first sign-in and of the year without
+access carry <code>ferme</code>, a frame of <code>server</code>, <code>project_id</code> and <code>esito</code> (the
+row's <code>outcome</code>) for their stopped rows, for the mail to say the request
+is stopped. A row whose name executed is not known (<code>nome_eseguito</code> empty,
+<code><a href="report_executed_register.html">report_executed_register()</a></code>) is not judged on its access: nobody knows
+which account to look at.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

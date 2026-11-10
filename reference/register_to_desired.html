@@ -13,7 +13,7 @@ request_status = &quot;revoked&quot; does that."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,7 @@ never produces a revocation that a person did not ask for: only
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_to_desired</span><span class="op">(</span><span class="va">register</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">register_to_desired</span><span class="op">(</span><span class="va">register</span>, executed <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,13 +62,20 @@ never produces a revocation that a person did not ask for: only
 <dd><p>The register as a data frame, one row per pair, carrying at
 least <code>record_id</code> and <code>request_status</code>.</p></dd>
 
+
+<dt id="arg-executed">executed<a class="anchor" aria-label="anchor" href="#arg-executed"></a></dt>
+<dd><p>The <code>record_id</code>s of the rows the round carried out and
+nobody changed since: the channel's seal is there and has not moved.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>desired</code>, <code>revoked</code> and <code>errors</code>. The first two hold
-requests that already went through <code><a href="intake_request.html">intake_request()</a></code>, each carrying its
-<code>record_id</code> so the outcome knows where to go back. <code>errors</code> is named by
-<code>record_id</code>.</p>
+    <p>A list with <code>desired</code>, <code>revoked</code>, <code>errors</code> and <code>lapsed</code>. The first
+two hold requests that already went through <code><a href="intake_request.html">intake_request()</a></code>, each
+carrying its <code>record_id</code> so the outcome knows where to go back. <code>errors</code>
+is named by <code>record_id</code>. <code>lapsed</code> holds the <code>record_id</code>s of the rows in
+<code>desired</code> whose last day has passed, admitted because they are in
+<code>executed</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -91,6 +98,12 @@ register exists to prevent, arriving from the side nobody was watching.</p>
 name the right row more precisely and is refused on the same ground as the
 identity gate's: it would ask the <code>outcome</code> the register carries, a verdict
 up to four hours old, instead of a fact about the row.</p>
+<p>A row the round carried out and nobody changed since keeps a last day that
+has passed, <code><a href="validate_request.html">validate_request()</a></code>: the expiration is REDCap's to apply. Its
+id is returned in <code>lapsed</code>, because such a row may be compared with the
+instance and brought back to what it says, and never written as a new
+access: on a pair the instance no longer holds, the round refuses its last
+day as before (<code><a href="provisioning_reconcile.html">provisioning_reconcile()</a></code>).</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

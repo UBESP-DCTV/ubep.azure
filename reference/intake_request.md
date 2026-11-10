@@ -8,7 +8,7 @@ conversion wrong is to forget it.
 ## Usage
 
 ``` r
-intake_request(request)
+intake_request(request, executed = FALSE)
 ```
 
 ## Arguments
@@ -16,6 +16,14 @@ intake_request(request)
 - request:
 
   A named list, one request as described in the spec.
+
+- executed:
+
+  Whether the round carried this request out and nobody changed it
+  since, for
+  [`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md).
+  The conversion is the same: the round compares the instance with the
+  value REDCap stores.
 
 ## Value
 

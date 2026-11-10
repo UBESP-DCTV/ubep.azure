@@ -17,7 +17,7 @@ what the write claimed a moment ago."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,7 @@ what the write claimed a moment ago.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">round_observed</span><span class="op">(</span><span class="va">reread</span>, <span class="va">entry</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">round_observed</span><span class="op">(</span><span class="va">reread</span>, <span class="va">entry</span>, any_case <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -72,6 +72,13 @@ this was a simulation and there is nothing to read back.</p></dd>
 <dt id="arg-entry">entry<a class="anchor" aria-label="anchor" href="#arg-entry"></a></dt>
 <dd><p>One entry of a write response's <code>results</code>, carrying
 <code>username</code>, <code>project_id</code> and the response's own <code>after</code>.</p></dd>
+
+
+<dt id="arg-any-case">any_case<a class="anchor" aria-label="anchor" href="#arg-any-case"></a></dt>
+<dd><p>Whether to find the pair without regard to the case of
+the username, as REDCap does (<code><a href="round_present.html">round_present()</a></code>): what a revoke's
+read-back asks, since a person still held under another case of the name
+is still on the project.</p></dd>
 
 </dl></div>
     <div class="section level2">
