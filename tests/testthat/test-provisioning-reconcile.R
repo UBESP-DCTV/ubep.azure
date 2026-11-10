@@ -7011,3 +7011,49 @@ test_that("una revoca chiusa senza cancello non passa la riga a chi il cancello 
   expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
   expect_false(isTRUE(bruno %in% proprietari_scritti()[["owned_by"]]))
 })
+
+
+# ---- Corrections after the review of 0.25.0 ----
+
+
+test_that("senza l'utenza del canale un sigillo nel campo non chiude la revoca senza cancello", { # nolint: line_length_linter.
+  # eval
+  # Nobody but the field says the row was carried out: no write of the
+  # channel in the log, and no channel account to tell one from an import.
+  esito <- giro_revoca(
+    cambi = list(outcome = "data_error", applied_as = ""),
+    eseguita = list(),
+    channel_account = NULL
+  )
+
+  # test
+  # Without the channel's account the round believes the field, which an
+  # import writes as any other. A row closed past the gate on it would tell
+  # whoever imported the seal whether the person is on the project.
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})
+
+
+test_that("con l'utenza del canale un sigillo importato da un altro non chiude la revoca", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca(
+    cambi = list(outcome = "data_error", applied_as = ""),
+    eseguita = list(
+      list(
+        timestamp = "2026-08-12 05:00", username = bruno,
+        action = "Update record (API) 1", record = "1",
+        details = paste0("applied_seal = '", sigillo_eseguito(), "'")
+      ),
+      carried_out(sigillo_eseguito())[[2]]
+    )
+  )
+
+  # test
+  expect_equal(
+    esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+  expect_length(revoche(), 0L)
+})

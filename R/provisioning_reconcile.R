@@ -946,7 +946,8 @@ provisioning_reconcile <- function(register_url,
   # asked for a date not yet passed, or none, and either reopened the access.
   # A row changed after its seal, or never carried out, would write a last
   # day anew, and is refused on it as before. The seal is the one the round
-  # believes, the channel's own in the owners' log.
+  # believes: with the channel's account configured, the channel's own in the
+  # owners' log; without it, the field, as everywhere else in the round.
   intact <- record_ids[nzchar(sealed) & !tampered]
   plan <- register_to_desired(resolved, executed = intact)
   asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
@@ -962,9 +963,17 @@ provisioning_reconcile <- function(register_url,
   # resolved differently from the one the register holds: the instance would
   # be asked about a name that was never carried out, find it absent, and the
   # name carried out would stay with no row to govern it.
+  #
+  # And only on the channel's own seal, read from the owners' log with the
+  # channel's account configured. Without the account the round believes the
+  # field, which an import writes as any other: a seal typed there would close
+  # a revocation past the gate, and tell whoever typed it whether the person
+  # is on the project.
+  channel_sealed <- !is.null(channel_account) && !is.null(owners_log)
   as_read <- identity_normalize(register[["username"]] %||% "")
   as_read[is.na(as_read)] <- ""
-  vacatable <- seal_holds_but_revocation(register, sealed) &
+  vacatable <- channel_sealed &
+    seal_holds_but_revocation(register, sealed) &
     nzchar(as_read) & as_read == identity_normalize(resolved_names)
 
   # The rights a provisional withdrawal is judged on are those of whoever had a
