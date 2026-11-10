@@ -1340,3 +1340,46 @@ test_that("un otherMails sporco si pulisce, e uno che non e' un indirizzo si sal
   expect_equal(pulito[["external"]], "mario.privato@example.org")
   expect_equal(saltato[["external"]], "mario.rossi@example.org")
 })
+
+
+test_that("un apice sbilanciato resta, perche' e' un carattere dell'indirizzo", { # nolint: line_length_linter.
+  # eval
+  # A quote is a character of the local part, so one without its partner is
+  # part of what was written: taken off, `'mario'@example.org` would become
+  # `mario'@example.org`, another address of valid form. Quotes go only in
+  # pairs around the whole value.
+  valori <- c(
+    "'mario'@example.org", "'mario@example.org", "mario@example.org'",
+    "'mario@example.org'", "\"mario@example.org\"", "<'mario@example.org'>"
+  )
+
+  # test
+  expect_equal(
+    directory_address(valori),
+    c(
+      "'mario'@example.org", "'mario@example.org", "",
+      "mario@example.org", "mario@example.org", "mario@example.org"
+    )
+  )
+})
+
+
+test_that("uno spazio non separabile attorno all'indirizzo si toglie", {
+  # eval
+  # Frequent in a value copied from a page or from a mail client, and not a
+  # character of an address: left on, it would lose the address.
+  valori <- c(
+    "mario@example.org\u00a0", "\u00a0mario@example.org",
+    "\u00a0<mario@example.org>;\u00a0"
+  )
+
+  # test
+  expect_equal(directory_address(valori), rep("mario@example.org", 3L))
+})
+
+
+test_that("directory_address() su un vettore vuoto da' un vettore di caratteri", { # nolint: line_length_linter.
+  # test
+  expect_identical(directory_address(character()), character())
+  expect_identical(directory_address(NA_character_), "")
+})

@@ -214,12 +214,15 @@ directory_identifiers <- function(account) {
 #' full stop, angle brackets, parentheses, quotes, a `mailto:` in front.
 #' Handed to the mail service as it is, such a value is refused, and with it
 #' every other recipient of the same message. So what wraps the address is
-#' taken off: spaces, an opening bracket or parenthesis, quotes and `mailto:`
-#' on the left; spaces, a closing bracket or parenthesis, quotes and a
-#' trailing `,`, `;` or `.` on the right, as often as they nest. A full stop,
-#' comma or semicolon on the left stays: taken off, `.mario@example.org`
-#' would become `mario@example.org`, an address that may be somebody else's,
-#' where the value as written reaches nobody. What is left
+#' taken off: spaces, no-break spaces included, an opening bracket or
+#' parenthesis and `mailto:` on the left; spaces, a closing bracket or
+#' parenthesis and a trailing `,`, `;` or `.` on the right; quotes only as a
+#' pair around the whole value; as often as they nest. A full stop, comma or
+#' semicolon on the left stays: taken off, `.mario@example.org` would become
+#' `mario@example.org`, an address that may be somebody else's, where the
+#' value as written reaches nobody. So does a quote without its partner,
+#' which is a character of the local part: `'mario'@example.org` is what was
+#' written, and `mario'@example.org` would be another address. What is left
 #' is folded to lower case and has to have the strict form of an address: a
 #' local part of dot-separated atoms, one `@`, a domain of labels that start
 #' and end with a letter or a digit, the last one alphabetic, nothing else. A
@@ -237,11 +240,17 @@ directory_address <- function(values) {
   values[is.na(values)] <- ""
   # Wrappers on both sides, separators on the right only: a full stop, comma
   # or semicolon on the left is not something wrapped around an address, and
-  # taking it off could turn a value into somebody else's address.
-  left <- "^[[:space:]<('\"]+"
-  right <- "[[:space:]>)'\",;.]+$"
+  # taking it off could turn a value into somebody else's address. Quotes
+  # only in pairs around the whole value: a quote is a character of the local
+  # part, and one alone is part of what was written. The no-break space is
+  # spelled out, being no `[[:space:]]` to every regular expression engine.
+  left <- "^[[:space:]\u00a0<(]+"
+  right <- "[[:space:]\u00a0>),;.]+$"
+  quoted <- "^([\"'])(.*)\\1$"
   repeat {
-    cleaned <- sub("^mailto:", "", sub(right, "", sub(left, "", values)))
+    cleaned <- sub(
+      quoted, "\\2", sub("^mailto:", "", sub(right, "", sub(left, "", values)))
+    )
     if (identical(cleaned, values)) {
       break
     }
@@ -252,7 +261,8 @@ directory_address <- function(values) {
   form <- paste0(
     "^", atom, "(\\.", atom, ")*@(", label, "\\.)+[a-z]{2,}$"
   )
-  ifelse(grepl(form, values), values, "")
+  values[!grepl(form, values)] <- ""
+  values
 }
 
 
