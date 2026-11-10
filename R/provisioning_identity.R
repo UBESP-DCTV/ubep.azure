@@ -207,6 +207,46 @@ directory_identifiers <- function(account) {
 }
 
 
+#' Read an address out of a field a person typed
+#'
+#' `officeLocation` is free text, and the historical flow wrote it as the
+#' spreadsheet had it: an address with a comma or a semicolon after it, a
+#' full stop, angle brackets, parentheses, quotes, a `mailto:` in front.
+#' Handed to the mail service as it is, such a value is refused, and with it
+#' every other recipient of the same message. So the punctuation is taken off
+#' the ends, and `mailto:` off the front, as often as they nest; what is left
+#' is folded to lower case and has to have the strict form of an address: a
+#' local part of dot-separated atoms, one `@`, a domain of labels that start
+#' and end with a letter or a digit, the last one alphabetic, nothing else. A
+#' value that does not is not an address, which is not the same as a wrong
+#' one: it is a room, a note, two addresses in one field.
+#'
+#' @param values A character vector.
+#'
+#' @return A character vector of the same length: the address, cleaned and in
+#'   lower case, or `""`.
+#'
+#' @keywords internal
+directory_address <- function(values) {
+  values <- tolower(as.character(values))
+  values[is.na(values)] <- ""
+  edges <- "^[[:space:]<>(),;.'\"]+|[[:space:]<>(),;.'\"]+$"
+  repeat {
+    cleaned <- sub("^mailto:", "", gsub(edges, "", values))
+    if (identical(cleaned, values)) {
+      break
+    }
+    values <- cleaned
+  }
+  atom <- "[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
+  label <- "[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+  form <- paste0(
+    "^", atom, "(\\.", atom, ")*@(", label, "\\.)+[a-z]{2,}$"
+  )
+  ifelse(grepl(form, values), values, "")
+}
+
+
 #' Where the account an internal contact names reads its mail
 #'
 #' The access message of a row whose contact is internal does not go to that
@@ -224,9 +264,11 @@ directory_identifiers <- function(account) {
 #'
 #' `external` is the first address the account carries outside the domain:
 #' the first of `otherMails`, otherwise `officeLocation`, the historical
-#' carrier of decision 9, which on many accounts holds a room instead and
-#' counts only when it has the form of an address. An alias in the domain is
-#' skipped, being the same mailbox or none.
+#' carrier of decision 9, which on many accounts holds a room instead. Each
+#' is read with `directory_address()`, which takes punctuation off its ends
+#' and keeps it only when what is left has the strict form of an address; one
+#' that does not is skipped for the next. An alias in the domain is skipped
+#' too, being the same mailbox or none.
 #'
 #' @param directory A directory frame as `directory_users()` returns.
 #' @param upns The UPN each row resolved to, as the resolution answered it.
@@ -235,8 +277,9 @@ directory_identifiers <- function(account) {
 #' @param domain The tenant's verified domain, as `identity_internal()` takes
 #'   it.
 #'
-#' @return A data frame with `mailbox` and `external`, one row per UPN, the
-#'   addresses trimmed and otherwise as the directory writes them.
+#' @return A data frame with `mailbox` and `external`, one row per UPN:
+#'   `mailbox` trimmed and otherwise as the directory writes it, `external`
+#'   as `directory_address()` reads it.
 #'
 #' @keywords internal
 directory_mailboxes <- function(directory, upns, domain = "ubep.unipd.it") {
@@ -267,13 +310,10 @@ directory_mailboxes <- function(directory, upns, domain = "ubep.unipd.it") {
     if (is.na(j)) {
       return("")
     }
-    carried <- addresses(c(
+    carried <- directory_address(addresses(c(
       directory[["otherMails"]][[j]], directory[["officeLocation"]][[j]]
-    ))
-    carried <- carried[
-      grepl("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", carried) &
-        !identity_internal(carried, domain)
-    ]
+    )))
+    carried <- carried[nzchar(carried) & !identity_internal(carried, domain)]
     c(carried, "")[[1L]]
   }, character(1))
 

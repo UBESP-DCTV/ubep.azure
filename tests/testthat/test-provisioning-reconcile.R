@@ -7372,3 +7372,71 @@ test_that("nel giro un account senza casella ne' esterno fa avvisare il referent
   expect_match(giro_fatto[["accesso"]][[1L]][["body"]], "^Avvisa tu ")
   expect_identical(giro_fatto[["esito"]][["posta"]][["accessi_recapitati"]], 1L)
 })
+
+
+test_that("nel giro un officeLocation sporco arriva pulito accanto alla casella", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(
+    mail = "mario.rossi@ubep.unipd.it",
+    officeLocation = "<Mario.Privato@example.org>;"
+  )
+
+  # test
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]],
+    c("mario.rossi@ubep.unipd.it", "mario.privato@example.org")
+  )
+})
+
+
+test_that("nel giro un officeLocation che non e' un indirizzo lascia la sola casella", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(
+    mail = "mario.rossi@ubep.unipd.it",
+    officeLocation = "mario.privato@example"
+  )
+
+  # test
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]], "mario.rossi@ubep.unipd.it"
+  )
+})
+
+
+test_that("nel giro un rifiuto dei due destinatari ritenta la casella", {
+  # eval
+  mandate <- list()
+  esito <- giro(
+    registro_doppio(record_json(list(
+      contact_email = "mario.rossi@ubep.unipd.it"
+    ))),
+    istanza_che_scrive(),
+    directory_doppia(graph_user(
+      mail = "mario.rossi@ubep.unipd.it",
+      otherMails = I("mario.privato@example.org")
+    )),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject
+      )
+      if (length(to) > 1L) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    }
+  )
+  accesso <- Filter(
+    function(m) startsWith(m[["subject"]], "Accesso a REDCap"), mandate
+  )
+
+  # test
+  expect_length(accesso, 2L)
+  expect_equal(accesso[[2L]][["to"]], "mario.rossi@ubep.unipd.it")
+  expect_identical(esito[["posta"]][["accessi_recapitati"]], 1L)
+  expect_identical(esito[["posta"]][["accessi_persi"]], 0L)
+  expect_false("POSTA_ACCESSO_PERSA" %in% esito[["errori"]])
+})

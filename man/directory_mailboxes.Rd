@@ -17,8 +17,9 @@ gets two empty strings.}
 it.}
 }
 \value{
-A data frame with \code{mailbox} and \code{external}, one row per UPN, the
-addresses trimmed and otherwise as the directory writes them.
+A data frame with \code{mailbox} and \code{external}, one row per UPN:
+\code{mailbox} trimmed and otherwise as the directory writes it, \code{external}
+as \code{directory_address()} reads it.
 }
 \description{
 The access message of a row whose contact is internal does not go to that
@@ -37,8 +38,10 @@ primary address there when it gives the account a mailbox, and on about
 
 \code{external} is the first address the account carries outside the domain:
 the first of \code{otherMails}, otherwise \code{officeLocation}, the historical
-carrier of decision 9, which on many accounts holds a room instead and
-counts only when it has the form of an address. An alias in the domain is
-skipped, being the same mailbox or none.
+carrier of decision 9, which on many accounts holds a room instead. Each
+is read with \code{directory_address()}, which takes punctuation off its ends
+and keeps it only when what is left has the strict form of an address; one
+that does not is skipped for the next. An alias in the domain is skipped
+too, being the same mailbox or none.
 }
 \keyword{internal}

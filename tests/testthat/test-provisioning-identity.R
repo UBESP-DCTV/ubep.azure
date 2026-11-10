@@ -1259,3 +1259,62 @@ test_that("un nome che non e' un account del tenant non ha caselle", {
   expect_equal(trovate[["mailbox"]], c("", "", "", "mario.rossi@ubep.unipd.it"))
   expect_equal(trovate[["external"]], c("", "", "", "mario.rossi@example.org"))
 })
+
+
+# `officeLocation` is free text, written by the historical flow as the
+# spreadsheet had it. A value with punctuation around the address would go,
+# unread, into the same personalization as the mailbox, and a mail service
+# that refuses one address of a personalization refuses the whole message:
+# the mailbox, which received it before, would lose it too.
+test_that("un esterno sporco si pulisce agli estremi e torna in minuscolo", {
+  # eval
+  esterno_di <- function(valore) {
+    caselle_di(officeLocation = valore)[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    "mario.privato@example.org,", "mario.privato@example.org;",
+    "mario.privato@example.org.", "<mario.privato@example.org>",
+    "mailto:mario.privato@example.org", "(mario.privato@example.org)",
+    "'mario.privato@example.org'", "\"mario.privato@example.org\"",
+    " <MAILTO:Mario.Privato@Example.org>; ", "Mario.Privato@Example.ORG"
+  )) {
+    expect_equal(esterno_di(valore), "mario.privato@example.org", info = valore)
+  }
+})
+
+
+test_that("un valore che pulito non e' un indirizzo non e' un esterno", {
+  # eval
+  esterno_di <- function(valore) {
+    caselle_di(officeLocation = valore)[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    "Stanza 12", "mario.privato@example", "mario.privato@example.123",
+    "mario@@example.org", "mario privato@example.org",
+    "mario.privato@example.org, altro@example.org", "mailto:", "@example.org",
+    "mario.privato@-example.org", "mario.privato@example..org",
+    "mario.@example.org", "mario..privato@example.org"
+  )) {
+    expect_equal(esterno_di(valore), "", info = valore)
+  }
+})
+
+
+test_that("un otherMails sporco si pulisce, e uno che non e' un indirizzo si salta", { # nolint: line_length_linter.
+  # eval
+  pulito <- caselle_di(
+    otherMails = I("<Mario.Privato@example.org>"), officeLocation = ""
+  )
+  saltato <- caselle_di(
+    otherMails = I("mario.privato@example"),
+    officeLocation = "mario.rossi@example.org;"
+  )
+
+  # test
+  expect_equal(pulito[["external"]], "mario.privato@example.org")
+  expect_equal(saltato[["external"]], "mario.rossi@example.org")
+})

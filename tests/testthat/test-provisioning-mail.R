@@ -2432,3 +2432,111 @@ test_that("il servizio di posta riceve piu' destinatari in un messaggio solo", {
     c("uno@example.org", "due@example.org")
   )
 })
+
+
+# A mailer that refuses a message with more than one recipient, as the mail
+# service does when one address of a personalization is not valid, and takes
+# one with a single recipient unless `anche_uno` says otherwise.
+rifiuta_i_molti <- function(anche_uno = FALSE) {
+  mandate <- list()
+  list(
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, cc = cc, subject = subject, body = body
+      )
+      if (length(to) > 1L || isTRUE(anche_uno)) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    },
+    mandate = function() mandate
+  )
+}
+
+
+interno_di_prova <- "sara.collaudozeta@ubep.unipd.it"
+
+
+accesso_ritentato <- function(posta,
+                              mailbox,
+                              external,
+                              contact_email = interno_di_prova) {
+  registro <- registro_di_prova(contact_email = contact_email)
+  mail_round(
+    registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+    mailer = posta[["mailer"]], dry_run = FALSE,
+    copy_to = "it@example.org", granted = "16",
+    identified = data.frame(
+      record_id = "16", username = "sara.collaudozeta@ubep.unipd.it",
+      identity = "existing", owner = "cinzia@ubep.unipd.it",
+      mailbox = mailbox, external = external, stringsAsFactors = FALSE
+    )
+  )
+}
+
+
+test_that("rifiutato a due destinatari, l'accesso si ritenta alla sola casella", { # nolint: line_length_linter.
+  # eval
+  posta <- rifiuta_i_molti()
+  detto <- accesso_ritentato(
+    posta, "sara.collaudozeta@ubep.unipd.it", "sara.privata@example.org"
+  )
+  mandate <- posta[["mandate"]]()
+
+  # test
+  # The mailbox is the recipient the message reached before the external
+  # address existed for it, so a refusal of the two must not cost it.
+  expect_length(mandate, 2L)
+  expect_equal(
+    mandate[[1L]][["to"]],
+    c("sara.collaudozeta@ubep.unipd.it", "sara.privata@example.org")
+  )
+  expect_equal(mandate[[2L]][["to"]], "sara.collaudozeta@ubep.unipd.it")
+  expect_equal(mandate[[2L]][["body"]], mandate[[1L]][["body"]])
+  expect_identical(detto[["contatori"]][["accessi_recapitati"]], 1L)
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 0L)
+  expect_equal(detto[["errori"]], character())
+})
+
+
+test_that("rifiutato anche alla casella, l'accesso e' perso una volta sola", {
+  # eval
+  posta <- rifiuta_i_molti(anche_uno = TRUE)
+  detto <- accesso_ritentato(
+    posta, "sara.collaudozeta@ubep.unipd.it", "sara.privata@example.org"
+  )
+
+  # test
+  expect_length(posta[["mandate"]](), 2L)
+  expect_identical(detto[["contatori"]][["accessi_recapitati"]], 0L)
+  expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+  expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
+})
+
+
+test_that("un invio a un destinatario solo che fallisce non si ritenta", {
+  # eval
+  # The external address alone, the mailbox alone, and a contact outside the
+  # domain on an account that has a mailbox: one recipient each, so nothing
+  # to fall back to, and the contact outside the domain stays as it was.
+  casi <- list(
+    list(mailbox = "", external = "sara.privata@example.org"),
+    list(mailbox = "sara.collaudozeta@ubep.unipd.it", external = ""),
+    list(
+      mailbox = "sara.collaudozeta@ubep.unipd.it",
+      external = "sara.privata@example.org",
+      contact_email = "sara.esterna@example.org"
+    )
+  )
+
+  for (caso in casi) {
+    posta <- rifiuta_i_molti(anche_uno = TRUE)
+    detto <- do.call(accesso_ritentato, c(list(posta), caso))
+
+    # test
+    expect_length(posta[["mandate"]](), 1L)
+    expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
+    expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
+  }
+})

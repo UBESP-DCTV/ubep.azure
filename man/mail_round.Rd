@@ -104,6 +104,8 @@ exception: it goes to the account's mailbox and its first external
 address (\code{mail_access_recipients()}), in one message, and when the
 account has neither, to the referent with a line asking them to tell the
 person, or to \code{copy_to} when the row has no owner. Either counts as
-delivered.
+delivered. A message to the two that is refused is tried once more to the
+mailbox alone, the recipient it reached before; the two tries count as
+one message, delivered or lost.
 }
 \keyword{internal}

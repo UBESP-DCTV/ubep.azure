@@ -1604,7 +1604,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' address (`mail_access_recipients()`), in one message, and when the
 #' account has neither, to the referent with a line asking them to tell the
 #' person, or to `copy_to` when the row has no owner. Either counts as
-#' delivered.
+#' delivered. A message to the two that is refused is tried once more to the
+#' mailbox alone, the recipient it reached before; the two tries count as
+#' one message, delivered or lost.
 #'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
@@ -1837,7 +1839,18 @@ mail_round <- function(changed,
       url <- indirizzo_di(riga[["server"]])
       persona <- mail_access_recipients(riga)
       if (length(persona) > 0L) {
-        consegna(persona, NULL, mail_access_message(riga, url = url))
+        messaggio <- mail_access_message(riga, url = url)
+        inviato <- consegna(persona, NULL, messaggio)
+        # A refusal of two recipients is a refusal of both, and the mailbox
+        # is the one that received this message before the external address
+        # travelled with it: one more try to it alone, counted as one
+        # message either way.
+        casella <- trimws(mail_said_or(riga[["mailbox"]], ""))
+        ritenta <- !isTRUE(inviato[["ok"]]) && length(persona) > 1L
+        if (ritenta && nzchar(casella)) {
+          inviato <- consegna(casella, NULL, messaggio)
+        }
+        inviato
       } else if (nzchar(mail_referent(riga))) {
         consegna(
           mail_referent(riga), NULL,
