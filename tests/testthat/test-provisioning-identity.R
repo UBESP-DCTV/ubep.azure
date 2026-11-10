@@ -1304,6 +1304,28 @@ test_that("un valore che pulito non e' un indirizzo non e' un esterno", {
 })
 
 
+test_that("la pulizia non fa di un valore un altro indirizzo plausibile", {
+  # eval
+  # A separator on the left is not a wrapper: taken off, `.mario@...` would
+  # become `mario@...`, which may be somebody else's mailbox. The value stays
+  # as it is, the strict form refuses it, and the next candidate is read.
+  esterno_di <- function(valore) {
+    caselle_di(
+      otherMails = I(valore), officeLocation = "mario.rossi@example.org"
+    )[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    ".mario@example.org", ",mario@example.org", ";mario@example.org",
+    " .mario@example.org>", "mailto:.mario@example.org"
+  )) {
+    expect_equal(esterno_di(valore), "mario.rossi@example.org", info = valore)
+    expect_equal(directory_address(valore), "", info = valore)
+  }
+})
+
+
 test_that("un otherMails sporco si pulisce, e uno che non e' un indirizzo si salta", { # nolint: line_length_linter.
   # eval
   pulito <- caselle_di(

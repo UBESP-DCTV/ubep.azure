@@ -18,8 +18,13 @@ lower case, or \code{""}.
 spreadsheet had it: an address with a comma or a semicolon after it, a
 full stop, angle brackets, parentheses, quotes, a \verb{mailto:} in front.
 Handed to the mail service as it is, such a value is refused, and with it
-every other recipient of the same message. So the punctuation is taken off
-the ends, and \verb{mailto:} off the front, as often as they nest; what is left
+every other recipient of the same message. So what wraps the address is
+taken off: spaces, an opening bracket or parenthesis, quotes and \verb{mailto:}
+on the left; spaces, a closing bracket or parenthesis, quotes and a
+trailing \verb{,}, \verb{;} or \code{.} on the right, as often as they nest. A full stop,
+comma or semicolon on the left stays: taken off, \code{.mario@example.org}
+would become \code{mario@example.org}, an address that may be somebody else's,
+where the value as written reaches nobody. What is left
 is folded to lower case and has to have the strict form of an address: a
 local part of dot-separated atoms, one \code{@}, a domain of labels that start
 and end with a letter or a digit, the last one alphabetic, nothing else. A

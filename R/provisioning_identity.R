@@ -213,8 +213,13 @@ directory_identifiers <- function(account) {
 #' spreadsheet had it: an address with a comma or a semicolon after it, a
 #' full stop, angle brackets, parentheses, quotes, a `mailto:` in front.
 #' Handed to the mail service as it is, such a value is refused, and with it
-#' every other recipient of the same message. So the punctuation is taken off
-#' the ends, and `mailto:` off the front, as often as they nest; what is left
+#' every other recipient of the same message. So what wraps the address is
+#' taken off: spaces, an opening bracket or parenthesis, quotes and `mailto:`
+#' on the left; spaces, a closing bracket or parenthesis, quotes and a
+#' trailing `,`, `;` or `.` on the right, as often as they nest. A full stop,
+#' comma or semicolon on the left stays: taken off, `.mario@example.org`
+#' would become `mario@example.org`, an address that may be somebody else's,
+#' where the value as written reaches nobody. What is left
 #' is folded to lower case and has to have the strict form of an address: a
 #' local part of dot-separated atoms, one `@`, a domain of labels that start
 #' and end with a letter or a digit, the last one alphabetic, nothing else. A
@@ -230,9 +235,13 @@ directory_identifiers <- function(account) {
 directory_address <- function(values) {
   values <- tolower(as.character(values))
   values[is.na(values)] <- ""
-  edges <- "^[[:space:]<>(),;.'\"]+|[[:space:]<>(),;.'\"]+$"
+  # Wrappers on both sides, separators on the right only: a full stop, comma
+  # or semicolon on the left is not something wrapped around an address, and
+  # taking it off could turn a value into somebody else's address.
+  left <- "^[[:space:]<('\"]+"
+  right <- "[[:space:]>)'\",;.]+$"
   repeat {
-    cleaned <- sub("^mailto:", "", gsub(edges, "", values))
+    cleaned <- sub("^mailto:", "", sub(right, "", sub(left, "", values)))
     if (identical(cleaned, values)) {
       break
     }
