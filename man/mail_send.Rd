@@ -11,7 +11,11 @@ mail_send(api_key, from, to, subject, body, cc = NULL, reply_to = NULL)
 
 \item{from}{The verified sender identity.}
 
-\item{to}{Recipient address.}
+\item{to}{Recipient addresses: one, or more for the access message of a
+row whose contact is internal (\code{mail_access_recipients()}). All go in
+one personalization, so the service sends one message that names them
+all; an address repeated in it is refused, which is why the caller drops
+duplicates first.}
 
 \item{subject, body}{The composed message.}
 

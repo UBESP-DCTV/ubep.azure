@@ -48,9 +48,11 @@ name the round composed, which a collision's message names; \code{owner}, who
 the log says the row belongs to, where the outcome and the key go
 (\code{mail_referent()}); \code{passed}, whether the change applied this round
 handed the row over; \code{edited_by}, who changed a held row since
-it was applied, as the row's log says. \code{register} is the register as read,
-on purpose; this is how the message names what the round has just
-established rather than what the referent typed.}
+it was applied, as the row's log says; \code{mailbox} and \code{external}, where
+the account the row resolved to reads mail (\code{directory_mailboxes()}),
+which the access message of an internal contact goes to. \code{register} is
+the register as read, on purpose; this is how the message names what
+the round has just established rather than what the referent typed.}
 
 \item{hosts}{Named character vector, instance name to host, as
 \code{provisioning_reconcile()} receives it from the inventory. Only the
@@ -96,5 +98,19 @@ with nobody in copy. The outcome and the key go
 to the referent, \code{mail_referent()}: the owner \code{identified} carries. The
 outcome of a row without one goes to \code{copy_to} alone, with a line saying
 so; its key goes nowhere.
+
+The access message of a row whose contact is internal, the UPN, is the
+exception: it goes to the account's mailbox and its first external
+address (\code{mail_access_recipients()}), in one message, and when the
+account has neither, to the referent with a line asking them to tell the
+person, or to \code{copy_to} when the row has no owner. Either counts as
+delivered. A message to the two that the mail service refuses
+(\code{TRASPORTO_POSTA_RIFIUTATA}) is tried once more to the mailbox alone, the
+recipient it reached before; the two tries count as one message, delivered
+or lost. Not on a transport that failed, which may have failed after the
+service took the message, and not under \code{redirect_to}, where the one
+recipient was the test address. A row whose \code{mailbox} and \code{external}
+\code{identified} does not carry loses the message, as a row without an
+address does: the round did not read where the account reads mail.
 }
 \keyword{internal}

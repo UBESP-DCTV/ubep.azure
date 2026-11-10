@@ -9,7 +9,8 @@ mail_redirect_note(body, to, cc)
 \arguments{
 \item{body}{The composed body.}
 
-\item{to, cc}{Who the message was addressed to before the redirect.}
+\item{to, cc}{Who the message was addressed to before the redirect; \code{to}
+can name more than one address.}
 }
 \value{
 The body, with the declaration on top.

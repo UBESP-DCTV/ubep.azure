@@ -1165,3 +1165,221 @@ test_that("l'account nato da una risposta risolve created al giro dopo", {
   expect_equal(dopo("")[["identity"]], "existing")
   expect_equal(dopo("mario.rossi.3@ubep.unipd.it")[["identity"]], "existing")
 })
+
+
+# The two addresses the access message of a row with an internal contact goes
+# to, read from the account the row resolved to. Decided on 2026-11-10: the
+# UPN alone is no mailbox, and a send to an UPN without one is refused and then
+# suppressed for good by the mail service.
+caselle_di <- function(..., upn = "mario.rossi@ubep.unipd.it") {
+  directory_mailboxes(dir_frame(dir_user(...)), upn)
+}
+
+
+test_that("la casella e' il campo mail, l'esterno il primo otherMails fuori dominio", { # nolint: line_length_linter.
+  # eval
+  trovate <- caselle_di(
+    mail = "Mario.Rossi@ubep.unipd.it",
+    otherMails = I(c("mario.privato@example.org", "mario.altro@example.net"))
+  )
+
+  # test
+  expect_equal(trovate[["mailbox"]], "Mario.Rossi@ubep.unipd.it")
+  expect_equal(trovate[["external"]], "mario.privato@example.org")
+})
+
+
+test_that("senza mail resta l'esterno, senza esterno resta la casella", {
+  # eval
+  solo_mail <- caselle_di(
+    mail = "mario.rossi@ubep.unipd.it", officeLocation = ""
+  )
+  solo_altri <- caselle_di(
+    otherMails = I("mario.privato@example.org"), officeLocation = ""
+  )
+
+  # test
+  expect_equal(solo_mail[["mailbox"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(solo_mail[["external"]], "")
+  expect_equal(solo_altri[["mailbox"]], "")
+  expect_equal(solo_altri[["external"]], "mario.privato@example.org")
+})
+
+
+test_that("officeLocation vale come esterno solo se ha la forma di un indirizzo", { # nolint: line_length_linter.
+  # eval
+  indirizzo <- caselle_di(officeLocation = " mario.rossi@example.org ")
+  stanza <- caselle_di(officeLocation = "Stanza 12, secondo piano")
+
+  # test
+  # The historical carrier: on about 6.500 accounts it holds the address the
+  # old flow wrote there, and on others a room.
+  expect_equal(indirizzo[["external"]], "mario.rossi@example.org")
+  expect_equal(stanza[["external"]], "")
+  expect_equal(stanza[["mailbox"]], "")
+})
+
+
+test_that("un indirizzo nel dominio non e' un esterno, e si passa al seguente", { # nolint: line_length_linter.
+  # eval
+  trovate <- caselle_di(
+    otherMails = I("mario.alias@UBEP.unipd.it"),
+    officeLocation = "mario.rossi@example.org"
+  )
+  nessuno <- caselle_di(
+    otherMails = I("mario.alias@ubep.unipd.it"),
+    officeLocation = "mario.rossi@ubep.unipd.it"
+  )
+
+  # test
+  expect_equal(trovate[["external"]], "mario.rossi@example.org")
+  expect_equal(nessuno[["external"]], "")
+})
+
+
+test_that("un nome che non e' un account del tenant non ha caselle", {
+  # eval
+  # The second account has no UPN at all, which Graph never sends: it is
+  # here so that an empty name has something to match by mistake.
+  trovate <- directory_mailboxes(
+    dir_frame(
+      dir_user(mail = "mario.rossi@ubep.unipd.it"),
+      dir_user(
+        id = "00000000-0000-0000-0000-000000000002", userPrincipalName = "",
+        mail = "nessuno@ubep.unipd.it", officeLocation = "nessuno@example.org"
+      )
+    ),
+    c("mario.rossi.2@ubep.unipd.it", "", NA_character_,
+      " MARIO.ROSSI@ubep.unipd.it")
+  )
+
+  # test
+  # One answer per name, in order; a proposal of a collision, an empty name
+  # and a missing one name no account.
+  expect_equal(trovate[["mailbox"]], c("", "", "", "mario.rossi@ubep.unipd.it"))
+  expect_equal(trovate[["external"]], c("", "", "", "mario.rossi@example.org"))
+})
+
+
+# `officeLocation` is free text, written by the historical flow as the
+# spreadsheet had it. A value with punctuation around the address would go,
+# unread, into the same personalization as the mailbox, and a mail service
+# that refuses one address of a personalization refuses the whole message:
+# the mailbox, which received it before, would lose it too.
+test_that("un esterno sporco si pulisce agli estremi e torna in minuscolo", {
+  # eval
+  esterno_di <- function(valore) {
+    caselle_di(officeLocation = valore)[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    "mario.privato@example.org,", "mario.privato@example.org;",
+    "mario.privato@example.org.", "<mario.privato@example.org>",
+    "mailto:mario.privato@example.org", "(mario.privato@example.org)",
+    "'mario.privato@example.org'", "\"mario.privato@example.org\"",
+    " <MAILTO:Mario.Privato@Example.org>; ", "Mario.Privato@Example.ORG"
+  )) {
+    expect_equal(esterno_di(valore), "mario.privato@example.org", info = valore)
+  }
+})
+
+
+test_that("un valore che pulito non e' un indirizzo non e' un esterno", {
+  # eval
+  esterno_di <- function(valore) {
+    caselle_di(officeLocation = valore)[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    "Stanza 12", "mario.privato@example", "mario.privato@example.123",
+    "mario@@example.org", "mario privato@example.org",
+    "mario.privato@example.org, altro@example.org", "mailto:", "@example.org",
+    "mario.privato@-example.org", "mario.privato@example..org",
+    "mario.@example.org", "mario..privato@example.org"
+  )) {
+    expect_equal(esterno_di(valore), "", info = valore)
+  }
+})
+
+
+test_that("la pulizia non fa di un valore un altro indirizzo plausibile", {
+  # eval
+  # A separator on the left is not a wrapper: taken off, `.mario@...` would
+  # become `mario@...`, which may be somebody else's mailbox. The value stays
+  # as it is, the strict form refuses it, and the next candidate is read.
+  esterno_di <- function(valore) {
+    caselle_di(
+      otherMails = I(valore), officeLocation = "mario.rossi@example.org"
+    )[["external"]]
+  }
+
+  # test
+  for (valore in c(
+    ".mario@example.org", ",mario@example.org", ";mario@example.org",
+    " .mario@example.org>", "mailto:.mario@example.org"
+  )) {
+    expect_equal(esterno_di(valore), "mario.rossi@example.org", info = valore)
+    expect_equal(directory_address(valore), "", info = valore)
+  }
+})
+
+
+test_that("un otherMails sporco si pulisce, e uno che non e' un indirizzo si salta", { # nolint: line_length_linter.
+  # eval
+  pulito <- caselle_di(
+    otherMails = I("<Mario.Privato@example.org>"), officeLocation = ""
+  )
+  saltato <- caselle_di(
+    otherMails = I("mario.privato@example"),
+    officeLocation = "mario.rossi@example.org;"
+  )
+
+  # test
+  expect_equal(pulito[["external"]], "mario.privato@example.org")
+  expect_equal(saltato[["external"]], "mario.rossi@example.org")
+})
+
+
+test_that("un apice sbilanciato resta, perche' e' un carattere dell'indirizzo", { # nolint: line_length_linter.
+  # eval
+  # A quote is a character of the local part, so one without its partner is
+  # part of what was written: taken off, `'mario'@example.org` would become
+  # `mario'@example.org`, another address of valid form. Quotes go only in
+  # pairs around the whole value.
+  valori <- c(
+    "'mario'@example.org", "'mario@example.org", "mario@example.org'",
+    "'mario@example.org'", "\"mario@example.org\"", "<'mario@example.org'>"
+  )
+
+  # test
+  expect_equal(
+    directory_address(valori),
+    c(
+      "'mario'@example.org", "'mario@example.org", "",
+      "mario@example.org", "mario@example.org", "mario@example.org"
+    )
+  )
+})
+
+
+test_that("uno spazio non separabile attorno all'indirizzo si toglie", {
+  # eval
+  # Frequent in a value copied from a page or from a mail client, and not a
+  # character of an address: left on, it would lose the address.
+  valori <- c(
+    "mario@example.org\u00a0", "\u00a0mario@example.org",
+    "\u00a0<mario@example.org>;\u00a0"
+  )
+
+  # test
+  expect_equal(directory_address(valori), rep("mario@example.org", 3L))
+})
+
+
+test_that("directory_address() su un vettore vuoto da' un vettore di caratteri", { # nolint: line_length_linter.
+  # test
+  expect_identical(directory_address(character()), character())
+  expect_identical(directory_address(NA_character_), "")
+})

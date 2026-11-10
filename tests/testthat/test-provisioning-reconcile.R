@@ -7532,3 +7532,126 @@ test_that("una revoca parte col nome scritto uguale, se l'istanza ne tiene due c
   # test
   expect_equal(nomi_revocati(), maiuscolo)
 })
+
+
+# A round on a row whose contact is the person's UBEP address, which decision
+# 12 makes the UPN: the access message goes where the sweep says the account
+# reads mail, and never to the UPN alone.
+accesso_di_un_interno <- function(...) {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(list(
+      contact_email = "mario.rossi@ubep.unipd.it"
+    ))),
+    istanza_che_scrive(),
+    directory_doppia(graph_user(...)),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+  mandate <- posta[["mandate"]]()
+  di_accesso <- vapply(
+    mandate, function(m) startsWith(m[["subject"]], "Accesso a REDCap"), NA
+  )
+  list(esito = esito, accesso = mandate[di_accesso])
+}
+
+
+test_that("nel giro l'accesso di un recapito interno va alla casella e all'esterno dell'account", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(
+    mail = "mario.rossi@ubep.unipd.it",
+    otherMails = I(c("mario.alias@ubep.unipd.it", "mario.privato@example.org"))
+  )
+
+  # test
+  expect_length(scritture(), 1L)
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]],
+    c("mario.rossi@ubep.unipd.it", "mario.privato@example.org")
+  )
+  expect_identical(giro_fatto[["esito"]][["posta"]][["accessi_recapitati"]], 1L)
+})
+
+
+test_that("nel giro un account senza casella ne' esterno fa avvisare il referente", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(officeLocation = "Stanza 3")
+
+  # test
+  expect_length(scritture(), 1L)
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]], "anna.bianchi@ubep.unipd.it"
+  )
+  expect_match(giro_fatto[["accesso"]][[1L]][["body"]], "^Avvisa tu ")
+  expect_identical(giro_fatto[["esito"]][["posta"]][["accessi_recapitati"]], 1L)
+})
+
+
+test_that("nel giro un officeLocation sporco arriva pulito accanto alla casella", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(
+    mail = "mario.rossi@ubep.unipd.it",
+    officeLocation = "<Mario.Privato@example.org>;"
+  )
+
+  # test
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]],
+    c("mario.rossi@ubep.unipd.it", "mario.privato@example.org")
+  )
+})
+
+
+test_that("nel giro un officeLocation che non e' un indirizzo lascia la sola casella", { # nolint: line_length_linter.
+  # eval
+  giro_fatto <- accesso_di_un_interno(
+    mail = "mario.rossi@ubep.unipd.it",
+    officeLocation = "mario.privato@example"
+  )
+
+  # test
+  expect_length(giro_fatto[["accesso"]], 1L)
+  expect_equal(
+    giro_fatto[["accesso"]][[1L]][["to"]], "mario.rossi@ubep.unipd.it"
+  )
+})
+
+
+test_that("nel giro un rifiuto dei due destinatari ritenta la casella", {
+  # eval
+  mandate <- list()
+  esito <- giro(
+    registro_doppio(record_json(list(
+      contact_email = "mario.rossi@ubep.unipd.it"
+    ))),
+    istanza_che_scrive(),
+    directory_doppia(graph_user(
+      mail = "mario.rossi@ubep.unipd.it",
+      otherMails = I("mario.privato@example.org")
+    )),
+    dry_run = FALSE,
+    mailer = function(to, cc, subject, body) {
+      mandate[[length(mandate) + 1L]] <<- list( # nolint: assignment_linter.
+        to = to, subject = subject
+      )
+      if (length(to) > 1L) {
+        list(ok = FALSE, errors = "TRASPORTO_POSTA_RIFIUTATA")
+      } else {
+        list(ok = TRUE, errors = character())
+      }
+    }
+  )
+  accesso <- Filter(
+    function(m) startsWith(m[["subject"]], "Accesso a REDCap"), mandate
+  )
+
+  # test
+  expect_length(accesso, 2L)
+  expect_equal(accesso[[2L]][["to"]], "mario.rossi@ubep.unipd.it")
+  expect_identical(esito[["posta"]][["accessi_recapitati"]], 1L)
+  expect_identical(esito[["posta"]][["accessi_persi"]], 0L)
+  expect_false("POSTA_ACCESSO_PERSA" %in% esito[["errori"]])
+})
