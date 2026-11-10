@@ -8,7 +8,7 @@ mail_access_recipients(row, domain = "ubep.unipd.it")
 }
 \arguments{
 \item{row}{One register row as a list, with \code{mailbox} and \code{external} as
-the round settled them; a row without them has neither.}
+the round settled them.}
 
 \item{domain}{The tenant's verified domain, as \code{identity_internal()} takes
 it.}
@@ -16,7 +16,8 @@ it.}
 \value{
 A character vector: the contact as written when it is external,
 possibly empty; otherwise the mailbox and the external address that are
-there, without duplicates, possibly none.
+there, without duplicates, possibly none. \code{NULL} for an internal contact
+on a row that does not carry \code{mailbox} or \code{external}.
 }
 \description{
 To \code{contact_email}, as the welcome, when it is outside the tenant's
@@ -35,5 +36,11 @@ address once.
 Nothing when neither is: the caller then sends the message to the
 referent, who tells the person (\code{mail_access_message()}). Never the UPN
 alone, for the reason above.
+
+A row that does not carry the two fields is another case, and not the
+same as one that carries them empty: the round did not say where the
+account reads mail, so nobody knows it has nowhere. \code{NULL} says so, and
+the caller loses the message, as a row without an address loses it, rather
+than tell the referent something nobody read.
 }
 \keyword{internal}

@@ -829,14 +829,21 @@ mail_referent <- function(row) {
 #' referent, who tells the person (`mail_access_message()`). Never the UPN
 #' alone, for the reason above.
 #'
+#' A row that does not carry the two fields is another case, and not the
+#' same as one that carries them empty: the round did not say where the
+#' account reads mail, so nobody knows it has nowhere. `NULL` says so, and
+#' the caller loses the message, as a row without an address loses it, rather
+#' than tell the referent something nobody read.
+#'
 #' @param row One register row as a list, with `mailbox` and `external` as
-#'   the round settled them; a row without them has neither.
+#'   the round settled them.
 #' @param domain The tenant's verified domain, as `identity_internal()` takes
 #'   it.
 #'
 #' @return A character vector: the contact as written when it is external,
 #'   possibly empty; otherwise the mailbox and the external address that are
-#'   there, without duplicates, possibly none.
+#'   there, without duplicates, possibly none. `NULL` for an internal contact
+#'   on a row that does not carry `mailbox` or `external`.
 #'
 #' @keywords internal
 mail_access_recipients <- function(row, domain = "ubep.unipd.it") {
@@ -845,6 +852,13 @@ mail_access_recipients <- function(row, domain = "ubep.unipd.it") {
   contact <- mail_said_or(row[["contact_email"]], "")
   if (!identity_internal(contact, domain)) {
     return(contact)
+  }
+
+  # Not read is not empty: a row whose addresses the round did not carry
+  # here has nobody known to write to, and the line the referent would read
+  # ("neither a mailbox nor an external address") would be a guess.
+  if (is.null(row[["mailbox"]]) || is.null(row[["external"]])) {
+    return(NULL)
   }
 
   candidates <- trimws(c(
@@ -1606,7 +1620,9 @@ mail_redirect_note <- function(body, to, cc) {
 #' person, or to `copy_to` when the row has no owner. Either counts as
 #' delivered. A message to the two that is refused is tried once more to the
 #' mailbox alone, the recipient it reached before; the two tries count as
-#' one message, delivered or lost.
+#' one message, delivered or lost. A row whose `mailbox` and `external`
+#' `identified` does not carry loses the message, as a row without an
+#' address does: the round did not read where the account reads mail.
 #'
 #' @param changed The rows this round would write, from `round_changed()`.
 #' @param register The register as read, carrying every field the messages
@@ -1838,7 +1854,11 @@ mail_round <- function(changed,
     } else {
       url <- indirizzo_di(riga[["server"]])
       persona <- mail_access_recipients(riga)
-      if (length(persona) > 0L) {
+      if (is.null(persona)) {
+        # Where the account reads mail was not read: lost, as a row without
+        # an address, and not sent to the referent as if it were nowhere.
+        list(ok = FALSE)
+      } else if (length(persona) > 0L) {
         messaggio <- mail_access_message(riga, url = url)
         inviato <- consegna(persona, NULL, messaggio)
         # A refusal of two recipients is a refusal of both, and the mailbox

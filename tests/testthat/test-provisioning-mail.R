@@ -2540,3 +2540,68 @@ test_that("un invio a un destinatario solo che fallisce non si ritenta", {
     expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
   }
 })
+
+
+# What the round did not read is not what the account does not have. A row
+# whose addresses `identified` does not carry, or that `identified` does not
+# hold, has nobody the round knows to write to; sent to the referent, the
+# message would tell them the account has neither a mailbox nor an external
+# address, which nobody checked.
+test_that("senza gli indirizzi letti la mail di accesso di un interno e' persa, non mandata al referente", { # nolint: line_length_linter.
+  # eval
+  registro <- registro_di_prova(contact_email = interno_di_prova)
+  manda <- function(identified) {
+    posta <- raccoglitore()
+    detto <- mail_round(
+      registro[0, colonne_cambiate, drop = FALSE], registro, born = list(),
+      mailer = posta[["mailer"]], dry_run = FALSE,
+      copy_to = "it@example.org", granted = "16", identified = identified
+    )
+    list(mandate = posta[["mandate"]](), detto = detto)
+  }
+  casi <- list(
+    senza_colonne = data.frame(
+      record_id = "16", username = interno_di_prova, identity = "existing",
+      owner = "cinzia@ubep.unipd.it", stringsAsFactors = FALSE
+    ),
+    senza_riga = data.frame(
+      record_id = "99", username = interno_di_prova, identity = "existing",
+      owner = "cinzia@ubep.unipd.it", mailbox = "", external = "",
+      stringsAsFactors = FALSE
+    ),
+    senza_identified = NULL
+  )
+
+  for (nome in names(casi)) {
+    esito <- manda(casi[[nome]])
+
+    # test
+    expect_length(esito[["mandate"]], 0L)
+    expect_identical(
+      esito[["detto"]][["contatori"]][["accessi_persi"]], 1L, info = nome
+    )
+    expect_identical(
+      esito[["detto"]][["contatori"]][["accessi_recapitati"]], 0L, info = nome
+    )
+    expect_equal(esito[["detto"]][["errori"]], "POSTA_ACCESSO_PERSA")
+  }
+})
+
+
+test_that("i campi assenti non sono campi vuoti", {
+  # eval
+  riga <- riga_di_prova(contact_email = interno_di_prova)
+  letti <- utils::modifyList(riga, list(mailbox = "", external = ""))
+
+  # test
+  # NULL is "the round did not say", character(0) is "the account has none".
+  expect_null(mail_access_recipients(riga))
+  expect_null(mail_access_recipients(utils::modifyList(
+    riga, list(mailbox = "sara.collaudozeta@ubep.unipd.it")
+  )))
+  expect_identical(mail_access_recipients(letti), character())
+  # A contact outside the domain needs neither field.
+  expect_identical(
+    mail_access_recipients(riga_di_prova()), "sara.esterna@example.org"
+  )
+})
