@@ -1230,7 +1230,8 @@ log_executed_values <- function(events, record, creator,
 #' code of the identity, which concedes nothing either; a person to create is
 #' somebody else on a row carried out, whatever name the round would give
 #' them. A username carried out the log does not say decides nothing, except
-#' against a creation.
+#' against a creation, and nor does an empty one: a revocation closed before
+#' anybody was resolved was carried out for nobody.
 #'
 #' **A revoked row whose person the tenant no longer holds is no change**,
 #' decided on 2026-11-10, when nobody wrote the person in it: there is nobody
@@ -1241,8 +1242,9 @@ log_executed_values <- function(events, record, creator,
 #' exists still stops: revoking that account would take away an access the
 #' row never gave.
 #'
-#' @param executed What `log_executed_values()` answered for `server`,
-#'   `project_id` and `username`.
+#' @param executed The `server`, `project_id` and `username` carried out:
+#'   the row as read when its seal did not move, otherwise what
+#'   `log_executed_values()` answered.
 #' @param current The row as the register holds it, a list or a one-row data
 #'   frame with `server` and `project_id`.
 #' @param target The username the round would now serve, `""` when the
@@ -1296,6 +1298,7 @@ pair_change <- function(executed, current, target, creating, rewritten,
   closing <- creating && revoked && isFALSE(rewritten)
   person <- (creating && !closing) || (
     !is.na(target) && nzchar(target) && !is.na(executed[["username"]]) &&
+      nzchar(executed[["username"]]) &&
       identity_normalize(target) != identity_normalize(executed[["username"]])
   )
   if (person && !isFALSE(rewritten)) {

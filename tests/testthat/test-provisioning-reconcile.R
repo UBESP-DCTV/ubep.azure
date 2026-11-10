@@ -6359,3 +6359,157 @@ test_that("un account rinominato su Entra si annuncia al proprietario con IT in 
     "Account trovato ora: mario.rossi.nuovo@ubep.unipd.it", fixed = TRUE
   )
 })
+
+
+# ---- A row whose seal did not move holds the pair carried out ----
+
+# A row whose last execution carried out a change of project written by
+# somebody other than its owner, with no approval in the log: the history
+# before 2026-10-14, or IT correcting a row by hand. Nobody touched the row
+# since, and the channel's last seal is the row's.
+sigillo_9004 <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, project_id = "9004"
+  ))
+}
+
+giro_storico <- function(chi = bruno, approvers = character(), ...) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(
+        eseguita_row(project_id = "9004", applied_seal = sigillo_9004())
+      )),
+      storia = c(
+        list(list(
+          timestamp = "2026-10-01 05:00", username = "svc-canale-ubep",
+          action = "Update record (API) 1", record = "1",
+          details = paste0(
+            "applied_seal = '", sigillo_9004(), "', seal_state = 'intact'"
+          )
+        )),
+        list(cambio(
+          chi, "project_id = '9004'", timestamp = "2026-09-30 10:00"
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(project_id = 9004L),
+      list(
+        username = mario, project_id = 9004L, role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    dry_run = FALSE,
+    approvers = approvers,
+    ...
+  )
+}
+
+
+test_that("una modifica di un altro gia' eseguita senza approvazione non sposta la riga", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_storico(bruno)
+
+  # test
+  # The seal matches the row as read, so the row as read is what was carried
+  # out, project 9004 included. Read from the log, Bruno's write below the
+  # seal has no approval above it and would be passed over, and the project
+  # carried out would read 9003: the row would stop on a change nobody made.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una correzione di IT gia' eseguita non sposta la riga", {
+  # eval
+  esito <- giro_storico(
+    "it.admin@ubep.unipd.it", approvers = "it.admin@ubep.unipd.it"
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+})
+
+
+test_that("una riga eseguita col sigillo fermo non scrive a nessuno", {
+  # eval
+  posta <- posta_raccolta()
+  giro_storico(bruno, mailer = posta[["mailer"]], copy_to = "it@example.org")
+
+  # test
+  # Nothing changed, so nothing leaves: stopped, the row would have asked the
+  # owner to set the project back to one never carried out.
+  expect_length(posta[["mandate"]](), 0L)
+})
+
+
+test_that("una revoca chiusa su una persona assente resta chiusa quando la persona nasce", { # nolint: line_length_linter.
+  # eval
+  # Row 3 asked for Nadia, whom the tenant did not hold. Anna revoked it
+  # before any round served it, and the round closed it `applied` with
+  # `absent`, sealed with an empty username. Then Nadia was born for another
+  # request.
+  riga <- list(
+    record_id = "3", first_name = "Nadia", last_name = "Nuova",
+    contact_email = "nadia@example.org", request_status = "revoked",
+    username = ""
+  )
+  sigillo <- request_seal(do.call(riga_come_registro, riga))
+  del_canale <- function(details) {
+    list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 3", record = "3", details = details
+    )
+  }
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(utils::modifyList(riga, list(
+        identity = "absent", outcome = "applied", applied_as = "absent",
+        applied_seal = sigillo, seal_state = "intact", owned_by = anna
+      )))),
+      storia = list(
+        del_canale(paste0(
+          "applied_seal = '", sigillo, "', seal_state = 'intact'"
+        )),
+        del_canale("owned_by = 'anna.bianchi@ubep.unipd.it'"),
+        del_canale("outcome = 'applied', applied_as = 'absent'"),
+        del_canale("identity = 'absent'"),
+        cambio(
+          anna, "request_status = 'revoked'", record = "3",
+          timestamp = "2026-10-19 10:00"
+        )
+      ),
+      creazioni = creazioni_finte(creata_da_anna(
+        "3",
+        details = paste0(
+          "record_id = '3', server = 'edc10', project_id = '9003', ",
+          "first_name = 'Nadia', last_name = 'Nuova', ",
+          "contact_email = 'nadia@example.org', role_name = 'data entry', ",
+          "request_status = 'active'"
+        )
+      ))
+    ),
+    istanza_doppia(list()),
+    directory = directory_doppia(graph_user(
+      id = "00000000-0000-0000-0000-000000000004",
+      userPrincipalName = "nadia.nuova@ubep.unipd.it", givenName = "Nadia",
+      surname = "Nuova", officeLocation = "nadia@example.org"
+    )),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]],
+    copy_to = "it@example.org"
+  )
+
+  # test
+  # The row was never carried out for anybody, so no account was: an empty
+  # username carried out is not another person.
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_length(posta[["mandate"]](), 0L)
+  expect_length(scritture(), 0L)
+})
+

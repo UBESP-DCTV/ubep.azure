@@ -97,7 +97,8 @@
 #'
 #' **A row the channel has carried out does not change its pair**, decided on
 #' 2026-11-09: the instance, the project and the person it was carried out
-#' for, as the owners' log holds them below the channel's last seal
+#' for: the row as read when its seal did not move, and otherwise as the
+#' owners' log holds them below the channel's last seal
 #' (`log_executed_values()`). Whoever wrote the change, the owner included,
 #' approved or not, the row stops before the plan (`pair_change()`): nothing
 #' is written on the instance, nobody is created on Entra, the row keeps its
@@ -747,6 +748,23 @@ provisioning_reconcile <- function(register_url,
   executed_pair <- lapply(seq_along(record_ids), function(i) {
     if (is.null(owners_log) || !nzchar(sealed[[i]])) {
       return(NULL)
+    }
+    # A row whose seal did not move is the version carried out: the channel's
+    # seal covers `server`, `project_id` and `username`, and the register as
+    # read matches it. Read from the log instead, a change carried out with
+    # no approval above it (the history before 2026-10-14, or IT correcting a
+    # row by hand) would be passed over as uncovered, and the row would stop
+    # on a change nobody made. An account renamed on Entra is still seen: the
+    # register as read holds the old name.
+    if (!is.null(channel_account) && !tampered[[i]]) {
+      at <- function(field) {
+        value <- trimws(as.character(register[[field]][[i]]))
+        if (length(value) != 1L || is.na(value)) "" else value
+      }
+      return(c(
+        server = at("server"), project_id = at("project_id"),
+        username = at("username")
+      ))
     }
     log_executed_values(
       owners_log, record_ids[[i]], creators[[i]],

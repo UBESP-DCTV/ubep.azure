@@ -195,7 +195,8 @@ nobody whose rights to ask.
 
 \strong{A row the channel has carried out does not change its pair}, decided on
 2026-11-09: the instance, the project and the person it was carried out
-for, as the owners' log holds them below the channel's last seal
+for: the row as read when its seal did not move, and otherwise as the
+owners' log holds them below the channel's last seal
 (\code{log_executed_values()}). Whoever wrote the change, the owner included,
 approved or not, the row stops before the plan (\code{pair_change()}): nothing
 is written on the instance, nobody is created on Entra, the row keeps its

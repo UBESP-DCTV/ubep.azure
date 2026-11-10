@@ -3271,3 +3271,20 @@ test_that("una revoca su una persona che il tenant non tiene piu' non e' un camb
     "TRASPORTO_IDENTITA_CAMBIATA"
   )
 })
+
+
+test_that("un nome utente eseguito vuoto non e' un'altra persona", {
+  # test
+  # A revocation closed before anybody was resolved is sealed with an empty
+  # username: the row was carried out for nobody, and the person born later
+  # is not somebody it moved to.
+  vuoto <- eseguiti
+  vuoto[["username"]] <- ""
+  expect_equal(
+    pair_change(
+      vuoto, ora(), "nadia.nuova@ubep.unipd.it", FALSE, FALSE,
+      revoked = TRUE
+    )[["code"]],
+    ""
+  )
+})

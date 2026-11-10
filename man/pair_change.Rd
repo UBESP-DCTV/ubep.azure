@@ -7,8 +7,9 @@
 pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
 }
 \arguments{
-\item{executed}{What \code{log_executed_values()} answered for \code{server},
-\code{project_id} and \code{username}.}
+\item{executed}{The \code{server}, \code{project_id} and \code{username} carried out:
+the row as read when its seal did not move, otherwise what
+\code{log_executed_values()} answered.}
 
 \item{current}{The row as the register holds it, a list or a one-row data
 frame with \code{server} and \code{project_id}.}
@@ -65,7 +66,8 @@ names nobody, \code{ambiguous} or a collision nobody answered, is left to the
 code of the identity, which concedes nothing either; a person to create is
 somebody else on a row carried out, whatever name the round would give
 them. A username carried out the log does not say decides nothing, except
-against a creation.
+against a creation, and nor does an empty one: a revocation closed before
+anybody was resolved was carried out for nobody.
 
 \strong{A revoked row whose person the tenant no longer holds is no change},
 decided on 2026-11-10, when nobody wrote the person in it: there is nobody
