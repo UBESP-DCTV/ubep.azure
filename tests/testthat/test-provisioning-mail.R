@@ -2024,3 +2024,165 @@ test_that("la mail di accesso si dirotta e non parte in simulazione", {
   expect_length(finta[["mandate"]](), 0L)
   expect_identical(simulato[["contatori"]][["accessi_recapitati"]], 0L)
 })
+
+
+# The fields the round settles for a row it carried out on edc10, project
+# 9003, for Sara, and that now names another pair.
+coppia_di_prova <- list(
+  outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA",
+  server = "edc12", executed_server = "edc10", executed_project_id = "9029",
+  executed_username = "sara.collaudozeta@ubep.unipd.it",
+  pair_changed = "server", edited_by = "bruno@ubep.unipd.it"
+)
+
+
+test_that("il messaggio di una coppia cambiata dice che cosa e com'era", {
+  # eval
+  corpo <- mail_outcome_message(
+    do.call(riga_di_prova, coppia_di_prova)
+  )[["body"]]
+
+  # test
+  # What happened, what was carried out, and that nothing moved on the
+  # instance: the referent sets the fields back to those values, so the
+  # message has to name them.
+  expect_match(
+    corpo,
+    paste0(
+      "Questa richiesta e' gia' stata eseguita, e la riga ora chiede ",
+      "un'altra istanza"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "Eseguita su: edc10, progetto 9029, per sara.collaudozeta@ubep.unipd.it.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "Il canale non ha scritto niente sull'istanza", fixed = TRUE
+  )
+  expect_match(corpo, "Modificata da: bruno@ubep.unipd.it", fixed = TRUE)
+  expect_match(
+    corpo,
+    "This request has already been applied, and the row now asks for another instance", # nolint: line_length_linter.
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "Applied on: edc10, project 9029, for sara.collaudozeta@ubep.unipd.it.",
+    fixed = TRUE
+  )
+  expect_match(corpo, "The channel wrote nothing on the instance", fixed = TRUE)
+})
+
+
+test_that("il messaggio di una coppia cambiata dice le due uscite", {
+  # eval
+  corpo <- mail_outcome_message(
+    do.call(riga_di_prova, coppia_di_prova)
+  )[["body"]]
+
+  # test
+  # Setting the fields back, or revoking and filing anew; and the revocation
+  # holds only on the pair carried out, so the fields go back first. An
+  # approval does not help, and the message says so before somebody tries.
+  expect_match(corpo, "riporta istanza, progetto, nome, cognome", fixed = TRUE)
+  expect_match(corpo, "porta Requested state a revoked", fixed = TRUE)
+  expect_match(corpo, "crea una richiesta nuova", fixed = TRUE)
+  expect_match(
+    corpo, "Revocata senza riportare i campi, la riga resta ferma",
+    fixed = TRUE
+  )
+  expect_match(corpo, "Non serve approvare", fixed = TRUE)
+  expect_match(
+    corpo, "set instance, project, first name, last name", fixed = TRUE
+  )
+  expect_match(corpo, "set Requested state to revoked", fixed = TRUE)
+  expect_match(corpo, "file a new request", fixed = TRUE)
+  expect_match(corpo, "No approval is needed", fixed = TRUE)
+  expect_false(grepl("approved_seal", corpo, fixed = TRUE))
+})
+
+
+test_that("il messaggio nomina tutto cio' che e' cambiato", {
+  # eval
+  corpo <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(
+      coppia_di_prova, list(pair_changed = "project_id,person")
+    )
+  ))[["body"]]
+
+  # test
+  expect_match(
+    corpo, "la riga ora chiede un altro progetto e un'altra persona",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "the row now asks for another project and another person",
+    fixed = TRUE
+  )
+})
+
+
+test_that("il messaggio di un account cambiato su Entra va a IT e non chiede niente al referente", { # nolint: line_length_linter.
+  # eval
+  rinominato <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA",
+    username = "sara.nuova@ubep.unipd.it",
+    executed_server = "edc10", executed_project_id = "9029",
+    executed_username = "sara.collaudozeta@ubep.unipd.it",
+    pair_changed = "account"
+  ))[["body"]]
+  cancellato <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA", username = "",
+    executed_username = "sara.collaudozeta@ubep.unipd.it",
+    pair_changed = "account"
+  ))[["body"]]
+
+  # test
+  expect_match(
+    rinominato,
+    paste0(
+      "La persona di questa richiesta non corrisponde piu', su Entra, ",
+      "all'account a cui il canale aveva dato l'accesso"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    rinominato, "rinominato o cancellato, oppure ha cambiato nome o cognome",
+    fixed = TRUE
+  )
+  expect_match(
+    rinominato, "sull'istanza non e' cambiato niente", fixed = TRUE
+  )
+  expect_match(
+    rinominato,
+    "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto 9029.",
+    fixed = TRUE
+  )
+  expect_match(
+    rinominato, "Account trovato ora: sara.nuova@ubep.unipd.it", fixed = TRUE
+  )
+  expect_match(cancellato, "Account trovato ora: nessuno", fixed = TRUE)
+  expect_match(rinominato, "IT verifica l'account su Entra", fixed = TRUE)
+  expect_match(rinominato, "non serve modificare la riga", fixed = TRUE)
+  expect_match(
+    rinominato,
+    paste0(
+      "The person of this request no longer matches, on Entra, the account ",
+      "the channel had given the access to"
+    ),
+    fixed = TRUE
+  )
+  expect_match(rinominato, "nothing has changed on the instance", fixed = TRUE)
+  expect_match(rinominato, "IT checks the account on Entra", fixed = TRUE)
+  # It does not clear by itself, and the message does not say it does.
+  expect_false(grepl("torna in coda da sola", rinominato, fixed = TRUE))
+  expect_false(
+    grepl("returns to the queue by itself", rinominato, fixed = TRUE)
+  )
+})

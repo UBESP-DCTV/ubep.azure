@@ -224,6 +224,177 @@ mail_outcome_message <- function(row) {
   )[[1]])
   nomi_codici <- sub(":.*$", "", codici)
   disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% nomi_codici
+  # The other transport code that does not clear by itself, decided on
+  # 2026-11-09: a row carried out whose account changed on Entra.
+  cambiato <- "TRASPORTO_IDENTITA_CAMBIATA" %in% nomi_codici
+
+  # What a row carried out on one pair and stopped on another was carried
+  # out on (`pair_change()`): the referent sets the fields back to it, so
+  # the message names it.
+  eseguita <- list(
+    server = mail_said_or(row[["executed_server"]], "non noto"),
+    project_id = mail_said_or(row[["executed_project_id"]], "non noto"),
+    username = mail_said_or(row[["executed_username"]], "non noto")
+  )
+  executed <- list(
+    server = mail_said_or(row[["executed_server"]], "unknown"),
+    project_id = mail_said_or(row[["executed_project_id"]], "unknown"),
+    username = mail_said_or(row[["executed_username"]], "unknown")
+  )
+
+  # A row carried out does not change its pair, decided on 2026-11-09. The
+  # message says what the row asks for now, what was carried out, and the
+  # two ways out; and that an approval is not one of them, since the round
+  # refuses the change whoever approves it.
+  coppia <- if ("DATO_COPPIA_CAMBIATA" %in% nomi_codici) {
+    parti <- trimws(strsplit(
+      mail_said_or(row[["pair_changed"]], ""), ",", fixed = TRUE
+    )[[1]])
+    nomi <- list(
+      server = c(it = "un'altra istanza", en = "another instance"),
+      project_id = c(it = "un altro progetto", en = "another project"),
+      person = c(it = "un'altra persona", en = "another person")
+    )
+    parti <- intersect(names(nomi), parti)
+    if (length(parti) == 0L) {
+      parti <- names(nomi)
+    }
+    chiede <- function(lingua, congiunzione) {
+      parole <- vapply(nomi[parti], function(n) n[[lingua]], character(1))
+      if (length(parole) == 1L) {
+        return(parole)
+      }
+      paste(
+        paste(parole[-length(parole)], collapse = ", "),
+        congiunzione, parole[[length(parole)]]
+      )
+    }
+    list(
+      it = c(
+        "",
+        paste0(
+          "Questa richiesta e' gia' stata eseguita, e la riga ora chiede ",
+          chiede("it", "e"), ": una richiesta eseguita non cambia istanza, ",
+          "progetto o persona. Il canale non ha scritto niente sull'istanza ",
+          "e non ha creato nessun account: l'accesso eseguito resta com'era, ",
+          "e la riga resta ferma."
+        ),
+        paste0(
+          "Eseguita su: ", eseguita[["server"]], ", progetto ",
+          eseguita[["project_id"]], ", per ", eseguita[["username"]], "."
+        ),
+        paste0("Modificata da: ", mail_said_or(
+          row[["edited_by"]], "non stabilito dal registro degli eventi"
+        )),
+        "",
+        "Le uscite sono due.",
+        paste0(
+          "- Se la modifica e' un errore, riporta istanza, progetto, nome, ",
+          "cognome e indirizzo di contatto ai valori eseguiti: al giro ",
+          "successivo la riga torna com'era."
+        ),
+        paste0(
+          "- Se serve un'altra persona o un altro progetto, riporta i campi ",
+          "ai valori eseguiti e porta Requested state a revoked, se l'accesso ",
+          "eseguito non serve piu'; poi crea una richiesta nuova. Revocata ",
+          "senza riportare i campi, la riga resta ferma qui."
+        ),
+        "",
+        paste0(
+          "Non serve approvare: un'approvazione non fa passare un cambio di ",
+          "istanza, progetto o persona."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "This request has already been applied, and the row now asks for ",
+          chiede("en", "and"), ": an applied request does not change ",
+          "instance, project or person. The channel wrote nothing on the ",
+          "instance and created no account: the access that was applied ",
+          "stays as it was, and the row stays stopped."
+        ),
+        paste0(
+          "Applied on: ", executed[["server"]], ", project ",
+          executed[["project_id"]], ", for ", executed[["username"]], "."
+        ),
+        paste0("Edited by: ", mail_said_or(
+          row[["edited_by"]], "not established from the event log"
+        )),
+        "",
+        "There are two ways out.",
+        paste0(
+          "- If the edit is a mistake, set instance, project, first name, ",
+          "last name and contact e-mail back to the applied values: on the ",
+          "next round the row is back as it was."
+        ),
+        paste0(
+          "- If another person or another project is needed, set the fields ",
+          "back to the applied values and set Requested state to revoked, if ",
+          "the applied access is no longer needed; then file a new request. ",
+          "Revoked without setting the fields back, the row stays stopped ",
+          "here."
+        ),
+        "",
+        paste0(
+          "No approval is needed: an approval does not let a change of ",
+          "instance, project or person through."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
+  # The account carried out changed on Entra and nobody wrote the person in
+  # the row, decided on 2026-11-09: the referent has nothing to undo, and IT,
+  # in copy, looks at the account.
+  account <- if (cambiato) {
+    trovato_it <- mail_said_or(row[["username"]], "nessuno")
+    trovato_en <- mail_said_or(row[["username"]], "none")
+    list(
+      it = c(
+        "",
+        paste0(
+          "La persona di questa richiesta non corrisponde piu', su Entra, ",
+          "all'account a cui il canale aveva dato l'accesso: l'account e' ",
+          "stato rinominato o cancellato, oppure ha cambiato nome o cognome, ",
+          "e nella riga nessuno ha cambiato la persona. Il canale non cambia ",
+          "il nome utente di una richiesta eseguita e non crea un account al ",
+          "suo posto: sull'istanza non e' cambiato niente, e la riga resta ",
+          "ferma."
+        ),
+        paste0(
+          "Eseguita per: ", eseguita[["username"]], ", su ",
+          eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
+        ),
+        paste0("Account trovato ora: ", trovato_it),
+        paste0(
+          "IT verifica l'account su Entra; non serve modificare la riga."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The person of this request no longer matches, on Entra, the ",
+          "account the channel had given the access to: the account was ",
+          "renamed or deleted, or its first or last name changed, and nobody ",
+          "changed the person in the row. The channel does not change the ",
+          "username of an applied request nor create an account in its ",
+          "place: nothing has changed on the instance, and the row stays ",
+          "stopped."
+        ),
+        paste0(
+          "Applied for: ", executed[["username"]], ", on ",
+          executed[["server"]], ", project ", executed[["project_id"]], "."
+        ),
+        paste0("Account found now: ", trovato_en),
+        "IT checks the account on Entra; the row needs no edit."
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
 
   # A collision is the one data error whose answer is not a correction:
   # when the account that holds the composed name is somebody else, the
@@ -458,6 +629,8 @@ mail_outcome_message <- function(row) {
     )),
     trattenuta[["it"]],
     collisione[["it"]],
+    coppia[["it"]],
+    account[["it"]],
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
@@ -467,6 +640,12 @@ mail_outcome_message <- function(row) {
           "L'account della persona e' disattivato, di solito perche' non ",
           "e' mai entrata. Se l'accesso serve ancora, rispondi a questo ",
           "messaggio: IT riattiva l'account e ti manda una chiave nuova."
+        )
+      } else if (cambiato) {
+        paste0(
+          "Uno che comincia per TRASPORTO_ e' nostro: questo non si risolve ",
+          "da solo, e la riga resta ferma finche' IT non ha verificato ",
+          "l'account."
         )
       } else {
         paste0(
@@ -504,6 +683,8 @@ mail_outcome_message <- function(row) {
     )),
     trattenuta[["en"]],
     collisione[["en"]],
+    coppia[["en"]],
+    account[["en"]],
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
@@ -513,6 +694,12 @@ mail_outcome_message <- function(row) {
           "The person's account is deactivated, usually because they never ",
           "signed in. If the access is still needed, reply to this message: ",
           "IT reactivates the account and sends you a new key."
+        )
+      } else if (cambiato) {
+        paste0(
+          "One starting with TRASPORTO_ is ours: this one does not clear by ",
+          "itself, and the row stays stopped until IT has checked the ",
+          "account."
         )
       } else {
         paste0(

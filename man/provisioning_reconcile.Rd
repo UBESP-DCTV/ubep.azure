@@ -193,6 +193,30 @@ and not \code{held}, because a held message asks for an approval that nobody
 could give, from an owner nobody could name, and the gate would have
 nobody whose rights to ask.
 
+\strong{A row the channel has carried out does not change its pair}, decided on
+2026-11-09: the instance, the project and the person it was carried out
+for: the row as read when its seal did not move, and otherwise as the
+owners' log holds them below the channel's last seal
+(\code{log_executed_values()}). Whoever wrote the change, the owner included,
+approved or not, the row stops before the plan (\code{pair_change()}): nothing
+is written on the instance, nobody is created on Entra, the row keeps its
+seal and its owner. \code{DATO_COPPIA_CAMBIATA} when the referent moved it, the
+instance, the project, or the person written so that the round would serve
+somebody else; \code{TRASPORTO_IDENTITA_CAMBIATA} when the round would serve
+another account, or create one, and nobody wrote the person in the row:
+the account changed on Entra, and it is for IT. Both come before a held
+change, since no approval lets them through, and before the identity's own
+codes. A row never carried out changes as before.
+
+\strong{The oldest row of a pair keeps it whether the round serves it or not.}
+A row the round stops (held, blind, on its identity, on a pair that moved)
+still holds its pair, the one carried out when it is known, and a
+younger row on that pair takes \code{DATO_COPPIA_DUPLICATA} as it would beside
+an older row the round serves. Otherwise the younger one was carried out
+on its own authority while the older waited, and the access followed
+whichever of the two stood. A revocation closed on a person the tenant no
+longer holds holds no pair.
+
 \strong{Step 3 is a step of this round and not a job of its own} — decision 2 of
 the design — and the reason is latency: resolving and acting have the same
 cadence and the second consumes the first, so a resolver on a timer of its

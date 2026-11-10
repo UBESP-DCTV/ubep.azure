@@ -114,7 +114,9 @@ scope_pairs <- function(register) {
 #'
 #' - the row carries no requester, so nothing can be attributed to anybody;
 #' - the requester holds no rights at all on that project, so there is no row;
-#' - the permission was read and does not grant;
+#' - the permission was read and does not grant, or grants past its
+#'   expiration, since REDCap's expiration is the first day without access
+#'   and the referent could not use the permission by hand either;
 #' - the permission could not be read, which is the case that decides the
 #'   direction of the whole function. An instance answered by a module too old
 #'   to report the permission, a role deleted underneath a row, a column that
@@ -133,7 +135,8 @@ scope_pairs <- function(register) {
 #' @param register The register as a data frame, carrying at least `record_id`,
 #'   `server`, `project_id` and `requested_by`.
 #' @param rights The rights read from the instances, as a data frame with
-#'   `server`, `project_id`, `username` and `user_rights`. The caller assembles
+#'   `server`, `project_id`, `username`, `user_rights` and, when known,
+#'   `expiration` (`YYYY-MM-DD`, empty or `NA` for none). The caller assembles
 #'   it from each instance's answer, because a `state` reply names its server
 #'   once at the top and not on every row.
 #'
@@ -176,8 +179,25 @@ scope_errors <- function(register, rights) {
       rep(NA_integer_, length(held))
     }
 
-    granted <- held[!is.na(permission) & permission == scope_granting_value()]
-    unreadable <- held[is.na(permission)]
+    # A permission past its expiration does not grant: the referent could not
+    # open the project's User Rights page by hand either. REDCap's expiration
+    # is the first day without access, hence `<=`; empty is no expiration.
+    # Today is the client's date, as in `validate_request()`. An expiration
+    # that does not read as a date is a reply nobody can read, and on a
+    # permission that would grant it refuses as an unreadable one does.
+    expiration <- if ("expiration" %in% names(rights)) {
+      trimws(as.character(rights[["expiration"]]))
+    } else {
+      rep(NA_character_, length(held))
+    }
+    dated <- !is.na(expiration) & nzchar(expiration)
+    day <- suppressWarnings(as.Date(expiration, format = "%Y-%m-%d"))
+    garbled <- dated & is.na(day)
+    expired <- dated & !is.na(day) & day <= Sys.Date()
+
+    grants <- !is.na(permission) & permission == scope_granting_value()
+    granted <- held[grants & !expired & !garbled]
+    unreadable <- held[is.na(permission) | (grants & garbled)]
   }
 
   askable <- scope_filled(register[["server"]]) &

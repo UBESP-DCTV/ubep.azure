@@ -43,7 +43,9 @@ typo into a request to grant what somebody asked to revoke;
 \item \code{DIZIONARIO_SCELTE_DIVERSE} — same type, and the value that revokes is
 gone;
 \item \code{DIZIONARIO_READONLY_CADUTO} — a requester can type \code{applied} into the
-outcome, and the register carries a success nobody produced;
+outcome, and the register carries a success nobody produced. Only the
+tag that holds on every row is compared, \code{dictionary_readonly()}: one
+inside an \verb{@IF} is not;
 \item \code{DIZIONARIO_COLONNA_ASSENTE} — the dictionary is malformed, and without
 this code it would read as conforming rather than as unreadable;
 \item \code{DIZIONARIO_SCELTE_NON_CONFRONTATE} — reported for \code{server} when no

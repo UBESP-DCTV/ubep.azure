@@ -1232,6 +1232,93 @@ test_that("a revoke the re-read still shows is not called applied", {
 })
 
 
+# An instance that holds the pair until a revoke is written for real, and
+# then no longer does: the read-back after the revoke is what `applied` and
+# `absent` are claims about, so the double has to move.
+istanza_che_revoca <- function() {
+  revocato <- FALSE
+  function(data) {
+    if (identical(data[["operation"]], "revoke") &&
+          isFALSE(data[["dry_run"]])) {
+      revocato <<- TRUE # nolint: assignment_linter.
+    }
+    rows <- list(list())
+    if (!revocato) {
+      rows <- c(rows, list(list(
+        username = "mario.rossi@ubep.unipd.it", project_id = 9003L,
+        role_name = "data entry"
+      )))
+    }
+    do.call(istanza_doppia, rows)(data)
+  }
+}
+
+
+test_that("a revoked row is revoked even when its last day has passed", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      request_status = "revoked",
+      expiration = as.character(Sys.Date() - 1L)
+    ))),
+    istanza_che_revoca(),
+    dry_run = FALSE
+  )
+
+  # test
+  # The last day is checked because an apply would write it. A revoke writes
+  # none, and refusing the row for it left the right on the instance with no
+  # way for the register to remove it: the date never comes back.
+  revocazioni <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "revoke")
+  }, scritture())
+  expect_length(revocazioni, 1L)
+  expect_equal(esito[["esiti"]][["outcome"]], "applied")
+  expect_equal(esito[["esiti"]][["applied_as"]], "absent")
+})
+
+
+test_that("a requester whose access to the project has expired is refused", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list(expiration = as.character(Sys.Date() - 1L))),
+    dry_run = FALSE
+  )
+
+  # test
+  # The expiration travels in the module's own state reply, the one the gate
+  # already reads, so a requester who holds User Rights on a project whose
+  # access has expired is judged as one who holds none.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_AMBITO_NON_AUTORIZZATO"
+  )
+})
+
+
+test_that("an active row whose last day has passed is still refused", {
+  # eval
+  esito <- giro(
+    registro_doppio(record_json(list(
+      expiration = as.character(Sys.Date() - 1L)
+    ))),
+    istanza_che_revoca(),
+    dry_run = FALSE
+  )
+
+  # test
+  # What the revocation fix must not touch: an active row past its last day
+  # is a data error, and nothing is written to the instance for it.
+  expect_length(scritture(), 0L)
+  expect_equal(esito[["esiti"]][["outcome"]], "data_error")
+  expect_equal(
+    esito[["esiti"]][["outcome_detail"]], "DATO_SCADENZA_NON_VALIDA"
+  )
+})
+
+
 test_that("a simulated write carries the module's own intention in applied_as", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -5663,4 +5750,853 @@ test_that("il messaggio di una collisione dal giro nomina il nome occupato", {
     fixed = TRUE
   )
   expect_match(corpo, "\n    mario.rossi.2@ubep.unipd.it\n", fixed = TRUE)
+})
+
+
+# ---- A row carried out does not change its pair (decided on 2026-11-09) ----
+
+mario <- "mario.rossi@ubep.unipd.it"
+
+# The creation of Anna's request for Mario on edc10, project 9003, carrying
+# the fields as REDCap logs them, `campo = 'valore'`.
+creata_da_anna <- function(id = "1", ...) {
+  utils::modifyList(
+    list(
+      username = anna, action = paste0("Create record ", id), record = id,
+      details = paste0(
+        "record_id = '", id, "', server = 'edc10', project_id = '9003', ",
+        "first_name = 'Mario', last_name = 'Rossi', ",
+        "contact_email = 'mario.rossi@example.org', role_name = 'data entry', ",
+        "request_status = 'active'"
+      )
+    ),
+    list(...)
+  )
+}
+
+# What the round wrote when it carried the row out, newest first: the seals
+# door's event and, below it, the identity door's write of the username.
+carried_out <- function(sigillo, id = "1", username = mario) {
+  list(
+    list(
+      timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+      action = paste0("Update record (API) ", id), record = id,
+      details = paste0(
+        "applied_seal = '", sigillo, "', seal_state = 'intact'"
+      )
+    ),
+    list(
+      timestamp = "2026-08-12 05:00", username = "svc-canale-ubep",
+      action = paste0("Update record (API) ", id), record = id,
+      details = paste0("username = '", username, "', identity = 'existing'")
+    )
+  )
+}
+
+# The row as the round left it after carrying it out, before anybody touched
+# it, and its seal.
+eseguita_row <- function(id = "1", ...) {
+  utils::modifyList(
+    list(
+      record_id = id, username = mario, identity = "existing",
+      outcome = "applied", owned_by = anna,
+      applied_as = "role_name=data entry; dag_name=; expiration=",
+      seal_state = "intact"
+    ),
+    list(...)
+  )
+}
+sigillo_eseguito <- function(id = "1") {
+  request_seal(riga_come_registro(record_id = id, username = mario))
+}
+
+# One round over that row, changed by `cambi` as the register now holds it;
+# `storia` is what people wrote after the execution, newest first.
+giro_coppia <- function(cambi = list(),
+                        storia = list(),
+                        directory = directory_doppia(),
+                        istanza = istanza_che_scrive(),
+                        ...) {
+  riga <- utils::modifyList(
+    eseguita_row(applied_seal = sigillo_eseguito()), cambi
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, carried_out(sigillo_eseguito())),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza,
+    directory = directory,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+giulia <- graph_user(
+  id = "00000000-0000-0000-0000-000000000002",
+  userPrincipalName = "giulia.verdi@ubep.unipd.it", givenName = "Giulia",
+  surname = "Verdi", officeLocation = "giulia.verdi@example.org"
+)
+
+# Nothing left for an instance or for Graph, and nothing sealed again.
+nulla_scritto <- function() {
+  testthat::expect_length(scritture(), 0L)
+  testthat::expect_length(creazioni(), 0L)
+  testthat::expect_null(sigilli_scritti())
+  testthat::expect_null(proprietari_scritti())
+}
+
+
+test_that("il proprietario che sposta su un'altra istanza una riga eseguita la ferma", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(server = "edc12"), list(cambio(anna, "server = 'edc12'"))
+  )
+
+  # test
+  # Carried out on edc12, the row would leave Mario on edc10 with no row to
+  # govern him: the round revokes only what a row asks to revoke. So the row
+  # stops, the referent hears it as a data error, and nothing moves.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "data_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+  expect_length(interrogazioni(), 0L)
+})
+
+
+test_that("il proprietario che cambia il progetto di una riga eseguita la ferma", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(project_id = "9004"), list(cambio(anna, "project_id = '9004'"))
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("il proprietario che cambia la persona di una riga eseguita la ferma", { # nolint: line_length_linter.
+  # eval
+  # Anna writes Giulia's name and address over Mario's.
+  esito <- giro_coppia(
+    list(
+      first_name = "Giulia", last_name = "Verdi",
+      contact_email = "giulia.verdi@example.org"
+    ),
+    list(cambio(
+      anna, paste0(
+        "first_name = 'Giulia', last_name = 'Verdi', ",
+        "contact_email = 'giulia.verdi@example.org'"
+      )
+    )),
+    directory = directory_doppia(graph_user(), giulia)
+  )
+
+  # test
+  # The round resolves Giulia and would grant her, leaving Mario's access
+  # behind.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una persona da creare su una riga eseguita non nasce", {
+  # eval
+  # Anna writes somebody the tenant does not hold.
+  esito <- giro_coppia(
+    list(
+      first_name = "Nadia", last_name = "Nuova",
+      contact_email = "nadia@example.org"
+    ),
+    list(cambio(
+      anna, paste0(
+        "first_name = 'Nadia', last_name = 'Nuova', ",
+        "contact_email = 'nadia@example.org'"
+      )
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("il cambio di istanza di un altro referente non va in attesa: si ferma", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(server = "edc12"), list(cambio(bruno, "server = 'edc12'"))
+  )
+
+  # test
+  # Held, the owner would be asked for an approval that cannot let the change
+  # through. The data error names the two ways out at once.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "data_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("l'approvazione non fa passare un cambio di istanza", {
+  # eval
+  sigillo <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, server = "edc12"
+  ))
+  esito <- giro_coppia(
+    list(server = "edc12", approved_seal = sigillo),
+    list(approvazione(anna, sigillo), cambio(bruno, "server = 'edc12'")),
+    istanza = istanza_che_scrive(richiedenti = c(anna, bruno))
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una riga revocata spostata su un'altra coppia non revoca niente", {
+  # eval
+  esito <- giro_coppia(
+    list(server = "edc12", request_status = "revoked"),
+    list(cambio(anna, "server = 'edc12', request_status = 'revoked'"))
+  )
+
+  # test
+  # The revocation would take away an access the row never governed, Mario's
+  # on edc12, and leave the one it did govern.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("riportati i campi ai valori eseguiti la riga torna com'era", {
+  # eval
+  # The previous round stopped the row; Anna then put the server back.
+  esito <- giro_coppia(
+    list(outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA"),
+    list(
+      cambio(anna, "server = 'edc10'"), cambio(anna, "server = 'edc12'")
+    ),
+    istanza = istanza_doppia(
+      list(), list(username = mario, role_name = "data entry", user_rights = 0L)
+    )
+  )
+
+  # test
+  # A field brought back to the value carried out is no change: the row is
+  # the one sealed, and the round finds the access in place.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un indirizzo corretto della stessa persona passa come prima", {
+  # eval
+  # Mario's account carries the new address too.
+  esito <- giro_coppia(
+    list(contact_email = "mario.r@example.org"),
+    list(cambio(anna, "contact_email = 'mario.r@example.org'")),
+    directory = directory_doppia(
+      graph_user(otherMails = I("mario.r@example.org"))
+    ),
+    istanza = istanza_doppia(
+      list(), list(username = mario, role_name = "data entry", user_rights = 0L)
+    )
+  )
+
+  # test
+  # Still Mario: the owner's change is carried out and sealed again.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]),
+    request_seal(riga_come_registro(
+      record_id = "1", username = mario, contact_email = "mario.r@example.org"
+    ))
+  )
+})
+
+
+test_that("una riga mai eseguita cambia istanza come prima", {
+  # eval
+  # Filed on edc10, moved by Anna to edc12 before any round carried it out.
+  esito <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1", server = "edc12")),
+      storia = list(cambio(anna, "server = 'edc12'")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(scritture(), 1L)
+  expect_match(scritture()[[1]][["url"]], "edc12", fixed = TRUE)
+})
+
+
+test_that("un nome utente rinominato su Entra non si esegue: va a IT", {
+  # eval
+  # Nobody touched the row; Entra renamed Mario's account.
+  esito <- giro_coppia(
+    directory = directory_doppia(
+      graph_user(userPrincipalName = "mario.rossi.nuovo@ubep.unipd.it")
+    )
+  )
+
+  # test
+  # Carried out under the new name, the old login would stay on the instance
+  # with no row. Nothing in the row explains the change, so it is IT's.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("un account cancellato su Entra non si ricrea", {
+  # eval
+  esito <- giro_coppia(directory = directory_vuota(), mailer = posta_accesa)
+
+  # test
+  # Created again with the same name, the account would find on REDCap every
+  # right it had before, those given by hand included.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("un nome corretto su Entra non fa nascere un secondo account", {
+  # eval
+  # IT corrected Mario's surname and renamed the account to match: the row's
+  # name composes a username the tenant no longer holds.
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user(
+      userPrincipalName = "mario.rossini@ubep.unipd.it", surname = "Rossini"
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una revoca su un account cancellato si chiude come prima", {
+  # eval
+  esito <- giro_coppia(
+    list(request_status = "revoked"),
+    list(cambio(anna, "request_status = 'revoked'")),
+    directory = directory_vuota(),
+    mailer = posta_accesa
+  )
+
+  # test
+  # Decided on 2026-11-10: the person is not in the tenant, so there is
+  # nobody to take the access from and nobody to create. The row closes
+  # before any instance is asked, as it did before 0.24.0, and stopped for
+  # IT it would bring, on the first round, outcomes and copies for rows long
+  # closed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_length(interrogazioni(), 0L)
+})
+
+
+test_that("una revoca su un account rinominato non revoca il nome nuovo", {
+  # eval
+  esito <- giro_coppia(
+    list(request_status = "revoked"),
+    list(cambio(anna, "request_status = 'revoked'")),
+    directory = directory_doppia(
+      graph_user(userPrincipalName = "mario.rossi.nuovo@ubep.unipd.it")
+    )
+  )
+
+  # test
+  # Revoking the new name would take away an access the row never gave, and
+  # leave the one it gave: the row stops for IT.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una revoca spostata su una persona assente resta un cambio di coppia", { # nolint: line_length_linter.
+  # eval
+  # Anna revokes and writes somebody the tenant does not hold: the row would
+  # close as revoked while Mario's access stays.
+  esito <- giro_coppia(
+    list(
+      request_status = "revoked", first_name = "Nadia", last_name = "Nuova",
+      contact_email = "nadia@example.org"
+    ),
+    list(cambio(
+      anna, paste0(
+        "request_status = 'revoked', first_name = 'Nadia', ",
+        "last_name = 'Nuova', contact_email = 'nadia@example.org'"
+      )
+    )),
+    directory = directory_doppia()
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  nulla_scritto()
+})
+
+
+test_that("una persona assente su una riga mai eseguita nasce come prima", {
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(list()),
+    directory = directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 1L)
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "pending")
+})
+
+
+# ---- The oldest row of a pair keeps it, served or not ----
+
+# Two rows for Mario on edc10, project 9003: 5 carried out, 12 filed after it
+# and never carried out. `storia` is what happened to row 5 since.
+due_righe <- function(cambi5 = list(),
+                      storia = list(),
+                      cambi12 = list(),
+                      directory = directory_doppia(),
+                      ...) {
+  riga5 <- utils::modifyList(
+    eseguita_row("5", applied_seal = sigillo_eseguito("5")), cambi5
+  )
+  riga12 <- utils::modifyList(list(record_id = "12"), cambi12)
+  giro(
+    registro_con_log(
+      record_json(riga5, riga12),
+      storia = c(storia, carried_out(sigillo_eseguito("5"), id = "5")),
+      creazioni = creazioni_finte(creata_da_anna("12"), creata_da_anna("5"))
+    ),
+    istanza_che_scrive(),
+    directory = directory,
+    dry_run = FALSE,
+    ...
+  )
+}
+
+esito_di <- function(esito, id) {
+  at <- as.character(esito[["esiti"]][["record_id"]]) == id
+  list(
+    outcome = as.character(esito[["esiti"]][["outcome"]][at]),
+    detail = as.character(esito[["esiti"]][["outcome_detail"]][at])
+  )
+}
+
+
+test_that("una riga piu' recente non prende la coppia di una riga eseguita in attesa", { # nolint: line_length_linter.
+  # eval
+  esito <- due_righe(
+    list(role_name = "read only"),
+    list(cambio(bruno, "role_name = 'read only'", record = "5"))
+  )
+
+  # test
+  # Row 5 waits for Anna's approval and still governs Mario on that project.
+  # Served in its place, row 12 would grant on its own authority for as long
+  # as row 5 waits, and the two would take turns.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "held")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una riga piu' recente non prende la coppia di una riga eseguita ora ambigua", { # nolint: line_length_linter.
+  # eval
+  # A second account with Mario's name and his contact address: row 5 is
+  # ambiguous now. Row 12 gives an address only Mario's account carries.
+  esito <- due_righe(
+    cambi12 = list(contact_email = "mario.12@example.org"),
+    directory = directory_doppia(
+      graph_user(otherMails = I("mario.12@example.org")),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000003",
+        userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+      )
+    )
+  )
+
+  # test
+  expect_equal(
+    esito_di(esito, "5")[["detail"]], "DATO_RECAPITO_NON_IDENTIFICA"
+  )
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la coppia di una riga ferma per cambio di coppia resta sua", {
+  # eval
+  # Anna moved row 5 to edc12: it stops, and the pair it governs is still
+  # the one carried out, on edc10.
+  esito <- due_righe(
+    list(server = "edc12"),
+    list(cambio(anna, "server = 'edc12'", record = "5"))
+  )
+
+  # test
+  expect_equal(esito_di(esito, "5")[["detail"]], "DATO_COPPIA_CAMBIATA")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la riga eseguita in ordine tiene la coppia e la piu' recente resta doppione", { # nolint: line_length_linter.
+  # eval
+  esito <- due_righe()
+
+  # test
+  # The baseline the three above are read against: with row 5 served, the
+  # rule was already there.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "12")[["detail"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("una riga ferma per cambio di coppia scrive al proprietario che cosa era eseguito", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_coppia(
+    list(server = "edc12"), list(cambio(bruno, "server = 'edc12'")),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  mandate <- posta[["mandate"]]()
+
+  # test
+  # To the owner, IT in copy, as every outcome; with the pair carried out,
+  # which is what the fields go back to, and who wrote the change.
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+  expect_match(
+    mandate[[1L]][["body"]],
+    "Eseguita su: edc10, progetto 9003, per mario.rossi@ubep.unipd.it.",
+    fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]], "la riga ora chiede un'altra istanza",
+    fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]], paste("Modificata da:", bruno), fixed = TRUE
+  )
+})
+
+
+test_that("un account rinominato su Entra si annuncia al proprietario con IT in copia", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_coppia(
+    directory = directory_doppia(
+      graph_user(userPrincipalName = "mario.rossi.nuovo@ubep.unipd.it")
+    ),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  mandate <- posta[["mandate"]]()
+
+  # test
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+  expect_match(
+    mandate[[1L]][["body"]],
+    "Eseguita per: mario.rossi@ubep.unipd.it, su edc10, progetto 9003.",
+    fixed = TRUE
+  )
+  expect_match(
+    mandate[[1L]][["body"]],
+    "Account trovato ora: mario.rossi.nuovo@ubep.unipd.it", fixed = TRUE
+  )
+})
+
+
+# ---- A row whose seal did not move holds the pair carried out ----
+
+# A row whose last execution carried out a change of project written by
+# somebody other than its owner, with no approval in the log: the history
+# before 2026-10-14, or IT correcting a row by hand. Nobody touched the row
+# since, and the channel's last seal is the row's.
+sigillo_9004 <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, project_id = "9004"
+  ))
+}
+
+giro_storico <- function(chi = bruno, approvers = character(), ...) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(
+        eseguita_row(project_id = "9004", applied_seal = sigillo_9004())
+      )),
+      storia = c(
+        list(list(
+          timestamp = "2026-10-01 05:00", username = "svc-canale-ubep",
+          action = "Update record (API) 1", record = "1",
+          details = paste0(
+            "applied_seal = '", sigillo_9004(), "', seal_state = 'intact'"
+          )
+        )),
+        list(cambio(
+          chi, "project_id = '9004'", timestamp = "2026-09-30 10:00"
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(project_id = 9004L),
+      list(
+        username = mario, project_id = 9004L, role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    dry_run = FALSE,
+    approvers = approvers,
+    ...
+  )
+}
+
+
+test_that("una modifica di un altro gia' eseguita senza approvazione non sposta la riga", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_storico(bruno)
+
+  # test
+  # The seal matches the row as read, so the row as read is what was carried
+  # out, project 9004 included. Read from the log, Bruno's write below the
+  # seal has no approval above it and would be passed over, and the project
+  # carried out would read 9003: the row would stop on a change nobody made.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una correzione di IT gia' eseguita non sposta la riga", {
+  # eval
+  esito <- giro_storico(
+    "it.admin@ubep.unipd.it", approvers = "it.admin@ubep.unipd.it"
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+})
+
+
+test_that("una riga eseguita col sigillo fermo non scrive a nessuno", {
+  # eval
+  posta <- posta_raccolta()
+  giro_storico(bruno, mailer = posta[["mailer"]], copy_to = "it@example.org")
+
+  # test
+  # Nothing changed, so nothing leaves: stopped, the row would have asked the
+  # owner to set the project back to one never carried out.
+  expect_length(posta[["mandate"]](), 0L)
+})
+
+
+test_that("una revoca chiusa su una persona assente resta chiusa quando la persona nasce", { # nolint: line_length_linter.
+  # eval
+  # Row 3 asked for Nadia, whom the tenant did not hold. Anna revoked it
+  # before any round served it, and the round closed it `applied` with
+  # `absent`, sealed with an empty username. Then Nadia was born for another
+  # request.
+  riga <- list(
+    record_id = "3", first_name = "Nadia", last_name = "Nuova",
+    contact_email = "nadia@example.org", request_status = "revoked",
+    username = ""
+  )
+  sigillo <- request_seal(do.call(riga_come_registro, riga))
+  del_canale <- function(details) {
+    list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 3", record = "3", details = details
+    )
+  }
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(utils::modifyList(riga, list(
+        identity = "absent", outcome = "applied", applied_as = "absent",
+        applied_seal = sigillo, seal_state = "intact", owned_by = anna
+      )))),
+      storia = list(
+        del_canale(paste0(
+          "applied_seal = '", sigillo, "', seal_state = 'intact'"
+        )),
+        del_canale("owned_by = 'anna.bianchi@ubep.unipd.it'"),
+        del_canale("outcome = 'applied', applied_as = 'absent'"),
+        del_canale("identity = 'absent'"),
+        cambio(
+          anna, "request_status = 'revoked'", record = "3",
+          timestamp = "2026-10-19 10:00"
+        )
+      ),
+      creazioni = creazioni_finte(creata_da_anna(
+        "3",
+        details = paste0(
+          "record_id = '3', server = 'edc10', project_id = '9003', ",
+          "first_name = 'Nadia', last_name = 'Nuova', ",
+          "contact_email = 'nadia@example.org', role_name = 'data entry', ",
+          "request_status = 'active'"
+        )
+      ))
+    ),
+    istanza_doppia(list()),
+    directory = directory_doppia(graph_user(
+      id = "00000000-0000-0000-0000-000000000004",
+      userPrincipalName = "nadia.nuova@ubep.unipd.it", givenName = "Nadia",
+      surname = "Nuova", officeLocation = "nadia@example.org"
+    )),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]],
+    copy_to = "it@example.org"
+  )
+
+  # test
+  # The row was never carried out for anybody, so no account was: an empty
+  # username carried out is not another person.
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_length(posta[["mandate"]](), 0L)
+  expect_length(scritture(), 0L)
+})
+
+
+
+# Row 5, Mario's on edc10, project 9003: carried out, then revoked while his
+# account was there, and the account deleted since. Row 12 is filed for him
+# on the same pair when he comes back.
+sigillo_revocata <- function() {
+  request_seal(riga_come_registro(
+    record_id = "5", username = mario, request_status = "revoked"
+  ))
+}
+revocata_poi <- function() {
+  c(
+    list(list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 5", record = "5",
+      details = paste0(
+        "applied_seal = '", sigillo_revocata(), "', seal_state = 'intact'"
+      )
+    )),
+    list(cambio(
+      anna, "request_status = 'revoked'", record = "5",
+      timestamp = "2026-10-19 10:00"
+    )),
+    carried_out(sigillo_eseguito("5"), id = "5")
+  )
+}
+
+
+test_that("una persona che torna nasce con la riga nuova sulla coppia revocata", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(
+          "5", applied_seal = sigillo_revocata(), request_status = "revoked",
+          applied_as = "absent"
+        ),
+        list(record_id = "12")
+      ),
+      storia = revocata_poi(),
+      creazioni = creazioni_finte(creata_da_anna("12"), creata_da_anna("5"))
+    ),
+    istanza_doppia(list()),
+    directory = directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # Row 5 closed as revoked on a person the tenant no longer holds, and it
+  # governs nothing: row 12 is no duplicate of it, and Mario is created, as
+  # before 0.24.0.
+  expect_equal(esito_di(esito, "5")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "12")[["detail"]], "")
+  expect_length(creazioni(), 1L)
+})
+
+
+test_that("riattivare una riga eseguita su un account cancellato non lo ricrea", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(
+        "5", applied_seal = sigillo_revocata(), request_status = "active",
+        applied_as = "absent"
+      )),
+      storia = c(
+        list(cambio(anna, "request_status = 'active'", record = "5")),
+        revocata_poi()
+      ),
+      creazioni = creazioni_finte(creata_da_anna("5"))
+    ),
+    istanza_doppia(list()),
+    directory = directory_vuota(),
+    dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  # A row carried out creates nobody: created again under the same name, the
+  # account would find on REDCap every right it had. The way back is a new
+  # request, the test above.
+  expect_equal(
+    esito_di(esito, "5")[["detail"]], "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_length(creazioni(), 0L)
 })

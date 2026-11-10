@@ -1112,6 +1112,209 @@ log_value <- function(events, field) {
 }
 
 
+#' The pair a row's last execution carried out, from the log
+#'
+#' The value each of `fields` had in the version the round last carried
+#' out: the newest write of the field below the round's newest execution,
+#' `log_executions()`, in the row's current life, by anybody, the channel
+#' included. The creation carries the fields a referent filled in, `server
+#' = 'edc10'`, and the identity door the username the round resolved, which
+#' it writes before the seal in the same pass. A write below the seal that
+#' the execution did not cover, `log_uncovered_writes()`, is passed over:
+#' made while the round ran, it holds a value the round had not read, and
+#' the one below it is what was carried out.
+#'
+#' The value is read whole, up to the apostrophe that closes it, the one
+#' followed by the next field or by the end of `details`: a UPN can hold an
+#' apostrophe, and cut at the first one `luca.d'amico` would read `luca.d`.
+#' Meant for `server`, `project_id` and `username`, whose values never hold
+#' the text `', name = '` that would end them early.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers, for
+#'   `log_uncovered_writes()`.
+#' @param fields The fields to read.
+#' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
+#'
+#' @return A character vector named by `fields`, `NA` where the log does not
+#'   say: the row was never carried out in its current life, the log holds no
+#'   write of the field below the seal, the stretch below the seal cannot be
+#'   read, or the channel is not known.
+#'
+#' @keywords internal
+log_executed_values <- function(events, record, creator,
+                                fields = c("server", "project_id", "username"),
+                                approvers = character(),
+                                channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.character(fields), is.character(approvers)
+  )
+
+  unknown <- stats::setNames(rep(NA_character_, length(fields)), fields)
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (log_channel_unknown(channel, channel_account)) {
+    return(unknown)
+  }
+  executed <- log_executions(mine, channel, channel_account)
+  if (length(executed) == 0L) {
+    return(unknown)
+  }
+  open <- log_uncovered_writes(
+    events, record, creator, register_intent_fields(), approvers,
+    channel_account
+  )
+  if (anyNA(open)) {
+    return(unknown)
+  }
+
+  rows <- seq_len(nrow(mine))
+  details <- as.character(mine[["details"]])
+  details[is.na(details)] <- ""
+  vapply(fields, function(field) {
+    done <- which(
+      log_wrote(mine, field) & rows > executed[[1L]] & !rows %in% open
+    )
+    if (length(done) == 0L) {
+      return(NA_character_)
+    }
+    pattern <- paste0(
+      "\\b", field,
+      "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+    )
+    hit <- regmatches(
+      details[[done[[1L]]]],
+      regexec(pattern, details[[done[[1L]]]], perl = TRUE)
+    )[[1L]]
+    if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
+  }, character(1))
+}
+
+
+#' Whether a row the round carried out now asks for another pair
+#'
+#' Decided on 2026-11-09: **a row the channel has sealed does not change its
+#' pair**, the instance, the project and the person it was carried out for.
+#' Carried out on the new pair, it would leave the old one on the instance
+#' with no row to govern it, since the round revokes only what a row asks to
+#' revoke; a revoked row moved to another pair would take away an access it
+#' never governed. Whoever wrote the change, the owner included, and with an
+#' approval or not: the row stops before the plan, nothing is written on the
+#' instance, nobody is created, and the row keeps its seal and its owner.
+#'
+#' Two codes, for the two causes, so that whoever reads the message knows at
+#' once what to do:
+#'
+#' - `DATO_COPPIA_CAMBIATA`, the referent's: `server` or `project_id` differ
+#'   from the values carried out, or somebody wrote the person (first name,
+#'   last name, contact address) and the round would now serve somebody
+#'   else, another account or a person to create. Setting the fields back to
+#'   the values carried out brings the row back as it was; another person or
+#'   another project is a new request, and this one is revoked, its fields
+#'   back first;
+#' - `TRASPORTO_IDENTITA_CAMBIATA`, for IT, decided on 2026-11-09 as well: the
+#'   round would serve another account or create one while nobody wrote the
+#'   person in the row, so the account changed on Entra (renamed, deleted,
+#'   its name corrected). Nothing in the row explains it, and the referent has
+#'   nothing to undo.
+#'
+#' The pair comes first: it is a change the referent made and can undo, and
+#' the account is looked at once it is back.
+#'
+#' Who the round would serve is the resolution's to say. A verdict that
+#' names nobody, `ambiguous` or a collision nobody answered, is left to the
+#' code of the identity, which concedes nothing either; a person to create is
+#' somebody else on a row carried out, whatever name the round would give
+#' them. A username carried out the log does not say decides nothing, except
+#' against a creation, and nor does an empty one: a revocation closed before
+#' anybody was resolved was carried out for nobody.
+#'
+#' **A revoked row whose person the tenant no longer holds is no change**,
+#' decided on 2026-11-10, when nobody wrote the person in it: there is nobody
+#' to take the access from and nobody to create, and the round closes the row
+#' before any instance is asked, as it did before the rule. Stopped for IT,
+#' the rows long closed that way would bring an outcome and a copy each on
+#' the first round. A revoked row that resolves to another account that
+#' exists still stops: revoking that account would take away an access the
+#' row never gave.
+#'
+#' @param executed The `server`, `project_id` and `username` carried out:
+#'   the row as read when its seal did not move, otherwise what
+#'   `log_executed_values()` answered.
+#' @param current The row as the register holds it, a list or a one-row data
+#'   frame with `server` and `project_id`.
+#' @param target The username the round would now serve, `""` when the
+#'   resolution names nobody or would create somebody.
+#' @param creating Whether the round would create a person for the row.
+#' @param rewritten Whether a write of the person fields by somebody other
+#'   than the channel stands in the row since its last execution; `NA` when
+#'   the log does not say who wrote it, which counts as a write.
+#' @param revoked Whether the row asks for `revoked`.
+#'
+#' @return A list with `code`, one of the two codes or `""`, and `changed`,
+#'   which of `"server"`, `"project_id"` and `"person"` moved, or `"account"`
+#'   for the second code.
+#'
+#' @keywords internal
+pair_change <- function(executed, current, target, creating, rewritten,
+                        revoked = FALSE) {
+  stopifnot(
+    is.character(executed),
+    all(c("server", "project_id", "username") %in% names(executed)),
+    is.character(target), length(target) == 1L,
+    is.logical(creating), length(creating) == 1L, !is.na(creating),
+    is.logical(rewritten), length(rewritten) == 1L,
+    is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
+  )
+
+  now <- function(field) {
+    value <- trimws(as.character(current[[field]] %||% ""))
+    if (length(value) != 1L || is.na(value)) "" else value
+  }
+  # A project is a number, and `09003` is the project `9003`.
+  same_project <- function(a, b) {
+    if (grepl("^[0-9]+$", a) && grepl("^[0-9]+$", b)) {
+      as.numeric(a) == as.numeric(b)
+    } else {
+      identical(a, b)
+    }
+  }
+
+  changed <- character()
+  if (!is.na(executed[["server"]]) && now("server") != executed[["server"]]) {
+    changed <- c(changed, "server")
+  }
+  if (!is.na(executed[["project_id"]]) &&
+        !same_project(now("project_id"), executed[["project_id"]])) {
+    changed <- c(changed, "project_id")
+  }
+
+  # A revocation on a person the tenant no longer holds creates nobody: it
+  # closes, unless somebody wrote that person.
+  closing <- creating && revoked && isFALSE(rewritten)
+  person <- (creating && !closing) || (
+    !is.na(target) && nzchar(target) && !is.na(executed[["username"]]) &&
+      nzchar(executed[["username"]]) &&
+      identity_normalize(target) != identity_normalize(executed[["username"]])
+  )
+  if (person && !isFALSE(rewritten)) {
+    changed <- c(changed, "person")
+  }
+
+  if (length(changed) > 0L) {
+    return(list(code = "DATO_COPPIA_CAMBIATA", changed = changed))
+  }
+  if (person) {
+    return(list(code = "TRASPORTO_IDENTITA_CAMBIATA", changed = "account"))
+  }
+  list(code = "", changed = character())
+}
+
+
 #' Whether each of these authors may approve a row
 #'
 #' Whoever owns the row, `log_owner()`, or one of the IT accounts. The owner
@@ -1918,6 +2121,67 @@ log_answer_stands <- function(events, record, proposal,
 }
 
 
+#' The fields a dictionary makes read-only on every row
+#'
+#' The fields whose annotation carries `@READONLY` outside any `@IF(...)`.
+#' A tag inside an `@IF` holds only on the rows its condition picks, and the
+#' field can be written on the others: `server` and `project_id` are locked
+#' that way once a row carries a seal (decided on 2026-11-09), and they are
+#' intent fields, not fields of the channel. Counted with the rest, they
+#' would read as read-only fields the live register lost, on a register that
+#' has not imported the tag yet, and the round would stop.
+#'
+#' The `@IF` is cut with its parentheses balanced, skipping what stands
+#' inside quotes, since a condition can hold a parenthesis of its own; an
+#' `@IF` nested in another goes with it. A tag after the `@IF` still counts.
+#'
+#' @param dictionary A data dictionary, with `Variable / Field Name` and
+#'   `Field Annotation`.
+#'
+#' @return The names of those fields, in dictionary order.
+#'
+#' @keywords internal
+dictionary_readonly <- function(dictionary) {
+  annotation <- as.character(dictionary[["Field Annotation"]])
+  annotation[is.na(annotation)] <- ""
+
+  # The text left once every `@IF(...)` is taken out, the first one at each
+  # pass: from its opening parenthesis a scan with a depth counter, what
+  # stands inside quotes skipped. An `@IF` left open takes the rest.
+  unconditional <- vapply(annotation, function(text) {
+    repeat {
+      at <- regexpr("@IF\\s*\\(", text)
+      if (at < 0L) {
+        return(text)
+      }
+      start <- as.integer(at)
+      chars <- strsplit(text, "", fixed = TRUE)[[1]]
+      i <- start + attr(at, "match.length")
+      depth <- 1L
+      quote <- ""
+      while (i <= length(chars) && depth > 0L) {
+        ch <- chars[[i]]
+        if (nzchar(quote)) {
+          if (ch == quote) quote <- ""
+        } else if (ch %in% c("'", "\"")) {
+          quote <- ch
+        } else if (ch == "(") {
+          depth <- depth + 1L
+        } else if (ch == ")") {
+          depth <- depth - 1L
+        }
+        i <- i + 1L
+      }
+      text <- paste0(
+        substr(text, 1L, start - 1L), " ", substr(text, i, nchar(text))
+      )
+    }
+  }, character(1), USE.NAMES = FALSE)
+
+  dictionary[["Variable / Field Name"]][grepl("@READONLY", unconditional)]
+}
+
+
 #' Compare a project's dictionary against the packaged one
 #'
 #' The packaged CSV is the schema and REDCap imports it as it is, so the two
@@ -1941,7 +2205,9 @@ log_answer_stands <- function(events, record, proposal,
 #' - `DIZIONARIO_SCELTE_DIVERSE` — same type, and the value that revokes is
 #'   gone;
 #' - `DIZIONARIO_READONLY_CADUTO` — a requester can type `applied` into the
-#'   outcome, and the register carries a success nobody produced;
+#'   outcome, and the register carries a success nobody produced. Only the
+#'   tag that holds on every row is compared, `dictionary_readonly()`: one
+#'   inside an `@IF` is not;
 #' - `DIZIONARIO_COLONNA_ASSENTE` — the dictionary is malformed, and without
 #'   this code it would read as conforming rather than as unreadable;
 #' - `DIZIONARIO_SCELTE_NON_CONFRONTATE` — reported for `server` when no
@@ -1974,10 +2240,12 @@ compare_dictionary <- function(actual, instances = NULL) {
     if (length(fields) == 0L) character(0) else paste0(code, ":", fields)
   }
 
+  # Only the tag that holds on every row, `dictionary_readonly()`: a tag
+  # inside an `@IF` is not compared, so a register that has not imported one
+  # reads as conforming, and one wrapped around an outcome's tag is a tag
+  # that fell.
   readonly_in <- function(dictionary) {
-    annotation <- dictionary[["Field Annotation"]]
-    annotation[is.na(annotation)] <- ""
-    dictionary[[field]][grepl("@READONLY", annotation)]
+    dictionary_readonly(dictionary)
   }
 
   # Checked up front because an absent column does not raise downstream: the
@@ -2255,7 +2523,18 @@ register_to_desired <- function(register) {
       next
     }
 
-    taken <- intake_request(requests[[i]])
+    # A revocation writes no last day, so the one the row still carries is
+    # not validated: checked, a revoked row whose date had passed was refused
+    # with `DATO_SCADENZA_NON_VALIDA` at every round, never reached the plan,
+    # and the access it asked to remove stayed for good, because the date only
+    # gets older. Dropped here, before the intake, so that it is neither
+    # checked nor converted, and the revoke batch carries no expiration.
+    request <- requests[[i]]
+    if (identical(statuses[[i]], "revoked")) {
+      request[["expiration"]] <- NULL
+    }
+
+    taken <- intake_request(request)
     if (length(taken[["errors"]]) > 0L) {
       errors[[ids[[i]]]] <- taken[["errors"]]
       next
