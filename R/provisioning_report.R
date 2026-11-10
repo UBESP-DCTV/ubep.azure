@@ -503,7 +503,9 @@ report_expired <- function(expiration, today) {
 #'   that should be gone and is not, and it is no longer in any referent's
 #'   report. Not the rows with `TRASPORTO_ACCOUNT_DISATTIVATO` among their
 #'   codes, active or revoked: the active ones are `disattivata`, and none is
-#'   listed twice;
+#'   listed twice. Not a revocation the log says was carried out and that
+#'   somebody touched afterwards, `revoca_eseguita` of
+#'   `report_executed_register()`: its seal moved, but the access is gone;
 #' - `disattivata`, the active rows stopped on a disabled account:
 #'   `transport_error` with `TRASPORTO_ACCOUNT_DISATTIVATO` among the codes
 #'   of `outcome_detail`, sealed or not.
@@ -535,11 +537,19 @@ report_scope <- function(register) {
   disattivata <- status == "active" & outcome == "transport_error" &
     grepl("TRASPORTO_ACCOUNT_DISATTIVATO", detail, fixed = TRUE)
   disabled <- grepl("TRASPORTO_ACCOUNT_DISATTIVATO", detail, fixed = TRUE)
+  # Set by `report_executed_register()` when the log says the revocation was
+  # carried out.
+  gone <- register[["revoca_eseguita"]]
+  gone <- if (is.null(gone)) {
+    rep(FALSE, nrow(register))
+  } else {
+    !is.na(gone) & as.logical(gone)
+  }
 
   list(
     conta = status == "active" & (outcome == "applied" | sealed) &
       !disattivata,
-    ferma = sealed & outcome != "applied" & !disabled &
+    ferma = sealed & outcome != "applied" & !disabled & !gone &
       status %in% c("active", "revoked"),
     disattivata = disattivata
   )
@@ -583,10 +593,14 @@ report_scope <- function(register) {
 #'   token, or `NULL` when they are not configured.
 #'
 #' @return The register, with `server`, `project_id` and `username` the ones
-#'   executed, and three columns more: `username_registro`, the name the
+#'   executed, and four columns more: `username_registro`, the name the
 #'   register holds; `nome_eseguito`, `registro` or `log`, where the name
 #'   executed was read, `""` when it is not known; `nome_motivo`, why not:
-#'   `log` or `approvatori`, `""` when it is known.
+#'   `log` or `approvatori`, `""` when it is known; `revoca_eseguita`, `TRUE`
+#'   on a revoked row whose state executed, `log_executed_values()` on
+#'   `request_status`, is `revoked`: carried out, then touched, so that
+#'   `report_scope()` leaves it out of `ferma`. A log that does not say
+#'   leaves it `FALSE`.
 #'
 #' @keywords internal
 report_executed_register <- function(register, logs, creators,
@@ -622,9 +636,27 @@ report_executed_register <- function(register, logs, creators,
   out[["username_registro"]] <- field("username")
   out[["nome_eseguito"]] <- rep("registro", nrow(register))
   out[["nome_motivo"]] <- rep("", nrow(register))
+  out[["revoca_eseguita"]] <- rep(FALSE, nrow(register))
 
   for (i in which(stopped)) {
     log <- logs[[i]]
+
+    # A revoked row the round has already carried out as revoked, and that
+    # somebody touched afterwards: its seal moved and it stopped, but the
+    # access is gone. The log says it, the state executed being `revoked`;
+    # where it does not say, the row stays, the side that shows more.
+    if (identical(field("request_status")[[i]], "revoked") && !is.null(log)) {
+      done <- log_executed_values(
+        log, ids[[i]], creators[[i]], fields = "request_status",
+        approvers = approvers %||% character(),
+        channel_account = channel_account
+      )
+      if (identical(unname(done[["request_status"]]), "revoked")) {
+        out[["revoca_eseguita"]][[i]] <- TRUE
+        next
+      }
+    }
+
     believed <- if (!is.null(channel_account) && !is.null(log)) {
       log_channel_seal(log, ids[[i]], channel_account)
     } else {

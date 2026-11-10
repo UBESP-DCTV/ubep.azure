@@ -5334,3 +5334,49 @@ test_that("the report and the round read a written value with one reader", {
   )
   expect_false(exists("report_written_value", mode = "function"))
 })
+
+
+test_that("a revocation carried out and then touched is not stopped", {
+  # eval
+  # Revoked by the owner and carried out on 10 September; on 5 November a
+  # referent who is not the owner writes the expiration, and the round holds
+  # the row because its seal moved. The access is gone.
+  eseguita <- intatta(
+    record_id = "45", username = elena, first_name = "Elena",
+    last_name = "Supposta", request_status = "revoked"
+  )
+  registro <- eseguita
+  registro[["expiration"]] <- "2026-12-31"
+  registro[["outcome"]] <- "held"
+  registro[["outcome_detail"]] <- "SIGILLO_DIVERSO:bbbbbbbbbbbb"
+  sigillo <- eseguita[["applied_seal"]][[1L]]
+  chiusa <- log_eseguita("45", elena, sopra = rbind(
+    evento("2026-11-05 10:00", bruno, "expiration = '2026-12-31'",
+           record = "45"),
+    evento("2026-09-10 23:03", canale,
+           paste0("applied_seal = '", sigillo, "'"), record = "45"),
+    evento("2026-09-09 10:00", referente, "request_status = 'revoked'",
+           record = "45")
+  ))
+  # The same revocation, never carried out: the log says nothing of it.
+  aperta <- log_eseguita("45", elena, sopra = evento(
+    "2026-11-05 10:00", referente, "request_status = 'revoked'",
+    record = "45"
+  ))
+
+  eseguito <- report_executed_register(
+    registro, list(chiusa), referente, approvers = character(),
+    channel_account = canale
+  )
+  ancora <- report_executed_register(
+    registro, list(aperta), referente, approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  expect_equal(nrow(report_held_rows(eseguito, owners = referente)), 0L)
+  expect_length(report_server_asks(eseguito), 0L)
+  expect_equal(
+    report_held_rows(ancora, owners = referente)[["record_id"]], "45"
+  )
+})

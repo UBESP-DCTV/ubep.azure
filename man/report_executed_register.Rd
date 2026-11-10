@@ -28,10 +28,14 @@ token, or \code{NULL} when they are not configured.}
 }
 \value{
 The register, with \code{server}, \code{project_id} and \code{username} the ones
-executed, and three columns more: \code{username_registro}, the name the
+executed, and four columns more: \code{username_registro}, the name the
 register holds; \code{nome_eseguito}, \code{registro} or \code{log}, where the name
 executed was read, \code{""} when it is not known; \code{nome_motivo}, why not:
-\code{log} or \code{approvatori}, \code{""} when it is known.
+\code{log} or \code{approvatori}, \code{""} when it is known; \code{revoca_eseguita}, \code{TRUE}
+on a revoked row whose state executed, \code{log_executed_values()} on
+\code{request_status}, is \code{revoked}: carried out, then touched, so that
+\code{report_scope()} leaves it out of \code{ferma}. A log that does not say
+leaves it \code{FALSE}.
 }
 \description{
 A row that stopped after the channel executed it keeps on the instance

@@ -36,7 +36,9 @@ executed row that the round did not carry out, stopped at the gate on
 that should be gone and is not, and it is no longer in any referent's
 report. Not the rows with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among their
 codes, active or revoked: the active ones are \code{disattivata}, and none is
-listed twice;
+listed twice. Not a revocation the log says was carried out and that
+somebody touched afterwards, \code{revoca_eseguita} of
+\code{report_executed_register()}: its seal moved, but the access is gone;
 \item \code{disattivata}, the active rows stopped on a disabled account:
 \code{transport_error} with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among the codes
 of \code{outcome_detail}, sealed or not.
