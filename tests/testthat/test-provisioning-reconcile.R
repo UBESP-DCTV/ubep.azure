@@ -7210,3 +7210,57 @@ test_that("una revoca su un nome con altre maiuscole si chiude quando la rilettu
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
   expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
 })
+
+
+# The usernames the round sent in its real revokes.
+nomi_revocati <- function() {
+  unlist(lapply(revoche(), function(req) {
+    vapply(req[["body"]][["data"]][["requests"]], function(r) {
+      as.character(r[["username"]])
+    }, character(1))
+  }))
+}
+
+# An instance that revokes as the module's `Planner::planRevoke()` does: the
+# key is the username as written, so a revoke asked for `Mario.Rossi@` on a
+# row stored as `mario.rossi@` is a `noop` and removes nothing. Its state
+# read answers, as `StateReader::read()` under the `_ci` collation, with the
+# stored row whatever name it is asked about.
+istanza_esatta <- function() {
+  tolto <- FALSE
+  function(data) {
+    if (identical(data[["operation"]], "revoke") &&
+          isFALSE(data[["dry_run"]])) {
+      chiesti <- vapply(data[["requests"]], function(r) {
+        as.character(r[["username"]])
+      }, character(1))
+      if (mario %in% chiesti) {
+        tolto <<- TRUE # nolint: assignment_linter.
+      }
+    }
+    righe <- list(list(user_rights = 1L))
+    if (!tolto) {
+      righe <- c(righe, list(list(
+        username = mario, role_name = "data entry", user_rights = 0L
+      )))
+    }
+    do.call(istanza_doppia, righe)(data)
+  }
+}
+
+
+test_that("una revoca su un nome con altre maiuscole parte col nome che l'istanza tiene, e toglie la persona", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca(
+    istanza = istanza_esatta(),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  # Sent under the register's name, the module planned it `noop` and the row
+  # stayed on `TRASPORTO_SCRITTURA_NON_CONFERMATA` for good, with a message
+  # that said it would clear by itself.
+  expect_equal(nomi_revocati(), mario)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+})
