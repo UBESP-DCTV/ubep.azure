@@ -17,9 +17,9 @@ The rows, with \code{creator}, the owner, added.
 }
 \description{
 \code{ferma} of \code{report_scope()}: the rows the channel executed and that then
-stopped, active, or revoked on the two codes on which the revocation is
-not carried out. The access executed stays on the instance until the row
-is applied again or its revocation is. Read on the register with the
+stopped, active or revoked: a revocation stopped is one not carried out.
+The access executed stays on the instance until the row is applied again
+or its revocation is. Read on the register with the
 names executed, \code{report_executed_register()}, so that each row names the
 account that has the access.
 }

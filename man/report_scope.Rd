@@ -29,11 +29,14 @@ imported is at most a row more. The rows stopped on a disabled account
 are not in it: the person cannot sign in, and IT has them in a section
 of its own, \code{disattivata};
 \item \code{ferma}, the rows the mail to IT lists as stopped with an access
-executed: sealed, not \code{applied}, and either active or revoked on
-\code{DATO_COPPIA_CAMBIATA} or \code{TRASPORTO_IDENTITA_CAMBIATA}, the two codes
-on which a revocation stops before it is carried out and the account
-that has the access is not the one the register names. Not those of
-\code{disattivata};
+executed: sealed, not \code{applied}, active or revoked. A revocation of an
+executed row that the round did not carry out, stopped at the gate on
+\code{DATO_AMBITO_NON_AUTORIZZATO}, waiting for its owner as \code{held}, or on
+\code{DATO_COPPIA_CAMBIATA} or \code{TRASPORTO_IDENTITA_CAMBIATA}, is an access
+that should be gone and is not, and it is no longer in any referent's
+report. Not the rows with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among their
+codes, active or revoked: the active ones are \code{disattivata}, and none is
+listed twice;
 \item \code{disattivata}, the active rows stopped on a disabled account:
 \code{transport_error} with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among the codes
 of \code{outcome_detail}, sealed or not.

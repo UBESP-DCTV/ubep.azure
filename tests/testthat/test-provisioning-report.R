@@ -4866,7 +4866,7 @@ test_that("the servers are asked the names executed, not the ones written", {
 })
 
 
-test_that("IT gets the stopped rows, revoked too on the two codes of 0.24.0", {
+test_that("IT gets the stopped rows, the revocations not carried out too", {
   # eval
   registro <- registro_di(
     richiesta(record_id = "41"),
@@ -4876,7 +4876,7 @@ test_that("IT gets the stopped rows, revoked too on the two codes of 0.24.0", {
               outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"),
     richiesta(record_id = "44", request_status = "revoked",
               outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA"),
-    # Revoked on another code: not in this section.
+    # Revoked and stopped at the gate: not carried out either.
     richiesta(record_id = "45", request_status = "revoked",
               outcome = "data_error",
               outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
@@ -4890,8 +4890,8 @@ test_that("IT gets the stopped rows, revoked too on the two codes of 0.24.0", {
   ))
 
   # test
-  expect_equal(ferme[["record_id"]], c("42", "43", "44"))
-  expect_equal(ferme[["creator"]], c(bruno, referente, bruno))
+  expect_equal(ferme[["record_id"]], c("42", "43", "44", "45"))
+  expect_equal(ferme[["creator"]], c(bruno, referente, bruno, referente))
 })
 
 
@@ -5246,6 +5246,74 @@ test_that("the referent reads a name executed not known as such", {
   expect_true(any(startsWith(
     testo[["en"]], "- Carla Inventata, name executed not known: edc10, "
   )))
+})
+
+
+
+test_that("a revocation of an executed row not carried out goes to IT", {
+  # eval
+  registro <- registro_di(
+    # Stopped at the gate: the owner lost User Rights and revoked.
+    richiesta(record_id = "45", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO"),
+    # Waiting for the owner, revoked by somebody else.
+    richiesta(record_id = "46", request_status = "revoked", outcome = "held",
+              outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"),
+    # Carried out: the access is gone.
+    richiesta(record_id = "47", request_status = "revoked"),
+    # Never executed: no access to take away.
+    richiesta(record_id = "48", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO",
+              applied_seal = ""),
+    # A disabled account stays in its own section, and nowhere twice.
+    ferma(record_id = "49"),
+    ferma(record_id = "50", request_status = "revoked")
+  )
+
+  ferme <- report_held_rows(registro, owners = rep(referente, 6L))
+
+  # test
+  expect_equal(ferme[["record_id"]], c("45", "46"))
+  expect_equal(report_stopped_rows(registro)[["record_id"]], "49")
+})
+
+
+test_that("a revocation stopped at the gate is listed with the pair executed", {
+  # eval
+  registro <- registro_di(
+    richiesta(record_id = "45", username = elena, first_name = "Elena",
+              last_name = "Supposta", request_status = "revoked",
+              outcome = "data_error",
+              outcome_detail = "DATO_AMBITO_NON_AUTORIZZATO")
+  )
+  logs <- list(log_eseguita("45", elena, sopra = evento(
+    "2026-11-05 10:00", referente, "request_status = 'revoked'",
+    record = "45"
+  )))
+  eseguito <- report_executed_register(
+    registro, logs, referente, approvers = character(),
+    channel_account = canale
+  )
+  rapporto <- report_assemble(
+    report_rows(eseguito, referente, list("2026-08-03 23:03"), novembre()),
+    rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(elena))),
+    held = report_held_rows(eseguito, owners = referente)
+  )
+
+  testo <- parti(report_it_message(rapporto[["it"]], novembre()))
+
+  # test
+  expect_equal(eseguito[["nome_eseguito"]], "log")
+  expect_equal(report_server_asks(eseguito), list(edc10 = elena))
+  expect_true(paste0(
+    "   - Richiesta 45: Elena Supposta, elena.supposta@ubep.unipd.it: ",
+    "edc10, progetto 9301. Esito data_error, DATO_AMBITO_NON_AUTORIZZATO. ",
+    "Revocata, revoca non eseguita. La persona e' gia' entrata su edc10. ",
+    "Referente: anna.esempio@ubep.unipd.it."
+  ) %in% testo[["it"]])
 })
 
 

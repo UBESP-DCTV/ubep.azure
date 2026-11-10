@@ -525,11 +525,14 @@ report_expired <- function(expiration, today) {
 #'   are not in it: the person cannot sign in, and IT has them in a section
 #'   of its own, `disattivata`;
 #' - `ferma`, the rows the mail to IT lists as stopped with an access
-#'   executed: sealed, not `applied`, and either active or revoked on
-#'   `DATO_COPPIA_CAMBIATA` or `TRASPORTO_IDENTITA_CAMBIATA`, the two codes
-#'   on which a revocation stops before it is carried out and the account
-#'   that has the access is not the one the register names. Not those of
-#'   `disattivata`;
+#'   executed: sealed, not `applied`, active or revoked. A revocation of an
+#'   executed row that the round did not carry out, stopped at the gate on
+#'   `DATO_AMBITO_NON_AUTORIZZATO`, waiting for its owner as `held`, or on
+#'   `DATO_COPPIA_CAMBIATA` or `TRASPORTO_IDENTITA_CAMBIATA`, is an access
+#'   that should be gone and is not, and it is no longer in any referent's
+#'   report. Not the rows with `TRASPORTO_ACCOUNT_DISATTIVATO` among their
+#'   codes, active or revoked: the active ones are `disattivata`, and none is
+#'   listed twice;
 #' - `disattivata`, the active rows stopped on a disabled account:
 #'   `transport_error` with `TRASPORTO_ACCOUNT_DISATTIVATO` among the codes
 #'   of `outcome_detail`, sealed or not.
@@ -560,14 +563,13 @@ report_scope <- function(register) {
 
   disattivata <- status == "active" & outcome == "transport_error" &
     grepl("TRASPORTO_ACCOUNT_DISATTIVATO", detail, fixed = TRUE)
-  revoked_stuck <- status == "revoked" &
-    grepl("DATO_COPPIA_CAMBIATA|TRASPORTO_IDENTITA_CAMBIATA", detail)
+  disabled <- grepl("TRASPORTO_ACCOUNT_DISATTIVATO", detail, fixed = TRUE)
 
   list(
     conta = status == "active" & (outcome == "applied" | sealed) &
       !disattivata,
-    ferma = sealed & outcome != "applied" & !disattivata &
-      (status == "active" | revoked_stuck),
+    ferma = sealed & outcome != "applied" & !disabled &
+      status %in% c("active", "revoked"),
     disattivata = disattivata
   )
 }
@@ -838,9 +840,9 @@ report_stopped_rows <- function(register) {
 #' The rows stopped with an access executed, for IT
 #'
 #' `ferma` of `report_scope()`: the rows the channel executed and that then
-#' stopped, active, or revoked on the two codes on which the revocation is
-#' not carried out. The access executed stays on the instance until the row
-#' is applied again or its revocation is. Read on the register with the
+#' stopped, active or revoked: a revocation stopped is one not carried out.
+#' The access executed stays on the instance until the row is applied again
+#' or its revocation is. Read on the register with the
 #' names executed, `report_executed_register()`, so that each row names the
 #' account that has the access.
 #'
