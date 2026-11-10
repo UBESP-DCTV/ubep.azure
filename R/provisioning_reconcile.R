@@ -1406,16 +1406,28 @@ provisioning_reconcile <- function(register_url,
 
     # A row whose last day has passed, carried out and unchanged, on a pair the
     # instance no longer holds: somebody removed the person after the access
-    # ended. Written again it would be an access created already ended, and
-    # the person told they have one. Its last day is refused as it was before
-    # such a row was let through, and nothing is written.
-    lapsed <- Filter(function(e) {
+    # ended, which whoever governs the project may do. Written again it would
+    # be an access created already ended, and the person told they have one,
+    # so nothing is written; and the row asks for no access any longer, so it
+    # closes as a revocation already done does (decided on 2026-11-10): applied
+    # and read back as absent, with no mail to the person. Refused on its last
+    # day, the row would send the referent to write a date that has not passed,
+    # or none, and either would reopen the access.
+    #
+    # Gone as REDCap reads the name, without regard to case (`present()`): the
+    # diff reads it as written, so a person whose username changed on Entra in
+    # its capitals alone, still on the project, reads as `creato` here. Closed
+    # as absent it would tell the owner that the person is gone when they are
+    # not. That row keeps the refusal of before.
+    expired <- Filter(function(e) {
       identical(acted(e), "creato") &&
         as.character(e[["record_id"]]) %in% plan[["lapsed"]]
     }, wanted)
+    lapsed <- Filter(Negate(present), expired)
+    recased <- Filter(present, expired)
     wanted <- Filter(function(e) {
       !as.character(e[["record_id"]]) %in%
-        vapply(lapsed, function(l) as.character(l[["record_id"]]), "")
+        vapply(expired, function(l) as.character(l[["record_id"]]), "")
     }, wanted)
 
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
@@ -1463,6 +1475,13 @@ provisioning_reconcile <- function(register_url,
         )
       }),
       lapply(lapsed, function(e) {
+        outcome_payload(
+          as.character(e[["record_id"]]),
+          round_outcome_kind(character(), dry_run), at = at,
+          applied_as = round_applied_as(NULL)
+        )
+      }),
+      lapply(recased, function(e) {
         outcome_payload(
           as.character(e[["record_id"]]),
           round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),

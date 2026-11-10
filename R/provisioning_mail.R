@@ -146,14 +146,38 @@ mail_said_or <- function(value, absent) {
 #' exists to prevent -- it said `applied` on a revocation, naming nobody, and
 #' whoever read it understood that an access had been granted.
 #'
+#' A third fact has the same word: an active row whose last day has passed,
+#' carried out and unchanged, and whose person somebody removed from the
+#' project. The round writes nothing and reads the pair back as absent, which
+#' is the row's own wish, and the message says that instead of a grant.
+#'
 #' @param request_status The row's `request_status`.
+#' @param applied_as The row's read-back, `"absent"` when the pair is not on
+#'   the instance. Empty when the caller does not say.
 #'
 #' @return A character vector named `it` and `en`.
 #'
 #' @keywords internal
-mail_status_words <- function(request_status) {
+mail_status_words <- function(request_status, applied_as = "") {
+  applied_as <- if (is.null(applied_as) || length(applied_as) != 1L ||
+                      is.na(applied_as)) {
+    ""
+  } else {
+    trimws(as.character(applied_as))
+  }
   if (identical(as.character(request_status), "revoked")) {
     c(it = "l'accesso e' stato tolto", en = "the access has been removed")
+  } else if (identical(applied_as, "absent")) {
+    c(
+      it = paste0(
+        "l'ultimo giorno di accesso e' passato e la persona non e' piu' ",
+        "sul progetto: il canale non ha scritto niente sull'istanza"
+      ),
+      en = paste0(
+        "the last day of access has passed and the person is no longer on ",
+        "the project: the channel wrote nothing on the instance"
+      )
+    )
   } else {
     c(it = "l'accesso e' stato concesso", en = "the access has been granted")
   }
@@ -176,7 +200,7 @@ mail_outcome_message <- function(row) {
   stopifnot(is.list(row), !is.null(row[["record_id"]]))
 
   said <- mail_outcome_words(as.character(row[["outcome"]]))
-  status <- mail_status_words(row[["request_status"]])
+  status <- mail_status_words(row[["request_status"]], row[["applied_as"]])
   id <- as.character(row[["record_id"]])
   locale <- mail_said_or(mail_local_time(row[["outcome_at"]]), "non nota")
 
