@@ -5638,7 +5638,7 @@ test_that("the mail to IT lists the recipients suppressed", {
 })
 
 
-test_that("a suppressed recipient alone makes the mail to IT due", {
+test_that("a suppressed recipient alone makes the mail to IT due on day 1", {
   # eval
   dati <- con_soppressioni()
   # Every row has its referent: nothing else for IT.
@@ -5661,6 +5661,53 @@ test_that("a suppressed recipient alone makes the mail to IT due", {
   expect_false(it_prova %in% destinatari(senza))
   expect_true(it_prova %in% destinatari(posta))
   expect_true(report_it_key() %in% esito[["dovuti"]])
+})
+
+
+test_that("a suppression in mid month sends no mail to IT, due unchanged", {
+  # eval
+  # Found by the review of 2026-11-12 (R1). The sections are written with
+  # the reading of the report's sending day; between two reports the signal
+  # is the rule on the new entries.
+  dati <- con_soppressioni()
+  dati[["creazioni"]] <- rbind(
+    dati[["creazioni"]],
+    evento("2026-10-01 10:00", referente, "", record = "43",
+           action = "Create record 43")
+  )
+  cartella <- withr::local_tempdir()
+
+  # The 1st: no suppression, IT is not due and the month is complete.
+  doppie(dati)
+  primo <- esegui(
+    cartella, posta_finta(),
+    suppressions = function() soppressioni_finte()
+  )
+  # The 15th: Carla's contact bounced on the evening of the 14th.
+  doppie(dati)
+  quindici <- posta_finta()
+  esito <- esegui(
+    cartella, quindici, ora = "2026-11-15 06:30",
+    suppressions = function() {
+      soppressioni_finte(c("bounces", carla_fuori, "2026-11-14 20:00"))
+    }
+  )
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  expect_false(report_it_key() %in% primo[["dovuti"]])
+  expect_true(report_record(primo, posta = TRUE)[["mese_completo"]])
+  expect_false(
+    it_prova %in% vapply(quindici[["inviate"]][["mail"]], `[[`, "", "to")
+  )
+  expect_false(report_it_key() %in% esito[["dovuti"]])
+  expect_false(
+    report_it_key() %in% report_due_read(cartella, "2026-10")[["dovuti"]]
+  )
+  expect_false(record[["giorno_di_invio"]])
+  expect_true(record[["mese_completo"]])
+  # The rule on the new entries is what speaks between two reports.
+  expect_equal(record[["soppressi_recapiti_nuovi"]], 1L)
 })
 
 

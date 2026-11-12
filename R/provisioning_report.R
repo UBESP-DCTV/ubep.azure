@@ -3861,15 +3861,25 @@ provisioning_report <- function(register_url,
   }
 
   # The suppressions crossed with the recipients. What silences a person or
-  # a referent goes in the mail to IT, which goes to IT's address alone, and
-  # makes it due on its own; the referents' reports do not change.
+  # a referent goes in the mail to IT, which goes to IT's address alone; the
+  # referents' reports do not change. The sections are written with the
+  # reading of the report's sending day, as the design of voce 5 says: they
+  # make the mail to IT due on their own only when the month has no due
+  # reports kept yet, the first whole reading of the month. Later in the
+  # month they join a mail to IT that is due for another reason, and never
+  # make one due: a bounce of the 15th would otherwise send a report of the
+  # month before on the 15th, and reopen a month already complete. Between
+  # two reports the signal is the rule on the new entries.
   matched <- suppression_match(suppressed, recipients, now)
   for_it <- report_suppressed_for_it(
     matched[["dettaglio"]], reading[["records"]]
   )
+  kept_due <- report_due_read(ledger_dir, period[["mese"]])
+  sending_day <- isTRUE(kept_due[["ok"]]) && is.null(kept_due[["dovuti"]])
   if (isTRUE(matched[["soppressioni_lette"]]) &&
         (nrow(for_it[["soppressioni"]]) > 0L ||
-           nrow(for_it[["referenti_soppressi"]]) > 0L)) {
+           nrow(for_it[["referenti_soppressi"]]) > 0L) &&
+        (!is.null(assembled[["it"]]) || sending_day)) {
     assembled[["it"]] <- c(assembled[["it"]] %||% list(), for_it)
   }
 
