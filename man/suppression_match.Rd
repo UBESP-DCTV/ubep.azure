@@ -4,7 +4,7 @@
 \alias{suppression_match}
 \title{Cross the suppression lists with the channel's recipients}
 \usage{
-suppression_match(reading, recipients, now, window = 26)
+suppression_match(reading, recipients, now, cut = "06:30")
 }
 \arguments{
 \item{reading}{What \code{suppression_read()} answered, or \code{NULL} when nothing
@@ -12,9 +12,11 @@ was read.}
 
 \item{recipients}{What \code{suppression_recipients()} answered.}
 
-\item{now}{The moment the run reads, for the window.}
+\item{now}{The moment the run reads.}
 
-\item{window}{Hours an entry stays new.}
+\item{cut}{The time of day, \code{"\%H:\%M"} in UTC, at which the job's timer
+starts (\verb{OnCalendar=*-*-* 06:30:00 UTC}). If the timer moves, this moves
+with it.}
 }
 \value{
 A list with \code{soppressioni_lette}, \code{soppressa_casella_it},
@@ -27,8 +29,16 @@ cut) and \code{indirizzo}: one row per address, class and entry that counts.
 \description{
 Addresses compare without case and without blanks at the edges. The four
 lists that suppress are a state, any entry whatever its age; \emph{Blocks} is
-an event, an entry created in the last \code{window} hours, 26 so that a daily
-run at a time that slips by minutes neither misses nor counts a day twice.
+an event. So is \code{soppressi_recapiti_nuovi}, the recipients with an entry
+that is new: created in the 24 hours before the last cut, \code{cut} UTC, the
+time the job's timer starts, at or before \code{now}. The window is aligned to
+the timer and not to the moment of the run, which comes up to five minutes
+later (\code{RandomizedDelaySec=300}): an entry made between the cut and the run
+counts the next day, and every entry counts on one day only, with no
+overlap and no gap between two runs of the timer. A run by hand on the same
+day counts the same window. A day with no run at all (the machine off
+from before one cut to after the next) loses its entries as news; one of
+the four lists stays in the state counts and in the mail to IT.
 }
 \details{
 Counts and nothing else for the record, which a workspace keeps and others

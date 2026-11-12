@@ -346,8 +346,16 @@ suppression_recipients <- function(register, creators, owners, directory,
 #'
 #' Addresses compare without case and without blanks at the edges. The four
 #' lists that suppress are a state, any entry whatever its age; *Blocks* is
-#' an event, an entry created in the last `window` hours, 26 so that a daily
-#' run at a time that slips by minutes neither misses nor counts a day twice.
+#' an event. So is `soppressi_recapiti_nuovi`, the recipients with an entry
+#' that is new: created in the 24 hours before the last cut, `cut` UTC, the
+#' time the job's timer starts, at or before `now`. The window is aligned to
+#' the timer and not to the moment of the run, which comes up to five minutes
+#' later (`RandomizedDelaySec=300`): an entry made between the cut and the run
+#' counts the next day, and every entry counts on one day only, with no
+#' overlap and no gap between two runs of the timer. A run by hand on the same
+#' day counts the same window. A day with no run at all (the machine off
+#' from before one cut to after the next) loses its entries as news; one of
+#' the four lists stays in the state counts and in the mail to IT.
 #'
 #' Counts and nothing else for the record, which a workspace keeps and others
 #' read: never an address, and no hash of one, which on a known domain is
@@ -364,8 +372,10 @@ suppression_recipients <- function(register, creators, owners, directory,
 #' @param reading What `suppression_read()` answered, or `NULL` when nothing
 #'   was read.
 #' @param recipients What `suppression_recipients()` answered.
-#' @param now The moment the run reads, for the window.
-#' @param window Hours an entry stays new.
+#' @param now The moment the run reads.
+#' @param cut The time of day, `"%H:%M"` in UTC, at which the job's timer
+#'   starts (`OnCalendar=*-*-* 06:30:00 UTC`). If the timer moves, this moves
+#'   with it.
 #'
 #' @return A list with `soppressioni_lette`, `soppressa_casella_it`,
 #'   `soppressi_referenti`, `soppressi_recapiti`, `soppressi_recapiti_nuovi`,
@@ -375,12 +385,24 @@ suppression_recipients <- function(register, creators, owners, directory,
 #'   cut) and `indirizzo`: one row per address, class and entry that counts.
 #'
 #' @keywords internal
-suppression_match <- function(reading, recipients, now, window = 26) {
+suppression_match <- function(reading, recipients, now, cut = "06:30") {
   stopifnot(
     is.null(reading) || is.list(reading),
     is.list(recipients), is.data.frame(recipients[["destinatari"]]),
-    inherits(now, "POSIXct")
+    inherits(now, "POSIXct"),
+    is.character(cut), length(cut) == 1L,
+    grepl("^[0-2][0-9]:[0-5][0-9]$", cut)
   )
+
+  # The last cut at or before `now`, and the day before it.
+  until <- as.POSIXct(
+    paste(format(now, "%Y-%m-%d", tz = "UTC"), cut), tz = "UTC"
+  )
+  if (until > now) {
+    until <- until - 86400
+  }
+  since <- until - 86400
+  is_new <- function(at) !is.na(at) & at >= since & at < until
 
   detail <- data.frame(
     lista = character(), classe = character(), record_id = character(),
@@ -410,8 +432,7 @@ suppression_match <- function(reading, recipients, now, window = 26) {
   entries[["chiave"]] <- key(entries[["email"]])
   entries <- entries[nzchar(entries[["chiave"]]), , drop = FALSE]
   silencing <- entries[["lista"]] %in% lists[["lista"]][lists[["sopprime"]]]
-  fresh <- !is.na(entries[["creata"]]) &
-    entries[["creata"]] >= now - window * 3600
+  fresh <- is_new(entries[["creata"]])
   blocked <- entries[["lista"]] %in% lists[["lista"]][!lists[["sopprime"]]]
   counted <- entries[silencing | (blocked & fresh), , drop = FALSE]
 
@@ -424,8 +445,7 @@ suppression_match <- function(reading, recipients, now, window = 26) {
     suffixes = c("", ".voce")
   )
   hit_silencing <- hits[["lista"]] %in% lists[["lista"]][lists[["sopprime"]]]
-  hit_fresh <- !is.na(hits[["creata"]]) &
-    hits[["creata"]] >= now - window * 3600
+  hit_fresh <- is_new(hits[["creata"]])
 
   distinct <- function(class, also = TRUE) {
     as.integer(length(unique(

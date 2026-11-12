@@ -562,3 +562,37 @@ test_that("un tempo scaduto e' una lettura non riuscita", {
   expect_false(letto[["ok"]])
   expect_equal(letto[["errors"]], "TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI")
 })
+
+
+test_that("una voce nuova si conta un giorno solo, nemmeno col ritardo", {
+  # Dalla revisione del 2026-11-12 (R3): con una lavorazione ogni 24 ore e
+  # una finestra di 26 le due ore di sovrapposizione si contavano due volte.
+  # Il timer parte alle 06:30 UTC con fino a cinque minuti di ritardo.
+  d <- list(
+    destinatari = data.frame(
+      indirizzo = "lia.esterna@example.org", classe = "recapito",
+      record_id = "61", stringsAsFactors = FALSE
+    ),
+    classi = c("casella_it", "referente", "recapito")
+  )
+  nuove <- function(creata, corse) {
+    lettura <- lette(voce("bounces", "lia.esterna@example.org", creata))
+    vapply(corse, function(quando) {
+      suppression_match(
+        lettura, d, as.POSIXct(quando, tz = "UTC")
+      )[["soppressi_recapiti_nuovi"]]
+    }, 0L, USE.NAMES = FALSE)
+  }
+
+  # Prima del taglio delle 06:30: conta l'11, non il 12.
+  expect_equal(nuove("2026-11-11 05:00",
+                     c("2026-11-11 06:30", "2026-11-12 06:30")), c(1L, 0L))
+  # Fra il taglio e la corsa in ritardo: conta il giorno dopo, una volta.
+  expect_equal(
+    nuove("2026-11-11 06:32", c("2026-11-11 06:34", "2026-11-12 06:31",
+                                "2026-11-13 06:33")),
+    c(0L, 1L, 0L)
+  )
+  # Una corsa a mano nel pomeriggio conta come quella del mattino.
+  expect_equal(nuove("2026-11-11 05:00", "2026-11-11 15:00"), 1L)
+})
