@@ -3036,13 +3036,39 @@ test_that("una risposta alla proposta di prima non vale per quella nuova", {
 })
 
 
+# The seal of a version of row 1: every intent field empty but the ones
+# given, as `log_executed_row()` rebuilds a version from a log that never
+# wrote them. The seal the channel would have written on it.
+sigillo_versione <- function(..., record_id = "1") {
+  campi <- setdiff(register_intent_fields(), "record_id")
+  versione <- stats::setNames(as.list(rep("", length(campi))), campi)
+  versione <- utils::modifyList(versione, list(...))
+  request_seal(as.data.frame(
+    c(list(record_id = record_id), versione), stringsAsFactors = FALSE
+  ))
+}
+
+# The version the creation of `eseguita_su()` and its identity door hold.
+versione_creata <- function(...) {
+  do.call(sigillo_versione, utils::modifyList(
+    list(
+      server = "edc10", project_id = "9003",
+      username = "mario.rossi@ubep.unipd.it", first_name = "Mario",
+      last_name = "Rossi", contact_email = "mario.rossi@example.org",
+      role_name = "data entry", request_status = "active"
+    ),
+    list(...)
+  ))
+}
+
 # A row Anna filed for Mario on edc10, project 9003, that the round resolved
 # and carried out, newest first: the seals door's event, the identity door's
 # write of the username below it, and the creation at the bottom, carrying
-# the fields as REDCap logs them, `campo = 'valore'`.
+# the fields as REDCap logs them, `campo = 'valore'`. The seal is the one of
+# that version, as the channel writes it.
 eseguita_su <- function(...,
                         username = "mario.rossi@ubep.unipd.it",
-                        sigillo = "000000000000") {
+                        sigillo = versione_creata(username = username)) {
   eventi_finti(
     ...,
     list(
@@ -3148,13 +3174,16 @@ test_that("un campo che il log non porta sotto il sigillo e' ignoto", {
 })
 
 
-test_that("una scrittura scoperta sotto il sigillo non e' il valore eseguito", {
+test_that("una scrittura fatta durante il giro non e' il valore eseguito", {
   # eval
   # Cinzia wrote the server while the round that sealed the row ran: below
-  # its seal, with no approval above her write. The round carried out the
-  # value it had read, the creation's.
+  # its seal, above the reading. The round carried out the value it had
+  # read, the creation's, and sealed that.
   eventi <- eventi_finti(
-    eseguita("222222222222"),
+    eseguita(sigillo_versione(
+      server = "edc10", project_id = "9003",
+      username = "mario.rossi@ubep.unipd.it"
+    )),
     list(
       username = "cinzia.rossi@ubep.unipd.it", details = "server = 'edc12'"
     ),
@@ -3481,4 +3510,289 @@ test_that("un ruolo riportato al valore eseguito non ha autore sopra un esito de
   # unknown, and Bruno the author of a change that is no longer in the row.
   expect_equal(autori("data entry"), character())
   expect_equal(autori("read only"), bruno)
+})
+
+
+# ---- The version carried out, rebuilt from the log and verified by the seal ----
+
+# The identity door's write of the username, as the channel leaves it.
+porta <- function(username = "mario.rossi@ubep.unipd.it") {
+  list(
+    username = canale, action = "Update record (API) 1",
+    details = paste0("username = '", username, "', identity = 'existing'")
+  )
+}
+
+# Anna's creation of the row, as REDCap logs it.
+creazione <- list(
+  username = creatrice, action = "Create record 1",
+  details = paste0(
+    "record_id = '1', server = 'edc10', project_id = '9003', ",
+    "first_name = 'Mario', last_name = 'Rossi', ",
+    "contact_email = 'mario.rossi@example.org', role_name = 'data entry', ",
+    "request_status = 'active'"
+  )
+)
+
+
+test_that("la versione eseguita si ricostruisce dal log e il sigillo la verifica", { # nolint: line_length_linter.
+  # eval
+  # Above the seal Bruno moved the row: a change, not what was carried out.
+  eventi <- eseguita_su(list(
+    username = "bruno.verdi@ubep.unipd.it",
+    details = "server = 'edc12', project_id = '9004'"
+  ))
+  detta <- log_executed_row(eventi, "1", canale)
+
+  # test
+  expect_equal(detta[["seal"]], versione_creata())
+  expect_equal(request_seal(detta[["row"]]), detta[["seal"]])
+  expect_equal(detta[["at"]], 2L)
+  expect_equal(detta[["cut"]], 3L)
+  expect_equal(detta[["row"]][["record_id"]], "1")
+  expect_equal(detta[["row"]][["server"]], "edc10")
+  expect_equal(detta[["row"]][["project_id"]], "9003")
+  expect_equal(detta[["row"]][["username"]], "mario.rossi@ubep.unipd.it")
+  expect_equal(detta[["row"]][["role_name"]], "data entry")
+  # A field the log never wrote was empty when the round read it: the seal
+  # says so.
+  expect_equal(detta[["row"]][["dag_name"]], "")
+  expect_equal(detta[["row"]][["expiration"]], "")
+  expect_setequal(names(detta[["row"]]), register_intent_fields())
+})
+
+
+test_that("un sigillo che nessun taglio da' lascia la riga non verificata", {
+  # eval
+  # A seal no version of this log gives: a format of the log the reading
+  # does not know, a log cut short, a seal the fixture made up.
+  eventi <- eseguita_su(sigillo = "000000000000")
+
+  # test
+  expect_null(log_executed_row(eventi, "1", canale))
+  # Decided on 2026-11-12: for the rule of the pair, the reading of the
+  # 0.25.0 stands where the reconstruction does not.
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale),
+    log_executed_unverified(eventi, "1", creatrice, channel_account = canale)
+  )
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+      "server"
+    ]],
+    "edc10"
+  )
+})
+
+
+test_that("senza esecuzione o con il canale ignoto non c'e' versione eseguita", {
+  # eval
+  mai <- eventi_finti(creazione)
+  importato <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = paste0(
+        "applied_seal = '", versione_creata(), "', seal_state = 'intact'"
+      )
+    ),
+    porta(), creazione
+  )
+  # Without the account, two accounts writing the channel's fields.
+  ambiguo <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "outcome = 'applied'"
+    ),
+    eseguita(versione_creata()), porta(), creazione
+  )
+
+  # test
+  expect_null(log_executed_row(mai, "1", canale))
+  expect_null(log_executed_row(importato, "1", canale))
+  expect_null(log_executed_row(ambiguo, "1", NULL))
+  expect_false(is.null(log_executed_row(ambiguo, "1", canale)))
+})
+
+
+test_that("un cambio di progetto eseguito senza approvazione e' il progetto eseguito (A4)", { # nolint: line_length_linter.
+  # eval
+  # Newest first. Bruno moved the row to project 9004, with no approval
+  # above his write (the history before 2026-10-14, or IT correcting a row
+  # by hand), and the round carried it out under the seal of 9004. Then
+  # Anna changed the role.
+  eventi <- eventi_finti(
+    list(username = creatrice, details = "role_name = 'read only'"),
+    eseguita(versione_creata(project_id = "9004")),
+    list(
+      username = "bruno.verdi@ubep.unipd.it", details = "project_id = '9004'"
+    ),
+    eseguita(versione_creata()),
+    porta(),
+    creazione
+  )
+
+  # test
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+      "project_id"
+    ]],
+    "9004"
+  )
+  # The reading of the 0.25.0 passed Bruno's write over as uncovered.
+  expect_equal(
+    log_executed_unverified(
+      eventi, "1", creatrice, channel_account = canale
+    )[["project_id"]],
+    "9003"
+  )
+})
+
+
+test_that("la scrittura del proprietario durante il giro non e' eseguita (B)", {
+  # eval
+  # Newest first: Anna moved the row to edc12 while the round ran, after the
+  # identity door and before the seal. The round carried out edc10.
+  eventi <- eventi_finti(
+    eseguita(versione_creata()),
+    list(username = creatrice, details = "server = 'edc12'"),
+    porta(),
+    creazione
+  )
+
+  # test
+  expect_equal(
+    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+      "server"
+    ]],
+    "edc10"
+  )
+  # Read as the 0.25.0 read it, the owner's write is covered, and the
+  # instance carried out would be edc12.
+  expect_equal(
+    log_executed_unverified(
+      eventi, "1", creatrice, channel_account = canale
+    )[["server"]],
+    "edc12"
+  )
+})
+
+
+test_that("la persona scritta durante il giro non e' quella eseguita (B2)", {
+  # eval
+  eventi <- eventi_finti(
+    eseguita(versione_creata()),
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = paste0(
+        "first_name = 'Giulia', last_name = 'Verdi', ",
+        "contact_email = 'giulia.verdi@example.org'"
+      )
+    ),
+    porta(),
+    creazione
+  )
+  detta <- log_executed_row(eventi, "1", canale)[["row"]]
+
+  # test
+  expect_equal(detta[["first_name"]], "Mario")
+  expect_equal(detta[["last_name"]], "Rossi")
+  expect_equal(detta[["contact_email"]], "mario.rossi@example.org")
+})
+
+
+test_that("la revoca scritta durante il giro non e' eseguita (G1)", {
+  # eval
+  durante <- eventi_finti(
+    eseguita(versione_creata()),
+    list(username = creatrice, details = "request_status = 'revoked'"),
+    porta(),
+    creazione
+  )
+  # The revocation carried out by the next round, then touched (V5).
+  eseguita_poi_toccata <- eventi_finti(
+    list(
+      username = "bruno.verdi@ubep.unipd.it",
+      details = "expiration = '2027-01-31'"
+    ),
+    eseguita(versione_creata(request_status = "revoked")),
+    list(username = creatrice, details = "request_status = 'revoked'"),
+    eseguita(versione_creata()),
+    porta(),
+    creazione
+  )
+
+  # test
+  expect_equal(
+    log_executed_row(durante, "1", canale)[["row"]][["request_status"]],
+    "active"
+  )
+  expect_equal(
+    log_executed_row(
+      eseguita_poi_toccata, "1", canale
+    )[["row"]][["request_status"]],
+    "revoked"
+  )
+})
+
+
+test_that("il nome eseguito e' quello della porta del giro, sopra il taglio", { # nolint: line_length_linter.
+  # eval
+  # Newest first. The round read the row, Anna changed the role, the
+  # identity door wrote the name it resolved, the round sealed: the seal
+  # covers the role as read and the name resolved.
+  nuovo <- "mario.rossi2@ubep.unipd.it"
+  porta_sopra <- eventi_finti(
+    eseguita(versione_creata(username = nuovo)),
+    porta(nuovo),
+    list(username = creatrice, details = "role_name = 'read only'"),
+    porta(),
+    creazione
+  )
+  # An account renamed on Entra after the execution: a later round's door
+  # wrote the new name above the seal, and did not carry the row out.
+  rinominato <- eventi_finti(
+    porta(nuovo), eseguita(versione_creata()), porta(), creazione
+  )
+
+  # test
+  detta <- log_executed_row(porta_sopra, "1", canale)[["row"]]
+  expect_equal(detta[["username"]], nuovo)
+  expect_equal(detta[["role_name"]], "data entry")
+  expect_equal(
+    log_executed_row(rinominato, "1", canale)[["row"]][["username"]],
+    "mario.rossi@ubep.unipd.it"
+  )
+})
+
+
+test_that("il log e il rapporto leggono un valore nello stesso punto", {
+  # eval
+  # A form of the log the register does not share, made up for the test:
+  # the apostrophe as an HTML entity. `log_value_as_register()` is where it
+  # would be undone, once a measure found it.
+  nome <- "luca.d'amico@ubep.unipd.it"
+  eventi <- eventi_finti(
+    eseguita(versione_creata(username = nome)),
+    porta("luca.d&#39;amico@ubep.unipd.it"),
+    creazione
+  )
+
+  # test
+  # Not undone, no cut gives the seal, and the report does not see the name
+  # carried out.
+  expect_null(log_executed_row(eventi, "1", canale))
+  expect_length(
+    report_person_since(eventi, "1", canale, username = nome), 0L
+  )
+  local_mocked_bindings(log_value_as_register = function(value, field) {
+    gsub("&#39;", "'", value, fixed = TRUE)
+  })
+  # Undone in the one place, both read it.
+  expect_equal(
+    log_executed_row(eventi, "1", canale)[["row"]][["username"]], nome
+  )
+  expect_equal(
+    report_person_since(eventi, "1", canale, username = nome),
+    "2026-09-01 02:45"
+  )
 })

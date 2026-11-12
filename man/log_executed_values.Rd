@@ -2,7 +2,7 @@
 % Please edit documentation in R/provisioning_register.R
 \name{log_executed_values}
 \alias{log_executed_values}
-\title{The pair a row's last execution carried out, from the log}
+\title{The values a row's last execution carried out, from the log}
 \usage{
 log_executed_values(
   events,
@@ -18,37 +18,28 @@ log_executed_values(
 
 \item{record}{The record id to look at.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers, for
-\code{log_uncovered_writes()}.}
+\item{creator}{Who created the row, as \code{log_creators()} answers, for the
+reading of the 0.25.0.}
 
 \item{fields}{The fields to read.}
 
-\item{approvers}{The IT accounts whose approval counts on any row.}
+\item{approvers}{The IT accounts whose approval counts on any row, for the
+reading of the 0.25.0.}
 
 \item{channel_account}{The REDCap usernames that hold the round's token,
 one or more, or \code{NULL} when they are not configured.}
 }
 \value{
-A character vector named by \code{fields}, \code{NA} where the log does not
-say: the row was never carried out in its current life, the log holds no
-write of the field below the seal, the stretch below the seal cannot be
-read, or the channel is not known.
+A character vector named by \code{fields}. From a verified version, a
+field never written is \code{""} and a field that is not an intent field is
+\code{NA}. Without one, what \code{log_executed_unverified()} answers.
 }
 \description{
-The value each of \code{fields} had in the version the round last carried
-out: the newest write of the field below the round's newest execution,
-\code{log_executions()}, in the row's current life, by anybody, the channel
-included. The creation carries the fields a referent filled in, \code{server = 'edc10'}, and the identity door the username the round resolved, which
-it writes before the seal in the same pass. A write below the seal that
-the execution did not cover, \code{log_uncovered_writes()}, is passed over:
-made while the round ran, it holds a value the round had not read, and
-the one below it is what was carried out.
-}
-\details{
-The value is read whole, up to the apostrophe that closes it, the one
-followed by the next field or by the end of \code{details}: a UPN can hold an
-apostrophe, and cut at the first one \verb{luca.d'amico} would read \code{luca.d}.
-Meant for \code{server}, \code{project_id} and \code{username}, whose values never hold
-the text \code{', name = '} that would end them early.
+The fields asked of the version \code{log_executed_row()} rebuilds and the
+channel's seal verifies. Where it is not verified, the reading of the
+0.25.0, \code{log_executed_unverified()}, decided on 2026-11-12: the rule of
+the pair is never worse than it was. The report and the exit of a renamed
+account read \code{log_executed_row()} alone, and an unverified row is not
+known to them.
 }
 \keyword{internal}

@@ -1223,7 +1223,179 @@ log_value <- function(events, field) {
 }
 
 
-#' The pair a row's last execution carried out, from the log
+#' The version a row's last execution carried out, rebuilt from the log
+#'
+#' Every intent field as the round read it when it last carried the row out,
+#' accepted only when its seal, `request_seal()`, is the one the channel wrote
+#' at that execution, `log_executions()`. The seal proves the reading: a
+#' version rebuilt wrong does not give the channel's seal, and the answer is
+#' then `NULL`, never a value that may be wrong.
+#'
+#' **How it is rebuilt**, decided on 2026-11-12. The round reads the
+#' register, then the identity door writes the username it resolved, then
+#' the round carries the row out and writes the seal, which covers the row as
+#' read with the resolved name in place of the one read. In the log, between
+#' the execution before (or the creation) and the newest one, stand the
+#' writes the round read and, above them, those made while it ran, by
+#' anybody. So the version carried out is the state of the log at a **cut**
+#' below the seal:
+#'
+#' - each intent field holds the newest write at the cut or below it, in the
+#'   row's current life, `log_of_record()`, by anybody, the channel included;
+#'   a field never written is `""`; `record_id` is the record;
+#' - `username` holds instead the channel's write between the cut and the
+#'   seal, when there is one: the identity door of the round that carried the
+#'   row out, written after the reading;
+#' - the cuts are tried from the highest (right below the seal, no write
+#'   left out) to the lowest (right above the execution before), and the
+#'   first whose seal is the channel's is the answer. Two cuts that both give
+#'   the channel's seal give the same values, so which one is taken does not
+#'   matter.
+#'
+#' A write made before the reading is carried out whoever made it, with or
+#' without an approval; one made after it is not, whoever made it: the
+#' owner's own write while the round ran, the person written while it ran, a
+#' revocation written while it ran. Who approved what is not needed.
+#'
+#' The values are read with `log_written_value()`, whole up to the apostrophe
+#' that closes them, and brought to the form of the register by
+#' `log_value_as_register()`. A value the log holds in another form makes no
+#' cut give the seal, and the answer is `NULL`: the row is not verified, and
+#' no value is guessed. Measured on 2026-11-12 on the live register (M1 and
+#' M1b): the reconstruction gives the channel's seal on every row whose seal
+#' did not move, once the field names inside *Read back as* are no longer
+#' read as writes (`log_field_at()`); non-ASCII letters, capitals in an
+#' address, spaces at the edges of the register's values and fields never
+#' written among them. Not measured yet: apostrophes, `& < >` and quotes,
+#' dates written by the form, a `project_id` with a leading zero, values
+#' longer than 100 characters, emptied fields.
+#'
+#' No intent field is a checkbox. One that were would be logged as
+#' `field(code) = checked`, and this function would have to learn it first.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured: then every write of
+#'   the seal counts as an execution, as for `log_executions()`.
+#'
+#' @return `NULL` when the row was never carried out in its current life,
+#'   the channel is not known, `log_channel_unknown()`, or no cut gives the
+#'   channel's seal. Otherwise a list: `row`, a data frame of one row holding
+#'   `record_id` and every intent field as carried out; `seal`, the seal it
+#'   gives; `at`, the position of the execution in `log_of_record()`; `cut`,
+#'   the position of the cut, the newest event the version holds.
+#'
+#' @keywords internal
+log_executed_row <- function(events, record, channel_account = NULL) {
+  stopifnot(is.data.frame(events), channel_account_valid(channel_account))
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (log_channel_unknown(channel, channel_account)) {
+    return(NULL)
+  }
+  executed <- log_executions(mine, channel, channel_account)
+  if (length(executed) == 0L) {
+    return(NULL)
+  }
+  top <- executed[[1L]]
+  seal <- log_value(mine[top, , drop = FALSE], "applied_seal")
+  if (!nzchar(seal)) {
+    return(NULL)
+  }
+
+  # Newest first: the stretch is what stands below the newest execution and
+  # above the one before it, or the whole life when there is none.
+  bottom <- if (length(executed) > 1L) executed[[2L]] else nrow(mine) + 1L
+  rows <- seq_len(nrow(mine))
+  authors <- trimws(as.character(mine[["username"]]))
+  fields <- setdiff(register_intent_fields(), "record_id")
+  wrote <- lapply(stats::setNames(nm = fields), function(field) {
+    log_wrote(mine, field)
+  })
+  value <- lapply(stats::setNames(nm = fields), function(field) {
+    log_written_value(mine, field)
+  })
+  door <- wrote[["username"]] & authors %in% channel
+
+  for (cut in seq.int(top + 1L, bottom)) {
+    version <- list(record_id = as.character(record))
+    for (field in fields) {
+      at <- which(wrote[[field]] & rows >= cut)
+      if (identical(field, "username")) {
+        resolved <- which(door & rows > top & rows < cut)
+        if (length(resolved) > 0L) {
+          at <- resolved
+        }
+      }
+      version[[field]] <- if (length(at) == 0L) {
+        ""
+      } else {
+        value[[field]][[at[[1L]]]]
+      }
+    }
+    # A write whose value does not read leaves this cut unknown; a lower one
+    # may stand below it.
+    if (anyNA(unlist(version))) {
+      next
+    }
+    version <- as.data.frame(version, stringsAsFactors = FALSE)
+    if (identical(request_seal(version), seal)) {
+      return(list(row = version, seal = seal, at = top, cut = cut))
+    }
+  }
+  NULL
+}
+
+
+#' The values a row's last execution carried out, from the log
+#'
+#' The fields asked of the version `log_executed_row()` rebuilds and the
+#' channel's seal verifies. Where it is not verified, the reading of the
+#' 0.25.0, `log_executed_unverified()`, decided on 2026-11-12: the rule of
+#' the pair is never worse than it was. The report and the exit of a renamed
+#' account read `log_executed_row()` alone, and an unverified row is not
+#' known to them.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers, for the
+#'   reading of the 0.25.0.
+#' @param fields The fields to read.
+#' @param approvers The IT accounts whose approval counts on any row, for the
+#'   reading of the 0.25.0.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
+#'
+#' @return A character vector named by `fields`. From a verified version, a
+#'   field never written is `""` and a field that is not an intent field is
+#'   `NA`. Without one, what `log_executed_unverified()` answers.
+#'
+#' @keywords internal
+log_executed_values <- function(events, record, creator,
+                                fields = c("server", "project_id", "username"),
+                                approvers = character(),
+                                channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events), is.character(creator), length(creator) == 1L,
+    is.character(fields), is.character(approvers)
+  )
+
+  verified <- log_executed_row(events, record, channel_account)
+  if (is.null(verified)) {
+    return(log_executed_unverified(
+      events, record, creator, fields, approvers, channel_account
+    ))
+  }
+  vapply(fields, function(field) {
+    value <- verified[["row"]][[field]]
+    if (is.null(value)) NA_character_ else as.character(value[[1L]])
+  }, character(1))
+}
+
+
+#' The pair a row's last execution carried out, read as the 0.25.0 read it
 #'
 #' The value each of `fields` had in the version the round last carried
 #' out: the newest write of the field below the round's newest execution,
@@ -1235,20 +1407,17 @@ log_value <- function(events, field) {
 #' made while the round ran, it holds a value the round had not read, and
 #' the one below it is what was carried out.
 #'
+#' Not verified by the seal, and wrong in three cases the reconstruction
+#' gets right (review of the 0.24.0): a change carried out with no approval
+#' above it (A4), the owner's own write while the round ran (B), the person
+#' written while it ran (B2). Kept for the rows whose reconstruction is not
+#' verified, and for the rule of the pair only (decided on 2026-11-12).
+#'
 #' The value is read whole, up to the apostrophe that closes it, the one
 #' followed by the next field or by the end of `details`: a UPN can hold an
 #' apostrophe, and cut at the first one `luca.d'amico` would read `luca.d`.
-#' Meant for `server`, `project_id` and `username`, whose values never hold
-#' the text `', name = '` that would end them early.
 #'
-#' @param events The event log, as `register_log()` returns it.
-#' @param record The record id to look at.
-#' @param creator Who created the row, as `log_creators()` answers, for
-#'   `log_uncovered_writes()`.
-#' @param fields The fields to read.
-#' @param approvers The IT accounts whose approval counts on any row.
-#' @param channel_account The REDCap usernames that hold the round's token,
-#'   one or more, or `NULL` when they are not configured.
+#' @inheritParams log_executed_values
 #'
 #' @return A character vector named by `fields`, `NA` where the log does not
 #'   say: the row was never carried out in its current life, the log holds no
@@ -1256,10 +1425,12 @@ log_value <- function(events, field) {
 #'   read, or the channel is not known.
 #'
 #' @keywords internal
-log_executed_values <- function(events, record, creator,
-                                fields = c("server", "project_id", "username"),
-                                approvers = character(),
-                                channel_account = NULL) {
+log_executed_unverified <- function(events, record, creator,
+                                    fields = c(
+                                      "server", "project_id", "username"
+                                    ),
+                                    approvers = character(),
+                                    channel_account = NULL) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.character(fields), is.character(approvers)
@@ -1300,12 +1471,13 @@ log_executed_values <- function(events, record, creator,
 #'
 #' Up to the apostrophe that closes the value, the one followed by the next
 #' field or by the end of `details`: a UPN can hold an apostrophe, and cut at
-#' the first one `luca.d'amico` would read `luca.d`. Meant for `server`,
-#' `project_id` and `username`, whose values never hold the text
-#' `', name = '` that would end them early. The one reader of a whole value:
-#' `log_executed_values()` reads the pair executed with it, and the monthly
-#' report the name each execution carried out (`report_person_since()`), so
-#' that the names the two compare are read the same way.
+#' the first one `luca.d'amico` would read `luca.d`. For every intent field;
+#' a value ends early only where somebody typed `', name = '` inside it. The
+#' one reader of a whole value: `log_executed_row()` rebuilds the version
+#' carried out with it, and the monthly report reads the name each execution
+#' carried out (`report_person_since()`), so that the values the two compare
+#' are read the same way, and brought to the register's form in the same
+#' place, `log_value_as_register()`.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param field One field name.
@@ -1323,10 +1495,42 @@ log_written_value <- function(events, field) {
     log_field_at(field),
     "(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
   )
-  vapply(details, function(said) {
+  read <- vapply(details, function(said) {
     hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]
     if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
   }, character(1), USE.NAMES = FALSE)
+  log_value_as_register(read, field)
+}
+
+
+#' A value of the log in the form the register gives it
+#'
+#' The one place where a value read from `details` would be brought to the
+#' form the API gives for the same field, before anything compares the two:
+#' the seal of a version rebuilt from the log, `log_executed_row()`, and the
+#' names the report dates, `report_person_since()`, both read through
+#' `log_written_value()`, which calls this.
+#'
+#' Today it changes nothing, decided on 2026-11-12: M1 found no difference
+#' on the live register between the values the log carries and those of the
+#' register (non-ASCII letters, capitals, spaces at the edges, fields never
+#' written), and the forms it did not cover (apostrophes, `& < >`, quotes,
+#' dates written by the form, emptied fields, a `project_id` with a leading
+#' zero) are to be measured on the test instance (M2). A difference found
+#' there, systematic and reversible (an HTML entity, the order of a date), is
+#' undone here, by field. A wrong undoing cannot pass for a right one: the
+#' rebuilt version would no longer give the channel's seal, and the row would
+#' read as not verified.
+#'
+#' @param value Values as `details` carries them, `NA` where none was read.
+#' @param field The field they were written into.
+#'
+#' @return `value`, in the register's form.
+#'
+#' @keywords internal
+log_value_as_register <- function(value, field) {
+  stopifnot(is.character(value), is.character(field), length(field) == 1L)
+  value
 }
 
 
