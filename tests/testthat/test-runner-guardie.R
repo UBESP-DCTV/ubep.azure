@@ -527,13 +527,18 @@ raggiunte <- function(start, env = asNamespace("ubep.azure"),
 }
 
 
-# The four doors through which the monthly report reaches the outside. The
+# The five doors through which the monthly report reaches the outside. The
 # guard does not follow them: it checks them on their own, and forbids every
 # other way out. The fourth, `module_accounts()`, is the only way the report
-# speaks to an instance's module, and only to read.
+# speaks to an instance's module, and only to read. The fifth,
+# `suppression_read()`, reads the suppression lists of the mail service
+# (0.26.0); the report does not reach it by name, the runner hands it over
+# inside a closure as it hands over the `mailer`, and it is checked all the
+# same.
 lettori_del_rapporto <- function() {
   c(
-    "register_records", "register_log", "directory_users", "module_accounts"
+    "register_records", "register_log", "directory_users", "module_accounts",
+    "suppression_read"
   )
 }
 
@@ -562,7 +567,13 @@ violazioni_rapporto <- function(env = asNamespace("ubep.azure")) {
     lettori,
     function(name) {
       grepl('"(import|delete|rename|apply|revoke)"', body_of(name)) ||
-        grepl("dry_run = FALSE", body_of(name), fixed = TRUE)
+        grepl("dry_run = FALSE", body_of(name), fixed = TRUE) ||
+        # A method that is not a reading, written as a string (a deparsed
+        # body has no pipes left to search for), and the door that sends
+        # mail: the post goes through the `mailer` the runner builds, never
+        # through a reader.
+        grepl('"(POST|PUT|PATCH|DELETE)"', body_of(name), ignore.case = TRUE) ||
+        grepl("mail/send", body_of(name), fixed = TRUE)
     },
     logical(1)
   )]
@@ -743,4 +754,71 @@ test_that("il rapporto legge le istanze col modulo e i segreti", {
   expect_match(testo, "error = function(e) NA_character_", fixed = TRUE)
   expect_match(testo, "hosts = host", fixed = TRUE)
   expect_match(testo, "secrets = segreti", fixed = TRUE)
+})
+
+
+test_that("la lettura delle soppressioni e' una porta, e solo in lettura", {
+  # eval
+  # Decided on 2026-11-12: the key reads the lists and nothing else, and
+  # taking an address off a list is a gesture IT makes in the console.
+  corpo <- paste(deparse(body(suppression_read)), collapse = " ")
+
+  # test
+  expect_true("suppression_read" %in% lettori_del_rapporto())
+  expect_match(corpo, '"GET"', fixed = TRUE)
+  expect_match(corpo, "/v3/suppression/", fixed = TRUE)
+  expect_false("suppression_read" %in% violazioni_rapporto())
+})
+
+
+test_that("la guardia vede una scrittura dalla porta delle soppressioni", {
+  # eval
+  cancella <- namespace_con(
+    "suppression_read",
+    quote(httr2::req_perform(httr2::req_method(
+      httr2::request("https://api.sendgrid.com/v3/suppression/bounces"),
+      "DELETE"
+    )))
+  )
+  manda <- namespace_con(
+    "suppression_read",
+    quote(httr2::request("https://api.sendgrid.com/v3/mail/send"))
+  )
+
+  # test
+  expect_match(
+    paste(deparse(body(get("suppression_read", envir = cancella))),
+          collapse = " "),
+    '"DELETE"', fixed = TRUE
+  )
+  expect_true("suppression_read" %in% violazioni_rapporto(cancella))
+  expect_true("suppression_read" %in% violazioni_rapporto(manda))
+})
+
+
+test_that("il rapporto legge le soppressioni con la chiave dell'inventario", {
+  # Same limit as the guards above: `dev/` is not in the built package. The
+  # name of the secret is in the inventory, as the sending key's, and the key
+  # stays inside the closure; the closure calls the reader and nothing else.
+  script <- testthat::test_path("..", "..", "dev", "runner-rapporto.R")
+  skip_if_not(file.exists(script), "dev/ is not in the built package")
+  testo <- paste(readLines(script, warn = FALSE), collapse = "\n")
+
+  expect_match(
+    testo, 'registro[["segreto_soppressioni"]]', fixed = TRUE
+  )
+  expect_match(
+    testo, "function() ubep.azure:::suppression_read(api_key = chiave)",
+    fixed = TRUE
+  )
+  expect_match(testo, "suppressions = soppressioni", fixed = TRUE)
+  expect_match(testo, 'esito[["soppressioni"]]', fixed = TRUE)
+  # The reading does not stop the job: no stop() on the missing secret.
+  codice <- as.list(parse(script, keep.source = FALSE))
+  lettura <- Filter(function(e) {
+    is.call(e) && identical(e[[1L]], as.name("<-")) &&
+      identical(e[[2L]], as.name("soppressioni"))
+  }, codice)
+  expect_length(lettura, 1L)
+  expect_false("stop" %in% all.names(lettura[[1L]]))
 })

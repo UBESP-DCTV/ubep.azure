@@ -43,7 +43,13 @@ lost still misses a report (\code{mesi_persi}).
 for the year without access: those already named in an earlier report and
 those on a server not read are not in it.
 
-Names and codes only, and never a person: the record is shipped to a
-workspace and kept.
+The six columns of the suppressions, from 0.26.0, are
+\code{suppression_match()}'s counts: \code{soppressioni_lette}, always true or
+false, and five that are null when not computed, which the rule on the
+incomplete record does not ask about (a null there has a legitimate
+reason). A record of an esito without them says the lists were not read.
+
+Names, codes and counts only, and never a person or an address, nor a
+hash of one: the record is shipped to a workspace and kept.
 }
 \keyword{internal}

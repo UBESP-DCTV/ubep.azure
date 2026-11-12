@@ -2227,7 +2227,7 @@ report_message <- function(report, period) {
 
 #' Compose the monthly mail to IT
 #'
-#' One mail, and only when there is something in it. Six sections, numbered
+#' One mail, and only when there is something in it. Eight sections, numbered
 #' in this order: the rows with no referent to send them to, the people the
 #' report cannot judge, the rows the log does not date, the servers that were
 #' not read (with the reason, and how many pairs of person and server fell
@@ -2236,8 +2236,13 @@ report_message <- function(report, period) {
 #' entered the server, when the server was read), and the rows stopped with
 #' an access executed (with the outcome and its codes, whether the
 #' revocation is the one that stopped, the same column of the access, or why
-#' it is missing when the name executed is not known, and the owner). A row
-#' of the first or of the third section that is stopped says its outcome. It
+#' it is missing when the name executed is not known, and the owner). From
+#' 0.26.0 two more, from the suppression lists of the mail service read on
+#' the day of the run (`report_suppressed_for_it()`): the active rows with a
+#' recipient on a list that suppresses, with the request, the server, the
+#' project, the address, the list and the date of the entry; and the
+#' referents on one. A row of the first or of the third section that is
+#' stopped says its outcome. It
 #' has the referents' form to review, and its number counts the rows, people
 #' and servers listed, a row once even when it is in two sections, by its
 #' `record_id`. A section with nothing in it is not announced.
@@ -2649,6 +2654,109 @@ report_it_message <- function(it, period) {
           ),
           " Referent: ", ifelse(nzchar(owner), owner, "not established"), "."
         )
+      )
+    )
+  }
+
+  # The recipients the mail service suppresses (from 0.26.0): every send to
+  # them answers accepted and does not leave. The date is the entry's, in
+  # Rome.
+  suppressed_words <- function(rows) {
+    lists <- suppression_lists()
+    name <- lists[["nome"]][match(value(rows, "lista"), lists[["lista"]])]
+    name[is.na(name)] <- value(rows, "lista")[is.na(name)]
+    days <- lapply(seq_len(nrow(rows)), function(i) {
+      at <- rows[["creata"]][[i]]
+      if (is.null(at) || is.na(at)) {
+        return(c(it = "", en = ""))
+      }
+      day <- as.Date(format(at, "%Y-%m-%d", tz = "Europe/Rome"))
+      words <- report_day_words(day)
+      c(
+        it = paste0(" dal ", words[["it"]]),
+        en = paste0(" since ", words[["en"]])
+      )
+    })
+    list(
+      it = paste0(
+        value(rows, "indirizzo"), " in ", name,
+        vapply(days, `[[`, "", "it"), "."
+      ),
+      en = paste0(
+        value(rows, "indirizzo"), " on ", name,
+        vapply(days, `[[`, "", "en"), "."
+      )
+    )
+  }
+  why_suppressed <- list(
+    it = paste0(
+      "   Il servizio di posta non consegna piu' a questi indirizzi: ogni ",
+      "invio risulta accettato e non parte. Corretta la causa, con il ",
+      "referente o revocando la richiesta, l'indirizzo si toglie dalla lista ",
+      "nella console di SendGrid."
+    ),
+    en = paste0(
+      "   The mail service no longer delivers to these addresses: every send ",
+      "is accepted and does not leave. Once the cause is corrected, with the ",
+      "referent or by revoking the request, the address is taken off the ",
+      "list in the SendGrid console."
+    )
+  )
+
+  silenced <- it[["soppressioni"]]
+  if (!is.null(silenced) && nrow(silenced) > 0L) {
+    person <- trimws(paste(
+      value(silenced, "first_name"), value(silenced, "last_name")
+    ))
+    head <- paste0(
+      value(silenced, "record_id"), ": ", person, ": ",
+      value(silenced, "server")
+    )
+    words <- list(
+      it = paste0(
+        "   - Richiesta ", head, ", progetto ",
+        value(silenced, "project_id"), "."
+      ),
+      en = paste0(
+        "   - Request ", head, ", project ", value(silenced, "project_id"), "."
+      )
+    )
+    said <- suppressed_words(silenced)
+    n <- length(unique(value(silenced, "record_id")))
+    sections[[length(sections) + 1L]] <- list(
+      n = n, righe = value(silenced, "record_id"),
+      it = c(
+        paste0(
+          "Recapiti in soppressione presso il servizio di posta (", n, ")"
+        ),
+        why_suppressed[["it"]],
+        paste(words[["it"]], said[["it"]])
+      ),
+      en = c(
+        paste0("Recipients suppressed by the mail service (", n, ")"),
+        why_suppressed[["en"]],
+        paste(words[["en"]], said[["en"]])
+      )
+    )
+  }
+
+  silenced <- it[["referenti_soppressi"]]
+  if (!is.null(silenced) && nrow(silenced) > 0L) {
+    said <- suppressed_words(silenced)
+    n <- length(unique(tolower(value(silenced, "indirizzo"))))
+    sections[[length(sections) + 1L]] <- list(
+      n = n,
+      it = c(
+        paste0(
+          "Referenti in soppressione presso il servizio di posta (", n, ")"
+        ),
+        why_suppressed[["it"]],
+        paste0("   - ", said[["it"]])
+      ),
+      en = c(
+        paste0("Referents suppressed by the mail service (", n, ")"),
+        why_suppressed[["en"]],
+        paste0("   - ", said[["en"]])
       )
     )
   }
@@ -3505,6 +3613,15 @@ report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
 #'   default, is a caller that does not pass them, a runner older than the
 #'   argument: those rows enter without the name executed, and the mail to IT
 #'   says why.
+#' @param suppressions A function with no arguments that reads the
+#'   suppression lists of the mail service and answers as
+#'   `suppression_read()`, built by the runner around the read-only key as
+#'   the `mailer` is around the sending one. Asked first, before the register,
+#'   and nothing it answers stops the report: a failure, or an error it
+#'   throws, is `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` and null columns.
+#'   `NULL`, the default, is a runner without the key or older than the
+#'   argument: `soppressioni_lette` is false and no code is added, so the
+#'   record shows it without passing for a clean reading.
 #'
 #' @return A list that `report_record()` turns into the record, plus
 #'   `rapporti`, one row per report due and per late report, with the `mese`
@@ -3512,7 +3629,9 @@ report_owners <- function(logs, ids, creators, month, channel_account = NULL) {
 #'   `report_server_reads()` answered for each server asked; `recuperati`,
 #'   the late reports tried (a data frame of `mese`, `destinatario` and
 #'   `esito`, `mandato` or `fallito`); and `mesi_persi`, the months still
-#'   missing a report after the round.
+#'   missing a report after the round; the six counts of
+#'   `suppression_match()`, and `soppressioni`, its detail with the
+#'   addresses, for the journal and never for the record.
 #'
 #' @keywords internal
 provisioning_report <- function(register_url,
@@ -3528,7 +3647,8 @@ provisioning_report <- function(register_url,
                                 channel_account = NULL,
                                 hosts = character(),
                                 secrets = character(),
-                                approvers = NULL) {
+                                approvers = NULL,
+                                suppressions = NULL) {
   stopifnot(
     is.character(graph_token), length(graph_token) == 1L,
     is.character(graph_url), length(graph_url) == 1L,
@@ -3536,11 +3656,32 @@ provisioning_report <- function(register_url,
     is.null(mailer) || is.function(mailer),
     channel_account_valid(channel_account),
     is.character(hosts), is.character(secrets),
-    is.null(approvers) || is.character(approvers)
+    is.null(approvers) || is.character(approvers),
+    is.null(suppressions) || is.function(suppressions)
   )
 
   period <- report_month(now, month)
   errors <- character()
+
+  # The suppression lists first, and on their own: whatever they answer, the
+  # report goes on as without them. The address of IT is judged even when
+  # the register or the directory do not read.
+  suppressed <- if (!is.null(suppressions)) {
+    tryCatch(
+      suppressions(),
+      error = function(e) {
+        message("Le soppressioni non si leggono: ", conditionMessage(e))
+        list(
+          ok = FALSE, errors = "TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI",
+          voci = suppression_entries()
+        )
+      }
+    )
+  }
+  errors <- c(errors, suppressed[["errors"]])
+  recipients <- suppression_recipients(
+    NULL, character(), character(), NULL, copy_to
+  )
 
   # A redirected run on the real month reads and writes a ledger of its own.
   test_run <- !is.null(redirect_to) && !isTRUE(period[["forzato"]])
@@ -3659,6 +3800,20 @@ provisioning_report <- function(register_url,
       held = report_held_rows(executed, owners)
     )
 
+    # Whom a suppression would silence, from what is already read: the owner
+    # the log names today where the row's log was read, and the register's
+    # rows as they stand, not the pairs executed.
+    owners_today <- vapply(seq_along(ids), function(i) {
+      if (is.null(logs[[i]])) {
+        return("")
+      }
+      owner <- log_owner(logs[[i]], ids[[i]], creators[[i]], channel_account)
+      if (is.na(owner)) "" else owner
+    }, "")
+    recipients <- suppression_recipients(
+      register, creators, owners_today, sweep[["users"]], copy_to
+    )
+
     # The reports of the months lost, from the same readings and the owners
     # as each of those months ended. What a late report carries is the month's
     # activations: the rest is today's state, and the report of the month
@@ -3703,6 +3858,29 @@ provisioning_report <- function(register_url,
         }), owed)
       )
     }
+  }
+
+  # The suppressions crossed with the recipients. What silences a person or
+  # a referent goes in the mail to IT, which goes to IT's address alone; the
+  # referents' reports do not change. The sections are written with the
+  # reading of the report's sending day, as the design of voce 5 says: they
+  # make the mail to IT due on their own only when the month has no due
+  # reports kept yet, the first whole reading of the month. Later in the
+  # month they join a mail to IT that is due for another reason, and never
+  # make one due: a bounce of the 15th would otherwise send a report of the
+  # month before on the 15th, and reopen a month already complete. Between
+  # two reports the signal is the rule on the new entries.
+  matched <- suppression_match(suppressed, recipients, now)
+  for_it <- report_suppressed_for_it(
+    matched[["dettaglio"]], reading[["records"]]
+  )
+  kept_due <- report_due_read(ledger_dir, period[["mese"]])
+  sending_day <- isTRUE(kept_due[["ok"]]) && is.null(kept_due[["dovuti"]])
+  if (isTRUE(matched[["soppressioni_lette"]]) &&
+        (nrow(for_it[["soppressioni"]]) > 0L ||
+           nrow(for_it[["referenti_soppressi"]]) > 0L) &&
+        (!is.null(assembled[["it"]]) || sending_day)) {
+    assembled[["it"]] <- c(assembled[["it"]] %||% list(), for_it)
   }
 
   reports <- lapply(assembled[["referenti"]], report_message, period = period)
@@ -3907,7 +4085,84 @@ provisioning_report <- function(register_url,
         stringsAsFactors = FALSE
       )
     ),
+    soppressioni_lette = matched[["soppressioni_lette"]],
+    soppressa_casella_it = matched[["soppressa_casella_it"]],
+    soppressi_referenti = matched[["soppressi_referenti"]],
+    soppressi_recapiti = matched[["soppressi_recapiti"]],
+    soppressi_recapiti_nuovi = matched[["soppressi_recapiti_nuovi"]],
+    bloccati_nuovi = matched[["bloccati_nuovi"]],
+    soppressioni = matched[["dettaglio"]],
     errori = unique(errors)
+  )
+}
+
+
+#' The suppressed recipients the mail to IT lists
+#'
+#' From the detail of `suppression_match()`, the entries of the four lists
+#' that suppress, and not *Blocks*: one row per request, address and list
+#' for the people, with the request's server and project from the register,
+#' and one per address and list for the referents. The address of IT is not
+#' here: a mail to it would not arrive, and its rule says it.
+#'
+#' @param detail The `dettaglio` of `suppression_match()`.
+#' @param register The register as read, or `NULL`.
+#'
+#' @return A list with `soppressioni` (`record_id`, `first_name`,
+#'   `last_name`, `server`, `project_id`, `indirizzo`, `lista`, `creata`) and
+#'   `referenti_soppressi` (`indirizzo`, `lista`, `creata`), `creata` as
+#'   POSIXct in UTC.
+#'
+#' @keywords internal
+report_suppressed_for_it <- function(detail, register) {
+  stopifnot(is.data.frame(detail))
+
+  lists <- suppression_lists()
+  silencing <- detail[
+    detail[["lista"]] %in% lists[["lista"]][lists[["sopprime"]]], ,
+    drop = FALSE
+  ]
+  when <- function(x) as.POSIXct(x, tz = "UTC", format = "%Y-%m-%d %H:%M")
+
+  people <- silencing[silencing[["classe"]] == "recapito", , drop = FALSE]
+  ids <- strsplit(people[["record_id"]], ",", fixed = TRUE)
+  people <- people[rep(seq_len(nrow(people)), lengths(ids)), , drop = FALSE]
+  people[["record_id"]] <- unlist(ids) %||% character()
+
+  field <- function(name) {
+    if (is.null(register) || is.null(register[[name]])) {
+      return(rep("", nrow(people)))
+    }
+    at <- match(
+      people[["record_id"]], trimws(as.character(register[["record_id"]]))
+    )
+    value <- trimws(as.character(register[[name]]))[at]
+    value[is.na(value)] <- ""
+    value
+  }
+
+  soppressioni <- data.frame(
+    record_id = people[["record_id"]],
+    first_name = field("first_name"), last_name = field("last_name"),
+    server = field("server"), project_id = field("project_id"),
+    indirizzo = people[["indirizzo"]], lista = people[["lista"]],
+    creata = when(people[["creata"]]),
+    stringsAsFactors = FALSE
+  )
+  soppressioni <- soppressioni[order(
+    suppressWarnings(as.integer(soppressioni[["record_id"]])),
+    soppressioni[["record_id"]], soppressioni[["indirizzo"]]
+  ), , drop = FALSE]
+  rownames(soppressioni) <- NULL
+
+  referents <- silencing[silencing[["classe"]] == "referente", , drop = FALSE]
+  referenti_soppressi <- data.frame(
+    indirizzo = referents[["indirizzo"]], lista = referents[["lista"]],
+    creata = when(referents[["creata"]]), stringsAsFactors = FALSE
+  )
+
+  list(
+    soppressioni = soppressioni, referenti_soppressi = referenti_soppressi
   )
 }
 
@@ -3970,8 +4225,14 @@ report_late <- function(giorno, completo, forzato, persi = 0L,
 #' for the year without access: those already named in an earlier report and
 #' those on a server not read are not in it.
 #'
-#' Names and codes only, and never a person: the record is shipped to a
-#' workspace and kept.
+#' The six columns of the suppressions, from 0.26.0, are
+#' `suppression_match()`'s counts: `soppressioni_lette`, always true or
+#' false, and five that are null when not computed, which the rule on the
+#' incomplete record does not ask about (a null there has a legitimate
+#' reason). A record of an esito without them says the lists were not read.
+#'
+#' Names, codes and counts only, and never a person or an address, nor a
+#' hash of one: the record is shipped to a workspace and kept.
 #'
 #' @param esito What `provisioning_report()` returned.
 #' @param posta Whether the run was allowed to send. No fallback, as in the
@@ -3994,6 +4255,16 @@ report_record <- function(esito, posta) {
 
   referenti <- length(union(due, already))
   completo <- length(already) + length(sent) == referenti
+
+  # A count not computed is `NULL`, which the record serializes as null:
+  # jsonlite writes an integer `NA` as the string "NA", which an integer
+  # column would not take.
+  known <- function(value, as) {
+    if (is.null(value) || length(value) != 1L || is.na(value)) {
+      return(NULL)
+    }
+    as(value)
+  }
 
   list(
     at = as.character(esito[["at"]]),
@@ -4021,6 +4292,13 @@ report_record <- function(esito, posta) {
       persi = length(esito[["mesi_persi"]]),
       sconosciuti = isTRUE(esito[["dovuti_sconosciuti"]])
     ),
+    soppressioni_lette = isTRUE(esito[["soppressioni_lette"]]),
+    soppressa_casella_it = known(esito[["soppressa_casella_it"]], as.logical),
+    soppressi_referenti = known(esito[["soppressi_referenti"]], as.integer),
+    soppressi_recapiti = known(esito[["soppressi_recapiti"]], as.integer),
+    soppressi_recapiti_nuovi =
+      known(esito[["soppressi_recapiti_nuovi"]], as.integer),
+    bloccati_nuovi = known(esito[["bloccati_nuovi"]], as.integer),
     errori = as.character(esito[["errori"]] %||% character())
   )
 }
