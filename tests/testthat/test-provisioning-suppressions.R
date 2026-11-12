@@ -152,8 +152,9 @@ test_that("la lettura e' a pagine, e le legge tutte", {
     letto[["voci"]][["lista"]] == "bounces"
   ]), 0L)
   expect_s3_class(letto[["voci"]][["creata"]], "POSIXct")
-  # Tre pagine per Bounces (500, 500, 200), una per ciascuna delle altre.
-  expect_length(servizio[["fatte"]][["richieste"]], 3L + 4L)
+  # Ogni lista finisce alla pagina vuota: quattro per Bounces (500, 500,
+  # 200, 0), due per Blocks (3, 0), una per ciascuna delle altre tre.
+  expect_length(servizio[["fatte"]][["richieste"]], 4L + 2L + 3L)
 })
 
 
@@ -595,4 +596,44 @@ test_that("una voce nuova si conta un giorno solo, nemmeno col ritardo", {
   )
   # Una corsa a mano nel pomeriggio conta come quella del mattino.
   expect_equal(nuove("2026-11-11 05:00", "2026-11-11 15:00"), 1L)
+})
+
+
+test_that("un tetto di pagina del servizio sotto limit non tronca la lista", {
+  # Dalla revisione del 2026-11-12 (R4): il tetto di 500 per pagina e' della
+  # documentazione, non misurato. Un servizio che ne rende 100 chiudeva la
+  # lista alla prima pagina, con la lettura detta intera.
+  tutte <- lapply(seq_len(250L), function(k) {
+    list(email = sprintf("p%03d@example.org", k), created = 1762900000)
+  })
+  offset_visti <- integer()
+  httr2::local_mocked_responses(function(req) {
+    lista <- basename(sub("[?].*$", "", req[["url"]]))
+    offset <- as.integer(
+      httr2::url_parse(req[["url"]])[["query"]][["offset"]]
+    )
+    if (identical(lista, "bounces")) {
+      offset_visti <<- c(offset_visti, offset)
+    }
+    voci <- if (identical(lista, "bounces") && offset < 250L) {
+      tutte[seq(offset + 1L, min(offset + 100L, 250L))]
+    } else {
+      list()
+    }
+    httr2::response(
+      status_code = 200L,
+      headers = list(`Content-Type` = "application/json"),
+      body = charToRaw(as.character(
+        jsonlite::toJSON(voci, auto_unbox = TRUE)
+      ))
+    )
+  })
+
+  esito <- suppression_read(api_key = finti[["chiave"]])
+
+  expect_true(esito[["ok"]])
+  expect_equal(sum(esito[["voci"]][["lista"]] == "bounces"), 250L)
+  expect_equal(anyDuplicated(esito[["voci"]][["email"]]), 0L)
+  # Si avanza di quante voci sono arrivate, e ci si ferma alla pagina vuota.
+  expect_equal(offset_visti, c(0L, 100L, 200L, 250L))
 })

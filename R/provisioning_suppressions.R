@@ -54,7 +54,13 @@ suppression_lists <- function() {
 #' page of a list is `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` (the network, a
 #' key refused or revoked, an address not admitted); a failure on a later
 #' page, or a list that never ends, is `TRASPORTO_SOPPRESSIONI_INCOMPLETE`.
-#' A page shorter than `limit` is the last one.
+#' The list ends at the first page that comes back empty, and not at the
+#' first shorter than `limit`: the ceiling per page is the documentation's
+#' and not measured, and a service that hands back fewer entries than asked
+#' would otherwise close the list after its first page with the reading said
+#' whole. One request more per list, five a day. The next page starts after
+#' the entries received, not after `limit`. A list that reaches `max_pages`
+#' without an empty page is a reading that failed, not a list cut short.
 #'
 #' The parameters `limit` and `offset`, the ceiling of 500 entries per page
 #' and the shape of an entry (`email`, `created` in seconds since the epoch,
@@ -64,8 +70,10 @@ suppression_lists <- function() {
 #'
 #' @param api_key The read-only key, which the runner reads from Key Vault.
 #' @param limit Entries per page.
-#' @param max_pages Pages per list past which the list is taken as one that
-#'   never ends. Bounces held a few hundred entries in November 2026.
+#' @param max_pages Pages per list, the empty one included, past which the
+#'   list is taken as one that never ends. Bounces held a few hundred entries
+#'   in November 2026: 200 pages are 100.000 entries at 500 a page, 20.000 at
+#'   100.
 #'
 #' @return A list with `ok`, `errors` and `voci`, a data frame of `lista`,
 #'   `email`, `creata` (POSIXct, UTC) and `motivo`, every entry of the five
@@ -163,11 +171,11 @@ suppression_read <- function(api_key, limit = 500L, max_pages = 200L) {
         return(failed(code))
       }
 
-      read[[length(read) + 1L]] <- suppression_entries(entries, list_name)
-      if (length(entries) < limit) {
+      if (length(entries) == 0L) {
         break
       }
-      offset <- offset + as.integer(limit)
+      read[[length(read) + 1L]] <- suppression_entries(entries, list_name)
+      offset <- offset + length(entries)
     }
   }
 

@@ -11,8 +11,10 @@ suppression_read(api_key, limit = 500L, max_pages = 200L)
 
 \item{limit}{Entries per page.}
 
-\item{max_pages}{Pages per list past which the list is taken as one that
-never ends. Bounces held a few hundred entries in November 2026.}
+\item{max_pages}{Pages per list, the empty one included, past which the
+list is taken as one that never ends. Bounces held a few hundred entries
+in November 2026: 200 pages are 100.000 entries at 500 a page, 20.000 at
+100.}
 }
 \value{
 A list with \code{ok}, \code{errors} and \code{voci}, a data frame of \code{lista},
@@ -42,7 +44,13 @@ read, and nothing that follows would change that. A failure on the first
 page of a list is \code{TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI} (the network, a
 key refused or revoked, an address not admitted); a failure on a later
 page, or a list that never ends, is \code{TRASPORTO_SOPPRESSIONI_INCOMPLETE}.
-A page shorter than \code{limit} is the last one.
+The list ends at the first page that comes back empty, and not at the
+first shorter than \code{limit}: the ceiling per page is the documentation's
+and not measured, and a service that hands back fewer entries than asked
+would otherwise close the list after its first page with the reading said
+whole. One request more per list, five a day. The next page starts after
+the entries received, not after \code{limit}. A list that reaches \code{max_pages}
+without an empty page is a reading that failed, not a list cut short.
 
 The parameters \code{limit} and \code{offset}, the ceiling of 500 entries per page
 and the shape of an entry (\code{email}, \code{created} in seconds since the epoch,
