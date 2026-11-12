@@ -1630,12 +1630,17 @@ test_that("a revocation of somebody who was never made is simulated on a dry run
 
 test_that("nobody is created while the instance that would say so is silent", {
   # eval
+  # Both instances benches, so the question about names asks nobody and the
+  # row reaches the gate on the scope question, the one guard for a row on a
+  # silent instance. Left to production, the silence stops the row at the
+  # name question before and the gate is never tried.
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_muta(),
     directory_vuota(),
     dry_run = FALSE,
-    mailer = posta_accesa
+    mailer = posta_accesa,
+    banchi = c("edc10", "edc12")
   )
 
   # test
