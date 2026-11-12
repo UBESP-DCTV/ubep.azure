@@ -1385,6 +1385,29 @@ provisioning_reconcile <- function(register_url,
       unlist(lapply(rehearsals, function(r) r[["fit"]]))
     )
 
+    # A pair goes by the name the instance holds. REDCap matches usernames
+    # without regard to case (`round_present()`), and the module keys a
+    # request on the name as written (`Planner`): a grant under the register's
+    # capitals, where the instance stores the person under others, is planned
+    # as a creation REDCap refuses or stores twice, and the row stays on an
+    # error of ours that never clears. The grant is taken to the stored row
+    # instead, which is an update, or nothing at all when it already says what
+    # the row asks. The register keeps the name of Entra. REDCap allows one
+    # user per name in any capitals, so the row found is the person's; should
+    # the instance ever hold two, the one written as in the register goes
+    # first. A person absent in every capital keeps the name of the register.
+    held_as <- function(e) {
+      held <- round_actual(results, list(e))
+      if (length(held) == 0L) {
+        held <- round_actual(results, list(e), any_case = TRUE)
+      }
+      if (length(held) > 0L) {
+        e[["username"]] <- as.character(held[[1L]][["username"]])
+      }
+      e
+    }
+    wanted <- lapply(wanted, held_as)
+
     # 7. the diff, against the real rows somebody asked about and no others
     diff <- provisioning_diff(wanted, round_actual(results, wanted))
     # A list, not a character vector: `[[` on an unmatched character subscript
@@ -1438,24 +1461,11 @@ provisioning_reconcile <- function(register_url,
     # username, without regard to case (`round_present()`). Matched as
     # written, a person whose username changed on Entra in its capitals alone
     # read as gone, and the revocation closed with the person still on the
-    # project.
-    #
-    # And the revoke is sent under the name the instance holds, read off the
-    # same state. The module plans a revoke on the name as written
+    # project. And the revoke is sent under the name the instance holds
+    # (`held_as()`): the module plans a revoke on the name as written
     # (`Planner::planRevoke()`), so one sent under the register's capitals is
-    # a `noop` there, and the row stayed on an error of ours that never
-    # cleared. REDCap allows one user per name in any capitals, so the row
-    # found is the person's; should the instance ever hold two, the one
-    # written as in the register goes first. Only revokes: a grant goes as
-    # before.
-    to_revoke <- lapply(Filter(present, revoked), function(e) {
-      held <- round_actual(results, list(e))
-      if (length(held) == 0L) {
-        held <- round_actual(results, list(e), any_case = TRUE)
-      }
-      e[["username"]] <- as.character(held[[1L]][["username"]])
-      e
-    })
+    # a `noop` there.
+    to_revoke <- lapply(Filter(present, revoked), held_as)
     already_gone <- Filter(Negate(present), revoked)
 
     settled <- do.call(rbind, c(

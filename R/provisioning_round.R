@@ -183,7 +183,8 @@ round_actual <- function(results, requests, any_case = FALSE) {
 #' under either. `round_actual()` matches the names as written, and asked
 #' "is the person still there" it would answer no on a difference of
 #' capitals alone: a revocation settled on that answer leaves the person on
-#' the project, with the row closed and nobody told.
+#' the project, with the row closed and nobody told. A grant and a revocation
+#' both go under the name the instance holds, which is the name this finds.
 #'
 #' @param results The `results` of a `state` reply.
 #' @param request One request, carrying `username` and `project_id`.
