@@ -501,6 +501,13 @@ mail_outcome_message <- function(row) {
   # no write that leaves a value as it was.
   # A row the channel already carried out gets no such invitation (L5 of the
   # 0.24.0 notes): it is sent to IT.
+  #
+  # A composed name free on Entra and known to REDCap (item 4 (b') of the
+  # 0.26.0, `known_to_redcap`) has nobody in the directory to look at: the
+  # name was an account's that Entra no longer holds and a production
+  # instance still remembers, and the only answer is the proposal. The code
+  # is the same, so the table of codes, the answer and the work instruction
+  # hold; the paragraph says what happened.
   collisione <- if ("DATO_IDENTITA_IN_COLLISIONE" %in% nomi_codici) {
     codice <- codici[nomi_codici == "DATO_IDENTITA_IN_COLLISIONE"][[1L]]
     proposta <- if (grepl(":", codice, fixed = TRUE)) {
@@ -550,6 +557,74 @@ mail_outcome_message <- function(row) {
           paste0(
             "Do not edit the row: write to IT, who checks the account on ",
             "Entra and says how to proceed."
+          )
+        )
+      )
+    } else if (isTRUE(as.logical(row[["known_to_redcap"]]))) {
+      list(
+        it = c(
+          "",
+          paste0(
+            "Il nome utente composto da nome e cognome della riga",
+            tra_virgole, " non e' di nessun account su Entra, ma REDCap ",
+            "ricorda ancora un login con quel nome, con un account o con ",
+            "diritti su un progetto: e' stato di qualcuno che su Entra non ",
+            "c'e' piu'. Il canale non lo riusa, perche' chi lo ricevesse ",
+            "troverebbe i progetti del vecchio login. In rubrica non c'e' ",
+            "nessun account da guardare: la sola risposta e' incollare il ",
+            "nome utente proposto"
+          ),
+          "",
+          paste0("    ", proposta),
+          "",
+          paste0(
+            "nel campo \"Another person: create this username\" ",
+            "(distinct_username) della riga: al giro successivo il canale ",
+            "crea l'account con quel nome, manda a te la chiave e alla ",
+            "persona il benvenuto. La risposta vale solo per questa ",
+            "proposta: se la proposta cambia, arriva un messaggio con ",
+            "quella nuova. Se il campo porta gia' questo nome, scritto ",
+            "prima di questo messaggio, non vale: svuotalo, salva la riga ",
+            "e incollalo di nuovo. Scritta da un altro referente, aspetta ",
+            "l'approvazione del referente della riga, oppure di IT."
+          ),
+          "",
+          paste0(
+            "Se la persona e' la stessa che aveva quel nome, riceve un nome ",
+            "nuovo e non ritrova i progetti del vecchio login: chiedili di ",
+            "nuovo con le richieste del nome nuovo."
+          )
+        ),
+        en = c(
+          "",
+          paste0(
+            "The username composed from the row's first and last name",
+            tra_virgole, " belongs to no account on Entra, but REDCap still ",
+            "remembers a login with that name, as an account or as rights on ",
+            "a project: it was somebody's who is no longer on Entra. The ",
+            "channel does not reuse it, since whoever received it would find ",
+            "the old login's projects. There is no account in the directory ",
+            "to look at: the only answer is to paste the proposed username"
+          ),
+          "",
+          paste0("    ", proposta),
+          "",
+          paste0(
+            "into the row's \"Another person: create this username\" field ",
+            "(distinct_username): on the next round the channel creates the ",
+            "account with that name, and sends you the key and the person the ",
+            "welcome. The answer holds for this proposal only: if the ",
+            "proposal changes, a message with the new one follows. If the ",
+            "field already holds this name, written before this message, it ",
+            "does not count: empty it, save the row and paste it again. ",
+            "Written by another referent, it waits for the approval of ",
+            "whoever owns the row, or of IT."
+          ),
+          "",
+          paste0(
+            "If the person is the one who had that name, they receive a new ",
+            "one and do not find the old login's projects: ask for them again ",
+            "with requests for the new name."
           )
         )
       )
