@@ -442,6 +442,7 @@ giro <- function(registro,
                  directory = directory_doppia(),
                  creazione = creazione_riuscita(),
                  channel_account = "svc-canale-ubep",
+                 at = "2026-08-14 03:00",
                  ...) {
   inviate <<- list() # nolint: assignment_linter.
   httr2::with_mocked_responses(
@@ -455,7 +456,7 @@ giro <- function(registro,
       graph_url = "graph.example.org/v1.0",
       instances = c("edc10", "edc12"),
       channel_account = channel_account,
-      at = "2026-08-14 03:00",
+      at = at,
       ...
     )
   )
@@ -6903,6 +6904,40 @@ test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la per
 })
 
 
+# What the owner reads when the person is back on the project and the last day
+# of the row has passed: not that the access was granted.
+dice_ultimo_giorno_passato <- function(posta) {
+  expect_equal(a_chi_e_arrivata(posta), anna)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(
+    corpo, "l'ultimo giorno di accesso della richiesta e' passato",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "the last day of access of the request has passed", fixed = TRUE
+  )
+  expect_no_match(corpo, "l'accesso e' stato concesso", fixed = TRUE)
+  expect_no_match(corpo, "has been granted", fixed = TRUE)
+}
+
+
+test_that("la riga scaduta chiusa sulla persona tolta e rimessa con la stessa scadenza avvisa che l'ultimo giorno e' passato", { # nolint: line_length_linter.
+  # eval
+  # Somebody put Mario back by hand with the day the row says: the pair is
+  # `noop`, the read-back changes from `absent` to the access, and the
+  # round tells the owner.
+  posta <- posta_raccolta()
+  giro_scaduta(
+    list(applied_as = "absent"), mailer = posta[["mailer"]],
+    at = paste(Sys.Date(), "03:00")
+  )
+
+  # test
+  expect_length(scritture(), 0L)
+  dice_ultimo_giorno_passato(posta)
+})
+
+
 test_that("un giro simulato sulla persona tolta non scrive e non sigilla", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -7725,6 +7760,26 @@ test_that("la riga scaduta con la scadenza cambiata a mano sotto altre maiuscole
   richiesta <- scritture()[[1L]][["body"]][["data"]][["requests"]][[1L]]
   expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+})
+
+
+test_that("la riga scaduta chiusa sulla persona tolta e rimessa con un'altra scadenza avvisa che l'ultimo giorno e' passato", { # nolint: line_length_linter.
+  # eval
+  # Somebody put Mario back by hand with another day: the round brings the
+  # access back to what the row says, and the owner is told as in the case of
+  # the same day.
+  posta <- posta_raccolta()
+  giro_scaduta(
+    list(applied_as = "absent"),
+    istanza = istanza_che_concede_esatta(
+      ruolo = "data entry", scadenza = as.character(Sys.Date() + 30L)
+    ),
+    mailer = posta[["mailer"]], at = paste(Sys.Date(), "03:00")
+  )
+
+  # test
+  expect_equal(nomi_concessi(), mario)
+  dice_ultimo_giorno_passato(posta)
 })
 
 
