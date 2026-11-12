@@ -706,14 +706,31 @@ log_executions <- function(events, channel, channel_account) {
   if (is.null(channel_account)) {
     return(which(wrote))
   }
+  which(
+    wrote & log_seals_door(events) &
+      trimws(as.character(events[["username"]])) %in% channel
+  )
+}
+
+
+#' Which events have the form of the seals door
+#'
+#' `details` holding `applied_seal` and at most `seal_state` beside it,
+#' nothing else: the door has written only those two fields since the seal
+#' exists, and REDCap logs only the fields an import changed. A seal written
+#' with any other field, a referent's CSV carrying the row and its seal, or
+#' an outcome whose *Read back as* quotes a seal, does not have it.
+#'
+#' @param events Events of the log, as `register_log()` returns them.
+#'
+#' @return A logical vector, one answer per event.
+#'
+#' @keywords internal
+log_seals_door <- function(events) {
   one <- "(applied_seal|seal_state)\\s*=\\s*'[^']*'"
-  door <- grepl(
+  grepl(
     paste0("^\\s*", one, "(\\s*,\\s*", one, ")?\\s*$"),
     as.character(events[["details"]])
-  )
-  which(
-    wrote & door &
-      trimws(as.character(events[["username"]])) %in% channel
   )
 }
 
@@ -767,6 +784,14 @@ log_channel_seal <- function(events, record, channel_account) {
 #' hand other than the owner's held. A register where nothing was ever
 #' sealed answers `FALSE`: there is no channel yet to have seen.
 #'
+#' Only a seal in the form of the seals door counts, `log_seals_door()`,
+#' decided on 2026-11-12 (RC3 of the review of unit G). The identity door
+#' writes after this question is asked (L6), so on a register the channel
+#' has never written on, a referent's CSV carrying the row and its seal
+#' stopped every round, and the channel could never write to be seen. A
+#' seal imported alone, in the door's form, still stops the round: from the
+#' log it cannot be told from the channel's under a name typed wrong.
+#'
 #' @param events The owners' log, `logtype = "record"`.
 #' @param channel_account The REDCap usernames that hold the round's token,
 #'   one or more. Not `NULL`.
@@ -780,7 +805,7 @@ log_channel_absent <- function(events, channel_account) {
     channel_account_valid(channel_account)
   )
 
-  if (!any(log_wrote(events, "applied_seal"))) {
+  if (!any(log_wrote(events, "applied_seal") & log_seals_door(events))) {
     return(FALSE)
   }
   authors <- tolower(trimws(as.character(events[["username"]])))

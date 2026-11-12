@@ -5096,28 +5096,15 @@ test_that("un sigillo importato da solo lascia la riga intatta, e il canale lo r
 
 test_that("una riga mai sigillata dal canale e' mai eseguita, qualunque sigillo porti", { # nolint: line_length_linter.
   # eval
-  # Anna's new row, never carried out: an earlier round resolved Mario and
-  # left it waiting. Bruno changes the role and imports the seal of the row
-  # as he changed it.
-  cambiata <- list(
-    record_id = "1", role_name = "read only",
-    username = "mario.rossi@ubep.unipd.it",
-    identity = "existing"
-  )
+  # Anna's new row, never carried out. Bruno changes the role and imports the
+  # seal of the row as he changed it.
+  cambiata <- list(record_id = "1", role_name = "read only")
   falso <- request_seal(do.call(riga_come_registro, cambiata))
   posta <- posta_raccolta()
-  # The identity door of that earlier round. Since 2026-11-12 (L6) the door
-  # writes after the owners' log is read, so a round whose log held no write
-  # of the channel at all would stop on TRASPORTO_REGISTRO_CANALE_ASSENTE.
-  porta_di_prima <- list(
-    timestamp = "2026-08-13 05:00", username = "svc-canale-ubep",
-    action = "Update record (API) 1",
-    details = "username = 'mario.rossi@ubep.unipd.it', identity = 'existing'"
-  )
   esito <- giro(
     registro_con_log(
       record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
-      storia = list(sigillo_importato(falso), porta_di_prima)
+      storia = list(sigillo_importato(falso))
     ),
     istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
     mailer = posta[["mailer"]]
@@ -8548,4 +8535,43 @@ test_that("una porta delle identita' rifiutata nel giro della 12 non sigilla e n
   expect_equal(identita_scritte()[["username"]], mario)
   expect_false(rinominato %in% c(revocati_1, revocati()))
   expect_equal(as.character(secondo[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("un sigillo importato su un registro dove il canale non ha mai scritto non ferma ogni giro (RC3)", { # nolint: line_length_linter.
+  # eval
+  # Anna's new row, never carried out, on a register the channel has never
+  # written on. Bruno changes the role and imports, in the same CSV, the
+  # seal of the row as he changed it.
+  cambiata <- list(record_id = "1", role_name = "read only")
+  falso <- request_seal(do.call(riga_come_registro, cambiata))
+  registro <- registro_con_log(
+    record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
+    storia = list(sigillo_importato(falso))
+  )
+  primo <- giro(
+    registro, istanza_che_scrive(richiedenti = c(anna, bruno)),
+    dry_run = FALSE
+  )
+  # The register as the first round left it: the record as it was, the log
+  # with what the round wrote.
+  dopo <- registro_con_log(
+    record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
+    storia = log_dopo_il_giro(registro)
+  )
+  secondo <- giro(
+    dopo, istanza_che_scrive(richiedenti = c(anna, bruno)),
+    dry_run = FALSE
+  )
+
+  # test
+  # Bruno's import is not the seals door's: it does not say the channel has
+  # run on this register, and the round does not stop for a channel it
+  # cannot find. The row waits for Anna, as on the 0.25.0.
+  for (esito in list(primo, secondo)) {
+    expect_false(
+      "TRASPORTO_REGISTRO_CANALE_ASSENTE" %in% esito[["errori"]]
+    )
+    expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  }
 })
