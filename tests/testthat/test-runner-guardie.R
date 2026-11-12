@@ -221,6 +221,45 @@ test_that("il rapporto legge gli approvatori di IT come il giro e li passa", {
 })
 
 
+test_that("la lavorazione del canale legge i banchi come l'osservatore e li passa", { # nolint: line_length_linter.
+  # Same limit as the guards above. Since the 0.26.0 the round asks the
+  # production instances which names REDCap knows before it creates one
+  # (item 4 (b')), and never the benches: a bench switched off would stop
+  # every creation. The runner reads them from the inventory as the observer
+  # does, `"banco": true` and nothing else; the reading is taken out of both
+  # scripts and run on the same inventory.
+  dev <- testthat::test_path("..", "..", "dev")
+  skip_if_not(dir.exists(dev), "dev/ is not in the built package")
+  con_modulo <- list(
+    list(nome = "edc01", host = "edc01.example.org"),
+    list(nome = "edc02", host = "edc02.example.org", banco = TRUE),
+    list(nome = "edc04", host = "edc04.example.org", banco = "true"),
+    list(nome = "edc06", host = "edc06.example.org", banco = FALSE),
+    list(nome = "edc08", host = "edc08.example.org", banco = TRUE)
+  )
+  legge <- function(nome) {
+    codice <- as.list(parse(file.path(dev, nome), keep.source = FALSE))
+    lettura <- Filter(function(e) {
+      is.call(e) && identical(e[[1L]], as.name("<-")) &&
+        identical(e[[2L]], as.name("banchi"))
+    }, codice)
+    ambiente <- new.env(parent = baseenv())
+    ambiente[["con_modulo"]] <- con_modulo
+    for (e in lettura) {
+      eval(e, ambiente)
+    }
+    ambiente[["banchi"]]
+  }
+  expect_identical(legge("runner-canale.R"), c("edc02", "edc08"))
+  expect_identical(legge("runner-canale.R"), legge("runner-osservatore.R"))
+  testo <- paste(
+    readLines(file.path(dev, "runner-canale.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  expect_match(testo, "banchi = banchi", fixed = TRUE)
+})
+
+
 test_that("con la posta accesa il giro pretende la copia a IT", {
   # Same limit as the guards above. The outcome of a row whose owner is not
   # established goes to IT alone: without the copy it would leave for nobody,

@@ -178,6 +178,18 @@ if (length(con_modulo) == 0L) {
   stop("l'inventario non elenca nessuna istanza con il modulo", call. = FALSE)
 }
 
+# I banchi, letti come li legge l'osservatore. Prima di creare un account il
+# giro chiede alle istanze di produzione se REDCap conosce gia' il nome (dalla
+# 0.26.0), e un banco non si interroga mai: sui banchi non ci sono persone
+# vere, e un banco spento fermerebbe ogni creazione. Il campo assente, o con
+# un valore che non sia esattamente `true`, vale produzione: nel dubbio
+# un'istanza si interroga.
+banchi <- vapply(
+  Filter(function(x) isTRUE(x[["banco"]]), con_modulo),
+  function(x) as.character(x[["nome"]]),
+  character(1)
+)
+
 # L'elenco delle scelte del campo `server`, nell'ordine in cui il registro le
 # porta: l'ordine e' parte del valore, perche' il confronto e' sulla stringa
 # intera. Se manca, il confronto giudica le altre colonne e dichiara di non
@@ -259,6 +271,7 @@ esito <- ubep.azure:::provisioning_reconcile(
   reply_to = if (nzchar(POSTA_RISPOSTE)) POSTA_RISPOSTE else NULL,
   approvers = APPROVATORI_IT,
   channel_account = CANALE_UTENTE,
+  banchi = banchi,
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 
