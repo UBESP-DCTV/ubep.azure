@@ -7026,6 +7026,11 @@ test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiusc
   # reopens the access.
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
   expect_equal(esito_di(esito, "1")[["detail"]], "")
+  # Not closed as a person removed: the read-back is the access as it stands.
+  expect_equal(
+    as.character(esito[["esiti"]][["applied_as"]]),
+    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+  )
   expect_length(scritture(), 0L)
   expect_length(posta[["mandate"]](), 0L)
 })
