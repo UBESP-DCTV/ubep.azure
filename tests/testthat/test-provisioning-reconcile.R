@@ -7746,6 +7746,34 @@ test_that("una concessione con due righe d'istanza che differiscono nelle maiusc
 })
 
 
+test_that("una concessione su un nome che l'istanza tiene con uno spazio ai bordi ha comunque un esito", { # nolint: line_length_linter.
+  # eval
+  # The pair is found without the blanks at the edges (`round_actual()`), and
+  # the diff and the lookup of its answer (`acted()`) have to read the name
+  # the same way: left with the blank in the first, the row found no answer
+  # and the round wrote no outcome on it.
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(),
+      list(
+        username = paste0(mario, " "), role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("la riga scaduta con la scadenza cambiata a mano sotto altre maiuscole riporta la sua data sul nome dell'istanza", { # nolint: line_length_linter.
   # eval
   # Somebody extended Mario's access by hand, and the instance holds him in

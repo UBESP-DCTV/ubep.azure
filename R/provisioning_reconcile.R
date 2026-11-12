@@ -1416,8 +1416,12 @@ provisioning_reconcile <- function(register_url,
     # Unreachable today -- provisioning_diff() emits a row per desired entry
     # -- but the same latent crash as by_pair below, on the same construct.
     action <- as.list(as.character(diff[["action"]]))
+    # Looked up as `acted()` does, without the blanks at the edges of the
+    # name: a name the instance holds with a blank (`held_as()` takes it as
+    # it is, which is what the module keys on) would otherwise find no answer,
+    # and the row no outcome.
     names(action) <- paste(
-      diff[["username"]], diff[["project_id"]], sep = "\r"
+      trimws(diff[["username"]]), diff[["project_id"]], sep = "\r"
     )
     acted <- function(e) {
       action[[paste(
