@@ -3462,7 +3462,9 @@ test_that("the record carries exactly the columns of its table, in order", {
     "istanze_non_lette", "posta", "posta_dirottata", "referenti", "mandati",
     "gia_mandati", "falliti", "in_ordine", "da_guardare", "voci_attivati",
     "voci_senza_primo_accesso", "voci_senza_accessi", "senza_creatore",
-    "mese_completo", "in_ritardo", "errori"
+    "mese_completo", "in_ritardo", "soppressioni_lette",
+    "soppressa_casella_it", "soppressi_referenti", "soppressi_recapiti",
+    "soppressi_recapiti_nuovi", "bloccati_nuovi", "errori"
   ))
   expect_equal(record[["at"]], "2026-11-01 06:30")
   # Every server is read, and nobody is yet a year without access.
@@ -4247,7 +4249,14 @@ test_that("the record serializes with the types of its table", {
   # eval
   doppie()
   record <- report_record(
-    esegui(withr::local_tempdir(), posta_finta()), posta = TRUE
+    esegui(
+      withr::local_tempdir(), posta_finta(),
+      # Lists read and empty: every column of the suppressions has a value.
+      suppressions = function() {
+        list(ok = TRUE, errors = character(), voci = suppression_entries())
+      }
+    ),
+    posta = TRUE
   )
   record[["errori"]] <- "TRASPORTO_POSTA_RIFIUTATA"
   json <- run_record_json(record)
@@ -4276,6 +4285,9 @@ test_that("the record serializes with the types of its table", {
     in_ordine = "int", da_guardare = "int", voci_attivati = "int",
     voci_senza_primo_accesso = "int", voci_senza_accessi = "int",
     senza_creatore = "int", mese_completo = "bool", in_ritardo = "bool",
+    soppressioni_lette = "bool", soppressa_casella_it = "bool",
+    soppressi_referenti = "int", soppressi_recapiti = "int",
+    soppressi_recapiti_nuovi = "int", bloccati_nuovi = "int",
     errori = "dynamic"
   ))
   expect_false(grepl("\\.[0-9]", json))
@@ -5132,13 +5144,15 @@ test_that("a whole run reads the stopped rows and asks the name executed", {
       "La persona e' gia' entrata su edc10. Referente: ", bruno, "."
     ), fixed = TRUE
   )
-  # No new column in the record.
+  # No new column in the record but the six of the suppressions (0.26.0).
   expect_equal(names(report_record(esito, posta = TRUE)), c(
     "at", "mese", "giorno_di_invio", "registro_letto", "directory_letta",
     "istanze_non_lette", "posta", "posta_dirottata", "referenti", "mandati",
     "gia_mandati", "falliti", "in_ordine", "da_guardare", "voci_attivati",
     "voci_senza_primo_accesso", "voci_senza_accessi", "senza_creatore",
-    "mese_completo", "in_ritardo", "errori"
+    "mese_completo", "in_ritardo", "soppressioni_lette",
+    "soppressa_casella_it", "soppressi_referenti", "soppressi_recapiti",
+    "soppressi_recapiti_nuovi", "bloccati_nuovi", "errori"
   ))
 })
 
@@ -5379,4 +5393,299 @@ test_that("a revocation carried out and then touched is not stopped", {
   expect_equal(
     report_held_rows(ancora, owners = referente)[["record_id"]], "45"
   )
+})
+
+
+# --- the suppressions of the mail service ------------------------------------
+
+# What a reading of the suppression lists answers, from entries written as
+# list, address and moment in UTC. Addresses on example.org.
+soppressioni_finte <- function(...) {
+  voci <- list(...)
+  list(
+    ok = TRUE, errors = character(),
+    voci = do.call(rbind, c(
+      list(suppression_entries()),
+      lapply(voci, function(v) {
+        suppression_entries(
+          list(list(
+            email = v[[2L]],
+            created = as.numeric(as.POSIXct(v[[3L]], tz = "UTC")),
+            reason = "550 5.1.1 finta"
+          )),
+          v[[1L]]
+        )
+      })
+    ))
+  )
+}
+
+# The run of 1 November with Carla's contact in Bounces since the evening
+# before and IT's address in Global Unsubscribes for months. Carla's account
+# was created by the channel, so the welcome went to her contact.
+con_soppressioni <- function() {
+  dati <- scenario()
+  dati[["registro"]][["identity"]][[1L]] <- "created"
+  dati[["registro"]][["contact_email"]][2:3] <- "dario.ipotetico@example.org"
+  dati
+}
+
+carla_fuori <- "carla.inventata@example.org"
+
+lettura_di_ieri <- function() {
+  soppressioni_finte(
+    c("bounces", carla_fuori, "2026-10-31 20:00"),
+    c("unsubscribes", it_prova, "2026-05-01 10:00")
+  )
+}
+
+
+test_that("the record says which recipients the mail service suppresses", {
+  # eval
+  doppie(con_soppressioni())
+
+  esito <- esegui(
+    withr::local_tempdir(), posta_finta(),
+    suppressions = function() lettura_di_ieri()
+  )
+  record <- report_record(esito, posta = TRUE)
+
+  # test
+  expect_true(record[["soppressioni_lette"]])
+  expect_true(record[["soppressa_casella_it"]])
+  expect_equal(record[["soppressi_referenti"]], 0L)
+  expect_equal(record[["soppressi_recapiti"]], 1L)
+  expect_equal(record[["soppressi_recapiti_nuovi"]], 1L)
+  expect_equal(record[["bloccati_nuovi"]], 0L)
+  expect_equal(record[["errori"]], character())
+  # The detail, with the addresses, is for the journal and not the record.
+  expect_setequal(
+    esito[["soppressioni"]][["indirizzo"]], c(carla_fuori, it_prova)
+  )
+  expect_false(grepl("@", run_record_json(record), fixed = TRUE))
+})
+
+
+test_that("an old entry is a state for the record and not news", {
+  # eval
+  doppie(con_soppressioni())
+
+  esito <- esegui(
+    withr::local_tempdir(),
+    suppressions = function() {
+      soppressioni_finte(c("bounces", carla_fuori, "2026-10-22 08:00"))
+    }
+  )
+  record <- report_record(esito, posta = FALSE)
+
+  # test
+  expect_equal(record[["soppressi_recapiti"]], 1L)
+  expect_equal(record[["soppressi_recapiti_nuovi"]], 0L)
+  expect_false(record[["soppressa_casella_it"]])
+})
+
+
+test_that("a referent on a list is counted, a creator of nothing active not", {
+  # eval
+  dati <- con_soppressioni()
+  dati[["registro"]][["owned_by"]] <- c(
+    "bruno.fittizio@ubep.unipd.it", "", ""
+  )
+  doppie(dati)
+
+  esito <- esegui(
+    withr::local_tempdir(),
+    suppressions = function() {
+      soppressioni_finte(
+        c("spam_reports", "Anna.Esempio@ubep.unipd.it ", "2026-09-01 08:00"),
+        c("bounces", "bruno.fittizio@ubep.unipd.it", "2026-09-01 08:00"),
+        c("bounces", "gina.immaginaria@ubep.unipd.it", "2026-09-01 08:00")
+      )
+    }
+  )
+
+  # test
+  expect_equal(
+    report_record(esito, posta = FALSE)[["soppressi_referenti"]], 2L
+  )
+})
+
+
+test_that("a reading refused leaves the columns null and the rest as today", {
+  # eval
+  doppie()
+  rifiutata <- function() {
+    list(
+      ok = FALSE, errors = "TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI",
+      voci = suppression_entries()
+    )
+  }
+  nuove <- c(
+    "soppressioni_lette", "soppressa_casella_it", "soppressi_referenti",
+    "soppressi_recapiti", "soppressi_recapiti_nuovi", "bloccati_nuovi"
+  )
+
+  senza <- report_record(
+    esegui(withr::local_tempdir(), posta_finta()), posta = TRUE
+  )
+  record <- report_record(
+    esegui(withr::local_tempdir(), posta_finta(), suppressions = rifiutata),
+    posta = TRUE
+  )
+  rotta <- report_record(
+    suppressMessages(esegui(
+      withr::local_tempdir(), posta_finta(),
+      suppressions = function() stop("chiusura rotta")
+    )),
+    posta = TRUE
+  )
+
+  # test
+  for (r in list(record, rotta)) {
+    expect_false(r[["soppressioni_lette"]])
+    for (colonna in nuove[-1L]) {
+      expect_null(r[[colonna]])
+      expect_true(colonna %in% names(r))
+    }
+    expect_equal(r[["errori"]], "TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI")
+    # The report goes on as without the reading.
+    same <- setdiff(names(senza), c("errori", nuove))
+    expect_equal(r[same], senza[same])
+  }
+  expect_match(
+    run_record_json(record), '"soppressi_recapiti":null', fixed = TRUE
+  )
+})
+
+
+test_that("a runner that passes no reading says the lists were not read", {
+  # eval
+  doppie()
+
+  record <- report_record(esegui(withr::local_tempdir()), posta = FALSE)
+
+  # test
+  expect_false(record[["soppressioni_lette"]])
+  expect_null(record[["soppressi_recapiti"]])
+  expect_equal(record[["errori"]], character())
+})
+
+
+test_that("with the register not read only IT's address is judged", {
+  # eval
+  doppie(letto = FALSE)
+
+  record <- report_record(
+    esegui(
+      withr::local_tempdir(), suppressions = function() lettura_di_ieri()
+    ),
+    posta = FALSE
+  )
+
+  # test
+  expect_false(record[["soppressioni_lette"]])
+  expect_true(record[["soppressa_casella_it"]])
+  expect_null(record[["soppressi_referenti"]])
+  expect_null(record[["soppressi_recapiti"]])
+  expect_null(record[["bloccati_nuovi"]])
+})
+
+
+test_that("the mail to IT lists the recipients suppressed", {
+  # eval
+  doppie(con_soppressioni())
+  posta <- posta_finta()
+  esegui(
+    withr::local_tempdir(), posta, suppressions = function() lettura_di_ieri()
+  )
+  doppie(con_soppressioni())
+  senza <- posta_finta()
+  esegui(withr::local_tempdir(), senza)
+
+  a_chi <- function(p, chi) {
+    mail <- p[["inviate"]][["mail"]]
+    mail[[match(chi, vapply(mail, `[[`, "", "to"))]]
+  }
+
+  # test
+  testo <- parti(a_chi(posta, it_prova))
+  expect_true(any(grepl(
+    "Recapiti in soppressione presso il servizio di posta (1)", testo[["it"]],
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    paste0(
+      "Richiesta 41: Carla Inventata: edc10, progetto 9301. ", carla_fuori,
+      " in Bounces dal 31 ottobre 2026."
+    ),
+    testo[["it"]], fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "Recipients suppressed by the mail service (1)", testo[["en"]],
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    paste0(carla_fuori, " on Bounces since 31 October 2026."),
+    testo[["en"]], fixed = TRUE
+  )))
+  expect_match(a_chi(posta, it_prova)[["subject"]], "^Da guardare [(]2[)]")
+  expect_match(a_chi(senza, it_prova)[["subject"]], "^Da guardare [(]1[)]")
+  expect_false(grepl(
+    "soppressione", a_chi(senza, it_prova)[["body"]], fixed = TRUE
+  ))
+  # The referents' reports do not change.
+  expect_identical(a_chi(posta, referente), a_chi(senza, referente))
+})
+
+
+test_that("a suppressed recipient alone makes the mail to IT due", {
+  # eval
+  dati <- con_soppressioni()
+  # Every row has its referent: nothing else for IT.
+  dati[["creazioni"]] <- rbind(
+    dati[["creazioni"]],
+    evento("2026-10-01 10:00", referente, "", record = "43",
+           action = "Create record 43")
+  )
+  doppie(dati)
+  senza <- posta_finta()
+  esegui(withr::local_tempdir(), senza)
+  doppie(dati)
+  posta <- posta_finta()
+  esito <- esegui(
+    withr::local_tempdir(), posta, suppressions = function() lettura_di_ieri()
+  )
+
+  # test
+  destinatari <- function(p) vapply(p[["inviate"]][["mail"]], `[[`, "", "to")
+  expect_false(it_prova %in% destinatari(senza))
+  expect_true(it_prova %in% destinatari(posta))
+  expect_true(report_it_key() %in% esito[["dovuti"]])
+})
+
+
+test_that("the mail to IT names a referent the mail service suppresses", {
+  # eval
+  it <- list(
+    referenti_soppressi = data.frame(
+      indirizzo = "anna.esempio@ubep.unipd.it", lista = "spam_reports",
+      creata = as.POSIXct("2026-09-01 08:00", tz = "UTC"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  # test
+  testo <- parti(report_it_message(it, novembre()))
+  expect_true(any(grepl(
+    "1. Referenti in soppressione presso il servizio di posta (1)",
+    testo[["it"]], fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "anna.esempio@ubep.unipd.it in Spam Reports dal 1 settembre 2026.",
+    testo[["it"]], fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "anna.esempio@ubep.unipd.it on Spam Reports since 1 September 2026.",
+    testo[["en"]], fixed = TRUE
+  )))
 })

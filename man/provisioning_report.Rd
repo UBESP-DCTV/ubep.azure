@@ -18,7 +18,8 @@ provisioning_report(
   channel_account = NULL,
   hosts = character(),
   secrets = character(),
-  approvers = NULL
+  approvers = NULL,
+  suppressions = NULL
 )
 }
 \arguments{
@@ -66,6 +67,16 @@ the round's does; \code{character()} when the list is empty. \code{NULL}, the
 default, is a caller that does not pass them, a runner older than the
 argument: those rows enter without the name executed, and the mail to IT
 says why.}
+
+\item{suppressions}{A function with no arguments that reads the
+suppression lists of the mail service and answers as
+\code{suppression_read()}, built by the runner around the read-only key as
+the \code{mailer} is around the sending one. Asked first, before the register,
+and nothing it answers stops the report: a failure, or an error it
+throws, is \code{TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI} and null columns.
+\code{NULL}, the default, is a runner without the key or older than the
+argument: \code{soppressioni_lette} is false and no code is added, so the
+record shows it without passing for a clean reading.}
 }
 \value{
 A list that \code{report_record()} turns into the record, plus
@@ -74,7 +85,9 @@ it covers, for whoever reads a single run; \code{server}, what
 \code{report_server_reads()} answered for each server asked; \code{recuperati},
 the late reports tried (a data frame of \code{mese}, \code{destinatario} and
 \code{esito}, \code{mandato} or \code{fallito}); and \code{mesi_persi}, the months still
-missing a report after the round.
+missing a report after the round; the six counts of
+\code{suppression_match()}, and \code{soppressioni}, its detail with the
+addresses, for the journal and never for the record.
 }
 \description{
 \strong{It reads and sends mail, and nothing else.} It does not write in the
