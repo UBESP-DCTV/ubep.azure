@@ -3513,7 +3513,7 @@ test_that("un ruolo riportato al valore eseguito non ha autore sopra un esito de
 })
 
 
-# ---- The version carried out, rebuilt from the log and verified by the seal ----
+# ---- The version carried out, rebuilt from the log, verified by the seal ----
 
 # The identity door's write of the username, as the channel leaves it.
 porta <- function(username = "mario.rossi@ubep.unipd.it") {
@@ -3585,7 +3585,7 @@ test_that("un sigillo che nessun taglio da' lascia la riga non verificata", {
 })
 
 
-test_that("senza esecuzione o con il canale ignoto non c'e' versione eseguita", {
+test_that("senza esecuzione o col canale ignoto non c'e' versione eseguita", {
   # eval
   mai <- eventi_finti(creazione)
   importato <- eventi_finti(

@@ -7928,7 +7928,9 @@ test_that("su una riga sigillata con il log non letto la porta delle identita' n
   # would write could be the one it would stop on.
   giro(
     log_illeggibile(registro_con_log(
-      do.call(record_json, list(eseguita_row(applied_seal = sigillo_eseguito()))),
+      do.call(record_json, list(
+        eseguita_row(applied_seal = sigillo_eseguito())
+      )),
       storia = carried_out(sigillo_eseguito()),
       creazioni = creazioni_finte(creata_da_anna())
     )),

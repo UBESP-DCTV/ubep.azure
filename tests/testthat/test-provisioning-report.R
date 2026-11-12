@@ -5448,7 +5448,8 @@ test_that("a revocation written while the round ran stays stopped (G1)", {
   # identity door, before the seal. The access executed is still there.
   registro <- registro_di(richiesta(
     record_id = "45", username = elena, first_name = "Elena",
-    last_name = "Supposta", request_status = "revoked", expiration = "2026-12-31",
+    last_name = "Supposta", request_status = "revoked",
+    expiration = "2026-12-31",
     outcome = "held", outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"
   ))
   log <- rbind(
