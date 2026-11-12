@@ -5096,15 +5096,28 @@ test_that("un sigillo importato da solo lascia la riga intatta, e il canale lo r
 
 test_that("una riga mai sigillata dal canale e' mai eseguita, qualunque sigillo porti", { # nolint: line_length_linter.
   # eval
-  # Anna's new row, never carried out. Bruno changes the role and imports the
-  # seal of the row as he changed it.
-  cambiata <- list(record_id = "1", role_name = "read only")
+  # Anna's new row, never carried out: an earlier round resolved Mario and
+  # left it waiting. Bruno changes the role and imports the seal of the row
+  # as he changed it.
+  cambiata <- list(
+    record_id = "1", role_name = "read only",
+    username = "mario.rossi@ubep.unipd.it",
+    identity = "existing"
+  )
   falso <- request_seal(do.call(riga_come_registro, cambiata))
   posta <- posta_raccolta()
+  # The identity door of that earlier round. Since 2026-11-12 (L6) the door
+  # writes after the owners' log is read, so a round whose log held no write
+  # of the channel at all would stop on TRASPORTO_REGISTRO_CANALE_ASSENTE.
+  porta_di_prima <- list(
+    timestamp = "2026-08-13 05:00", username = "svc-canale-ubep",
+    action = "Update record (API) 1",
+    details = "username = 'mario.rossi@ubep.unipd.it', identity = 'existing'"
+  )
   esito <- giro(
     registro_con_log(
       record_json(utils::modifyList(cambiata, list(applied_seal = falso))),
-      storia = list(sigillo_importato(falso))
+      storia = list(sigillo_importato(falso), porta_di_prima)
     ),
     istanza_che_scrive(richiedenti = c(anna, bruno)), dry_run = FALSE,
     mailer = posta[["mailer"]]
@@ -7828,4 +7841,135 @@ test_that("la persona riscritta durante il giro e' un cambio di coppia del refer
     )
   }
   expect_length(scritture(), 0L)
+})
+
+
+# ---- The identity door and a row stopped on its pair (L6, 0.26.0) ----
+
+rinominato <- "mario.rossi.nuovo@ubep.unipd.it"
+
+# A register whose owners' log cannot be read, and that answers everything
+# else as `registro` does.
+log_illeggibile <- function(registro) {
+  function(data) {
+    if (identical(form_field_value(data[["content"]]), "log") &&
+          identical(form_field_value(data[["logtype"]] %||% ""), "record")) {
+      return('{"error":"You do not have Logging rights"}')
+    }
+    registro(data)
+  }
+}
+
+
+test_that("su un account rinominato la porta delle identita' non scrive il nome nuovo", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user(userPrincipalName = rinominato))
+  )
+
+  # test
+  # The register keeps the name carried out, and the seal does not move by
+  # the channel's hand: the next round reads the pair from the register, as
+  # this one did, and stops the same way.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_null(identita_scritte())
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("sulla persona riscritta dal proprietario la porta delle identita' non scrive", { # nolint: line_length_linter.
+  # eval
+  persona <- list(
+    first_name = "Giulia", last_name = "Verdi",
+    contact_email = "giulia.verdi@example.org"
+  )
+  esito <- giro_coppia(
+    persona,
+    list(cambio(anna, paste0(
+      "first_name = 'Giulia', last_name = 'Verdi', ",
+      "contact_email = 'giulia.verdi@example.org'"
+    ))),
+    directory = directory_doppia(graph_user(), giulia)
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  expect_null(identita_scritte())
+})
+
+
+test_that("su una riga mai eseguita la porta delle identita' scrive come prima", { # nolint: line_length_linter.
+  # eval
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE
+  )
+
+  # test
+  scritte <- identita_scritte()
+  expect_equal(nrow(scritte), 1L)
+  expect_equal(scritte[["username"]], mario)
+  expect_equal(scritte[["identity"]], "existing")
+})
+
+
+test_that("su una riga sigillata con il log non letto la porta delle identita' non scrive", { # nolint: line_length_linter.
+  # eval
+  # The rule of the pair cannot be judged this round: the name the round
+  # would write could be the one it would stop on.
+  giro(
+    log_illeggibile(registro_con_log(
+      do.call(record_json, list(eseguita_row(applied_seal = sigillo_eseguito()))),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    )),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(userPrincipalName = rinominato)),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_null(identita_scritte())
+})
+
+
+test_that("il giro fermo sul canale assente scrive le identita' delle sole righe mai sigillate", { # nolint: line_length_linter.
+  # eval
+  # Row 1 was carried out by an account the machine no longer lists; row 2
+  # is new. The round stops before judging anything.
+  vecchio <- "svc-canale-vecchio"
+  storia <- lapply(carried_out(sigillo_eseguito()), function(evento) {
+    utils::modifyList(evento, list(username = vecchio))
+  })
+  esito <- giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(applied_seal = sigillo_eseguito()),
+        list(record_id = "2")
+      ),
+      storia = storia,
+      creazioni = creazioni_finte(
+        creata_da_anna(), creata_da_anna("2")
+      )
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(userPrincipalName = rinominato)),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_true(esito[["fermato"]])
+  expect_equal(esito[["errori"]], "TRASPORTO_REGISTRO_CANALE_ASSENTE")
+  scritte <- identita_scritte()
+  expect_equal(scritte[["record_id"]], "2")
+  expect_equal(scritte[["username"]], rinominato)
 })

@@ -111,7 +111,11 @@
 #' another account, or create one, and nobody wrote the person in the row:
 #' the account changed on Entra, and it is for IT. Both come before a held
 #' change, since no approval lets them through, and before the identity's own
-#' codes. A row never carried out changes as before.
+#' codes. A row never carried out changes as before. On a row stopped on
+#' either code, and on a sealed row whose pair the round could not judge,
+#' the identity door writes neither *Username (UPN)* nor *Identity
+#' resolution* (decided on 2026-11-12): the register keeps the name carried
+#' out, and the channel does not move the seal itself.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -437,19 +441,29 @@ provisioning_reconcile <- function(register_url,
   # and stays that way: it is what the two comparisons below are made against,
   # and a frame already carrying this round's answers would compare a value
   # with itself and report that nothing ever changes.
-  identity_written <- register_identity_import(
-    register_url, register_token,
-    round_changed(
-      register,
-      do.call(rbind, c(
-        list(identity_payload("", "", "")[0, , drop = FALSE]),
-        lapply(seq_along(record_ids), function(i) {
-          identity_payload(record_ids[[i]], resolved_names[[i]], verdicts[[i]])
-        })
-      )),
-      fields = c("username", "identity")
+  #
+  # Written once the rule of the pair has judged the rows, decided on
+  # 2026-11-12 (L6), and for the rows `open` names: nothing below reads what
+  # it writes, so the moment changes no decision of this round, only where
+  # the write stands in the log, still below the outcome, the owner and the
+  # seal.
+  write_identities <- function(open) {
+    register_identity_import(
+      register_url, register_token,
+      round_changed(
+        register,
+        do.call(rbind, c(
+          list(identity_payload("", "", "")[0, , drop = FALSE]),
+          lapply(which(open), function(i) {
+            identity_payload(
+              record_ids[[i]], resolved_names[[i]], verdicts[[i]]
+            )
+          })
+        )),
+        fields = c("username", "identity")
+      )
     )
-  )
+  }
 
   # What the gate refuses stops here and enters nothing that follows: not the
   # desired state, not the scope question, not an instance. `ambiguous` and
@@ -586,9 +600,12 @@ provisioning_reconcile <- function(register_url,
         # channel has sealed: a name typed wrong, or the old account dropped
         # too early. Every write of the channel would read as somebody
         # else's, so the round stops here, before it judges or writes
-        # anything but the identities, which do not depend on it.
+        # anything but the identities of the rows never sealed, which the
+        # rule of the pair does not concern; a sealed row waits for a round
+        # that judges it (L6).
         if (!is.null(channel_account) &&
               log_channel_absent(reading_owners[["log"]], channel_account)) {
+          identity_written <- write_identities(!nzchar(carried))
           return(halted(
             c(identity_written[["errors"]],
               "TRASPORTO_REGISTRO_CANALE_ASSENTE"),
@@ -831,6 +848,20 @@ provisioning_reconcile <- function(register_url,
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
   moved <- nzchar(shift_code)
   awaiting <- awaiting & !moved
+
+  # The identity door, decided on 2026-11-12 (L6): not on a row stopped on
+  # its pair, nor on a sealed row whose pair this round could not judge (the
+  # owners' log not read, or the row blind). There the round would write the
+  # name it stops on: the register would lose the name carried out, and the
+  # channel's own write would move the seal. `username` and `identity` go
+  # together or not at all, so the verdict beside the name stays the one of
+  # the execution, and the next round reads the name as the channel's, not
+  # as a declaration.
+  sealed_row <- if (is.null(owners_log)) nzchar(carried) else nzchar(sealed)
+  unjudged <- vapply(seq_along(record_ids), function(i) {
+    is.null(executed_pair[[i]]) || blind[[i]]
+  }, logical(1))
+  identity_written <- write_identities(!moved & !(sealed_row & unjudged))
 
   # A revocation and nothing else, by somebody other than the owner, is free
   # when they manage the project, and only the instance can say whether they

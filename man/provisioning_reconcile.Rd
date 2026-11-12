@@ -209,7 +209,11 @@ somebody else; \code{TRASPORTO_IDENTITA_CAMBIATA} when the round would serve
 another account, or create one, and nobody wrote the person in the row:
 the account changed on Entra, and it is for IT. Both come before a held
 change, since no approval lets them through, and before the identity's own
-codes. A row never carried out changes as before.
+codes. A row never carried out changes as before. On a row stopped on
+either code, and on a sealed row whose pair the round could not judge,
+the identity door writes neither \emph{Username (UPN)} nor \emph{Identity
+resolution} (decided on 2026-11-12): the register keeps the name carried
+out, and the channel does not move the seal itself.
 
 \strong{The oldest row of a pair keeps it whether the round serves it or not.}
 A row the round stops (held, blind, on its identity, on a pair that moved)
