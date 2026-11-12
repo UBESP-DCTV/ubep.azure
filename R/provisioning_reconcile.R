@@ -97,9 +97,12 @@
 #'
 #' **A row the channel has carried out does not change its pair**, decided on
 #' 2026-11-09: the instance, the project and the person it was carried out
-#' for: the row as read when its seal did not move, and otherwise as the
-#' owners' log holds them below the channel's last seal
-#' (`log_executed_values()`). Whoever wrote the change, the owner included,
+#' for: the row as read when its seal did not move, and otherwise the
+#' version the owners' log rebuilds and the channel's last seal verifies
+#' (`log_executed_row()`, decided on 2026-11-12), or, where none does, the
+#' log read as the 0.25.0 read it (`log_executed_unverified()`). With the
+#' version verified, the person is rewritten when the register's differs
+#' from the one carried out. Whoever wrote the change, the owner included,
 #' approved or not, the row stops before the plan (`pair_change()`): nothing
 #' is written on the instance, nobody is created on Entra, the row keeps its
 #' seal and its owner. `DATO_COPPIA_CAMBIATA` when the referent moved it, the
@@ -736,38 +739,52 @@ provisioning_reconcile <- function(register_url,
   # nothing written on the instance, nobody created, no new seal and the
   # same owner. Rows never carried out are not concerned.
   #
-  # The pair carried out is read from the owners' log, which the round holds
-  # whole, and not from the row's own log: an account renamed on Entra moves
-  # no seal, since the register still holds the old name when it is read, so
-  # that row is never among the ones whose log is asked for. Whether somebody
-  # wrote the person is read from the row's log, which is asked for every row
-  # whose seal moved; a row whose seal did not move holds the person carried
-  # out.
+  # The version carried out is read from the owners' log, which the round
+  # holds whole, and not from the row's own log: an account renamed on Entra
+  # moves no seal, since the register still holds the old name when it is
+  # read, so that row is never among the ones whose log is asked for.
+  #
+  # Rebuilt and verified by the channel's seal, `log_executed_row()`
+  # (decided on 2026-11-12): a write made before the round read the row is
+  # carried out whoever made it, one made while it ran is not, whoever made
+  # it. Where no version of the log gives the seal, the pair is read as the
+  # 0.25.0 read it, `log_executed_unverified()`, and the person as well: the
+  # rule is never worse than it was.
   person_fields <- c("first_name", "last_name", "contact_email")
   resolvable <- identity_normalize(verdicts) %in%
     c("existing", "created", "disabled")
+  # A row whose seal did not move is the version carried out: the channel's
+  # seal covers every intent field, and the register as read matches it.
+  # Read from the log instead, a version the log cannot rebuild would leave
+  # the row unknown with nothing changed. An account renamed on Entra is
+  # still seen: the register as read holds the old name.
+  from_log <- !is.null(owners_log) & nzchar(sealed) &
+    (is.null(channel_account) | tampered)
+  executed_row <- lapply(seq_along(record_ids), function(i) {
+    if (!from_log[[i]]) {
+      return(NULL)
+    }
+    log_executed_row(owners_log, record_ids[[i]], channel_account)
+  })
+  pair_fields <- c("server", "project_id", "username")
   executed_pair <- lapply(seq_along(record_ids), function(i) {
     if (is.null(owners_log) || !nzchar(sealed[[i]])) {
       return(NULL)
     }
-    # A row whose seal did not move is the version carried out: the channel's
-    # seal covers `server`, `project_id` and `username`, and the register as
-    # read matches it. Read from the log instead, a change carried out with
-    # no approval above it (the history before 2026-10-14, or IT correcting a
-    # row by hand) would be passed over as uncovered, and the row would stop
-    # on a change nobody made. An account renamed on Entra is still seen: the
-    # register as read holds the old name.
-    if (!is.null(channel_account) && !tampered[[i]]) {
+    if (!from_log[[i]]) {
       at <- function(field) {
         value <- trimws(as.character(register[[field]][[i]]))
         if (length(value) != 1L || is.na(value)) "" else value
       }
-      return(c(
-        server = at("server"), project_id = at("project_id"),
-        username = at("username")
-      ))
+      return(vapply(pair_fields, at, character(1)))
     }
-    log_executed_values(
+    verified <- executed_row[[i]]
+    if (!is.null(verified)) {
+      return(vapply(pair_fields, function(field) {
+        as.character(verified[["row"]][[field]])
+      }, character(1)))
+    }
+    log_executed_unverified(
       owners_log, record_ids[[i]], creators[[i]],
       approvers = approvers, channel_account = channel_account
     )
@@ -776,8 +793,24 @@ provisioning_reconcile <- function(register_url,
     if (is.null(executed_pair[[i]]) || blind[[i]]) {
       return(list(code = "", changed = character()))
     }
+    # Whether somebody wrote the person: with the version verified, the
+    # person as read differs from the one carried out, whoever wrote it and
+    # wherever the write stands, above the seal or below it while the round
+    # ran. Only somebody writes the person: the channel never does. Without
+    # it, the writes above the seal in the row's log, as before; a row whose
+    # seal did not move holds the person carried out.
     rewritten <- FALSE
-    if (checked[[i]] && !unread[[i]]) {
+    verified <- executed_row[[i]]
+    if (!is.null(verified)) {
+      now <- vapply(person_fields, function(field) {
+        value <- trimws(as.character(register[[field]][[i]]))
+        if (length(value) != 1L || is.na(value)) "" else value
+      }, character(1))
+      was <- vapply(person_fields, function(field) {
+        as.character(verified[["row"]][[field]])
+      }, character(1))
+      rewritten <- any(now != was)
+    } else if (checked[[i]] && !unread[[i]]) {
       who <- log_change_authors(
         events, record_ids[[i]], fields = person_fields,
         channel_account = channel_account,

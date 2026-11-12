@@ -195,9 +195,12 @@ nobody whose rights to ask.
 
 \strong{A row the channel has carried out does not change its pair}, decided on
 2026-11-09: the instance, the project and the person it was carried out
-for: the row as read when its seal did not move, and otherwise as the
-owners' log holds them below the channel's last seal
-(\code{log_executed_values()}). Whoever wrote the change, the owner included,
+for: the row as read when its seal did not move, and otherwise the
+version the owners' log rebuilds and the channel's last seal verifies
+(\code{log_executed_row()}, decided on 2026-11-12), or, where none does, the
+log read as the 0.25.0 read it (\code{log_executed_unverified()}). With the
+version verified, the person is rewritten when the register's differs
+from the one carried out. Whoever wrote the change, the owner included,
 approved or not, the row stops before the plan (\code{pair_change()}): nothing
 is written on the instance, nobody is created on Entra, the row keeps its
 seal and its owner. \code{DATO_COPPIA_CAMBIATA} when the referent moved it, the

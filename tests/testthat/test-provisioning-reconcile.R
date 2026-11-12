@@ -7655,3 +7655,177 @@ test_that("nel giro un rifiuto dei due destinatari ritenta la casella", {
   expect_identical(esito[["posta"]][["accessi_persi"]], 0L)
   expect_false("POSTA_ACCESSO_PERSA" %in% esito[["errori"]])
 })
+
+
+# ---- The pair carried out, from the version the seal verifies (0.26.0) ----
+
+# The channel's seals door, as `carried_out()` writes it.
+sigillo_scritto <- function(sigillo, timestamp = "2026-10-01 05:00") {
+  list(
+    timestamp = timestamp, username = "svc-canale-ubep",
+    action = "Update record (API) 1", record = "1",
+    details = paste0("applied_seal = '", sigillo, "', seal_state = 'intact'")
+  )
+}
+
+
+test_that("un cambio di progetto eseguito senza approvazione resta il progetto eseguito anche dopo un altro cambio (A4)", { # nolint: line_length_linter.
+  # eval
+  # Bruno moved the row to project 9004 before 2026-10-14, with no approval,
+  # and the round carried it out; today Anna, the owner, changes the role.
+  riga <- eseguita_row(
+    project_id = "9004", applied_seal = sigillo_9004(),
+    role_name = "read only"
+  )
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(
+        list(cambio(anna, "role_name = 'read only'")),
+        list(sigillo_scritto(sigillo_9004())),
+        list(cambio(
+          bruno, "project_id = '9004'", timestamp = "2026-09-30 10:00"
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(list(project_id = 9004L)),
+    dry_run = FALSE
+  )
+
+  # test
+  # The project carried out is 9004, the one the seal covers. Read as the
+  # 0.25.0 read it, Bruno's write had no approval above it and was passed
+  # over: the project carried out read 9003, and the owner's change of role
+  # stopped on a change of pair nobody made.
+  expect_false(identical(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  ))
+})
+
+
+# The owner moves the row to edc12 while the round that carries it out runs:
+# her write stands below the seal, between the identity door and the seals
+# door. The round carried out edc10.
+giro_durante <- function(chi = anna, cambi = list(), prima = list(),
+                         sigillo = sigillo_eseguito(), ...) {
+  esecuzione <- carried_out(sigillo)
+  riga <- utils::modifyList(
+    eseguita_row(applied_seal = sigillo, server = "edc12"), cambi
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(
+        prima,
+        list(esecuzione[[1L]], cambio(chi, "server = 'edc12'"),
+             esecuzione[[2L]])
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    dry_run = FALSE,
+    ...
+  )
+}
+
+
+test_that("l'istanza spostata dal proprietario durante il giro e' un cambio di coppia (B)", { # nolint: line_length_linter.
+  # eval
+  di_anna <- giro_durante(anna)
+  di_bruno <- giro_durante(bruno)
+
+  # test
+  # Read as the 0.25.0 read it, the owner's write was covered and edc12
+  # passed for the instance carried out: the row was held for an approval
+  # that would then move it to edc12.
+  expect_equal(
+    as.character(di_anna[["esiti"]][["outcome_detail"]]),
+    "DATO_COPPIA_CAMBIATA"
+  )
+  expect_equal(
+    as.character(di_bruno[["esiti"]][["outcome_detail"]]),
+    "DATO_COPPIA_CAMBIATA"
+  )
+})
+
+
+test_that("e con l'approvazione del proprietario non si scrive su edc12 (B)", { # nolint: line_length_linter.
+  # eval
+  sigillo <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, server = "edc12"
+  ))
+  esito <- giro_durante(
+    anna, cambi = list(approved_seal = sigillo),
+    prima = list(approvazione(anna, sigillo))
+  )
+
+  # test
+  expect_length(scritture(), 0L)
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+})
+
+
+test_that("una versione che il log non ricostruisce si legge come nella 0.25.0", { # nolint: line_length_linter.
+  # eval
+  # A seal no state of the log gives: here made up, in production a form of
+  # the log the reading does not know.
+  esito <- giro_durante(anna, sigillo = "000000000000")
+
+  # test
+  # Decided on 2026-11-12: the reading of the 0.25.0 for the rule of the
+  # pair, where the owner's write while the round ran passes for carried
+  # out. The row waits for its owner, as before.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(scritture(), 0L)
+})
+
+
+# The person written while the round that carries the row out runs: below
+# the seal, above the identity door. The round carried out Mario; the row
+# now names Giulia, who has an account.
+giro_persona_durante <- function(chi) {
+  esecuzione <- carried_out(sigillo_eseguito())
+  riga <- eseguita_row(
+    applied_seal = sigillo_eseguito(), first_name = "Giulia",
+    last_name = "Verdi", contact_email = "giulia.verdi@example.org"
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = list(
+        esecuzione[[1L]],
+        cambio(chi, paste0(
+          "first_name = 'Giulia', last_name = 'Verdi', ",
+          "contact_email = 'giulia.verdi@example.org'"
+        )),
+        esecuzione[[2L]]
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(), giulia),
+    dry_run = FALSE
+  )
+}
+
+
+test_that("la persona riscritta durante il giro e' un cambio di coppia del referente (B2)", { # nolint: line_length_linter.
+  # eval
+  di_bruno <- giro_persona_durante(bruno)
+  di_anna <- giro_persona_durante(anna)
+
+  # test
+  # Somebody wrote the person: the referent's code, not IT's. The writes
+  # above the seal said nobody, since this one stands below it.
+  for (esito in list(di_bruno, di_anna)) {
+    expect_equal(
+      as.character(esito[["esiti"]][["outcome_detail"]]),
+      "DATO_COPPIA_CAMBIATA"
+    )
+  }
+  expect_length(scritture(), 0L)
+})
