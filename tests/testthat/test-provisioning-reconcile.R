@@ -9016,8 +9016,7 @@ senza_accounts <- function(istanza = istanza_doppia(list())) {
 }
 
 # A fresh request, or several, for people the tenant does not hold.
-# `copy_to` is set because the message of a row the round does not admit
-# goes to IT alone: no owner is read for it.
+# `copy_to` is set so that the messages of the round have a copy for IT.
 giro_nuovo <- function(istanza, directory = directory_vuota(), righe = NULL,
                        copy_to = "it@example.org", ...) {
   registro <- if (is.null(righe)) {
@@ -9424,4 +9423,91 @@ test_that("la mail di una collisione su un nome noto a REDCap lo dice", {
   expect_match(corpo, "REDCap ricorda", fixed = TRUE)
   expect_no_match(corpo, "nome o cognome diversi", fixed = TRUE)
   expect_match(corpo, paste0("    ", suffisso(2)), fixed = TRUE)
+})
+
+
+# Every address a message of the round went to.
+destinatari_di_tutti <- function(posta) {
+  unlist(lapply(posta[["mandate"]](), function(m) as.character(m[["to"]])))
+}
+
+# A second person the tenant holds and the register has never carried out:
+# her row is admitted, so the round reads the owners' log as it does in
+# production, where an admitted row is never missing.
+carla_ammessa <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000c3",
+    userPrincipalName = "carla.verdi@ubep.unipd.it",
+    givenName = "Carla", surname = "Verdi",
+    officeLocation = "carla.verdi@example.org"
+  )
+}
+
+
+test_that("la collisione su un nome noto a REDCap arriva al referente anche da sola", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The only row of the round is a collision that no one admitted and that
+  # waits for nothing, and its owner is still read from the creations' log:
+  # the message that asks for an answer goes to who can give it.
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("la creazione ferma da una produzione muta arriva al referente anche da sola", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    senza_accounts(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The row has no verdict and creates nobody, and still its owner is read.
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("la collisione su Entra arriva al referente anche da sola", {
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list()), directory = occupata(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("con un'altra riga ammessa la collisione su un nome noto arriva al referente", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    directory = directory_doppia(carla_ammessa()),
+    righe = list(
+      list(),
+      list(
+        record_id = "2", first_name = "Carla", last_name = "Verdi",
+        contact_email = "carla.verdi@example.org"
+      )
+    ),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  per_mario <- Filter(function(m) {
+    grepl("Request 1 ", m[["body"]], fixed = TRUE) ||
+      grepl("Richiesta 1 ", m[["body"]], fixed = TRUE)
+  }, posta[["mandate"]]())
+
+  # test
+  expect_true(length(per_mario) > 0L)
+  expect_true(anna %in% unlist(lapply(per_mario, `[[`, "to")))
 })

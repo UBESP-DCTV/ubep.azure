@@ -663,7 +663,10 @@ provisioning_reconcile <- function(register_url,
   # The owners' log, kept for the pair each row carried out: `NULL` when it
   # was not asked or could not be read.
   owners_log <- NULL
-  if (any(admitted | awaiting | tampered)) {
+  # A candidate is read for too: its collision, or its stop on a silent
+  # production, is a message whose reader is the owner, and without the log
+  # it would go to IT alone.
+  if (any(admitted | awaiting | tampered | candidates)) {
     reading_creations <- register_log(
       register_url, register_token, logtype = "record_add"
     )
