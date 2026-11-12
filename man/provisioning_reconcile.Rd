@@ -19,6 +19,7 @@ provisioning_reconcile(
   reply_to = NULL,
   approvers = character(),
   channel_account = NULL,
+  banchi = character(),
   at = format(Sys.time(), "\%Y-\%m-\%d \%H:\%M", tz = "UTC")
 )
 }
@@ -76,6 +77,11 @@ token changes hands. Only their writes of \code{owned_by} are believed; with
 round writes no \code{owned_by}. The runner reads it from
 \code{UBEP_CANALE_UTENTE}, a list separated by commas, which it requires.}
 
+\item{banchi}{The instances of \code{hosts} that are benches, which step 3b
+never asks. Empty by default, so every instance counts as a production:
+in doubt an instance is asked, as the observer watches it. The runner
+reads them from the inventory, \code{"banco": true}.}
+
 \item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
 }
 \value{
@@ -106,7 +112,9 @@ and the order is the design:
 round reads;
 \item read the register;
 \item resolve \strong{who each row is talking about}, against the tenant read whole,
-and write the verdict back;
+and write the verdict back; for the rows that could create an account,
+first ask the production instances which of the names they could be
+created under REDCap still knows (3b), and resolve them again;
 \item turn what the gate admits into the desired state, keeping the form
 errors;
 \item per instance, read the state \strong{once} for the grantees and the requesters
@@ -235,6 +243,25 @@ own would make every new row wait one more cycle to be looked at. It follows
 that the gate has no window at all: it asks after the verdict it has just
 computed, never after the one the register carries, and writing \code{identity}
 back is the minutes of the verdict rather than the input to the next step.
+
+\strong{A name REDCap still knows counts as taken}, decided on 2026-11-10 and
+2026-11-12 (item 4 (b') of the 0.26.0). Whoever were created under a name
+a production instance remembers, as an account or as rights on a project,
+would find there the projects of the old login. So step 3b asks, once per
+production instance and round, about every name a row could be created
+under (\code{upn_window()}, \code{round_known_names()}), and resolves those rows
+again: a composed name free on Entra and known to REDCap is a \code{collision},
+and a proposal skips the names REDCap knows. Asked only when a row could
+create: verdict \code{absent} or \code{collision}, not revoked, and \code{applied_seal}
+empty. The benches, \code{banchi}, are never asked. A production instance not
+read stops every such row on \code{TRASPORTO_NOME_NON_VERIFICATO}, with the
+reason in the round's errors, and the row keeps in the register the name
+and the verdict it holds: a proposal rewritten without that instance would
+stand above an answer already given, and \code{log_answer_stands()} would drop
+it. And step 10 creates a name only for a row it asked about and found
+unknown in this pass, so a row whose \code{applied_seal} an import filled, which
+is not asked, creates nobody. Asked in a simulation too, and with the post
+off: a reading, and the verdict the real round would give.
 
 \strong{Step 10 is last because it needs step 6's answer}, and that is the whole
 shape of it. A row whose verdict is \code{absent} is not a pair — there is nobody
