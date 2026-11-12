@@ -2670,10 +2670,12 @@ report_it_message <- function(it, period) {
       if (is.null(at) || is.na(at)) {
         return(c(it = "", en = ""))
       }
-      words <- report_day_words(as.Date(format(at, "%Y-%m-%d",
-                                               tz = "Europe/Rome")))
-      c(it = paste0(" dal ", words[["it"]]), en = paste0(" since ",
-                                                        words[["en"]]))
+      day <- as.Date(format(at, "%Y-%m-%d", tz = "Europe/Rome"))
+      words <- report_day_words(day)
+      c(
+        it = paste0(" dal ", words[["it"]]),
+        en = paste0(" since ", words[["en"]])
+      )
     })
     list(
       it = paste0(
