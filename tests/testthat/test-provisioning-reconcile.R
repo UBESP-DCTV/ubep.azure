@@ -6907,17 +6907,19 @@ test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la per
 # What the owner reads when the person is back on the project and the last day
 # of the row has passed: not that the access was granted.
 dice_ultimo_giorno_passato <- function(posta) {
-  expect_equal(a_chi_e_arrivata(posta), anna)
+  testthat::expect_equal(a_chi_e_arrivata(posta), anna)
   corpo <- posta[["mandate"]]()[[1L]][["body"]]
-  expect_match(
+  testthat::expect_match(
     corpo, "l'ultimo giorno di accesso della richiesta e' passato",
     fixed = TRUE
   )
-  expect_match(
+  testthat::expect_match(
     corpo, "the last day of access of the request has passed", fixed = TRUE
   )
-  expect_no_match(corpo, "l'accesso e' stato concesso", fixed = TRUE)
-  expect_no_match(corpo, "has been granted", fixed = TRUE)
+  testthat::expect_no_match(
+    corpo, "l'accesso e' stato concesso", fixed = TRUE
+  )
+  testthat::expect_no_match(corpo, "has been granted", fixed = TRUE)
 }
 
 
@@ -7588,8 +7590,8 @@ nomi_concessi <- function() {
 # with the stored row whatever name it is asked about, as the real query does
 # under the `_ci` collation.
 istanza_che_concede_esatta <- function(tenuto = mario,
-                                      ruolo = "read only",
-                                      scadenza = NULL) {
+                                       ruolo = "read only",
+                                       scadenza = NULL) {
   righe <- list(
     list(user_rights = 1L),
     list(
@@ -7606,8 +7608,10 @@ istanza_che_concede_esatta <- function(tenuto = mario,
         }, NA)
         if (any(trovata)) {
           riga <- which(trovata)[[1L]]
-          righe[[riga]][["role_name"]] <<- r[["role_name"]] # nolint: assignment_linter.
-          righe[[riga]][["expiration"]] <<- r[["expiration"]] # nolint: assignment_linter.
+          # nolint start: assignment_linter.
+          righe[[riga]][["role_name"]] <<- r[["role_name"]]
+          righe[[riga]][["expiration"]] <<- r[["expiration"]]
+          # nolint end
         } else {
           righe[[length(righe) + 1L]] <<- list( # nolint: assignment_linter.
             username = nome, role_name = r[["role_name"]],

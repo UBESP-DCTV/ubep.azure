@@ -492,7 +492,9 @@ test_that("il messaggio d'esito di una riga con la scadenza gia' raggiunta dice 
   ))[["body"]]
 
   # test
-  expect_match(detto, "l'ultimo giorno di accesso della richiesta", fixed = TRUE)
+  expect_match(
+    detto, "l'ultimo giorno di accesso della richiesta", fixed = TRUE
+  )
   expect_match(
     detto, "the last day of access of the request has passed", fixed = TRUE
   )
