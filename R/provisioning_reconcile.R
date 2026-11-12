@@ -774,11 +774,23 @@ provisioning_reconcile <- function(register_url,
     !is.null(executed_pair[[i]]) &&
       (!from_log[[i]] || !is.null(executed_row[[i]]))
   }, logical(1))
+  # And only on a name the channel gave an access to on this row, sealing it
+  # active (`log_granted_names()`, RC1 of the review): a request withdrawn
+  # before its person was created is sealed under a name nobody was given.
+  # Read on the channel's own seals, so with the channel's account
+  # configured only.
   exiting <- vapply(seq_along(record_ids), function(i) {
-    revocation_exits(
-      executed_pair[[i]], register[i, , drop = FALSE],
-      certain = certain[[i]], creating = creating[[i]] && !unheard[[i]]
-    )
+    ask <- function(granted) {
+      revocation_exits(
+        executed_pair[[i]], register[i, , drop = FALSE],
+        certain = certain[[i]], creating = creating[[i]] && !unheard[[i]],
+        granted = granted
+      )
+    }
+    # The log is read again only for a row that would exit on its own name.
+    name <- identity_normalize(executed_pair[[i]][["username"]] %||% "")
+    ask(name) && !is.null(channel_account) &&
+      ask(log_granted_names(owners_log, record_ids[[i]], channel_account))
   }, logical(1))
   resolved_names[exiting] <- vapply(
     executed_pair[exiting], function(pair) pair[["username"]], character(1)

@@ -3808,12 +3808,15 @@ test_that("una revoca esce dal registro sul nome eseguito solo nel perimetro", {
     server = "edc10", project_id = "09003", request_status = "revoked"
   )
   esce <- function(executed = eseguita, current = revocata, certain = TRUE,
-                   creating = FALSE) {
-    revocation_exits(executed, current, certain, creating)
+                   creating = FALSE, granted = "mario.rossi@ubep.unipd.it") {
+    revocation_exits(executed, current, certain, creating, granted)
   }
 
   # test
   expect_true(esce())
+  # A name the channel never carried out active on the row (RC1).
+  expect_false(esce(granted = character()))
+  expect_false(esce(granted = "mario.rossi.2@ubep.unipd.it"))
   expect_false(esce(current = utils::modifyList(
     revocata, list(request_status = "active")
   )))
@@ -3828,4 +3831,41 @@ test_that("una revoca esce dal registro sul nome eseguito solo nel perimetro", {
   expect_false(esce(current = utils::modifyList(
     revocata, list(project_id = "9004")
   )))
+})
+
+
+test_that("i nomi concessi sono quelli delle versioni attive sigillate dal canale", { # nolint: line_length_linter.
+  # eval
+  # Newest first: the round revoked Mario together with a change of role,
+  # after carrying him out active.
+  eseguita_attiva <- eventi_finti(
+    eseguita(versione_creata(
+      request_status = "revoked", role_name = "read only"
+    )),
+    list(
+      username = creatrice,
+      details = "role_name = 'read only', request_status = 'revoked'"
+    ),
+    eseguita(versione_creata()),
+    porta(),
+    creazione
+  )
+  # A request withdrawn before its person was created: sealed revoked under
+  # the name the round would have created, and never active.
+  ritirata <- eventi_finti(
+    eseguita(versione_creata(
+      request_status = "revoked", username = "mario.rossi.2@ubep.unipd.it"
+    )),
+    porta("mario.rossi.2@ubep.unipd.it"),
+    list(username = creatrice, details = "request_status = 'revoked'"),
+    creazione
+  )
+
+  # test
+  expect_equal(
+    log_granted_names(eseguita_attiva, "1", canale),
+    "mario.rossi@ubep.unipd.it"
+  )
+  expect_length(log_granted_names(ritirata, "1", canale), 0L)
+  expect_error(log_granted_names(ritirata, "1", NULL))
 })

@@ -1349,6 +1349,63 @@ log_executed_row <- function(events, record, channel_account = NULL) {
 }
 
 
+#' The usernames the channel carried out on a row while it was active
+#'
+#' For each of the channel's executions in the row's current life,
+#' `log_executions()`, the version that execution sealed, rebuilt from the
+#' log below it and verified by its seal, `log_executed_row()`; of those, the
+#' usernames of the versions with `request_status` `active`. They are the
+#' names the channel gave an access to on this row: an execution of an
+#' active version brought its pair onto the instance.
+#'
+#' What `revocation_exits()` asks, decided on 2026-11-12 after the review of
+#' unit G (RC1): the channel also seals a request withdrawn before its person
+#' was created, without asking any instance, and under the name the round
+#' would have created, a collision's proposal among them. That seal covers a
+#' name nobody was ever given, which may later be another person's; the row
+#' never granted it, and must not take it away. The guard of item 7,
+#' `seal_holds_but_revocation()`, asks the same question of the seal alone;
+#' here the name is asked too, so a revocation carried out together with
+#' another change (the role, say), whose revoked version was never sealed
+#' active, still finds the name it was given at an earlier execution.
+#'
+#' A version the log does not verify names nobody: the answer can only be
+#' shorter, the direction that revokes less.
+#'
+#' @param events The owners' log, `logtype = "record"`.
+#' @param record The record id.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them any account's seal would count.
+#'
+#' @return A character vector of usernames as carried out, each once (folded
+#'   as addresses are); empty when the channel never carried the row out
+#'   active, or the log does not say.
+#'
+#' @keywords internal
+log_granted_names <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  names <- vapply(executed, function(at) {
+    version <- log_executed_row(
+      mine[seq.int(at, nrow(mine)), , drop = FALSE], record, channel_account
+    )
+    if (is.null(version) ||
+          !identical(version[["row"]][["request_status"]], "active")) {
+      return(NA_character_)
+    }
+    version[["row"]][["username"]]
+  }, character(1))
+  names <- identity_normalize(names[!is.na(names) & nzchar(names)])
+  unique(names[!is.na(names)])
+}
+
+
 #' The values a row's last execution carried out, from the log
 #'
 #' The fields asked of the version `log_executed_row()` rebuilds and the
@@ -1696,7 +1753,12 @@ same_project <- function(a, b) {
 #' - a person the tenant no longer holds, a row to create: its revocation
 #'   closes before any instance is asked (`pair_change()`), and the old login
 #'   stays for IT to take off by hand, as before;
-#' - a row carried out for nobody, closed before anybody was resolved.
+#' - a row carried out for nobody, closed before anybody was resolved;
+#' - a name the channel never carried out on the row while it was active,
+#'   `log_granted_names()`: a request withdrawn before its person was
+#'   created is sealed under the name the round would have created, a
+#'   collision's proposal among them, and that name may be somebody else's
+#'   later (RC1 of the review of unit G, 2026-11-12).
 #'
 #' @param executed The `server`, `project_id` and `username` carried out, as
 #'   for `pair_change()`, or `NULL` when the row was never carried out.
@@ -1704,17 +1766,21 @@ same_project <- function(a, b) {
 #'   frame with `server`, `project_id` and `request_status`.
 #' @param certain Whether `executed` is the version carried out for certain.
 #' @param creating Whether the round would create a person for the row.
+#' @param granted The usernames the channel carried out on the row while it
+#'   was active, `log_granted_names()`.
 #'
 #' @return `TRUE` when the row revokes the username carried out.
 #'
 #' @keywords internal
-revocation_exits <- function(executed, current, certain, creating) {
+revocation_exits <- function(executed, current, certain, creating,
+                             granted = character()) {
   pair <- c("server", "project_id", "username")
   stopifnot(
     is.null(executed) ||
       (is.character(executed) && all(pair %in% names(executed))),
     is.logical(certain), length(certain) == 1L, !is.na(certain),
-    is.logical(creating), length(creating) == 1L, !is.na(creating)
+    is.logical(creating), length(creating) == 1L, !is.na(creating),
+    is.character(granted)
   )
 
   now <- function(field) {
@@ -1727,6 +1793,7 @@ revocation_exits <- function(executed, current, certain, creating) {
   }
 
   nzchar(executed[["username"]]) &&
+    identity_normalize(executed[["username"]]) %in% granted &&
     identical(now("server"), executed[["server"]]) &&
     same_project(now("project_id"), executed[["project_id"]])
 }

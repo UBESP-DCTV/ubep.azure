@@ -4,7 +4,7 @@
 \alias{revocation_exits}
 \title{Whether a revoked row takes the access away from the name carried out}
 \usage{
-revocation_exits(executed, current, certain, creating)
+revocation_exits(executed, current, certain, creating, granted = character())
 }
 \arguments{
 \item{executed}{The \code{server}, \code{project_id} and \code{username} carried out, as
@@ -16,6 +16,9 @@ frame with \code{server}, \code{project_id} and \code{request_status}.}
 \item{certain}{Whether \code{executed} is the version carried out for certain.}
 
 \item{creating}{Whether the round would create a person for the row.}
+
+\item{granted}{The usernames the channel carried out on the row while it
+was active, \code{log_granted_names()}.}
 }
 \value{
 \code{TRUE} when the row revokes the username carried out.
@@ -49,7 +52,12 @@ referent brings them back;
 \item a person the tenant no longer holds, a row to create: its revocation
 closes before any instance is asked (\code{pair_change()}), and the old login
 stays for IT to take off by hand, as before;
-\item a row carried out for nobody, closed before anybody was resolved.
+\item a row carried out for nobody, closed before anybody was resolved;
+\item a name the channel never carried out on the row while it was active,
+\code{log_granted_names()}: a request withdrawn before its person was
+created is sealed under the name the round would have created, a
+collision's proposal among them, and that name may be somebody else's
+later (RC1 of the review of unit G, 2026-11-12).
 }
 }
 \keyword{internal}

@@ -8264,3 +8264,209 @@ test_that("la revoca del proprietario senza diritti si chiude solo se la coppia 
     "DATO_AMBITO_NON_AUTORIZZATO"
   )
 })
+
+
+# ---- Review of unit G (0.26.0): corrections ----
+
+# The double register's log after one or more rounds, without the
+# creations, which `creazioni_finte()` puts back at the bottom. The double
+# logs the round's imports but does not carry them into the records it
+# exports: the state of one round after another is rebuilt by hand.
+log_dopo_il_giro <- function(registro) {
+  log <- jsonlite::fromJSON(
+    registro(list(content = "log", logtype = "record")),
+    simplifyVector = FALSE
+  )
+  Filter(function(e) {
+    !startsWith(as.character(e[["action"]]), "Create record")
+  }, log)
+}
+
+# The seal a round wrote on a row.
+sigillo_scritto_su <- function(sigilli, id) {
+  as.character(sigilli[["applied_seal"]][sigilli[["record_id"]] == id])
+}
+
+ripetizione <- "mario.rossi.2@ubep.unipd.it"
+
+# An account holding the row's composed name, somebody else's.
+titolare_composto <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000a1",
+    userPrincipalName = "mario.rossi@ubep.unipd.it",
+    givenName = "Altra", surname = "Persona",
+    officeLocation = "altra.persona@example.org"
+  )
+}
+
+# A third person, who is given `mario.rossi.2` later.
+titolare_ripetizione <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000a2",
+    userPrincipalName = ripetizione,
+    givenName = "Terza", surname = "Persona",
+    officeLocation = "terza.persona@example.org"
+  )
+}
+
+# A second row the gate admits: with it the round reads the owners' log, as
+# in production, where admitted rows are always there.
+carla_upn <- "carla.verdi@ubep.unipd.it"
+carla_verdi <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000a3",
+    userPrincipalName = carla_upn, givenName = "Carla", surname = "Verdi",
+    officeLocation = "carla.verdi@example.org"
+  )
+}
+riga_carla <- function(...) {
+  utils::modifyList(
+    list(
+      record_id = "2", first_name = "Carla", last_name = "Verdi",
+      contact_email = "carla.verdi@example.org"
+    ),
+    list(...)
+  )
+}
+creazioni_due <- function() {
+  creazioni_finte(
+    creata_da_anna(),
+    list(
+      username = anna, action = "Create record 2", record = "2",
+      details = paste0(
+        "record_id = '2', server = 'edc10', project_id = '9003', ",
+        "first_name = 'Carla', last_name = 'Verdi', ",
+        "contact_email = 'carla.verdi@example.org', ",
+        "role_name = 'data entry', request_status = 'active'"
+      )
+    )
+  )
+}
+
+
+test_that("una richiesta ritirata prima della creazione non revoca il nome proposto, poi dato a un altro (RC1)", { # nolint: line_length_linter.
+  # eval
+  # A collision answered with the proposal, then revoked before the round
+  # created the person: the round closes it `applied` without asking any
+  # instance, and seals it with the proposal as its username. Nobody was
+  # ever created under that name, and no access was ever given.
+  registro <- registro_con_log(
+    record_json(
+      list(
+        record_id = "1", username = ripetizione, identity = "collision",
+        distinct_username = ripetizione, request_status = "revoked",
+        owned_by = anna, outcome = "data_error",
+        outcome_detail = paste0("DATO_IDENTITA_IN_COLLISIONE:", ripetizione)
+      ),
+      riga_carla()
+    ),
+    storia = list(
+      cambio(anna, "request_status = 'revoked'", record = "1"),
+      cambio(anna, paste0("distinct_username = '", ripetizione, "'"),
+             record = "1"),
+      list(
+        timestamp = "2026-08-13 05:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0(
+          "username = '", ripetizione, "', identity = 'collision'"
+        )
+      )
+    ),
+    creazioni = creazioni_due()
+  )
+  primo <- giro(
+    registro, istanza_che_scrive(),
+    directory = directory_doppia(titolare_composto(), carla_verdi()),
+    dry_run = FALSE
+  )
+  esito_1 <- primo[["esiti"]][primo[["esiti"]][["record_id"]] == "1", ]
+  sigilli <- sigilli_scritti()
+
+  # Then `mario.rossi.2` is born for somebody else, whom IT puts on project
+  # 9003. The register as the first round left it.
+  dopo <- registro_con_log(
+    record_json(
+      list(
+        record_id = "1", username = ripetizione, identity = "collision",
+        distinct_username = ripetizione, request_status = "revoked",
+        owned_by = anna, outcome = "applied", applied_as = "absent",
+        applied_seal = sigillo_scritto_su(sigilli, "1"),
+        seal_state = "intact"
+      ),
+      riga_carla(
+        username = carla_upn, identity = "existing", owned_by = anna,
+        outcome = "applied", applied_seal = sigillo_scritto_su(sigilli, "2"),
+        seal_state = "intact"
+      )
+    ),
+    storia = log_dopo_il_giro(registro),
+    creazioni = creazioni_due()
+  )
+  giro(
+    dopo,
+    istanza_doppia(
+      list(),
+      list(username = carla_upn, project_id = 9003L,
+           role_name = "data entry", user_rights = 0L),
+      list(username = ripetizione, project_id = 9003L,
+           role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(
+      titolare_composto(), titolare_ripetizione(), carla_verdi()
+    ),
+    dry_run = FALSE
+  )
+
+  # test
+  # The seal covers the proposal, but the channel never sealed the row
+  # active under it: it gave nobody an access, and has nothing to take away.
+  expect_equal(as.character(esito_1[["outcome"]]), "applied")
+  expect_length(sigillo_scritto_su(sigilli, "1"), 1L)
+  expect_false(ripetizione %in% revocati())
+  expect_false(ripetizione %in% chiesti_allo_stato())
+})
+
+
+test_that("una revoca eseguita insieme a un cambio di ruolo esce anche nei giri dopo", { # nolint: line_length_linter.
+  # eval
+  # Anna revoked and changed the role in the same edit; the round revoked
+  # Mario and sealed the revoked version with the new role. The channel
+  # never sealed that version active, but it sealed Mario active before.
+  sigillo <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, request_status = "revoked",
+    role_name = "read only"
+  ))
+  riga <- eseguita_row(
+    request_status = "revoked", role_name = "read only",
+    applied_seal = sigillo, applied_as = "absent"
+  )
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(
+        list(list(
+          timestamp = "2026-11-13 05:00", username = "svc-canale-ubep",
+          action = "Update record (API) 1", record = "1",
+          details = paste0(
+            "applied_seal = '", sigillo, "', seal_state = 'intact'"
+          )
+        )),
+        list(cambio(
+          anna, "role_name = 'read only', request_status = 'revoked'"
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(list()),
+    directory = rinominata(),
+    dry_run = FALSE
+  )
+
+  # test
+  # Mario's access was given by the first execution: the revocation of the
+  # name carried out stands, and the row stays closed.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_false(rinominato %in% chiesti_allo_stato())
+})
