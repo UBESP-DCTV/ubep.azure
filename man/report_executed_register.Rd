@@ -18,10 +18,14 @@ report_executed_register(
 \item{logs}{One element per row, in the register's order: the row's log,
 or \code{NULL} where it was not read.}
 
-\item{creators}{Who created each row, as \code{log_creators()} answers.}
+\item{creators}{Who created each row, as \code{log_creators()} answers. Not
+read any more: the reconstruction does not need it. Kept for the
+runners that pass it.}
 
 \item{approvers}{The IT accounts whose approval counts on any row, or
-\code{NULL} when the caller does not know them.}
+\code{NULL} when the caller does not know them. Not read any more, for the
+same reason: a runner that does not pass them no longer loses the name
+executed.}
 
 \item{channel_account}{The REDCap usernames that hold the register's
 token, or \code{NULL} when they are not configured.}
@@ -31,11 +35,11 @@ The register, with \code{server}, \code{project_id} and \code{username} the ones
 executed, and four columns more: \code{username_registro}, the name the
 register holds; \code{nome_eseguito}, \code{registro} or \code{log}, where the name
 executed was read, \code{""} when it is not known; \code{nome_motivo}, why not:
-\code{log} or \code{approvatori}, \code{""} when it is known; \code{revoca_eseguita}, \code{TRUE}
-on a revoked row whose state executed, \code{log_executed_values()} on
-\code{request_status}, is \code{revoked}: carried out, then touched, so that
-\code{report_scope()} leaves it out of \code{ferma}. A log that does not say
-leaves it \code{FALSE}.
+\code{log}, \code{""} when it is known; \code{revoca_eseguita}, \code{TRUE} on a revoked
+row whose state executed, in the verified version, is \code{revoked}:
+carried out, then touched, so that \code{report_scope()} leaves it out of
+\code{ferma}. A version not verified leaves it \code{FALSE}, the side that shows
+more.
 }
 \description{
 A row that stopped after the channel executed it keeps on the instance
@@ -48,20 +52,25 @@ the one the register holds now. Two ways of knowing it, as in the round:
 is the channel's last one in the row's log, \code{log_channel_seal()}, when
 the channel's account is configured, as the round reads it; otherwise
 the field;
-\item \strong{the seal moved}: the values the round last carried out, read from
-the log by \code{log_executed_values()}, which needs the IT approvers to know
-which writes an approval covered. A seal moves on a row \code{held} on its
-role, and on a row the identity door rewrote after an account changed on
-Entra, which stops on \code{TRASPORTO_IDENTITA_CAMBIATA} with the new name in
-the register and the old one on the instance.
+\item \strong{the seal moved}: the version the round last carried out, rebuilt
+from the log and verified by the channel's seal, \code{log_executed_row()}
+(decided on 2026-11-12). A seal moves on a row \code{held} on its role, and
+on a row the identity door rewrote after an account changed on Entra,
+which stops on \code{TRASPORTO_IDENTITA_CAMBIATA} with the new name in the
+register and the old one on the instance. A name written by somebody
+else and carried out with no approval is the name executed, and the
+one the servers are asked about; a revocation written while a round ran
+was not carried out, and the row stays among the stopped ones.
 }
 
-Where the log does not say, or the caller gave no approvers (\code{NULL}, a
-runner older than this function: without them a change IT approved would
-be passed over and the name read would be the one before it), the name
-executed is not known: \code{username} is emptied, so that no server is asked
-about a name that may not be the one executed, and the row is not judged
-on its access. \code{server} and \code{project_id} stay the register's then.
+Where the version is not verified, no cut of the log giving the channel's
+seal, or the log was not read, the name executed is not known: \code{username}
+is emptied, so that no server is asked about a name that may not be the
+one executed, and the row is not judged on its access. \code{server} and
+\code{project_id} stay the register's then. The reading of the 0.25.0, which
+the round keeps for the rule of the pair, is not used here (decided on
+2026-11-12): it names the wrong person in the cases the reconstruction
+does not verify, and the report would ask a server about them.
 
 Applied rows, and every row outside \code{conta} and \code{ferma} of
 \code{report_scope()}, keep the register's values.
