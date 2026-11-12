@@ -3093,6 +3093,16 @@ eseguita_su <- function(...,
   )
 }
 
+# The pair carried out, from the version the seal verifies; `NA` where there
+# is none.
+eseguiti_dal_log <- function(eventi, account = canale,
+                             campi = c("server", "project_id", "username")) {
+  versione <- log_executed_row(eventi, "1", account)
+  vapply(campi, function(campo) {
+    if (is.null(versione)) NA_character_ else versione[["row"]][[campo]]
+  }, character(1))
+}
+
 test_that("i valori eseguiti sono quelli sotto l'ultimo sigillo del canale", {
   # eval
   # Above the seal Bruno moved the row to edc12 and project 9004.
@@ -3107,7 +3117,7 @@ test_that("i valori eseguiti sono quelli sotto l'ultimo sigillo del canale", {
   # it is a change, not what was carried out.
   for (account in list(NULL, canale)) {
     expect_equal(
-      log_executed_values(eventi, "1", creatrice, channel_account = account),
+      eseguiti_dal_log(eventi, account),
       c(
         server = "edc10", project_id = "9003",
         username = "mario.rossi@ubep.unipd.it"
@@ -3134,9 +3144,9 @@ test_that("senza un sigillo del canale non c'e' un valore eseguito", {
   # test
   # A row the channel never sealed is a row never carried out, whatever the
   # field holds; a seal a referent imported carried out nothing.
-  expect_true(all(is.na(log_executed_values(mai, "1", creatrice))))
+  expect_true(all(is.na(eseguiti_dal_log(mai, NULL))))
   expect_true(all(is.na(
-    log_executed_values(importato, "1", creatrice, channel_account = canale)
+    eseguiti_dal_log(importato)
   )))
 })
 
@@ -3149,7 +3159,7 @@ test_that("un nome utente eseguito con l'apostrofo si legge intero", {
   # Cut at the first apostrophe it would read `luca.d`, and every round would
   # find a username different from the one carried out.
   expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+    eseguiti_dal_log(eventi)[[
       "username"
     ]],
     "luca.d'amico@ubep.unipd.it"
@@ -3169,7 +3179,7 @@ test_that("un campo che il log non porta sotto il sigillo e' ignoto", {
 
   # test
   expect_true(all(is.na(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)
+    eseguiti_dal_log(eventi)
   )))
 })
 
@@ -3199,7 +3209,7 @@ test_that("una scrittura fatta durante il giro non e' il valore eseguito", {
 
   # test
   expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+    eseguiti_dal_log(eventi)[[
       "server"
     ]],
     "edc10"
@@ -3573,13 +3583,9 @@ test_that("un sigillo che nessun taglio da' lascia la riga non verificata", {
   # Decided on 2026-11-12: for the rule of the pair, the reading of the
   # 0.25.0 stands where the reconstruction does not.
   expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale),
-    log_executed_unverified(eventi, "1", creatrice, channel_account = canale)
-  )
-  expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
-      "server"
-    ]],
+    log_executed_unverified(
+      eventi, "1", creatrice, channel_account = canale
+    )[["server"]],
     "edc10"
   )
 })
@@ -3633,7 +3639,7 @@ test_that("un cambio di progetto eseguito senza approvazione e' il progetto eseg
 
   # test
   expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+    eseguiti_dal_log(eventi)[[
       "project_id"
     ]],
     "9004"
@@ -3661,7 +3667,7 @@ test_that("la scrittura del proprietario durante il giro non e' eseguita (B)", {
 
   # test
   expect_equal(
-    log_executed_values(eventi, "1", creatrice, channel_account = canale)[[
+    eseguiti_dal_log(eventi)[[
       "server"
     ]],
     "edc10"

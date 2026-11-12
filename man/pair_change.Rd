@@ -9,7 +9,7 @@ pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
 \arguments{
 \item{executed}{The \code{server}, \code{project_id} and \code{username} carried out:
 the row as read when its seal did not move, otherwise what
-\code{log_executed_values()} answered.}
+\code{log_executed_row()} or \code{log_executed_unverified()} answered.}
 
 \item{current}{The row as the register holds it, a list or a one-row data
 frame with \code{server} and \code{project_id}.}

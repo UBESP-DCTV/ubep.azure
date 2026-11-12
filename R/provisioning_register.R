@@ -1431,52 +1431,6 @@ log_granted_names <- function(events, record, channel_account) {
 }
 
 
-#' The values a row's last execution carried out, from the log
-#'
-#' The fields asked of the version `log_executed_row()` rebuilds and the
-#' channel's seal verifies. Where it is not verified, the reading of the
-#' 0.25.0, `log_executed_unverified()`, decided on 2026-11-12: the rule of
-#' the pair is never worse than it was. The report and the exit of a renamed
-#' account read `log_executed_row()` alone, and an unverified row is not
-#' known to them.
-#'
-#' @param events The event log, as `register_log()` returns it.
-#' @param record The record id to look at.
-#' @param creator Who created the row, as `log_creators()` answers, for the
-#'   reading of the 0.25.0.
-#' @param fields The fields to read.
-#' @param approvers The IT accounts whose approval counts on any row, for the
-#'   reading of the 0.25.0.
-#' @param channel_account The REDCap usernames that hold the round's token,
-#'   one or more, or `NULL` when they are not configured.
-#'
-#' @return A character vector named by `fields`. From a verified version, a
-#'   field never written is `""` and a field that is not an intent field is
-#'   `NA`. Without one, what `log_executed_unverified()` answers.
-#'
-#' @keywords internal
-log_executed_values <- function(events, record, creator,
-                                fields = c("server", "project_id", "username"),
-                                approvers = character(),
-                                channel_account = NULL) {
-  stopifnot(
-    is.data.frame(events), is.character(creator), length(creator) == 1L,
-    is.character(fields), is.character(approvers)
-  )
-
-  verified <- log_executed_row(events, record, channel_account)
-  if (is.null(verified)) {
-    return(log_executed_unverified(
-      events, record, creator, fields, approvers, channel_account
-    ))
-  }
-  vapply(fields, function(field) {
-    value <- verified[["row"]][[field]]
-    if (is.null(value)) NA_character_ else as.character(value[[1L]])
-  }, character(1))
-}
-
-
 #' The pair a row's last execution carried out, read as the 0.25.0 read it
 #'
 #' The value each of `fields` had in the version the round last carried
@@ -1499,7 +1453,14 @@ log_executed_values <- function(events, record, creator,
 #' followed by the next field or by the end of `details`: a UPN can hold an
 #' apostrophe, and cut at the first one `luca.d'amico` would read `luca.d`.
 #'
-#' @inheritParams log_executed_values
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param creator Who created the row, as `log_creators()` answers, for
+#'   `log_uncovered_writes()`.
+#' @param fields The fields to read.
+#' @param approvers The IT accounts whose approval counts on any row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
 #'
 #' @return A character vector named by `fields`, `NA` where the log does not
 #'   say: the row was never carried out in its current life, the log holds no
@@ -1668,7 +1629,7 @@ log_value_as_register <- function(value, field) {
 #'
 #' @param executed The `server`, `project_id` and `username` carried out:
 #'   the row as read when its seal did not move, otherwise what
-#'   `log_executed_values()` answered.
+#'   `log_executed_row()` or `log_executed_unverified()` answered.
 #' @param current The row as the register holds it, a list or a one-row data
 #'   frame with `server` and `project_id`.
 #' @param target The username the round would now serve, `""` when the

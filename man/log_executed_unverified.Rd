@@ -18,13 +18,12 @@ log_executed_unverified(
 
 \item{record}{The record id to look at.}
 
-\item{creator}{Who created the row, as \code{log_creators()} answers, for the
-reading of the 0.25.0.}
+\item{creator}{Who created the row, as \code{log_creators()} answers, for
+\code{log_uncovered_writes()}.}
 
 \item{fields}{The fields to read.}
 
-\item{approvers}{The IT accounts whose approval counts on any row, for the
-reading of the 0.25.0.}
+\item{approvers}{The IT accounts whose approval counts on any row.}
 
 \item{channel_account}{The REDCap usernames that hold the round's token,
 one or more, or \code{NULL} when they are not configured.}
