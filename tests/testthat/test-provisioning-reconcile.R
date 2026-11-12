@@ -8470,3 +8470,82 @@ test_that("una revoca eseguita insieme a un cambio di ruolo esce anche nei giri 
   expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
   expect_false(rinominato %in% chiesti_allo_stato())
 })
+
+
+# A register that refuses the identity door alone.
+porta_rifiutata <- function(registro) {
+  function(data) {
+    if (identical(form_field_value(data[["action"]] %||% ""), "import") &&
+          grepl("\"identity\"", form_field_value(data[["data"]] %||% ""),
+                fixed = TRUE)) {
+      return('{"error":"The data you supplied could not be imported"}')
+    }
+    registro(data)
+  }
+}
+
+
+test_that("una porta delle identita' rifiutata nel giro della 12 non sigilla e non porta a revocare il nome nuovo (RC2)", { # nolint: line_length_linter.
+  # eval
+  # The door of the 0.25.0 had written the new name on the row stopped on
+  # TRASPORTO_IDENTITA_CAMBIATA; then Anna revoked.
+  registro <- registro_con_log(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_eseguito(), request_status = "revoked",
+      username = rinominato
+    ))),
+    storia = c(
+      list(cambio(anna, "request_status = 'revoked'")),
+      list(list(
+        timestamp = "2026-11-05 05:00", username = "svc-canale-ubep",
+        action = "Update record (API) 1", record = "1",
+        details = paste0(
+          "username = '", rinominato, "', identity = 'existing'"
+        )
+      )),
+      carried_out(sigillo_eseguito())
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+  dove <- istanza_doppia(
+    list(),
+    list(username = rinominato, project_id = 9003L,
+         role_name = "data entry", user_rights = 0L)
+  )
+
+  # The round of item 12, with the identity door refused.
+  primo <- giro(
+    porta_rifiutata(registro), istanza_che_revoca(),
+    directory = rinominata(), dry_run = FALSE
+  )
+  revocati_1 <- revocati()
+  sigilli_1 <- sigilli_scritti()
+
+  # The next round, on the register as the first left it, the door working.
+  dopo <- registro_con_log(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_eseguito(), request_status = "revoked",
+      username = rinominato,
+      outcome = as.character(primo[["esiti"]][["outcome"]]),
+      outcome_detail = as.character(primo[["esiti"]][["outcome_detail"]])
+    ))),
+    storia = log_dopo_il_giro(registro),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+  secondo <- giro(dopo, dove, directory = rinominata(), dry_run = FALSE)
+
+  # test
+  # The register could not be brought back to the name carried out, so the
+  # row is not sealed under it: register and seal would disagree, and the
+  # next round, unable to rebuild the version, would read the new name as
+  # carried out. Nothing goes to the instance; the round says why, and the
+  # next one does it again.
+  expect_equal(
+    as.character(primo[["esiti"]][["outcome"]]), "transport_error"
+  )
+  expect_length(revocati_1, 0L)
+  expect_null(sigilli_1)
+  expect_equal(identita_scritte()[["username"]], mario)
+  expect_false(rinominato %in% c(revocati_1, revocati()))
+  expect_equal(as.character(secondo[["esiti"]][["outcome"]]), "applied")
+})

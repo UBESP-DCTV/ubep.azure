@@ -930,6 +930,23 @@ provisioning_reconcile <- function(register_url,
     verdicts_of = ifelse(exiting, verdict_read, verdicts)
   )
 
+  # A row whose name carried out the door had to write back, and could not
+  # (RC2 of the review): register and seal would disagree, the next round
+  # could not rebuild the version, and would read the new name as carried
+  # out. The row stops before the plan, unsealed, on the register's code,
+  # and the next round does it again. Which rows of the import REDCap took
+  # is not known, so every row that needed it stops.
+  as_read_name <- trimws(as.character(register[["username"]] %||% ""))
+  as_read_name[is.na(as_read_name)] <- ""
+  door_codes <- grep(
+    "^TRASPORTO_", identity_written[["errors"]], value = TRUE
+  )
+  if (length(door_codes) == 0L) {
+    door_codes <- "TRASPORTO_REGISTRO_RIFIUTATO"
+  }
+  unwritten <- exiting & !moved & as_read_name != resolved_names &
+    length(identity_written[["errors"]]) > 0L
+
   # A revocation and nothing else, by somebody other than the owner, is free
   # when they manage the project, and only the instance can say whether they
   # do. So it is not held here: it stands provisionally and the gate decides,
@@ -965,8 +982,8 @@ provisioning_reconcile <- function(register_url,
 
   # A pair that moved stops before a held change: an approval cannot let it
   # through, so the message asks for what can.
-  held <- awaits & !cleared & !blind & !withdrawal & !moved
-  standing <- (admitted | awaiting) & !held & !blind & !moved
+  held <- awaits & !cleared & !blind & !withdrawal & !moved & !unwritten
+  standing <- (admitted | awaiting) & !held & !blind & !moved & !unwritten
 
   held_outcome <- function(i) {
     outcome_payload(
@@ -1009,6 +1026,12 @@ provisioning_reconcile <- function(register_url,
           record_ids[[i]],
           round_outcome_kind("TRASPORTO_AUTORE_NON_LEGGIBILE", dry_run),
           detail = "TRASPORTO_AUTORE_NON_LEGGIBILE", at = at
+        ))
+      }
+      if (unwritten[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]], round_outcome_kind(door_codes, dry_run),
+          detail = paste(door_codes, collapse = ","), at = at
         ))
       }
 
