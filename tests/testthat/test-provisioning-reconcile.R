@@ -8575,3 +8575,45 @@ test_that("un sigillo importato su un registro dove il canale non ha mai scritto
     expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
   }
 })
+
+
+test_that("una riga importata senza stato, servita come attiva, revoca il nome concesso dopo una rinomina (U8e)", { # nolint: line_length_linter.
+  # eval
+  # The form requires `request_status`, the API does not: a row imported
+  # without it is served as active, since every state but `revoked` is, and
+  # sealed with the state empty.
+  senza_stato <- creata_da_anna(details = paste0(
+    "record_id = '1', server = 'edc10', project_id = '9003', ",
+    "first_name = 'Mario', last_name = 'Rossi', ",
+    "contact_email = 'mario.rossi@example.org', role_name = 'data entry'"
+  ))
+  registro <- registro_con_log(
+    record_json(list(record_id = "1", request_status = "")),
+    creazioni = creazioni_finte(senza_stato)
+  )
+  primo <- giro(registro, istanza_che_scrive(), dry_run = FALSE)
+  sigillo <- as.character(sigilli_scritti()[["applied_seal"]])
+  # Then Anna revokes, and Mario's account is renamed on Entra.
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo, request_status = "revoked",
+        applied_as = "role_name=data entry; dag_name=; expiration="
+      ))),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'")),
+        log_dopo_il_giro(registro)
+      ),
+      creazioni = creazioni_finte(senza_stato)
+    ),
+    istanza_che_revoca(), directory = rinominata(), dry_run = FALSE
+  )
+
+  # test
+  # The name was given an access at the first round: the revocation takes
+  # it away, as for a row sealed `active`.
+  expect_equal(as.character(primo[["esiti"]][["outcome"]]), "applied")
+  expect_length(sigillo, 1L)
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(revocati(), mario)
+})

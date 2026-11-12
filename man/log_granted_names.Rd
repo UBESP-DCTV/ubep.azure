@@ -23,9 +23,13 @@ active, or the log does not say.
 For each of the channel's executions in the row's current life,
 \code{log_executions()}, the version that execution sealed, rebuilt from the
 log below it and verified by its seal, \code{log_executed_row()}; of those, the
-usernames of the versions with \code{request_status} \code{active}. They are the
-names the channel gave an access to on this row: an execution of an
-active version brought its pair onto the instance.
+usernames of the versions whose \code{request_status} is not \code{revoked}. They
+are the names the channel gave an access to on this row: an execution of
+such a version brought its pair onto the instance. Not \code{revoked} rather
+than \code{active}, as \code{register_to_desired()} reads the field: a row imported
+without the state, which the form requires and the API does not, is
+served as active and sealed with the state empty (U8e of the review,
+2026-11-12).
 }
 \details{
 What \code{revocation_exits()} asks, decided on 2026-11-12 after the review of
