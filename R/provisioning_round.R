@@ -588,3 +588,93 @@ round_record <- function(esito, scrittura, posta) {
     counted
   )
 }
+
+
+#' Ask the production instances which names REDCap knows
+#'
+#' Decided on 2026-11-10 and 2026-11-12 (item 4 (b') of the 0.26.0): before a
+#' verdict that can make an account, the round asks every production instance
+#' which of the names it could create REDCap already knows. Known means a row
+#' in `redcap_user_information`, which `accounts` reads
+#' ([module_accounts()], through [report_server_reads()]), or a row in
+#' `redcap_user_rights`, which the whole-instance read of `state` carries:
+#' measured on 2026-11-12, seven productions out of eight hold names with
+#' rights and no account, people added to a project before their first
+#' sign-in.
+#'
+#' An instance is read only when both answer. `StateReader::read()` answers an
+#' empty list when its query fails, so a production with no pair at all is an
+#' instance not read, `TRASPORTO_STATO_VUOTO`, and not one where nobody has
+#' rights. With any production not read the round has asked nothing: `asked`
+#' is empty and no name is verified, the direction that does not create. The
+#' `state` read is skipped on an instance whose `accounts` failed, so a
+#' machine switched off costs one wait and not two.
+#'
+#' The benches are not asked, switched on or off (they hold no real people);
+#' the caller leaves them out of `productions`. With no production at all
+#' there is nobody to ask and every name is verified.
+#'
+#' @param usernames The names to ask, as the round would create them.
+#' @param productions The names of the production instances, keys of `hosts`.
+#' @param hosts,secrets As [provisioning_reconcile()] receives them.
+#'
+#' @return A list with `asked`, the names asked of every production (empty
+#'   when one was not read), `known`, the names REDCap knows on any of them,
+#'   folded as [identity_normalize()] folds them, and `errors`, the reason of
+#'   each production not read, once per code.
+#'
+#' @keywords internal
+round_known_names <- function(usernames, productions, hosts, secrets) {
+  stopifnot(is.character(usernames), is.character(productions))
+
+  usernames <- unique(
+    usernames[!is.na(usernames) & nzchar(trimws(usernames))]
+  )
+  if (length(usernames) == 0L || length(productions) == 0L) {
+    return(list(
+      asked = usernames, known = character(), errors = character()
+    ))
+  }
+
+  asks <- rep(list(usernames), length(productions))
+  names(asks) <- productions
+  reads <- report_server_reads(asks, hosts, secrets)
+
+  known <- character()
+  errors <- character()
+  for (server in productions) {
+    read <- reads[[server]]
+    if (!isTRUE(read[["letto"]])) {
+      errors <- c(errors, read[["motivo"]] %||% "INTERNO")
+      next
+    }
+    conti <- read[["conti"]]
+    known <- c(known, conti[["username"]][conti[["exists"]] %in% TRUE])
+
+    state <- tryCatch(
+      module_state(hosts[[server]], secrets[[server]]),
+      error = function(e) list(ok = FALSE, errors = "INTERNO")
+    )
+    if (!isTRUE(state[["ok"]])) {
+      codes <- as.character(state[["errors"]])
+      errors <- c(errors, if (length(codes) > 0L) codes[[1L]] else "INTERNO")
+      next
+    }
+    rows <- state[["payload"]][["results"]]
+    if (!is.list(rows) || length(rows) == 0L) {
+      errors <- c(errors, "TRASPORTO_STATO_VUOTO")
+      next
+    }
+    known <- c(known, vapply(rows, function(row) {
+      value <- row[["username"]]
+      if (is.character(value) && length(value) == 1L) value else NA_character_
+    }, character(1)))
+  }
+
+  known <- identity_normalize(known)
+  list(
+    asked = if (length(errors) > 0L) character() else usernames,
+    known = unique(known[!is.na(known) & nzchar(known)]),
+    errors = unique(errors)
+  )
+}

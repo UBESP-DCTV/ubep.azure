@@ -432,6 +432,56 @@ upn_proposal <- function(composed, taken) {
 }
 
 
+#' The names a round asks REDCap about, for one row that may create
+#'
+#' Decided on 2026-11-10 (item 4 (b') of the 0.26.0): a name REDCap still
+#' knows counts as taken, as a UPN held on Entra does, since whoever were
+#' given it would find on the instances the projects of the old login. So
+#' before a verdict that can make an account the round asks the production
+#' instances about the names it could create: the composed one, when it is
+#' free on Entra, and the first `size` suffixes free on Entra, in the order
+#' `upn_proposal()` takes them. A fixed window, so that one call per instance
+#' is enough: the proposal is the first name of the window REDCap does not
+#' know, and a window REDCap knows whole stops the row
+#' (`resolve_against_directory()`).
+#'
+#' @param composed The UPN `compose_upn()` built.
+#' @param taken Normalized UPNs held by the whole tenant, as for
+#'   `upn_proposal()`.
+#' @param size How many suffixes the window holds.
+#'
+#' @return A character vector: the composed name first when it is free on
+#'   Entra, then the suffixes, written as `composed` is.
+#'
+#' @keywords internal
+upn_window <- function(composed, taken, size = 5L) {
+  stopifnot(
+    is.character(composed), length(composed) == 1L,
+    is.numeric(size), length(size) == 1L, size >= 1L
+  )
+  local <- sub("@.*$", "", composed)
+  domain <- sub("^[^@]*@", "", composed)
+  taken <- identity_normalize(taken)
+
+  window <- if (identity_normalize(composed) %in% taken) {
+    character()
+  } else {
+    composed
+  }
+  suffix <- 2L
+  found <- 0L
+  while (found < size) {
+    candidate <- paste0(local, ".", suffix, "@", domain)
+    if (!(identity_normalize(candidate) %in% taken)) {
+      window <- c(window, candidate)
+      found <- found + 1L
+    }
+    suffix <- suffix + 1L
+  }
+  window
+}
+
+
 #' Say what the resolution decided about one row
 #'
 #' @param identity One of the six words, or `""` when the row could not be
@@ -443,17 +493,22 @@ upn_proposal <- function(composed, taken) {
 #'   read only on `absent`, which is the verdict that says it was free, and it
 #'   is not the same thing as `username`: a name that does not exist yet is not
 #'   a confirmation and does not belong in the register.
+#' @param known_to_redcap Whether the composed name is free on Entra and
+#'   known to REDCap on a production instance (0.26.0): a `collision` with
+#'   nobody in the directory to look at, whose message says so.
 #'
-#' @return A list with `identity`, `username`, `errors` and `composed`.
+#' @return A list with `identity`, `username`, `errors`, `composed` and
+#'   `known_to_redcap`.
 #'
 #' @keywords internal
 identity_verdict <- function(identity,
                              username = "",
                              errors = character(),
-                             composed = "") {
+                             composed = "",
+                             known_to_redcap = FALSE) {
   list(
     identity = identity, username = username, errors = errors,
-    composed = composed
+    composed = composed, known_to_redcap = known_to_redcap
   )
 }
 
@@ -490,11 +545,13 @@ identity_verdict <- function(identity,
 #'
 #' @inheritParams resolve_against_directory
 #'
-#' @return A list with `identity`, `username`, `errors` and `composed`.
+#' @return A list with `identity`, `username`, `errors`, `composed` and
+#'   `known_to_redcap`.
 #'
 #' @keywords internal
-resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
-  answer <- resolve_against_directory(request, directory, domain)
+resolve_identity <- function(request, directory, domain = "ubep.unipd.it",
+                             redcap = NULL) {
+  answer <- resolve_against_directory(request, directory, domain, redcap)
 
   if (nzchar(answer[["identity"]])) {
     return(answer)
@@ -549,16 +606,30 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it") {
 #' @param domain The tenant's verified domain, defaulting as `compose_upn()`
 #'   does, so that what counts as an internal address and what a composed UPN
 #'   looks like cannot drift apart.
+#' @param redcap What the production instances said about the names this row
+#'   could be created under (decided on 2026-11-10, item 4 (b') of the
+#'   0.26.0): a list with `asked`, the names the round asked, and `known`,
+#'   those REDCap knows, as an account or as rights on a project. `NULL`, the
+#'   default, judges the directory alone, as before. Read only where the
+#'   verdict could create, `absent` and `collision`: a name REDCap knows is
+#'   taken as a UPN held on Entra is, so a composed name free on Entra and
+#'   known to REDCap is a `collision` (`known_to_redcap`), and the proposal
+#'   skips the names REDCap knows. The proposal is taken from
+#'   `upn_window()`; a window not asked whole, or known whole, is no verdict
+#'   at all, `TRASPORTO_NOME_NON_VERIFICATO`: the round creates no name it
+#'   has not found unknown in this pass.
 #'
-#' @return A list with `identity`, `username` and `errors`. The username is
-#'   what the **directory** says, so it is empty on every verdict that did not
-#'   resolve; giving the row back what its filer typed is `resolve_identity()`,
-#'   which is the only caller and the only place that knows whose the value is.
+#' @return A list with `identity`, `username`, `errors`, `composed` and
+#'   `known_to_redcap`. The username is what the **directory** says, so it is
+#'   empty on every verdict that did not resolve; giving the row back what
+#'   its filer typed is `resolve_identity()`, which is the only caller and the
+#'   only place that knows whose the value is.
 #'
 #' @keywords internal
 resolve_against_directory <- function(request,
                                       directory,
-                                      domain = "ubep.unipd.it") {
+                                      domain = "ubep.unipd.it",
+                                      redcap = NULL) {
   stopifnot(
     is.list(request),
     is.data.frame(directory),
@@ -709,13 +780,43 @@ resolve_against_directory <- function(request,
     domain = domain
   )
 
-  if (identity_normalize(composed) %in% taken) {
-    return(identity_verdict(
-      "collision", upn_proposal(composed, taken), composed = composed
-    ))
+  held <- identity_normalize(composed) %in% taken
+
+  if (is.null(redcap)) {
+    if (held) {
+      return(identity_verdict(
+        "collision", upn_proposal(composed, taken), composed = composed
+      ))
+    }
+    return(identity_verdict("absent", composed = composed))
   }
 
-  identity_verdict("absent", composed = composed)
+  # The names REDCap knows count as taken, decided on 2026-11-10. Only the
+  # window the round asked about can be judged: a name outside it, or a
+  # window the round could not ask whole, is not known to be free, and the
+  # row stops on our code rather than create a name nobody checked.
+  window <- upn_window(composed, taken)
+  asked <- identity_normalize(redcap[["asked"]] %||% character())
+  known <- identity_normalize(redcap[["known"]] %||% character())
+  unverified <- identity_verdict(
+    "", errors = "TRASPORTO_NOME_NON_VERIFICATO", composed = composed
+  )
+  if (!all(identity_normalize(window) %in% asked)) {
+    return(unverified)
+  }
+  remembered <- !held && identity_normalize(composed) %in% known
+  if (!held && !remembered) {
+    return(identity_verdict("absent", composed = composed))
+  }
+  suffixes <- window[identity_normalize(window) != identity_normalize(composed)]
+  free <- suffixes[!identity_normalize(suffixes) %in% known]
+  if (length(free) == 0L) {
+    return(unverified)
+  }
+  identity_verdict(
+    "collision", free[[1L]], composed = composed,
+    known_to_redcap = remembered
+  )
 }
 
 

@@ -364,6 +364,83 @@ test_that("il messaggio di una collisione porta il nome occupato e la proposta",
 })
 
 
+# A collision on a composed name free on Entra and known to REDCap (item 4
+# (b') of the 0.26.0): the same code, another paragraph.
+collisione_nota_a_redcap <- utils::modifyList(
+  collisione_di_prova, list(known_to_redcap = TRUE)
+)
+
+
+test_that("una collisione su un nome noto a REDCap non manda a guardare la rubrica", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(
+    do.call(riga_di_prova, collisione_nota_a_redcap)
+  )[["body"]]
+
+  # test
+  # Nobody on Entra holds the name: no account to look up, no "same person"
+  # answer, and the proposal to paste.
+  expect_false(grepl("nome o cognome diversi", detto, fixed = TRUE))
+  expect_false(grepl("different first or last name", detto, fixed = TRUE))
+  expect_false(grepl("lascia vuoto il campo", detto, fixed = TRUE))
+  expect_false(grepl("leave the field blank", detto, fixed = TRUE))
+  for (frase in c(
+    paste0(
+      "Il nome utente composto da nome e cognome della riga, ",
+      "sara.collaudozeta@ubep.unipd.it, non e' di nessun account su Entra, ",
+      "ma REDCap ricorda ancora un login con quel nome"
+    ),
+    "la sola risposta e' incollare il nome utente proposto",
+    "\n    sara.collaudozeta.2@ubep.unipd.it\n",
+    "\"Another person: create this username\" (distinct_username)",
+    "La risposta vale solo per questa proposta",
+    "non ritrova i progetti del vecchio login",
+    "belongs to no account on Entra, but REDCap still remembers a login",
+    "the only answer is to paste the proposed username",
+    "do not find the old login's projects",
+    "DATO_IDENTITA_IN_COLLISIONE:sara.collaudozeta.2@ubep.unipd.it"
+  )) {
+    expect_match(detto, frase, fixed = TRUE)
+  }
+})
+
+
+test_that("una collisione su Entra tiene il testo di sempre", {
+  # eval
+  # `known_to_redcap` false, or not said by the caller.
+  detti <- lapply(
+    list(
+      collisione_di_prova,
+      utils::modifyList(collisione_di_prova, list(known_to_redcap = FALSE))
+    ),
+    function(campi) {
+      mail_outcome_message(do.call(riga_di_prova, campi))[["body"]]
+    }
+  )
+
+  # test
+  for (detto in detti) {
+    expect_match(detto, "e' di un account con nome o cognome diversi",
+                 fixed = TRUE)
+    expect_false(grepl("REDCap ricorda", detto, fixed = TRUE))
+  }
+})
+
+
+test_that("una collisione su un nome noto a REDCap, su una riga eseguita, resta quella di L5", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(do.call(
+    riga_di_prova,
+    c(collisione_nota_a_redcap, list(seal_carried = "a1b2c3d4e5f6"))
+  ))[["body"]]
+
+  # test
+  expect_match(detto, "La richiesta e' gia' stata eseguita", fixed = TRUE)
+  expect_false(grepl("incolla", detto, ignore.case = TRUE))
+  expect_false(grepl("REDCap ricorda", detto, fixed = TRUE))
+})
+
+
 test_that("un campo vuoto cambia la frase invece di lasciare un buco", {
   # eval
   detto <- mail_outcome_message(

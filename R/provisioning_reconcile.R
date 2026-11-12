@@ -9,7 +9,9 @@
 #'    round reads;
 #' 2. read the register;
 #' 3. resolve **who each row is talking about**, against the tenant read whole,
-#'    and write the verdict back;
+#'    and write the verdict back; for the rows that could create an account,
+#'    first ask the production instances which of the names they could be
+#'    created under REDCap still knows (3b), and resolve them again;
 #' 4. turn what the gate admits into the desired state, keeping the form
 #'    errors;
 #' 5. per instance, read the state **once** for the grantees and the requesters
@@ -138,6 +140,25 @@
 #' computed, never after the one the register carries, and writing `identity`
 #' back is the minutes of the verdict rather than the input to the next step.
 #'
+#' **A name REDCap still knows counts as taken**, decided on 2026-11-10 and
+#' 2026-11-12 (item 4 (b') of the 0.26.0). Whoever were created under a name
+#' a production instance remembers, as an account or as rights on a project,
+#' would find there the projects of the old login. So step 3b asks, once per
+#' production instance and round, about every name a row could be created
+#' under (`upn_window()`, `round_known_names()`), and resolves those rows
+#' again: a composed name free on Entra and known to REDCap is a `collision`,
+#' and a proposal skips the names REDCap knows. Asked only when a row could
+#' create: verdict `absent` or `collision`, not revoked, and `applied_seal`
+#' empty. The benches, `banchi`, are never asked. A production instance not
+#' read stops every such row on `TRASPORTO_NOME_NON_VERIFICATO`, with the
+#' reason in the round's errors, and the row keeps in the register the name
+#' and the verdict it holds: a proposal rewritten without that instance would
+#' stand above an answer already given, and `log_answer_stands()` would drop
+#' it. And step 10 creates a name only for a row it asked about and found
+#' unknown in this pass, so a row whose `applied_seal` an import filled, which
+#' is not asked, creates nobody. Asked in a simulation too, and with the post
+#' off: a reading, and the verdict the real round would give.
+#'
 #' **Step 10 is last because it needs step 6's answer**, and that is the whole
 #' shape of it. A row whose verdict is `absent` is not a pair — there is nobody
 #' to grant a right to — so it never enters the desired state; but it does
@@ -237,6 +258,10 @@
 #'   `NULL`, the default, none is, every row belongs to its creator, and the
 #'   round writes no `owned_by`. The runner reads it from
 #'   `UBEP_CANALE_UTENTE`, a list separated by commas, which it requires.
+#' @param banchi The instances of `hosts` that are benches, which step 3b
+#'   never asks. Empty by default, so every instance counts as a production:
+#'   in doubt an instance is asked, as the observer watches it. The runner
+#'   reads them from the inventory, `"banco": true`.
 #' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
@@ -269,6 +294,7 @@ provisioning_reconcile <- function(register_url,
                                    reply_to = NULL,
                                    approvers = character(),
                                    channel_account = NULL,
+                                   banchi = character(),
                                    at = format(
                                      Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC"
                                    )) {
@@ -280,6 +306,7 @@ provisioning_reconcile <- function(register_url,
     is.logical(dry_run), length(dry_run) == 1L, !is.na(dry_run),
     is.character(approvers),
     channel_account_valid(channel_account),
+    is.character(banchi),
     is.character(at), length(at) == 1L
   )
 
@@ -431,6 +458,54 @@ provisioning_reconcile <- function(register_url,
   resolutions <- lapply(seq_len(nrow(register)), function(i) {
     resolve_identity(as.list(register[i, , drop = FALSE]), sweep[["users"]])
   })
+
+  # `carried` is the seal the field holds. Read here, before the owners' log
+  # says which seal the round believes, because step 3b asks about a row by
+  # its field: a row whose field an import filled is not asked, and step 10
+  # creates nobody for it.
+  carried <- trimws(as.character(register[["applied_seal"]] %||% ""))
+  carried[is.na(carried)] <- ""
+
+  # 3b. A name REDCap still knows counts as taken (item 4 (b') of the
+  # 0.26.0). Only for the rows that could create: a verdict that opens the
+  # creation, a request not revoked, a field with no seal. One question per
+  # production instance with every name of every such row, and none on the
+  # ordinary night. The rows are resolved again with the answer; a row whose
+  # names could not all be asked, or whose window REDCap knows whole, has no
+  # verdict and stops on `TRASPORTO_NOME_NON_VERIFICATO`.
+  first_verdicts <- identity_normalize(vapply(
+    resolutions, function(answer) as.character(answer[["identity"]]),
+    character(1)
+  ))
+  candidates <- first_verdicts %in% c("absent", "collision") &
+    !trimws(as.character(register[["request_status"]])) %in% "revoked" &
+    !nzchar(carried)
+  name_errors <- character()
+  free_names <- character()
+  unverified <- logical(nrow(register))
+  if (any(candidates)) {
+    taken <- identity_normalize(sweep[["users"]][["userPrincipalName"]])
+    asked_names <- unique(unlist(lapply(which(candidates), function(i) {
+      upn_window(as.character(resolutions[[i]][["composed"]]), taken)
+    })))
+    known <- round_known_names(
+      asked_names, setdiff(names(hosts), banchi), hosts, secrets
+    )
+    name_errors <- known[["errors"]]
+    free_names <- setdiff(
+      identity_normalize(known[["asked"]]), known[["known"]]
+    )
+    for (i in which(candidates)) {
+      resolutions[[i]] <- resolve_identity(
+        as.list(register[i, , drop = FALSE]), sweep[["users"]],
+        redcap = known[c("asked", "known")]
+      )
+    }
+    unverified <- candidates & vapply(resolutions, function(answer) {
+      "TRASPORTO_NOME_NON_VERIFICATO" %in% answer[["errors"]]
+    }, logical(1))
+  }
+
   verdicts <- vapply(
     resolutions, function(answer) as.character(answer[["identity"]]),
     character(1)
@@ -439,6 +514,14 @@ provisioning_reconcile <- function(register_url,
     resolutions, function(answer) as.character(answer[["username"]]),
     character(1)
   )
+  # A row step 3b could not verify keeps the name the register holds, for
+  # the seal and for every decision below, and the identity door does not
+  # write it.
+  held_names <- as.character(
+    register[["username"]] %||% rep("", nrow(register))
+  )
+  held_names[is.na(held_names)] <- ""
+  resolved_names[unverified] <- held_names[unverified]
 
   # The minutes of the verdict, written through the door that takes nothing
   # else, and only for the rows it moved. `register` is the register as read
@@ -451,8 +534,13 @@ provisioning_reconcile <- function(register_url,
   # it writes, so the moment changes no decision of this round, only where
   # the write stands in the log, still below the outcome, the owner and the
   # seal.
+  #
+  # Nor for a row step 3b could not verify (item 4 (b')): the register keeps
+  # the proposal and the verdict it holds, so an answer already given stands
+  # for the next round, which asks again.
   write_identities <- function(open, names = resolved_names,
                                verdicts_of = verdicts) {
+    open <- open & !unverified
     register_identity_import(
       register_url, register_token,
       round_changed(
@@ -541,8 +629,6 @@ provisioning_reconcile <- function(register_url,
   # which an import writes as any other (decided on 2026-10-17). Without the
   # account the field stands. Without the log it stands too, and then no row
   # has an owner this round, so none is carried out.
-  carried <- trimws(as.character(register[["applied_seal"]] %||% ""))
-  carried[is.na(carried)] <- ""
   sealed <- carried
   tampered <- nzchar(sealed) & sealed != request_seal(register)
 
@@ -577,7 +663,10 @@ provisioning_reconcile <- function(register_url,
   # The owners' log, kept for the pair each row carried out: `NULL` when it
   # was not asked or could not be read.
   owners_log <- NULL
-  if (any(admitted | awaiting | tampered)) {
+  # A candidate is read for too: its collision, or its stop on a silent
+  # production, is a message whose reader is the owner, and without the log
+  # it would go to IT alone.
+  if (any(admitted | awaiting | tampered | candidates)) {
     reading_creations <- register_log(
       register_url, register_token, logtype = "record_add"
     )
@@ -1858,6 +1947,20 @@ provisioning_reconcile <- function(register_url,
   )
 
   creatable <- which(awaiting & record_ids %in% in_scope)
+
+  # A name is created only when this round asked about it and found it
+  # unknown on every production instance (step 3b). The verdict computed
+  # there already says so for the rows it asked about; the check is for the
+  # others, a row whose `applied_seal` an import filled although the channel
+  # never sealed it, which would otherwise create with nobody asking.
+  name_checked <- candidates & !unverified &
+    identity_normalize(creation_names) %in% free_names
+  unchecked_births <- creatable[!name_checked[creatable]]
+  creatable <- creatable[name_checked[creatable]]
+  unchecked_outcomes <- outcome_rows(
+    record_ids[unchecked_births], "transport_error",
+    detail = "TRASPORTO_NOME_NON_VERIFICATO"
+  )
   unposted <- !dry_run && is.null(mailer) && length(creatable) > 0L
 
   # One creation per name in a round, `creation_shares()`. The resolution
@@ -1950,7 +2053,7 @@ provisioning_reconcile <- function(register_url,
   outcomes <- do.call(rbind, c(
     list(stopped, late_held, form_errors),
     lapply(per_instance, function(answer) answer[["esiti"]]),
-    list(created_outcomes, waiting)
+    list(created_outcomes, unchecked_outcomes, waiting)
   ))
   # One outcome per record, and the first one wins: the identity verdict comes
   # first because a row the gate stopped never entered anything below it, and a
@@ -2038,6 +2141,12 @@ provisioning_reconcile <- function(register_url,
       composed = vapply(resolutions, function(answer) {
         as.character(answer[["composed"]] %||% "")
       }, character(1)),
+      # A collision on a composed name free on Entra and known to REDCap
+      # (item 4 (b')): nobody in the directory to look at, and the message
+      # says so.
+      known_to_redcap = vapply(resolutions, function(answer) {
+        isTRUE(answer[["known_to_redcap"]])
+      }, logical(1)),
       owner = owner_after,
       passed = passed,
       edited_by = edited_by,
@@ -2252,7 +2361,8 @@ provisioning_reconcile <- function(register_url,
     # verdicts while every row still reported its own fate correctly. A message
     # that did not leave is here for the same reason: nothing else says it.
     errori = c(
-      identity_written[["errors"]], unique(log_errors), import[["errors"]],
+      identity_written[["errors"]], unique(log_errors), name_errors,
+      import[["errors"]],
       posta[["errori"]], owner_written[["errors"]], seal_written[["errors"]],
       if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA",
       if (any(unlogged)) "TRASPORTO_SIGILLO_NON_REGISTRATO"

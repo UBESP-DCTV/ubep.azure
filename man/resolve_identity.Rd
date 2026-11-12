@@ -4,7 +4,7 @@
 \alias{resolve_identity}
 \title{Resolve who a register row is talking about}
 \usage{
-resolve_identity(request, directory, domain = "ubep.unipd.it")
+resolve_identity(request, directory, domain = "ubep.unipd.it", redcap = NULL)
 }
 \arguments{
 \item{request}{One register row as a named list, carrying \code{first_name},
@@ -23,9 +23,23 @@ apart. \code{distinct_username}, when the row carries it, is read only to tell
 \item{domain}{The tenant's verified domain, defaulting as \code{compose_upn()}
 does, so that what counts as an internal address and what a composed UPN
 looks like cannot drift apart.}
+
+\item{redcap}{What the production instances said about the names this row
+could be created under (decided on 2026-11-10, item 4 (b') of the
+0.26.0): a list with \code{asked}, the names the round asked, and \code{known},
+those REDCap knows, as an account or as rights on a project. \code{NULL}, the
+default, judges the directory alone, as before. Read only where the
+verdict could create, \code{absent} and \code{collision}: a name REDCap knows is
+taken as a UPN held on Entra is, so a composed name free on Entra and
+known to REDCap is a \code{collision} (\code{known_to_redcap}), and the proposal
+skips the names REDCap knows. The proposal is taken from
+\code{upn_window()}; a window not asked whole, or known whole, is no verdict
+at all, \code{TRASPORTO_NOME_NON_VERIFICATO}: the round creates no name it
+has not found unknown in this pass.}
 }
 \value{
-A list with \code{identity}, \code{username}, \code{errors} and \code{composed}.
+A list with \code{identity}, \code{username}, \code{errors}, \code{composed} and
+\code{known_to_redcap}.
 }
 \description{
 The door, and the one rule that is about the round rather than about the

@@ -1383,3 +1383,177 @@ test_that("directory_address() su un vettore vuoto da' un vettore di caratteri",
   expect_identical(directory_address(character()), character())
   expect_identical(directory_address(NA_character_), "")
 })
+
+
+# --- un nome che REDCap conosce ancora (0.26.0, voce 4) ----------------------
+
+# Un account del tenant che tiene il nome composto e non e' la persona della
+# riga: la collisione di Entra.
+occupante_del_composto <- function() {
+  dir_user(
+    givenName = "Anna", surname = "Bianchi",
+    officeLocation = "anna.bianchi@example.org"
+  )
+}
+
+# Che cosa le istanze di produzione hanno detto: i nomi chiesti e quelli che
+# REDCap conosce, fra account e diritti.
+redcap_ha_detto <- function(noti = character(), chiesti = NULL,
+                            richiesta = a_request(),
+                            directory = dir_frame()) {
+  if (is.null(chiesti)) {
+    chiesti <- upn_window(
+      "mario.rossi@ubep.unipd.it",
+      identity_normalize(directory[["userPrincipalName"]])
+    )
+  }
+  resolve_identity(
+    richiesta, directory, redcap = list(asked = chiesti, known = noti)
+  )
+}
+
+
+test_that("la finestra chiede il composto libero e i primi cinque suffissi liberi", { # nolint: line_length_linter.
+  # test
+  expect_equal(
+    upn_window("mario.rossi@ubep.unipd.it", character()),
+    c(
+      "mario.rossi@ubep.unipd.it", "mario.rossi.2@ubep.unipd.it",
+      "mario.rossi.3@ubep.unipd.it", "mario.rossi.4@ubep.unipd.it",
+      "mario.rossi.5@ubep.unipd.it", "mario.rossi.6@ubep.unipd.it"
+    )
+  )
+})
+
+
+test_that("la finestra salta i nomi presi su Entra, composto compreso", {
+  # eval
+  presi <- c("mario.rossi@ubep.unipd.it", "mario.rossi.3@ubep.unipd.it")
+
+  # test
+  expect_equal(
+    upn_window("Mario.Rossi@ubep.unipd.it", presi),
+    c(
+      "Mario.Rossi.2@ubep.unipd.it", "Mario.Rossi.4@ubep.unipd.it",
+      "Mario.Rossi.5@ubep.unipd.it", "Mario.Rossi.6@ubep.unipd.it",
+      "Mario.Rossi.7@ubep.unipd.it"
+    )
+  )
+})
+
+
+test_that("senza la risposta di REDCap la risoluzione e' quella di prima", {
+  # eval
+  prima <- resolve_identity(a_request(), dir_frame())
+  occupato <- resolve_identity(a_request(), dir_frame(occupante_del_composto()))
+
+  # test
+  expect_equal(prima[["identity"]], "absent")
+  expect_false(isTRUE(prima[["known_to_redcap"]]))
+  expect_equal(occupato[["identity"]], "collision")
+  expect_equal(occupato[["username"]], "mario.rossi.2@ubep.unipd.it")
+  expect_false(isTRUE(occupato[["known_to_redcap"]]))
+})
+
+
+test_that("un composto libero e sconosciuto a REDCap resta absent", {
+  # eval
+  answer <- redcap_ha_detto()
+
+  # test
+  expect_equal(answer[["identity"]], "absent")
+  expect_equal(answer[["composed"]], "mario.rossi@ubep.unipd.it")
+})
+
+
+test_that("un composto libero su Entra e noto a REDCap e' una collisione", {
+  # eval
+  answer <- redcap_ha_detto(noti = "mario.rossi@ubep.unipd.it")
+
+  # test
+  expect_equal(answer[["identity"]], "collision")
+  expect_equal(answer[["username"]], "mario.rossi.2@ubep.unipd.it")
+  expect_equal(answer[["composed"]], "mario.rossi@ubep.unipd.it")
+  expect_true(answer[["known_to_redcap"]])
+  expect_equal(
+    identity_stop_codes(
+      answer[["identity"]], answer[["errors"]], answer[["username"]]
+    ),
+    "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it"
+  )
+})
+
+
+test_that("la proposta salta anche i suffissi noti a REDCap", {
+  # eval
+  answer <- redcap_ha_detto(
+    noti = c("mario.rossi@ubep.unipd.it", "mario.rossi.2@ubep.unipd.it")
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "collision")
+  expect_equal(answer[["username"]], "mario.rossi.3@ubep.unipd.it")
+})
+
+
+test_that("un composto preso su Entra con il .2 noto a REDCap propone il .3", {
+  # eval
+  directory <- dir_frame(occupante_del_composto())
+  answer <- redcap_ha_detto(
+    noti = "mario.rossi.2@ubep.unipd.it", directory = directory
+  )
+
+  # test
+  # La collisione di Entra di sempre, con la proposta che salta il nome noto:
+  # il composto non e' noto a REDCap, la mail resta quella di Entra.
+  expect_equal(answer[["identity"]], "collision")
+  expect_equal(answer[["username"]], "mario.rossi.3@ubep.unipd.it")
+  expect_false(answer[["known_to_redcap"]])
+})
+
+
+test_that("un nome noto con altre maiuscole e' preso", {
+  # eval
+  answer <- redcap_ha_detto(noti = " Mario.Rossi@UBEP.unipd.it ")
+
+  # test
+  expect_equal(answer[["identity"]], "collision")
+  expect_equal(answer[["username"]], "mario.rossi.2@ubep.unipd.it")
+})
+
+
+test_that("una finestra tutta nota a REDCap ferma la riga senza proposta", {
+  # eval
+  finestra <- upn_window("mario.rossi@ubep.unipd.it", character())
+  answer <- redcap_ha_detto(noti = finestra)
+
+  # test
+  expect_equal(answer[["identity"]], "")
+  expect_equal(answer[["errors"]], "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_equal(answer[["username"]], "")
+})
+
+
+test_that("un nome della finestra non chiesto non e' verificato", {
+  # eval
+  # Una produzione non letta: il giro non ha chiesto niente.
+  answer <- redcap_ha_detto(chiesti = character())
+
+  # test
+  expect_equal(answer[["identity"]], "")
+  expect_equal(answer[["errors"]], "TRASPORTO_NOME_NON_VERIFICATO")
+})
+
+
+test_that("la risposta di REDCap non tocca un verdetto che non crea", {
+  # eval
+  # La persona c'e' su Entra: il nome che REDCap conosce e' il suo.
+  answer <- redcap_ha_detto(
+    noti = "mario.rossi@ubep.unipd.it", chiesti = character(),
+    directory = dir_frame(dir_user())
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "existing")
+  expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
+})

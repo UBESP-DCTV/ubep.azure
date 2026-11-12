@@ -40,7 +40,13 @@ canale_mock <- function(registro, istanza, directory, creazione) {
       ))
     }
     body <- if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
-      istanza(req[["body"]][["data"]])
+      # A double that takes `url` answers each instance on its own: the
+      # round asks the production instances apart from the benches.
+      if ("url" %in% names(formals(istanza))) {
+        istanza(req[["body"]][["data"]], url = req[["url"]])
+      } else {
+        istanza(req[["body"]][["data"]])
+      }
     } else {
       registro(req[["body"]][["data"]])
     }
@@ -65,6 +71,20 @@ interrogazioni <- function() {
   Filter(function(req) {
     grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)
   }, inviate)
+}
+
+
+# The same, without the questions about names (0.26.0, item 4 (b')): a row
+# that could create makes the round ask the production instances `accounts`
+# and read them whole, before any verdict, and that is not a question about
+# the row's pair.
+interrogazioni_sulle_coppie <- function() {
+  Filter(function(req) {
+    data <- req[["body"]][["data"]]
+    !identical(data[["operation"]], "accounts") &&
+      !(identical(data[["operation"]], "state") &&
+          length(data[["requests"]] %||% list()) == 0L)
+  }, interrogazioni())
 }
 
 
@@ -320,7 +340,13 @@ riga_come_registro <- function(...) {
 # what the module does, and what lets the round map an entry back to the
 # record that asked for it. A double that echoed a fixed list instead would
 # keep passing after that mapping broke.
-istanza_doppia <- function(..., contract = 3L) {
+#
+# And `accounts`, contract 4, with one entry per name asked: `noti` are the
+# names `redcap_user_information` holds, compared as the module compares
+# them, without case and blanks at the edges. A double at contract 3 answers
+# `accounts` with its contract, as a module not updated does, and the client
+# reads it as `TRASPORTO_CONTRATTO_DISALLINEATO`.
+istanza_doppia <- function(..., contract = 4L, noti = character()) {
   rows <- lapply(list(...), function(row) {
     defaults <- list(
       username = "anna.bianchi@ubep.unipd.it", project_id = 9003L,
@@ -330,7 +356,29 @@ istanza_doppia <- function(..., contract = 3L) {
     defaults
   })
 
+  intestazione <- list(
+    contract_version = contract,
+    redcap_version = "17.3.3", redcap_major = 17L,
+    module_version = "0.10.0", version_gate = "collaudata",
+    surface_fingerprint = "16faf46d5ab1",
+    allowlist_fingerprint = "aabbccddeeff"
+  )
+
   function(data) {
+    if (identical(data[["operation"]], "accounts")) {
+      voci <- lapply(data[["requests"]] %||% list(), function(request) {
+        nome <- as.character(request[["username"]])
+        list(
+          username = nome,
+          exists = tolower(trimws(nome)) %in% tolower(trimws(noti)),
+          user_firstvisit = NULL, user_lastlogin = NULL,
+          user_lastactivity = NULL
+        )
+      })
+      return(as.character(jsonlite::toJSON(c(intestazione, list(
+        dry_run = TRUE, accounts = voci, errors = list()
+      )), auto_unbox = TRUE, null = "null")))
+    }
     results <- if (identical(data[["operation"]], "state")) {
       rows
     } else {
@@ -355,15 +403,10 @@ istanza_doppia <- function(..., contract = 3L) {
       })
     }
 
-    as.character(jsonlite::toJSON(list(
-      contract_version = contract,
-      redcap_version = "17.3.3", redcap_major = 17L,
-      module_version = "0.10.0", version_gate = "collaudata",
-      surface_fingerprint = "16faf46d5ab1",
-      allowlist_fingerprint = "aabbccddeeff",
+    as.character(jsonlite::toJSON(c(intestazione, list(
       dry_run = data[["dry_run"]],
       results = results, summary = list(), errors = list()
-    ), auto_unbox = TRUE, null = "null"))
+    )), auto_unbox = TRUE, null = "null"))
   }
 }
 
@@ -384,7 +427,8 @@ istanza_doppia <- function(..., contract = 3L) {
 # users of the project who do not manage it.
 istanza_che_scrive <- function(richiedenti = "anna.bianchi@ubep.unipd.it",
                                senza_diritti = character(),
-                               contract = 3L) {
+                               contract = 4L,
+                               noti = character()) {
   written <- FALSE
   utente <- function(chi, diritti) {
     list(
@@ -410,7 +454,9 @@ istanza_che_scrive <- function(richiedenti = "anna.bianchi@ubep.unipd.it",
         user_rights = 0L
       )
     }
-    do.call(istanza_doppia, c(rows, list(contract = contract)))(data)
+    do.call(
+      istanza_doppia, c(rows, list(contract = contract, noti = noti))
+    )(data)
   }
 }
 
@@ -852,8 +898,10 @@ test_that("a collision stops the row and leaves the proposal where a person read
   # 11: without it the row hands a person two questions and no material. The
   # gate still stops it — a proposal is not a confirmation — and the code is
   # the one sub-project 5 will write the message from. It carries the
-  # proposal, so a proposal that moves sends the message again.
-  expect_length(interrogazioni(), 0L)
+  # proposal, so a proposal that moves sends the message again. The round
+  # asks the instances about the names it could propose, and nothing about
+  # the row's pair.
+  expect_length(interrogazioni_sulle_coppie(), 0L)
   expect_equal(esito[["esiti"]][["outcome"]], "data_error")
   expect_equal(
     esito[["esiti"]][["outcome_detail"]],
@@ -1582,12 +1630,17 @@ test_that("a revocation of somebody who was never made is simulated on a dry run
 
 test_that("nobody is created while the instance that would say so is silent", {
   # eval
+  # Both instances benches, so the question about names asks nobody and the
+  # row reaches the gate on the scope question, the one guard for a row on a
+  # silent instance. Left to production, the silence stops the row at the
+  # name question before and the gate is never tried.
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_muta(),
     directory_vuota(),
     dry_run = FALSE,
-    mailer = posta_accesa
+    mailer = posta_accesa,
+    banchi = c("edc10", "edc12")
   )
 
   # test
@@ -1602,10 +1655,14 @@ test_that("nobody is created while the instance that would say so is silent", {
 
 test_that("a person to create on a silent instance waits with the instance's code", { # nolint: line_length_linter.
   # eval
+  # Both instances benches, so the question about names asks nobody: a
+  # silent production stops the row before, on
+  # `TRASPORTO_NOME_NON_VERIFICATO` (0.26.0, item 4 (b')).
   muta <- giro(
     registro_doppio(record_json(list())),
     istanza_muta(),
-    directory_vuota()
+    directory_vuota(),
+    banchi = c("edc10", "edc12")
   )
   senza_modulo <- giro(
     registro_doppio(record_json(list(server = "edc07"))),
@@ -5493,9 +5550,9 @@ test_that("una collisione con la risposta di un altro referente resta held", {
   # test
   # Bruno answered on Anna's row: an account would be made on the word of
   # somebody the row does not answer to. It waits for Anna, or IT, with the
-  # seal to paste, and nobody is asked anything meanwhile.
+  # seal to paste, and no instance is asked about its pair meanwhile.
   expect_length(creazioni(), 0L)
-  expect_length(interrogazioni(), 0L)
+  expect_length(interrogazioni_sulle_coppie(), 0L)
   expect_equal(esito[["esiti"]][["outcome"]], "held")
   expect_equal(
     esito[["esiti"]][["outcome_detail"]],
@@ -5591,8 +5648,10 @@ test_that("una collisione con la risposta passa dalla prova sull'istanza", {
 
 test_that("una collisione con la risposta su un'istanza muta aspetta col codice dell'istanza", { # nolint: line_length_linter.
   # eval
+  # Benches, as above: a silent production stops the row on the names first.
   esito <- giro_collisione(
-    istanza = istanza_muta(), dry_run = FALSE, mailer = posta_accesa
+    istanza = istanza_muta(), dry_run = FALSE, mailer = posta_accesa,
+    banchi = c("edc10", "edc12")
   )
 
   # test
@@ -8902,4 +8961,558 @@ test_that("una riga importata senza stato, servita come attiva, revoca il nome c
   expect_length(sigillo, 1L)
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
   expect_equal(revocati(), mario)
+})
+
+
+# ---- A name REDCap still knows counts as taken (0.26.0, item 4 (b')) --------
+
+suffisso <- function(n) paste0("mario.rossi.", n, "@ubep.unipd.it")
+
+host_di <- function(req) sub("^https://([^/]+)/.*$", "\\1", req[["url"]])
+
+# What the round asked the instances with `accounts`, one entry per call:
+# the host and the names.
+chiamate_accounts <- function() {
+  lapply(
+    Filter(function(req) {
+      identical(req[["body"]][["data"]][["operation"]], "accounts")
+    }, interrogazioni()),
+    function(req) {
+      list(
+        host = host_di(req),
+        nomi = vapply(
+          req[["body"]][["data"]][["requests"]],
+          function(r) as.character(r[["username"]]), character(1)
+        )
+      )
+    }
+  )
+}
+
+# The whole-instance reads of `state`, which carry the rights.
+letture_intere <- function() {
+  Filter(function(req) {
+    data <- req[["body"]][["data"]]
+    identical(data[["operation"]], "state") &&
+      length(data[["requests"]] %||% list()) == 0L
+  }, interrogazioni())
+}
+
+# One double per host: `edc10` and `edc12` answer apart.
+istanze_per_host <- function(edc10, edc12) {
+  function(data, url) {
+    if (grepl("edc12.example.org", url, fixed = TRUE)) {
+      edc12(data)
+    } else {
+      edc10(data)
+    }
+  }
+}
+
+# An instance that answers everything but `accounts`, which it cannot be
+# reached for: the production instance that does not answer the question.
+senza_accounts <- function(istanza = istanza_doppia(list())) {
+  function(data) {
+    if (identical(data[["operation"]], "accounts")) {
+      stop("Could not resolve host")
+    }
+    istanza(data)
+  }
+}
+
+# A fresh request, or several, for people the tenant does not hold.
+# `copy_to` is set so that the messages of the round have a copy for IT.
+giro_nuovo <- function(istanza, directory = directory_vuota(), righe = NULL,
+                       copy_to = "it@example.org", ...) {
+  registro <- if (is.null(righe)) {
+    registro_doppio(record_json(list()))
+  } else {
+    registro_doppio(do.call(record_json, righe))
+  }
+  giro(registro, istanza, directory, copy_to = copy_to, ...)
+}
+
+dettaglio <- function(esito) {
+  as.character(esito[["esiti"]][["outcome_detail"]])
+}
+
+in_collisione_su <- function(n) {
+  paste0("DATO_IDENTITA_IN_COLLISIONE:", suffisso(n))
+}
+
+
+test_that("un nome composto che REDCap conosce non si crea: collisione col .2", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  # Free on Entra, known to REDCap on a production instance: whoever were
+  # created under it would find the old login's projects. So no creation,
+  # and a collision whose proposal skips the name.
+  expect_length(creazioni(), 0L)
+  expect_equal(identita_scritte()[["identity"]], "collision")
+  expect_equal(identita_scritte()[["username"]], suffisso(2))
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "data_error")
+  expect_equal(dettaglio(esito), in_collisione_su(2))
+})
+
+
+test_that("un nome con diritti e senza account su REDCap vale come preso", {
+  # eval
+  # Measured on 2026-11-12 on seven productions out of eight: people added
+  # to a project before their first sign-in have rights and no account row.
+  esito <- giro_nuovo(
+    istanza_doppia(
+      list(), list(username = mario, project_id = 9077L, user_rights = 0L)
+    ),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(identita_scritte()[["username"]], suffisso(2))
+  expect_equal(dettaglio(esito), in_collisione_su(2))
+})
+
+
+test_that("un nome libero e sconosciuto a REDCap si crea, chiesto una volta per istanza", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list()), dry_run = FALSE, mailer = posta_accesa
+  )
+  chiamate <- chiamate_accounts()
+
+  # test
+  expect_length(creazioni(), 1L)
+  expect_equal(
+    creazioni()[[1]][["body"]][["data"]][["userPrincipalName"]], mario
+  )
+  # The two production instances, once each, with the whole window: the
+  # composed name and the first five suffixes.
+  expect_setequal(
+    vapply(chiamate, `[[`, "", "host"),
+    c("edc10.example.org", "edc12.example.org")
+  )
+  expect_equal(chiamate[[1]][["nomi"]], c(mario, suffisso(2:6)))
+  expect_length(letture_intere(), 2L)
+  expect_equal(esito[["errori"]], character())
+})
+
+
+test_that("composto e .2 noti a REDCap: la proposta e' il .3", {
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list(), noti = c(mario, suffisso(2))),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(identita_scritte()[["username"]], suffisso(3))
+  expect_equal(dettaglio(esito), in_collisione_su(3))
+})
+
+
+test_that("un composto preso su Entra salta anche il .2 noto a REDCap", {
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list(), noti = suffisso(2)), directory = occupata(),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  # The collision of Entra of always, and the proposal is the .3: the .2
+  # would hand the old login's projects to whoever pasted it.
+  expect_equal(identita_scritte()[["identity"]], "collision")
+  expect_equal(identita_scritte()[["username"]], suffisso(3))
+  expect_equal(dettaglio(esito), in_collisione_su(3))
+  # Only the suffixes: the composed name is Entra's.
+  expect_equal(chiamate_accounts()[[1]][["nomi"]], suffisso(2:6))
+})
+
+
+test_that("un nome noto con altre maiuscole e' preso", {
+  # eval
+  giro_nuovo(
+    istanza_doppia(list(), noti = "Mario.Rossi@UBEP.unipd.it"),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(identita_scritte()[["username"]], suffisso(2))
+})
+
+
+test_that("una risposta al .2 non vale piu' quando il .2 diventa noto", {
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_collisione(
+    istanza = istanza_doppia(list(), noti = suffisso(2)),
+    dry_run = FALSE, mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+
+  # test
+  # The answer holds for its proposal, and the proposal moved: the rule of
+  # the 0.22.0. Nobody is created, the new proposal is written and the
+  # message with it leaves.
+  expect_length(creazioni(), 0L)
+  expect_equal(identita_scritte()[["username"]], suffisso(3))
+  expect_equal(dettaglio(esito), in_collisione_su(3))
+  expect_length(posta[["mandate"]](), 1L)
+  expect_match(posta[["mandate"]]()[[1]][["body"]], suffisso(3), fixed = TRUE)
+})
+
+
+test_that("una produzione che non risponde ferma la creazione e non scrive l'identita'", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_nuovo(
+    senza_accounts(), dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome"]]), "transport_error"
+  )
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  # The register keeps what it holds: nothing to write for the row.
+  expect_null(identita_scritte())
+  # Why, in the round's record, once per code.
+  expect_equal(esito[["errori"]], "TRASPORTO_NON_RAGGIUNGIBILE")
+})
+
+
+test_that("una produzione al contratto 3 ferma la creazione come una muta", {
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list(), contract = 3L), dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_equal(esito[["errori"]], "TRASPORTO_CONTRATTO_DISALLINEATO")
+})
+
+
+test_that("una produzione senza nessun diritto letto vale come non letta", {
+  # eval
+  # `StateReader::read()` answers an empty list when its query fails: a
+  # production instance with no pair at all is a reading that did not
+  # happen, not an instance where nobody has rights.
+  esito <- giro_nuovo(
+    istanze_per_host(istanza_doppia(list()), istanza_doppia()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_equal(esito[["errori"]], "TRASPORTO_STATO_VUOTO")
+})
+
+
+test_that("un banco non si interroga, e un banco muto non ferma la creazione", {
+  # eval
+  giro_nuovo(
+    istanze_per_host(istanza_doppia(list()), istanza_muta()),
+    banchi = "edc12", dry_run = FALSE, mailer = posta_accesa
+  )
+  chiesti <- vapply(interrogazioni(), host_di, character(1))
+
+  # test
+  expect_length(creazioni(), 1L)
+  expect_false("edc12.example.org" %in% chiesti)
+  expect_equal(
+    vapply(chiamate_accounts(), `[[`, "", "host"), "edc10.example.org"
+  )
+})
+
+
+test_that("una produzione muta ferma la creazione anche su un'altra istanza", {
+  # eval
+  # The row is on edc10, which answers; edc12 is a production and does not.
+  esito <- giro_nuovo(
+    istanze_per_host(istanza_doppia(list()), istanza_muta()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_equal(esito[["errori"]], "TRASPORTO_NON_RAGGIUNGIBILE")
+})
+
+
+test_that("una risposta data resta valida dopo un giro con la produzione muta", { # nolint: line_length_linter.
+  # eval
+  primo <- giro_collisione(
+    istanza = senza_accounts(), dry_run = FALSE, mailer = posta_accesa
+  )
+  identita_del_primo <- identita_scritte()
+  nati_nel_primo <- length(creazioni())
+
+  # test
+  # The proposal is not rewritten: a write of the channel above the answer
+  # would make `log_answer_stands()` drop it.
+  expect_equal(nati_nel_primo, 0L)
+  expect_null(identita_del_primo)
+  expect_equal(dettaglio(primo), "TRASPORTO_NOME_NON_VERIFICATO")
+
+  # eval
+  # The next round, the instance back, the row as the first one left it.
+  secondo <- giro_collisione(
+    righe = list(in_collisione(
+      outcome = "transport_error",
+      outcome_detail = "TRASPORTO_NOME_NON_VERIFICATO"
+    )),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 1L)
+  expect_equal(
+    creazioni()[[1]][["body"]][["data"]][["userPrincipalName"]], suffisso(2)
+  )
+  expect_equal(as.character(secondo[["esiti"]][["outcome"]]), "pending")
+})
+
+
+test_that("senza righe che creano non si chiede niente a REDCap", {
+  # eval
+  giro(registro_doppio(record_json(list())), istanza_doppia(list()))
+
+  # test
+  # Mario is in the tenant: the ordinary night asks no `accounts` and reads
+  # no instance whole.
+  expect_length(chiamate_accounts(), 0L)
+  expect_length(letture_intere(), 0L)
+})
+
+
+test_that("una sola chiamata accounts per produzione anche con piu' righe", {
+  # eval
+  giro_nuovo(
+    istanza_doppia(list()),
+    righe = list(
+      list(record_id = "1"),
+      list(
+        record_id = "2", first_name = "Lucia", last_name = "Neri",
+        contact_email = "lucia.neri@example.org"
+      )
+    ),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+  chiamate <- chiamate_accounts()
+
+  # test
+  expect_length(chiamate, 2L)
+  expect_setequal(
+    chiamate[[1]][["nomi"]],
+    c(
+      mario, suffisso(2:6), "lucia.neri@ubep.unipd.it",
+      paste0("lucia.neri.", 2:6, "@ubep.unipd.it")
+    )
+  )
+  expect_length(creazioni(), 2L)
+})
+
+
+test_that("una riga revocata assente non si chiede e si chiude come prima", {
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list()),
+    righe = list(list(request_status = "revoked")),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(chiamate_accounts(), 0L)
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(
+    as.character(esito[["esiti"]][["applied_as"]]), round_applied_as(NULL)
+  )
+})
+
+
+test_that("una riga sigillata assente resta sull'identita' cambiata, senza domanda", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(directory = directory_vuota(), mailer = posta_accesa)
+
+  # test
+  expect_length(chiamate_accounts(), 0L)
+  expect_equal(dettaglio(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  nulla_scritto()
+  expect_null(identita_scritte())
+})
+
+
+test_that("una riga col sigillo importato e mai sigillata dal canale non crea", { # nolint: line_length_linter.
+  # eval
+  # Anna, the owner, imports her own new row with a seal: the field is full,
+  # the channel never sealed it. It is not among the rows the round asks
+  # about, and it creates nothing.
+  sigillo <- request_seal(riga_come_registro())
+  esito <- giro(
+    registro_con_log(
+      record_json(list(applied_seal = sigillo)),
+      storia = list(cambio(
+        anna, paste0("first_name = 'Mario', applied_seal = '", sigillo, "'")
+      ))
+    ),
+    istanza_doppia(list()), directory_vuota(),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(chiamate_accounts(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome"]]), "transport_error"
+  )
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+})
+
+
+test_that("il giro simulato chiede a REDCap e propone la collisione", {
+  # eval
+  esito <- giro_nuovo(istanza_doppia(list(), noti = mario))
+
+  # test
+  expect_length(chiamate_accounts(), 2L)
+  expect_equal(identita_scritte()[["username"]], suffisso(2))
+  expect_equal(dettaglio(esito), in_collisione_su(2))
+})
+
+
+test_that("il giro con la posta spenta chiede a REDCap e propone", {
+  # eval
+  esito <- giro_nuovo(istanza_doppia(list(), noti = mario), dry_run = FALSE)
+
+  # test
+  expect_length(chiamate_accounts(), 2L)
+  expect_equal(dettaglio(esito), in_collisione_su(2))
+})
+
+
+test_that("una finestra tutta nota a REDCap ferma la riga senza proposta", {
+  # eval
+  esito <- giro_nuovo(
+    istanza_doppia(list(), noti = c(mario, suffisso(2:6))),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_null(identita_scritte())
+  expect_equal(esito[["errori"]], character())
+})
+
+
+test_that("la mail di una collisione su un nome noto a REDCap lo dice", {
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  corpo <- posta[["mandate"]]()[[1]][["body"]]
+
+  # test
+  expect_match(corpo, "REDCap ricorda", fixed = TRUE)
+  expect_no_match(corpo, "nome o cognome diversi", fixed = TRUE)
+  expect_match(corpo, paste0("    ", suffisso(2)), fixed = TRUE)
+})
+
+
+# Every address a message of the round went to.
+destinatari_di_tutti <- function(posta) {
+  unlist(lapply(posta[["mandate"]](), function(m) as.character(m[["to"]])))
+}
+
+# A second person the tenant holds and the register has never carried out:
+# her row is admitted, so the round reads the owners' log as it does in
+# production, where an admitted row is never missing.
+carla_ammessa <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000c3",
+    userPrincipalName = "carla.verdi@ubep.unipd.it",
+    givenName = "Carla", surname = "Verdi",
+    officeLocation = "carla.verdi@example.org"
+  )
+}
+
+
+test_that("la collisione su un nome noto a REDCap arriva al referente anche da sola", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The only row of the round is a collision that no one admitted and that
+  # waits for nothing, and its owner is still read from the creations' log:
+  # the message that asks for an answer goes to who can give it.
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("la creazione ferma da una produzione muta arriva al referente anche da sola", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    senza_accounts(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The row has no verdict and creates nobody, and still its owner is read.
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("la collisione su Entra arriva al referente anche da sola", {
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list()), directory = occupata(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_true(anna %in% destinatari_di_tutti(posta))
+})
+
+
+test_that("con un'altra riga ammessa la collisione su un nome noto arriva al referente", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_nuovo(
+    istanza_doppia(list(), noti = mario),
+    directory = directory_doppia(carla_ammessa()),
+    righe = list(
+      list(),
+      list(
+        record_id = "2", first_name = "Carla", last_name = "Verdi",
+        contact_email = "carla.verdi@example.org"
+      )
+    ),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+  per_mario <- Filter(function(m) {
+    grepl("Request 1 ", m[["body"]], fixed = TRUE) ||
+      grepl("Richiesta 1 ", m[["body"]], fixed = TRUE)
+  }, posta[["mandate"]]())
+
+  # test
+  expect_true(length(per_mario) > 0L)
+  expect_true(anna %in% unlist(lapply(per_mario, `[[`, "to")))
 })
