@@ -532,7 +532,10 @@ log_current_life <- function(events) {
 #' Which events wrote one of these fields
 #'
 #' Reads `details`, which REDCap fills with the fields an event wrote and the
-#' values it gave them, `role_name = 'read only'`.
+#' values it gave them, `role_name = 'read only'`, the fields apart by a
+#' comma. A field counts where a field can start, `log_field_at()`: at the
+#' start of `details` or after that comma, never inside the value of another
+#' field.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param fields Field names to look for.
@@ -544,11 +547,40 @@ log_wrote <- function(events, fields) {
   if (length(fields) == 0L || nrow(events) == 0L) {
     return(logical(nrow(events)))
   }
-  # `\b` and `=` together: without the word boundary `seal_state` would match
-  # inside nothing, but `name` would match inside `role_name`, and the answer
-  # would be an author who touched a different field.
-  pattern <- paste0("\\b(", paste(fields, collapse = "|"), ")\\s*=")
-  grepl(pattern, as.character(events[["details"]]))
+  grepl(log_field_at(fields), as.character(events[["details"]]), perl = TRUE)
+}
+
+
+#' Where a field written by an event starts in its details
+#'
+#' REDCap logs an edit as `field = 'value'`, the fields apart by a comma and
+#' a space or a line break. So a field starts at the start of `details`, or
+#' right after a comma, and its name is followed by `=` and the apostrophe
+#' that opens the value. Searched anywhere in `details`, as before
+#' 2026-11-12, a field name matched inside the value of another field: the
+#' channel's *Read back as*, `applied_as = 'role_name=...; dag_name=...;
+#' expiration=...'` (`round_applied_as()`), read as a write of all three,
+#' measured on 2026-11-12 (M1b) on 46 events out of 102 that "wrote"
+#' `role_name`, on every row of the register. The name has to be followed by
+#' the apostrophe too, which a value that quotes `name=` does not carry.
+#'
+#' What it cannot tell apart is a value that holds `', field = '` itself: the
+#' log does not escape an apostrophe inside a value, and no reading of the
+#' text can say where such a value ends.
+#'
+#' The one pattern every reader of a field in `details` starts from:
+#' `log_wrote()`, `log_value()`, `log_written_value()`, and the check of a
+#' whole value in `log_change_authors()`.
+#'
+#' @param fields Field names, one or more.
+#'
+#' @return A regular expression, Perl syntax, that matches up to and
+#'   including the apostrophe that opens the value.
+#'
+#' @keywords internal
+log_field_at <- function(fields) {
+  stopifnot(is.character(fields), length(fields) > 0L)
+  paste0("(?:^|,)\\s*(?:", paste(fields, collapse = "|"), ")\\s*=\\s*'")
 }
 
 
@@ -1143,9 +1175,9 @@ log_change_authors <- function(events, record,
     # apostrophe, `D'Amico` reads `D`, and a later `D` would read as no
     # change. Unknown, as when the log does not hold it.
     whole <- paste0(
-      "\\b", field, "\\s*=\\s*'[^']*'(\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+      log_field_at(field), "[^']*'(\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
     )
-    if (!grepl(whole, as.character(carried[["details"]]))) {
+    if (!grepl(whole, as.character(carried[["details"]]), perl = TRUE)) {
       return(any(wrote & window))
     }
     now(field) != log_value(carried, field)
@@ -1183,8 +1215,8 @@ log_value <- function(events, field) {
   stopifnot(is.character(field), length(field) == 1L)
 
   details <- as.character(events[["details"]])
-  pattern <- paste0("\\b", field, "\\s*=\\s*'([^']*)'")
-  found <- regmatches(details, regexec(pattern, details))
+  pattern <- paste0(log_field_at(field), "([^']*)'")
+  found <- regmatches(details, regexec(pattern, details, perl = TRUE))
   vapply(found, function(hit) {
     if (length(hit) < 2L) "" else trimws(hit[[2L]])
   }, character(1))
@@ -1288,8 +1320,8 @@ log_written_value <- function(events, field) {
   details <- as.character(events[["details"]])
   details[is.na(details)] <- ""
   pattern <- paste0(
-    "\\b", field,
-    "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+    log_field_at(field),
+    "(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
   )
   vapply(details, function(said) {
     hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]

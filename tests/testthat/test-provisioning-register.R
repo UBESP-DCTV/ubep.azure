@@ -3383,3 +3383,102 @@ test_that("log_channel_seals reads every seal of the channel, newest first", {
                character())
   expect_error(log_channel_seals(eventi, "1", NULL))
 })
+
+
+# What the outcome door of the channel leaves in the log: *Read back as*
+# names the role, the group and the last day inside its own value, in the
+# form `round_applied_as()` writes. Measured on 2026-11-12 (M1b): 46 events
+# out of 102 read as a write of `role_name`, on every row of the register.
+letto_dal_canale <- function(scadenza = "", dopo = "") {
+  list(
+    username = canale, action = "Update record (API) 1",
+    details = paste0(
+      "outcome = 'applied', outcome_at = '2026-10-23 23:03', ",
+      "applied_as = 'role_name=data entry; dag_name=centro-01; expiration=",
+      scadenza, "'", dopo
+    )
+  )
+}
+
+
+test_that("un campo nominato dentro il valore di un altro non e' una scrittura", { # nolint: line_length_linter.
+  # eval
+  vuota <- eventi_finti(letto_dal_canale())
+  piena <- eventi_finti(letto_dal_canale("2027-01-31"))
+  seguita <- eventi_finti(letto_dal_canale(dopo = ", seal_state = 'intact'"))
+
+  # test
+  # REDCap writes `field = 'value'`, the fields apart by a comma: a field
+  # name counts at the start of `details` or after that comma, never inside
+  # the value of another field.
+  for (eventi in list(vuota, piena, seguita)) {
+    for (campo in c("role_name", "dag_name", "expiration")) {
+      expect_false(log_wrote(eventi, campo), info = campo)
+      expect_equal(log_value(eventi, campo), "", info = campo)
+      expect_true(is.na(log_written_value(eventi, campo)), info = campo)
+    }
+    expect_true(log_wrote(eventi, "applied_as"))
+    expect_true(log_wrote(eventi, "outcome"))
+  }
+  expect_equal(
+    log_written_value(piena, "applied_as"),
+    "role_name=data entry; dag_name=centro-01; expiration=2027-01-31"
+  )
+})
+
+
+test_that("un campo scritto all'inizio o dopo la virgola si legge ancora", {
+  # eval
+  eventi <- eventi_finti(
+    list(details = "role_name = 'read only', dag_name = 'centro-02'"),
+    list(details = "record_id = '1',\nexpiration = '2027-01-31'"),
+    list(details = "last_name = 'D'Angelo', username = 'mario.dangelo@ubep.unipd.it'"), # nolint: line_length_linter.
+    list(details = "  role_name='data entry'")
+  )
+
+  # test
+  expect_equal(log_wrote(eventi, "role_name"), c(TRUE, FALSE, FALSE, TRUE))
+  expect_equal(log_wrote(eventi, "dag_name"), c(TRUE, FALSE, FALSE, FALSE))
+  expect_equal(log_wrote(eventi, "expiration"), c(FALSE, TRUE, FALSE, FALSE))
+  expect_equal(log_wrote(eventi, "username"), c(FALSE, FALSE, TRUE, FALSE))
+  expect_equal(
+    log_value(eventi, "role_name"), c("read only", "", "", "data entry")
+  )
+  expect_equal(log_value(eventi, "expiration"), c("", "2027-01-31", "", ""))
+  expect_equal(
+    log_written_value(eventi, "username"),
+    c(NA, NA, "mario.dangelo@ubep.unipd.it", NA)
+  )
+  expect_equal(log_written_value(eventi, "last_name")[[3L]], "D'Angelo")
+})
+
+
+test_that("un ruolo riportato al valore eseguito non ha autore sopra un esito del canale", { # nolint: line_length_linter.
+  # eval
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  # Newest first: Bruno changed the role and brought it back; below the
+  # seal, the outcome the same round wrote, then the creation.
+  eventi <- eventi_finti(
+    list(username = bruno, details = "role_name = 'data entry'"),
+    list(username = bruno, details = "role_name = 'read only'"),
+    eseguita("111111111111"),
+    letto_dal_canale(),
+    list(
+      username = creatrice, action = "Create record 1",
+      details = "record_id = '1', role_name = 'data entry'"
+    )
+  )
+  autori <- function(ruolo) {
+    log_change_authors(
+      eventi, "1", fields = "role_name", channel_account = canale,
+      current = register_row(role_name = ruolo), creator = creatrice
+    )
+  }
+
+  # test
+  # The value carried out is the creation's: the outcome only quotes it.
+  # Read as the newest write below the seal, it made the value carried out
+  # unknown, and Bruno the author of a change that is no longer in the row.
+  expect_equal(autori("data entry"), character())
+  expect_equal(autori("read only"), bruno)
+})
