@@ -4,13 +4,17 @@
 \alias{mail_status_words}
 \title{Say what \code{applied} did, which is not the same thing twice}
 \usage{
-mail_status_words(request_status, applied_as = "")
+mail_status_words(request_status, applied_as = "", at = "")
 }
 \arguments{
 \item{request_status}{The row's \code{request_status}.}
 
 \item{applied_as}{The row's read-back, \code{"absent"} when the pair is not on
 the instance. Empty when the caller does not say.}
+
+\item{at}{The time of the round, UTC, \code{"\%Y-\%m-\%d \%H:\%M"}: the day against
+which the stored expiration of \code{applied_as} is read. Empty or not a date,
+and the fourth fact is not told.}
 }
 \value{
 A character vector named \code{it} and \code{en}.
@@ -28,5 +32,12 @@ A third fact has the same word: an active row whose last day has passed,
 carried out and unchanged, and whose person somebody removed from the
 project. The round writes nothing and reads the pair back as absent, which
 is the row's own wish, and the message says that instead of a grant.
+
+A fourth fact has the same word again: an active row whose last day has
+passed on the day of the round and whose person is on the project all the
+same, because somebody put them back by hand, with the day the row says or
+with another that the round brought back to it. REDCap stores the day after
+the last, and on it does not let the person in. Whether the channel wrote
+is no part of the sentence, which is the same for both.
 }
 \keyword{internal}

@@ -442,6 +442,7 @@ giro <- function(registro,
                  directory = directory_doppia(),
                  creazione = creazione_riuscita(),
                  channel_account = "svc-canale-ubep",
+                 at = "2026-08-14 03:00",
                  ...) {
   inviate <<- list() # nolint: assignment_linter.
   httr2::with_mocked_responses(
@@ -455,7 +456,7 @@ giro <- function(registro,
       graph_url = "graph.example.org/v1.0",
       instances = c("edc10", "edc12"),
       channel_account = channel_account,
-      at = "2026-08-14 03:00",
+      at = at,
       ...
     )
   )
@@ -6903,6 +6904,42 @@ test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la per
 })
 
 
+# What the owner reads when the person is back on the project and the last day
+# of the row has passed: not that the access was granted.
+dice_ultimo_giorno_passato <- function(posta) {
+  testthat::expect_equal(a_chi_e_arrivata(posta), anna)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  testthat::expect_match(
+    corpo, "l'ultimo giorno di accesso della richiesta e' passato",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    corpo, "the last day of access of the request has passed", fixed = TRUE
+  )
+  testthat::expect_no_match(
+    corpo, "l'accesso e' stato concesso", fixed = TRUE
+  )
+  testthat::expect_no_match(corpo, "has been granted", fixed = TRUE)
+}
+
+
+test_that("la riga scaduta chiusa sulla persona tolta e rimessa con la stessa scadenza avvisa che l'ultimo giorno e' passato", { # nolint: line_length_linter.
+  # eval
+  # Somebody put Mario back by hand with the day the row says: the pair is
+  # `noop`, the read-back changes from `absent` to the access, and the
+  # round tells the owner.
+  posta <- posta_raccolta()
+  giro_scaduta(
+    list(applied_as = "absent"), mailer = posta[["mailer"]],
+    at = paste(Sys.Date(), "03:00")
+  )
+
+  # test
+  expect_length(scritture(), 0L)
+  dice_ultimo_giorno_passato(posta)
+})
+
+
 test_that("un giro simulato sulla persona tolta non scrive e non sigilla", { # nolint: line_length_linter.
   # eval
   esito <- giro(
@@ -6968,11 +7005,11 @@ test_that("una riga scaduta cambiata dopo il sigillo resta in errore sulla data 
 })
 
 
-test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiuscole non si chiude sulla persona tolta", { # nolint: line_length_linter.
+test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiuscole resta applied senza scrivere", { # nolint: line_length_linter.
   # eval
   # The username changed on Entra in its capitals alone: the row is intact,
   # and Mario is still on the project, which REDCap matches without regard to
-  # case. The diff, read as written, calls the pair absent.
+  # case. The round reads the pair under the name the instance holds.
   maiuscolo <- "Mario.Rossi@ubep.unipd.it"
   posta <- posta_raccolta()
   esito <- giro_scaduta(
@@ -6982,19 +7019,20 @@ test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiusc
   )
 
   # test
-  # Closed as absent it would tell the owner the person is gone from the
-  # project when he is on it. The row is refused on its last day as it was
-  # before the pair was let through, and nothing is written.
-  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
-  expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
-  expect_false(identical(
-    as.character(esito[["esiti"]][["applied_as"]]), "absent"
-  ))
+  # The instance holds what the row asks, as with the same capitals: the row
+  # stays as it is, with nothing written and nobody told. Refused on its last
+  # day, as it was before the grant took the name the instance holds, the row
+  # sent the referent to write a date that has not passed, or none, and either
+  # reopens the access.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  # Not closed as a person removed: the read-back is the access as it stands.
+  expect_equal(
+    as.character(esito[["esiti"]][["applied_as"]]),
+    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+  )
   expect_length(scritture(), 0L)
-  corpi <- vapply(posta[["mandate"]](), function(m) m[["body"]], "")
-  expect_false(any(grepl(
-    "la persona non e' piu' sul progetto", corpi, fixed = TRUE
-  )))
+  expect_length(posta[["mandate"]](), 0L)
 })
 
 
@@ -7531,6 +7569,254 @@ test_that("una revoca parte col nome scritto uguale, se l'istanza ne tiene due c
 
   # test
   expect_equal(nomi_revocati(), maiuscolo)
+})
+
+
+# ---- A grant under a name the instance holds in other capitals ----
+
+# The usernames the round sent in its real applies.
+nomi_concessi <- function() {
+  unlist(lapply(
+    Filter(function(req) {
+      identical(req[["body"]][["data"]][["operation"]], "apply")
+    }, scritture()),
+    function(req) {
+      vapply(req[["body"]][["data"]][["requests"]], function(r) {
+        as.character(r[["username"]])
+      }, character(1))
+    }
+  ))
+}
+
+# An instance that applies as the module's `Planner::planApply()` does: the
+# key is the username as written. Asked for the name it holds, it updates the
+# row; asked for the same name in other capitals, it creates one under that
+# name, which its own state read, exact, then shows. Its state read answers
+# with the stored row whatever name it is asked about, as the real query does
+# under the `_ci` collation.
+istanza_che_concede_esatta <- function(tenuto = mario,
+                                       ruolo = "read only",
+                                       scadenza = NULL) {
+  righe <- list(
+    list(user_rights = 1L),
+    list(
+      username = tenuto, role_name = ruolo, expiration = scadenza,
+      user_rights = 0L
+    )
+  )
+  function(data) {
+    if (identical(data[["operation"]], "apply") && isFALSE(data[["dry_run"]])) {
+      for (r in data[["requests"]]) {
+        nome <- as.character(r[["username"]])
+        trovata <- vapply(righe, function(x) {
+          identical(x[["username"]], nome)
+        }, NA)
+        if (any(trovata)) {
+          riga <- which(trovata)[[1L]]
+          # nolint start: assignment_linter.
+          righe[[riga]][["role_name"]] <<- r[["role_name"]]
+          righe[[riga]][["expiration"]] <<- r[["expiration"]]
+          # nolint end
+        } else {
+          righe[[length(righe) + 1L]] <<- list( # nolint: assignment_linter.
+            username = nome, role_name = r[["role_name"]],
+            expiration = r[["expiration"]], user_rights = 0L
+          )
+        }
+      }
+    }
+    do.call(istanza_doppia, righe)(data)
+  }
+}
+
+accessi_mandati <- function(posta) {
+  Filter(function(m) {
+    startsWith(m[["subject"]], "Accesso a REDCap")
+  }, posta[["mandate"]]())
+}
+
+
+test_that("una concessione su un nome che l'istanza tiene con altre maiuscole non parte come creazione", { # nolint: line_length_linter.
+  # eval
+  # The username changed on Entra in its capitals alone, after the row was
+  # carried out: the instance holds `mario.rossi@` with what the row asks.
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(),
+      list(username = mario, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo)),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Written as `Mario.Rossi@` the module plans a creation on a key it does
+  # not hold, and the row stayed on an error to the end.
+  expect_length(nomi_concessi(), 0L)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_length(accessi_mandati(posta), 0L)
+})
+
+
+test_that("una concessione su un nome con altre maiuscole e un ruolo diverso aggiorna la riga che l'istanza tiene", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_concede_esatta(),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo)),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  # One write, under the name the instance holds, confirmed by the read-back;
+  # the person had the access already, so nobody is told they have one.
+  expect_equal(nomi_concessi(), mario)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+  expect_length(accessi_mandati(posta), 0L)
+})
+
+
+test_that("una concessione su un nome assente in ogni grafia parte col nome del registro e manda l'accesso", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_che_concede_esatta(tenuto = "altra.persona@ubep.unipd.it"),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo)),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(nomi_concessi(), maiuscolo)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_length(accessi_mandati(posta), 1L)
+})
+
+
+test_that("una concessione su un nome scritto uguale all'istanza parte come prima", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_concede_esatta(),
+    dry_run = FALSE, mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(nomi_concessi(), mario)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_length(accessi_mandati(posta), 0L)
+})
+
+
+test_that("una concessione con due righe d'istanza che differiscono nelle maiuscole tiene quella scritta come nel registro", { # nolint: line_length_linter.
+  # eval
+  # A state REDCap's `_ci` keys should not allow, kept as a guard: the name
+  # sent must be the one written as in the register, not the first one found.
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(user_rights = 1L),
+      list(username = mario, role_name = "data entry", user_rights = 0L),
+      list(username = maiuscolo, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo)),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_length(nomi_concessi(), 0L)
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+})
+
+
+test_that("una concessione su un nome che l'istanza tiene con uno spazio ai bordi ha comunque un esito", { # nolint: line_length_linter.
+  # eval
+  # The pair is found without the blanks at the edges (`round_actual()`), and
+  # the diff and the lookup of its answer (`acted()`) have to read the name
+  # the same way: left with the blank in the first, the row found no answer
+  # and the round wrote no outcome on it.
+  esito <- giro(
+    registro_con_log(
+      record_json(eseguita_row(applied_seal = sigillo_eseguito())),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(),
+      list(
+        username = paste0(mario, " "), role_name = "data entry",
+        user_rights = 0L
+      )
+    ),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la riga scaduta con la scadenza cambiata a mano sotto altre maiuscole riporta la sua data sul nome dell'istanza", { # nolint: line_length_linter.
+  # eval
+  # Somebody extended Mario's access by hand, and the instance holds him in
+  # other capitals than the row.
+  esito <- giro_scaduta(
+    istanza = istanza_che_concede_esatta(
+      ruolo = "data entry", scadenza = as.character(Sys.Date() + 30L)
+    ),
+    directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
+  )
+
+  # test
+  # As with the same capitals: the access of the channel goes back to what
+  # the row says, written once under the name the instance holds.
+  expect_equal(nomi_concessi(), mario)
+  richiesta <- scritture()[[1L]][["body"]][["data"]][["requests"]][[1L]]
+  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+})
+
+
+test_that("la riga scaduta chiusa sulla persona tolta e rimessa con un'altra scadenza avvisa che l'ultimo giorno e' passato", { # nolint: line_length_linter.
+  # eval
+  # Somebody put Mario back by hand with another day: the round brings the
+  # access back to what the row says, and the owner is told as in the case of
+  # the same day.
+  posta <- posta_raccolta()
+  giro_scaduta(
+    list(applied_as = "absent"),
+    istanza = istanza_che_concede_esatta(
+      ruolo = "data entry", scadenza = as.character(Sys.Date() + 30L)
+    ),
+    mailer = posta[["mailer"]], at = paste(Sys.Date(), "03:00")
+  )
+
+  # test
+  expect_equal(nomi_concessi(), mario)
+  dice_ultimo_giorno_passato(posta)
 })
 
 

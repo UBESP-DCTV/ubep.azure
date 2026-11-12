@@ -21,6 +21,7 @@ with the row it stores, \verb{mario.rossi@}, and the person is on the project
 under either. \code{round_actual()} matches the names as written, and asked
 "is the person still there" it would answer no on a difference of
 capitals alone: a revocation settled on that answer leaves the person on
-the project, with the row closed and nobody told.
+the project, with the row closed and nobody told. A grant and a revocation
+both go under the name the instance holds, which is the name this finds.
 }
 \keyword{internal}

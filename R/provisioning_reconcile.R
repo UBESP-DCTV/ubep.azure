@@ -1385,6 +1385,29 @@ provisioning_reconcile <- function(register_url,
       unlist(lapply(rehearsals, function(r) r[["fit"]]))
     )
 
+    # A pair goes by the name the instance holds. REDCap matches usernames
+    # without regard to case (`round_present()`), and the module keys a
+    # request on the name as written (`Planner`): a grant under the register's
+    # capitals, where the instance stores the person under others, is planned
+    # as a creation REDCap refuses or stores twice, and the row stays on an
+    # error of ours that never clears. The grant is taken to the stored row
+    # instead, which is an update, or nothing at all when it already says what
+    # the row asks. The register keeps the name of Entra. REDCap allows one
+    # user per name in any capitals, so the row found is the person's; should
+    # the instance ever hold two, the one written as in the register goes
+    # first. A person absent in every capital keeps the name of the register.
+    held_as <- function(e) {
+      held <- round_actual(results, list(e))
+      if (length(held) == 0L) {
+        held <- round_actual(results, list(e), any_case = TRUE)
+      }
+      if (length(held) > 0L) {
+        e[["username"]] <- as.character(held[[1L]][["username"]])
+      }
+      e
+    }
+    wanted <- lapply(wanted, held_as)
+
     # 7. the diff, against the real rows somebody asked about and no others
     diff <- provisioning_diff(wanted, round_actual(results, wanted))
     # A list, not a character vector: `[[` on an unmatched character subscript
@@ -1393,8 +1416,12 @@ provisioning_reconcile <- function(register_url,
     # Unreachable today -- provisioning_diff() emits a row per desired entry
     # -- but the same latent crash as by_pair below, on the same construct.
     action <- as.list(as.character(diff[["action"]]))
+    # Looked up as `acted()` does, without the blanks at the edges of the
+    # name: a name the instance holds with a blank (`held_as()` takes it as
+    # it is, which is what the module keys on) would otherwise find no answer,
+    # and the row no outcome.
     names(action) <- paste(
-      diff[["username"]], diff[["project_id"]], sep = "\r"
+      trimws(diff[["username"]]), diff[["project_id"]], sep = "\r"
     )
     acted <- function(e) {
       action[[paste(
@@ -1414,20 +1441,18 @@ provisioning_reconcile <- function(register_url,
     # day, the row would send the referent to write a date that has not passed,
     # or none, and either would reopen the access.
     #
-    # Gone as REDCap reads the name, without regard to case (`present()`): the
-    # diff reads it as written, so a person whose username changed on Entra in
-    # its capitals alone, still on the project, reads as `creato` here. Closed
-    # as absent it would tell the owner that the person is gone when they are
-    # not. That row keeps the refusal of before.
-    expired <- Filter(function(e) {
+    # A person gone in every capital: a name the instance holds under other
+    # capitals was taken to the stored row (`held_as()`), so the diff sees the
+    # pair, and a row whose person is still on the project is never `creato`
+    # here. Closed as absent it would tell the owner that the person is gone
+    # when they are not.
+    lapsed <- Filter(function(e) {
       identical(acted(e), "creato") &&
         as.character(e[["record_id"]]) %in% plan[["lapsed"]]
     }, wanted)
-    lapsed <- Filter(Negate(present), expired)
-    recased <- Filter(present, expired)
     wanted <- Filter(function(e) {
       !as.character(e[["record_id"]]) %in%
-        vapply(expired, function(l) as.character(l[["record_id"]]), "")
+        vapply(lapsed, function(l) as.character(l[["record_id"]]), "")
     }, wanted)
 
     conforming <- Filter(function(e) identical(acted(e), "noop"), wanted)
@@ -1438,24 +1463,11 @@ provisioning_reconcile <- function(register_url,
     # username, without regard to case (`round_present()`). Matched as
     # written, a person whose username changed on Entra in its capitals alone
     # read as gone, and the revocation closed with the person still on the
-    # project.
-    #
-    # And the revoke is sent under the name the instance holds, read off the
-    # same state. The module plans a revoke on the name as written
+    # project. And the revoke is sent under the name the instance holds
+    # (`held_as()`): the module plans a revoke on the name as written
     # (`Planner::planRevoke()`), so one sent under the register's capitals is
-    # a `noop` there, and the row stayed on an error of ours that never
-    # cleared. REDCap allows one user per name in any capitals, so the row
-    # found is the person's; should the instance ever hold two, the one
-    # written as in the register goes first. Only revokes: a grant goes as
-    # before.
-    to_revoke <- lapply(Filter(present, revoked), function(e) {
-      held <- round_actual(results, list(e))
-      if (length(held) == 0L) {
-        held <- round_actual(results, list(e), any_case = TRUE)
-      }
-      e[["username"]] <- as.character(held[[1L]][["username"]])
-      e
-    })
+    # a `noop` there.
+    to_revoke <- lapply(Filter(present, revoked), held_as)
     already_gone <- Filter(Negate(present), revoked)
 
     settled <- do.call(rbind, c(
@@ -1479,13 +1491,6 @@ provisioning_reconcile <- function(register_url,
           as.character(e[["record_id"]]),
           round_outcome_kind(character(), dry_run), at = at,
           applied_as = round_applied_as(NULL)
-        )
-      }),
-      lapply(recased, function(e) {
-        outcome_payload(
-          as.character(e[["record_id"]]),
-          round_outcome_kind("DATO_SCADENZA_NON_VALIDA", dry_run),
-          detail = "DATO_SCADENZA_NON_VALIDA", at = at
         )
       })
     ))

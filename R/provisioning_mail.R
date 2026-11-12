@@ -151,14 +151,24 @@ mail_said_or <- function(value, absent) {
 #' project. The round writes nothing and reads the pair back as absent, which
 #' is the row's own wish, and the message says that instead of a grant.
 #'
+#' A fourth fact has the same word again: an active row whose last day has
+#' passed on the day of the round and whose person is on the project all the
+#' same, because somebody put them back by hand, with the day the row says or
+#' with another that the round brought back to it. REDCap stores the day after
+#' the last, and on it does not let the person in. Whether the channel wrote
+#' is no part of the sentence, which is the same for both.
+#'
 #' @param request_status The row's `request_status`.
 #' @param applied_as The row's read-back, `"absent"` when the pair is not on
 #'   the instance. Empty when the caller does not say.
+#' @param at The time of the round, UTC, `"%Y-%m-%d %H:%M"`: the day against
+#'   which the stored expiration of `applied_as` is read. Empty or not a date,
+#'   and the fourth fact is not told.
 #'
 #' @return A character vector named `it` and `en`.
 #'
 #' @keywords internal
-mail_status_words <- function(request_status, applied_as = "") {
+mail_status_words <- function(request_status, applied_as = "", at = "") {
   applied_as <- if (is.null(applied_as) || length(applied_as) != 1L ||
                       is.na(applied_as)) {
     ""
@@ -178,9 +188,64 @@ mail_status_words <- function(request_status, applied_as = "") {
         "the project: the channel wrote nothing on the instance"
       )
     )
+  } else if (mail_expiration_reached(applied_as, at)) {
+    c(
+      it = paste0(
+        "la persona e' sul progetto, ma l'ultimo giorno di accesso della ",
+        "richiesta e' passato: REDCap non la fa entrare"
+      ),
+      en = paste0(
+        "the person is on the project, but the last day of access of the ",
+        "request has passed: REDCap does not let them in"
+      )
+    )
   } else {
     c(it = "l'accesso e' stato concesso", en = "the access has been granted")
   }
+}
+
+
+#' Whether the expiration a read-back carries is reached on the day of a round
+#'
+#' The stored expiration is the day after the last day of access, so it is
+#' reached when it is not later than the day of the round: REDCap, whose
+#' server runs UTC, denies access when `expiration <= TODAY`. The day is the
+#' UTC one of `at`, not the clock of whoever composes the message, so the same
+#' row says the same thing whenever it is read and the tests do not depend on
+#' the machine. `validate_request()` and the choice of `lapsed` read the date
+#' of the machine (`Sys.Date()`), which is the same day on a machine in UTC;
+#' on one in another zone the two differ between the midnights, and the
+#' message then says "granted" for that stretch, as the limit of the gate on
+#' the last day already does.
+#'
+#' @param applied_as The row's read-back, `role_name=...; dag_name=...;
+#'   expiration=...`.
+#' @param at The time of the round, `"%Y-%m-%d %H:%M"` in UTC.
+#'
+#' @return `TRUE` when both carry a date and the expiration is not later than
+#'   the day of `at`; `FALSE` otherwise, which is the answer for every row
+#'   that says nothing readable.
+#'
+#' @keywords internal
+mail_expiration_reached <- function(applied_as, at) {
+  day <- "[0-9]{4}-[0-9]{2}-[0-9]{2}"
+  if (length(applied_as) != 1L || is.na(applied_as) ||
+        length(at) != 1L || is.na(at)) {
+    return(FALSE)
+  }
+  expiration <- regmatches(
+    applied_as, regexec(paste0("(?:^|; )expiration=(", day, ")(?:;|$)"),
+                        applied_as, perl = TRUE)
+  )[[1L]]
+  today <- regmatches(
+    at, regexec(paste0("^(", day, ")(?: |$)"), at)
+  )[[1L]]
+  if (length(expiration) != 2L || length(today) != 2L) {
+    return(FALSE)
+  }
+  expiration <- as.Date(expiration[[2L]], format = "%Y-%m-%d")
+  today <- as.Date(today[[2L]], format = "%Y-%m-%d")
+  !is.na(expiration) && !is.na(today) && expiration <= today
 }
 
 
@@ -200,7 +265,9 @@ mail_outcome_message <- function(row) {
   stopifnot(is.list(row), !is.null(row[["record_id"]]))
 
   said <- mail_outcome_words(as.character(row[["outcome"]]))
-  status <- mail_status_words(row[["request_status"]], row[["applied_as"]])
+  status <- mail_status_words(
+    row[["request_status"]], row[["applied_as"]], at = row[["outcome_at"]]
+  )
   id <- as.character(row[["record_id"]])
   locale <- mail_said_or(mail_local_time(row[["outcome_at"]]), "non nota")
 

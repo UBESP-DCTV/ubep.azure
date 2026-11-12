@@ -416,6 +416,92 @@ test_that("una riga scaduta chiusa sulla persona tolta non dice che un accesso e
 })
 
 
+test_that("una riga con la scadenza gia' raggiunta non dice che un accesso e' stato concesso", { # nolint: line_length_linter.
+  # eval
+  scaduta <- "role_name=x; dag_name=; expiration=2026-11-01"
+  detto <- mail_status_words("active", scaduta, at = "2026-11-12 03:00")
+
+  # test
+  # The person is on the project and REDCap does not let them in: neither
+  # "granted" nor "the person is gone".
+  expect_match(detto[["it"]], "e' passato", fixed = TRUE)
+  expect_match(detto[["it"]], "REDCap non la fa entrare", fixed = TRUE)
+  expect_match(detto[["en"]], "has passed", fixed = TRUE)
+  expect_match(detto[["en"]], "REDCap does not let them in", fixed = TRUE)
+  expect_false(grepl("concesso", detto[["it"]], fixed = TRUE))
+  expect_false(grepl("granted", detto[["en"]], fixed = TRUE))
+})
+
+
+test_that("la scadenza uguale al giorno del giro e' raggiunta, quella del giorno dopo no", { # nolint: line_length_linter.
+  # The stored day is the one after the last: on it REDCap no longer lets the
+  # person in, the same rule as `validate_request()`.
+  ogni <- function(giorno) {
+    mail_status_words(
+      "active", paste0("role_name=x; dag_name=; expiration=", giorno),
+      at = "2026-11-12 03:00"
+    )
+  }
+  expect_match(ogni("2026-11-12")[["it"]], "e' passato", fixed = TRUE)
+  expect_match(
+    ogni("2026-11-13")[["it"]], "l'accesso e' stato concesso", fixed = TRUE
+  )
+})
+
+
+test_that("senza una scadenza leggibile o senza data del giro una riga attiva dice concesso", { # nolint: line_length_linter.
+  concesso <- c(
+    it = "l'accesso e' stato concesso", en = "the access has been granted"
+  )
+  at <- "2026-11-12 03:00"
+  expect_equal(
+    mail_status_words("active", "role_name=x; dag_name=; expiration=", at),
+    concesso
+  )
+  expect_equal(mail_status_words("active", "", at), concesso)
+  expect_equal(mail_status_words("active", "role_name=x", at), concesso)
+  expect_equal(
+    mail_status_words("active", "expiration=2026-11-01", at = ""), concesso
+  )
+  expect_equal(
+    mail_status_words("active", "expiration=2026-11-01"), concesso
+  )
+})
+
+
+test_that("una revoca e una riga absent dicono come prima anche con la scadenza passata", { # nolint: line_length_linter.
+  at <- "2026-11-12 03:00"
+  passata <- "role_name=x; dag_name=; expiration=2026-11-01"
+  expect_equal(
+    mail_status_words("revoked", passata, at)[["it"]],
+    "l'accesso e' stato tolto"
+  )
+  expect_match(
+    mail_status_words("active", "absent", at)[["it"]],
+    "non e' piu' sul progetto", fixed = TRUE
+  )
+})
+
+
+test_that("il messaggio d'esito di una riga con la scadenza gia' raggiunta dice che l'ultimo giorno e' passato", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_outcome_message(riga_di_prova(
+    outcome = "applied", outcome_detail = "", request_status = "active",
+    applied_as = "role_name=data entry; dag_name=; expiration=2026-08-24",
+    outcome_at = "2026-08-24 12:04"
+  ))[["body"]]
+
+  # test
+  expect_match(
+    detto, "l'ultimo giorno di accesso della richiesta", fixed = TRUE
+  )
+  expect_match(
+    detto, "the last day of access of the request has passed", fixed = TRUE
+  )
+  expect_false(grepl("l'accesso e' stato concesso", detto, fixed = TRUE))
+})
+
+
 test_that("l'ora nel corpo e' quella italiana, e nomina il fuso", {
   # eval
   detto <- mail_outcome_message(riga_di_prova())[["body"]]
