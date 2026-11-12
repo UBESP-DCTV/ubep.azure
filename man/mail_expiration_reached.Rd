@@ -18,9 +18,14 @@ that says nothing readable.
 }
 \description{
 The stored expiration is the day after the last day of access, so it is
-reached when it is not later than the day of the round, as
-\code{validate_request()} reads it. The day is the UTC one of \code{at}, not the
-clock of whoever composes the message, so the same row says the same thing
-whenever it is read.
+reached when it is not later than the day of the round: REDCap, whose
+server runs UTC, denies access when \code{expiration <= TODAY}. The day is the
+UTC one of \code{at}, not the clock of whoever composes the message, so the same
+row says the same thing whenever it is read and the tests do not depend on
+the machine. \code{validate_request()} and the choice of \code{lapsed} read the date
+of the machine (\code{Sys.Date()}), which is the same day on a machine in UTC;
+on one in another zone the two differ between the midnights, and the
+message then says "granted" for that stretch, as the limit of the gate on
+the last day already does.
 }
 \keyword{internal}

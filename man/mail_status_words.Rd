@@ -14,7 +14,7 @@ the instance. Empty when the caller does not say.}
 
 \item{at}{The time of the round, UTC, \code{"\%Y-\%m-\%d \%H:\%M"}: the day against
 which the stored expiration of \code{applied_as} is read. Empty or not a date,
-and the third fact is not told.}
+and the fourth fact is not told.}
 }
 \value{
 A character vector named \code{it} and \code{en}.

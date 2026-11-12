@@ -163,7 +163,7 @@ mail_said_or <- function(value, absent) {
 #'   the instance. Empty when the caller does not say.
 #' @param at The time of the round, UTC, `"%Y-%m-%d %H:%M"`: the day against
 #'   which the stored expiration of `applied_as` is read. Empty or not a date,
-#'   and the third fact is not told.
+#'   and the fourth fact is not told.
 #'
 #' @return A character vector named `it` and `en`.
 #'
@@ -208,10 +208,15 @@ mail_status_words <- function(request_status, applied_as = "", at = "") {
 #' Whether the expiration a read-back carries is reached on the day of a round
 #'
 #' The stored expiration is the day after the last day of access, so it is
-#' reached when it is not later than the day of the round, as
-#' `validate_request()` reads it. The day is the UTC one of `at`, not the
-#' clock of whoever composes the message, so the same row says the same thing
-#' whenever it is read.
+#' reached when it is not later than the day of the round: REDCap, whose
+#' server runs UTC, denies access when `expiration <= TODAY`. The day is the
+#' UTC one of `at`, not the clock of whoever composes the message, so the same
+#' row says the same thing whenever it is read and the tests do not depend on
+#' the machine. `validate_request()` and the choice of `lapsed` read the date
+#' of the machine (`Sys.Date()`), which is the same day on a machine in UTC;
+#' on one in another zone the two differ between the midnights, and the
+#' message then says "granted" for that stretch, as the limit of the gate on
+#' the last day already does.
 #'
 #' @param applied_as The row's read-back, `role_name=...; dag_name=...;
 #'   expiration=...`.
