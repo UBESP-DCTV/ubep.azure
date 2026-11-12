@@ -3796,3 +3796,36 @@ test_that("il log e il rapporto leggono un valore nello stesso punto", {
     "2026-09-01 02:45"
   )
 })
+
+
+test_that("una revoca esce dal registro sul nome eseguito solo nel perimetro", {
+  # eval
+  eseguita <- c(
+    server = "edc10", project_id = "9003",
+    username = "mario.rossi@ubep.unipd.it"
+  )
+  revocata <- list(
+    server = "edc10", project_id = "09003", request_status = "revoked"
+  )
+  esce <- function(executed = eseguita, current = revocata, certain = TRUE,
+                   creating = FALSE) {
+    revocation_exits(executed, current, certain, creating)
+  }
+
+  # test
+  expect_true(esce())
+  expect_false(esce(current = utils::modifyList(
+    revocata, list(request_status = "active")
+  )))
+  expect_false(esce(certain = FALSE))
+  expect_false(esce(creating = TRUE))
+  expect_false(esce(executed = NULL))
+  expect_false(esce(executed = c(eseguita[1:2], username = "")))
+  expect_false(esce(executed = c(eseguita[1:2], username = NA)))
+  expect_false(esce(current = utils::modifyList(
+    revocata, list(server = "edc12")
+  )))
+  expect_false(esce(current = utils::modifyList(
+    revocata, list(project_id = "9004")
+  )))
+})

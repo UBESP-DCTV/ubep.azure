@@ -75,7 +75,10 @@ to take the access from and nobody to create, and the round closes the row
 before any instance is asked, as it did before the rule. Stopped for IT,
 the rows long closed that way would bring an outcome and a copy each on
 the first round. A revoked row that resolves to another account that
-exists still stops: revoking that account would take away an access the
-row never gave.
+exists still stops here: revoking that account would take away an access
+the row never gave. Since 2026-11-12 the round does not ask this function
+about a revoked row whose version carried out is certain and whose
+instance and project did not move, \code{revocation_exits()}: it revokes the
+username carried out instead.
 }
 \keyword{internal}

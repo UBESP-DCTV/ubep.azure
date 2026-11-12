@@ -6194,12 +6194,16 @@ test_that("una revoca su un account rinominato non revoca il nome nuovo", {
 
   # test
   # Revoking the new name would take away an access the row never gave, and
-  # leave the one it gave: the row stops for IT.
-  expect_equal(
-    as.character(esito[["esiti"]][["outcome_detail"]]),
-    "TRASPORTO_IDENTITA_CAMBIATA"
+  # leave the one it gave. Until 0.26.0 the row stopped for IT; since
+  # 2026-11-12 it revokes the name carried out (item 12), here no longer on
+  # the project, and the new name is never asked about.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_false(
+    "mario.rossi.nuovo@ubep.unipd.it" %in% chiesti_allo_stato()
   )
-  nulla_scritto()
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
 })
 
 
@@ -7533,17 +7537,20 @@ test_that("una revoca parte col nome scritto uguale, se l'istanza ne tiene due c
   # eval
   # A state REDCap's `_ci` keys should not allow, kept as a guard: the name
   # sent must not be another row's because it came first in the reply.
+  # Since 2026-11-12 (item 12) the revocation of a row carried out goes to
+  # the name carried out, the register's `mario`, not to the one the
+  # resolution finds now: the other spelling comes first in the reply.
   esito <- giro_revoca(
     istanza = istanza_doppia(
       list(user_rights = 1L),
-      list(username = mario, role_name = "data entry", user_rights = 0L),
-      list(username = maiuscolo, role_name = "data entry", user_rights = 0L)
+      list(username = maiuscolo, role_name = "data entry", user_rights = 0L),
+      list(username = mario, role_name = "data entry", user_rights = 0L)
     ),
     directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
   )
 
   # test
-  expect_equal(nomi_revocati(), maiuscolo)
+  expect_equal(nomi_revocati(), mario)
 })
 
 
@@ -7974,4 +7981,286 @@ test_that("il giro fermo sul canale assente scrive le identita' delle sole righe
   scritte <- identita_scritte()
   expect_equal(scritte[["record_id"]], "2")
   expect_equal(scritte[["username"]], rinominato)
+})
+
+
+# ---- A revoked row revokes the username carried out (item 12, 0.26.0) ----
+
+# The usernames the round asked an instance to revoke.
+revocati <- function() {
+  unlist(lapply(revoche(), function(req) {
+    vapply(req[["body"]][["data"]][["requests"]], function(r) {
+      as.character(r[["username"]])
+    }, character(1))
+  }))
+}
+
+# The seal of Mario's row revoked, under the name carried out.
+sigillo_revocata_mario <- function(...) {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, request_status = "revoked", ...
+  ))
+}
+
+# Mario's account renamed on Entra, his contact outside the domain.
+rinominata <- function() {
+  directory_doppia(graph_user(userPrincipalName = rinominato))
+}
+
+# Anna revokes the row; `cambi` and `storia` change it further.
+giro_revoca_eseguita <- function(cambi = list(), storia = list(), ...) {
+  giro_coppia(
+    utils::modifyList(list(request_status = "revoked"), cambi),
+    c(storia, list(cambio(anna, "request_status = 'revoked'"))),
+    ...
+  )
+}
+
+
+test_that("la revoca di una riga eseguita su un account rinominato revoca il nome eseguito", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_revoca_eseguita(
+    directory = rinominata(), istanza = istanza_che_revoca()
+  )
+
+  # test
+  # The old login comes off the project; the new one is never asked about.
+  # The 0.25.0 stopped the row on TRASPORTO_IDENTITA_CAMBIATA, and the old
+  # login stayed with no row to govern it.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["outcome_detail"]]), "")
+  expect_equal(revocati(), mario)
+  expect_false(rinominato %in% chiesti_allo_stato())
+  # Sealed under the name carried out, so the next round finds the row
+  # intact under that name; the register keeps it (L6).
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_revocata_mario()
+  )
+  expect_null(identita_scritte())
+})
+
+
+# Mario's row whose contact is his UPN, as the work instruction asks for
+# somebody who already has a UBEP account; carried out under that name.
+creata_interna <- function() {
+  creata_da_anna(details = paste0(
+    "record_id = '1', server = 'edc10', project_id = '9003', ",
+    "first_name = 'Mario', last_name = 'Rossi', ",
+    "contact_email = 'mario.rossi@ubep.unipd.it', ",
+    "role_name = 'data entry', request_status = 'active'"
+  ))
+}
+sigillo_interna <- function(...) {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, contact_email = mario, ...
+  ))
+}
+giro_interna <- function(stato = "revoked", storia = list(), ...) {
+  riga <- eseguita_row(
+    applied_seal = sigillo_interna(), contact_email = mario,
+    request_status = stato
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, carried_out(sigillo_interna())),
+      creazioni = creazioni_finte(creata_interna())
+    ),
+    istanza_che_revoca(),
+    directory = rinominata(),
+    dry_run = FALSE,
+    ...
+  )
+}
+
+
+test_that("una rinomina col recapito interno ferma la riga attiva sul recapito", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_interna(stato = "active")
+
+  # test
+  # The contact is the old UPN, which the tenant no longer holds: the
+  # resolution names nobody, and the rule of the pair says nothing.
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "DATO_RECAPITO_INTERNO_INESISTENTE"
+  )
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("la revoca di una rinomina col recapito interno revoca il nome eseguito", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_interna(
+    storia = list(cambio(anna, "request_status = 'revoked'"))
+  )
+
+  # test
+  # The 0.25.0 stopped the revocation on the code of the contact, and it
+  # never passed the gate.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(revocati(), mario)
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]),
+    sigillo_interna(request_status = "revoked")
+  )
+})
+
+
+test_that("la revoca di un account rinominato con il vecchio nome gia' tolto si chiude absent", { # nolint: line_length_linter.
+  # eval
+  # IT took the old login off the project by hand.
+  esito <- giro_revoca_eseguita(
+    directory = rinominata(), istanza = istanza_doppia(list())
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  expect_length(revocati(), 0L)
+})
+
+
+test_that("al giro dopo la revoca sul nome eseguito non revoca il nome nuovo", {
+  # eval
+  # The round before revoked Mario and sealed the row revoked under his
+  # name; the new login holds the project now, through a new request.
+  sigillo <- sigillo_revocata_mario()
+  riga <- eseguita_row(
+    request_status = "revoked", applied_seal = sigillo, applied_as = "absent"
+  )
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(
+        list(list(
+          timestamp = "2026-11-13 05:00", username = "svc-canale-ubep",
+          action = "Update record (API) 1", record = "1",
+          details = paste0(
+            "applied_seal = '", sigillo, "', seal_state = 'intact'"
+          )
+        )),
+        list(cambio(anna, "request_status = 'revoked'")),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(),
+      list(username = rinominato, project_id = 9003L,
+           role_name = "data entry", user_rights = 0L)
+    ),
+    directory = rinominata(),
+    dry_run = FALSE,
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_length(revocati(), 0L)
+  expect_false(rinominato %in% chiesti_allo_stato())
+  expect_null(sigilli_scritti())
+  expect_null(identita_scritte())
+  expect_length(posta[["mandate"]](), 0L)
+})
+
+
+test_that("una riga col nome nuovo gia' scritto dalla 0.25.0 revoca il nome eseguito e lo riporta", { # nolint: line_length_linter.
+  # eval
+  # The door of the 0.25.0 wrote the new name above the seal, and moved it;
+  # then Anna revoked.
+  esito <- giro_revoca_eseguita(
+    cambi = list(username = rinominato),
+    storia = list(list(
+      timestamp = "2026-11-05 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 1", record = "1",
+      details = paste0("username = '", rinominato, "', identity = 'existing'")
+    )),
+    directory = rinominata(), istanza = istanza_che_revoca()
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(revocati(), mario)
+  # The name carried out goes back in the register, under the verdict it
+  # held: the seal of the version revoked covers it, and the next round
+  # finds the row intact instead of reading the new name from the log.
+  scritte <- identita_scritte()
+  expect_equal(scritte[["username"]], mario)
+  expect_equal(scritte[["identity"]], "existing")
+  expect_equal(
+    as.character(sigilli_scritti()[["applied_seal"]]), sigillo_revocata_mario()
+  )
+})
+
+
+test_that("una revoca su una versione non verificata resta ferma come prima", {
+  # eval
+  # A seal no state of the log gives.
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        request_status = "revoked", applied_seal = "000000000000"
+      ))),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'")),
+        carried_out("000000000000")
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(),
+    directory = rinominata(),
+    dry_run = FALSE
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_length(revocati(), 0L)
+})
+
+
+test_that("una revoca con il progetto spostato resta un cambio di coppia", {
+  # eval
+  esito <- giro_revoca_eseguita(
+    cambi = list(project_id = "9004"),
+    storia = list(cambio(anna, "project_id = '9004'")),
+    directory = rinominata(), istanza = istanza_che_revoca()
+  )
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]), "DATO_COPPIA_CAMBIATA"
+  )
+  expect_length(revocati(), 0L)
+})
+
+
+test_that("la revoca del proprietario senza diritti si chiude solo se la coppia non c'e'", { # nolint: line_length_linter.
+  # eval
+  senza <- list(user_rights = 0L)
+  assente <- giro_revoca_eseguita(
+    directory = rinominata(), istanza = istanza_doppia(senza)
+  )
+  presente <- giro_revoca_eseguita(
+    directory = rinominata(),
+    istanza = istanza_doppia(
+      senza,
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L)
+    )
+  )
+
+  # test
+  # Only the revocation moved the seal, and the register holds the name
+  # carried out: closed as item 7 of the 0.25.0 closes it.
+  expect_equal(as.character(assente[["esiti"]][["outcome"]]), "applied")
+  expect_equal(as.character(assente[["esiti"]][["applied_as"]]), "absent")
+  expect_equal(
+    as.character(presente[["esiti"]][["outcome_detail"]]),
+    "DATO_AMBITO_NON_AUTORIZZATO"
+  )
 })

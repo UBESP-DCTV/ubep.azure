@@ -115,7 +115,11 @@
 #' either code, and on a sealed row whose pair the round could not judge,
 #' the identity door writes neither *Username (UPN)* nor *Identity
 #' resolution* (decided on 2026-11-12): the register keeps the name carried
-#' out, and the channel does not move the seal itself.
+#' out, and the channel does not move the seal itself. A revoked row whose
+#' version carried out is certain, on the instance and the project carried
+#' out, revokes the username carried out whatever the resolution says now
+#' (`revocation_exits()`, decided on 2026-11-12): the way out of the register
+#' for an account renamed on Entra.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -447,7 +451,8 @@ provisioning_reconcile <- function(register_url,
   # it writes, so the moment changes no decision of this round, only where
   # the write stands in the log, still below the outcome, the owner and the
   # seal.
-  write_identities <- function(open) {
+  write_identities <- function(open, names = resolved_names,
+                               verdicts_of = verdicts) {
     register_identity_import(
       register_url, register_token,
       round_changed(
@@ -455,9 +460,7 @@ provisioning_reconcile <- function(register_url,
         do.call(rbind, c(
           list(identity_payload("", "", "")[0, , drop = FALSE]),
           lapply(which(open), function(i) {
-            identity_payload(
-              record_ids[[i]], resolved_names[[i]], verdicts[[i]]
-            )
+            identity_payload(record_ids[[i]], names[[i]], verdicts_of[[i]])
           })
         )),
         fields = c("username", "identity")
@@ -694,6 +697,97 @@ provisioning_reconcile <- function(register_url,
   awaiting <- awaiting & !unheard
   checked <- checked & !(unheard & !tampered)
 
+  # The version carried out is read from the owners' log, which the round
+  # holds whole, and not from the row's own log: an account renamed on Entra
+  # moves no seal, since the register still holds the old name when it is
+  # read, so that row is never among the ones whose log is asked for.
+  #
+  # Rebuilt and verified by the channel's seal, `log_executed_row()`
+  # (decided on 2026-11-12): a write made before the round read the row is
+  # carried out whoever made it, one made while it ran is not, whoever made
+  # it. Where no version of the log gives the seal, the pair is read as the
+  # 0.25.0 read it, `log_executed_unverified()`, and the person as well: the
+  # rule is never worse than it was.
+  person_fields <- c("first_name", "last_name", "contact_email")
+  resolvable <- identity_normalize(verdicts) %in%
+    c("existing", "created", "disabled")
+  # A row whose seal did not move is the version carried out: the channel's
+  # seal covers every intent field, and the register as read matches it.
+  # Read from the log instead, a version the log cannot rebuild would leave
+  # the row unknown with nothing changed. An account renamed on Entra is
+  # still seen: the register as read holds the old name.
+  from_log <- !is.null(owners_log) & nzchar(sealed) &
+    (is.null(channel_account) | tampered)
+  executed_row <- lapply(seq_along(record_ids), function(i) {
+    if (!from_log[[i]]) {
+      return(NULL)
+    }
+    log_executed_row(owners_log, record_ids[[i]], channel_account)
+  })
+  pair_fields <- c("server", "project_id", "username")
+  executed_pair <- lapply(seq_along(record_ids), function(i) {
+    if (is.null(owners_log) || !nzchar(sealed[[i]])) {
+      return(NULL)
+    }
+    if (!from_log[[i]]) {
+      at <- function(field) {
+        value <- trimws(as.character(register[[field]][[i]]))
+        if (length(value) != 1L || is.na(value)) "" else value
+      }
+      return(vapply(pair_fields, at, character(1)))
+    }
+    verified <- executed_row[[i]]
+    if (!is.null(verified)) {
+      return(vapply(pair_fields, function(field) {
+        as.character(verified[["row"]][[field]])
+      }, character(1)))
+    }
+    log_executed_unverified(
+      owners_log, record_ids[[i]], creators[[i]],
+      approvers = approvers, channel_account = channel_account
+    )
+  })
+
+  # The way out of the register for a renamed account, decided on
+  # 2026-11-12 (item 12): a revoked row the channel carried out, whose
+  # version carried out is certain (the seal did not move, or the log
+  # rebuilds it and the seal verifies it), on the instance and the project
+  # carried out, revokes the username carried out, whatever the resolution
+  # says now: the account renamed, an internal contact the tenant no longer
+  # holds, `ambiguous`, a collision nobody answered. `revocation_exits()`.
+  # Revoking another name would take away an access the row never gave, and
+  # leave the one it gave on the instance with no row to govern it.
+  #
+  # For such a row the name for the whole round is the one carried out:
+  # the plan, the gate, the claims of the duplicates, the mail and the seal,
+  # so that the version revoked is sealed under the name carried out. Sealed
+  # under the resolved one, the next round would find the row intact, read
+  # the pair from the register and revoke every night the new name, the
+  # login a new request gives the person. It is admitted at the gate like
+  # any other revocation, and leaves the creation branch: a collision nobody
+  # answered creates nobody.
+  #
+  # Outside: a person the tenant no longer holds, whose revocation closes
+  # before any instance is asked, as before (decided on 2026-11-12); and an
+  # instance or a project moved, which stays a change of pair.
+  certain <- vapply(seq_along(record_ids), function(i) {
+    !is.null(executed_pair[[i]]) &&
+      (!from_log[[i]] || !is.null(executed_row[[i]]))
+  }, logical(1))
+  exiting <- vapply(seq_along(record_ids), function(i) {
+    revocation_exits(
+      executed_pair[[i]], register[i, , drop = FALSE],
+      certain = certain[[i]], creating = creating[[i]] && !unheard[[i]]
+    )
+  }, logical(1))
+  resolved_names[exiting] <- vapply(
+    executed_pair[exiting], function(pair) pair[["username"]], character(1)
+  )
+  admitted <- admitted | exiting
+  creating <- creating & !exiting
+  withdrawn <- withdrawn & !exiting
+  awaiting <- awaiting & !exiting
+
   # The register as this round will have left it, and not as it read it. The
   # round resolves `username` and writes it back in this same pass, so sealing
   # the row as read would seal a version the register is about to stop
@@ -756,58 +850,8 @@ provisioning_reconcile <- function(register_url,
   # nothing written on the instance, nobody created, no new seal and the
   # same owner. Rows never carried out are not concerned.
   #
-  # The version carried out is read from the owners' log, which the round
-  # holds whole, and not from the row's own log: an account renamed on Entra
-  # moves no seal, since the register still holds the old name when it is
-  # read, so that row is never among the ones whose log is asked for.
-  #
-  # Rebuilt and verified by the channel's seal, `log_executed_row()`
-  # (decided on 2026-11-12): a write made before the round read the row is
-  # carried out whoever made it, one made while it ran is not, whoever made
-  # it. Where no version of the log gives the seal, the pair is read as the
-  # 0.25.0 read it, `log_executed_unverified()`, and the person as well: the
-  # rule is never worse than it was.
-  person_fields <- c("first_name", "last_name", "contact_email")
-  resolvable <- identity_normalize(verdicts) %in%
-    c("existing", "created", "disabled")
-  # A row whose seal did not move is the version carried out: the channel's
-  # seal covers every intent field, and the register as read matches it.
-  # Read from the log instead, a version the log cannot rebuild would leave
-  # the row unknown with nothing changed. An account renamed on Entra is
-  # still seen: the register as read holds the old name.
-  from_log <- !is.null(owners_log) & nzchar(sealed) &
-    (is.null(channel_account) | tampered)
-  executed_row <- lapply(seq_along(record_ids), function(i) {
-    if (!from_log[[i]]) {
-      return(NULL)
-    }
-    log_executed_row(owners_log, record_ids[[i]], channel_account)
-  })
-  pair_fields <- c("server", "project_id", "username")
-  executed_pair <- lapply(seq_along(record_ids), function(i) {
-    if (is.null(owners_log) || !nzchar(sealed[[i]])) {
-      return(NULL)
-    }
-    if (!from_log[[i]]) {
-      at <- function(field) {
-        value <- trimws(as.character(register[[field]][[i]]))
-        if (length(value) != 1L || is.na(value)) "" else value
-      }
-      return(vapply(pair_fields, at, character(1)))
-    }
-    verified <- executed_row[[i]]
-    if (!is.null(verified)) {
-      return(vapply(pair_fields, function(field) {
-        as.character(verified[["row"]][[field]])
-      }, character(1)))
-    }
-    log_executed_unverified(
-      owners_log, record_ids[[i]], creators[[i]],
-      approvers = approvers, channel_account = channel_account
-    )
-  })
   shifts <- lapply(seq_along(record_ids), function(i) {
-    if (is.null(executed_pair[[i]]) || blind[[i]]) {
+    if (is.null(executed_pair[[i]]) || blind[[i]] || exiting[[i]]) {
       return(list(code = "", changed = character()))
     }
     # Whether somebody wrote the person: with the version verified, the
@@ -861,7 +905,18 @@ provisioning_reconcile <- function(register_url,
   unjudged <- vapply(seq_along(record_ids), function(i) {
     is.null(executed_pair[[i]]) || blind[[i]]
   }, logical(1))
-  identity_written <- write_identities(!moved & !(sealed_row & unjudged))
+  # A revocation on the name carried out (item 12) keeps the verdict the
+  # register holds beside that name, and writes the name back only where the
+  # door of the 0.24.0 or the 0.25.0 had written the new one: the register
+  # then holds again what the seal of the revoked version covers.
+  verdict_read <- trimws(as.character(register[["identity"]] %||% ""))
+  verdict_read[is.na(verdict_read) |
+                 !verdict_read %in% identity_vocabulary()] <- ""
+  identity_written <- write_identities(
+    !moved & !(sealed_row & unjudged),
+    names = resolved_names,
+    verdicts_of = ifelse(exiting, verdict_read, verdicts)
+  )
 
   # A revocation and nothing else, by somebody other than the owner, is free
   # when they manage the project, and only the instance can say whether they

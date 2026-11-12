@@ -1578,8 +1578,11 @@ log_value_as_register <- function(value, field) {
 #' before any instance is asked, as it did before the rule. Stopped for IT,
 #' the rows long closed that way would bring an outcome and a copy each on
 #' the first round. A revoked row that resolves to another account that
-#' exists still stops: revoking that account would take away an access the
-#' row never gave.
+#' exists still stops here: revoking that account would take away an access
+#' the row never gave. Since 2026-11-12 the round does not ask this function
+#' about a revoked row whose version carried out is certain and whose
+#' instance and project did not move, `revocation_exits()`: it revokes the
+#' username carried out instead.
 #'
 #' @param executed The `server`, `project_id` and `username` carried out:
 #'   the row as read when its seal did not move, otherwise what
@@ -1614,15 +1617,6 @@ pair_change <- function(executed, current, target, creating, rewritten,
     value <- trimws(as.character(current[[field]] %||% ""))
     if (length(value) != 1L || is.na(value)) "" else value
   }
-  # A project is a number, and `09003` is the project `9003`.
-  same_project <- function(a, b) {
-    if (grepl("^[0-9]+$", a) && grepl("^[0-9]+$", b)) {
-      as.numeric(a) == as.numeric(b)
-    } else {
-      identical(a, b)
-    }
-  }
-
   changed <- character()
   if (!is.na(executed[["server"]]) && now("server") != executed[["server"]]) {
     changed <- c(changed, "server")
@@ -1651,6 +1645,90 @@ pair_change <- function(executed, current, target, creating, rewritten,
     return(list(code = "TRASPORTO_IDENTITA_CAMBIATA", changed = "account"))
   }
   list(code = "", changed = character())
+}
+
+
+#' Whether two project ids name the same project
+#'
+#' A project is a number, and `09003` is the project `9003`. Anything that is
+#' not all digits is compared as it is.
+#'
+#' @param a,b Two project ids, one string each.
+#'
+#' @return `TRUE` or `FALSE`.
+#'
+#' @keywords internal
+same_project <- function(a, b) {
+  if (grepl("^[0-9]+$", a) && grepl("^[0-9]+$", b)) {
+    as.numeric(a) == as.numeric(b)
+  } else {
+    identical(a, b)
+  }
+}
+
+
+#' Whether a revoked row takes the access away from the name carried out
+#'
+#' Decided on 2026-11-12 (item 12, widened): a revoked row the channel
+#' carried out revokes the username carried out on the pair carried out,
+#' whatever the resolution says now, when the version carried out is
+#' **certain** and the row still names the instance and the project carried
+#' out. The account renamed on Entra stays the way it is (option (a) of the
+#' 2026-11-10): the owner revokes the old row, which takes the old login off
+#' the project, and files a new one, which finds the new name; IT does not
+#' touch the instance. Widened to every verdict that names nobody, because a
+#' renamed account with an internal contact does not reach
+#' `TRASPORTO_IDENTITA_CAMBIATA`: its contact is the old UPN, which the tenant
+#' no longer holds, and the resolution stops on
+#' `DATO_RECAPITO_INTERNO_INESISTENTE`. The same for `ambiguous` and for a
+#' collision nobody answered.
+#'
+#' Certain means the seal of the channel did not move and the register as
+#' read is the version carried out, or `log_executed_row()` rebuilt it and
+#' the seal verified it. On a version the log does not verify the row stays
+#' where the rule of the pair puts it, as before.
+#'
+#' Outside, decided on 2026-11-12:
+#'
+#' - an instance or a project moved: the gate would judge the rights on the
+#'   wrong project, and the row stays on `DATO_COPPIA_CAMBIATA` until the
+#'   referent brings them back;
+#' - a person the tenant no longer holds, a row to create: its revocation
+#'   closes before any instance is asked (`pair_change()`), and the old login
+#'   stays for IT to take off by hand, as before;
+#' - a row carried out for nobody, closed before anybody was resolved.
+#'
+#' @param executed The `server`, `project_id` and `username` carried out, as
+#'   for `pair_change()`, or `NULL` when the row was never carried out.
+#' @param current The row as the register holds it, a list or a one-row data
+#'   frame with `server`, `project_id` and `request_status`.
+#' @param certain Whether `executed` is the version carried out for certain.
+#' @param creating Whether the round would create a person for the row.
+#'
+#' @return `TRUE` when the row revokes the username carried out.
+#'
+#' @keywords internal
+revocation_exits <- function(executed, current, certain, creating) {
+  pair <- c("server", "project_id", "username")
+  stopifnot(
+    is.null(executed) ||
+      (is.character(executed) && all(pair %in% names(executed))),
+    is.logical(certain), length(certain) == 1L, !is.na(certain),
+    is.logical(creating), length(creating) == 1L, !is.na(creating)
+  )
+
+  now <- function(field) {
+    value <- trimws(as.character(current[[field]] %||% ""))
+    if (length(value) != 1L || is.na(value)) "" else value
+  }
+  if (!identical(now("request_status"), "revoked") || !certain || creating ||
+        is.null(executed) || anyNA(executed)) {
+    return(FALSE)
+  }
+
+  nzchar(executed[["username"]]) &&
+    identical(now("server"), executed[["server"]]) &&
+    same_project(now("project_id"), executed[["project_id"]])
 }
 
 

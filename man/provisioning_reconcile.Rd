@@ -213,7 +213,11 @@ codes. A row never carried out changes as before. On a row stopped on
 either code, and on a sealed row whose pair the round could not judge,
 the identity door writes neither \emph{Username (UPN)} nor \emph{Identity
 resolution} (decided on 2026-11-12): the register keeps the name carried
-out, and the channel does not move the seal itself.
+out, and the channel does not move the seal itself. A revoked row whose
+version carried out is certain, on the instance and the project carried
+out, revokes the username carried out whatever the resolution says now
+(\code{revocation_exits()}, decided on 2026-11-12): the way out of the register
+for an account renamed on Entra.
 
 \strong{The oldest row of a pair keeps it whether the round serves it or not.}
 A row the round stops (held, blind, on its identity, on a pair that moved)
