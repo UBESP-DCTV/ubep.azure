@@ -11,7 +11,9 @@
 #
 # Legge e manda posta, e basta: non scrive nel registro e non tocca Entra.
 # Alle istanze col modulo chiede solo `accounts`, con i segreti che il giro
-# usa; un'istanza non letta non ferma niente.
+# usa; un'istanza non letta non ferma niente. Al servizio di posta, oltre a
+# mandare, chiede le liste di soppressione con una chiave di sola lettura
+# (dalla 0.26.0): una lettura mancata non ferma niente.
 # Una guardia in tests/testthat/test-runner-guardie.R lo tiene tale, su
 # questo file e su tutto cio' che il pacchetto raggiunge da
 # provisioning_report().
@@ -255,10 +257,43 @@ mailer <- if (POSTA) {
   NULL
 }
 
-# `approvers` c'e' dalla 0.25.0: un pacchetto piu' vecchio rifiuta
-# l'argomento e la lavorazione esce con un errore, senza record. Per questo
-# si installa prima il pacchetto e poi questo file, e al ritorno il
-# contrario.
+# Le liste di soppressione del servizio di posta, lette ogni giorno con una
+# chiave sua, di sola lettura, il cui nome sta nell'inventario accanto a
+# quello della chiave che manda. Come quella, resta dentro la chiusura: il
+# pacchetto sa che c'e' una funzione a cui chiedere le liste, e non vede mai
+# la chiave. Un nome assente o un segreto che non si legge non fermano il
+# rapporto: la lettura manca, `soppressioni_lette` e' falso, e lo dice la
+# sua regola. Indipendente da UBEP_RAPPORTO_POSTA: leggere non manda niente.
+soppressioni <- local({
+  nome <- registro[["segreto_soppressioni"]]
+  chiave <- if (is.null(nome) || !nzchar(as.character(nome))) {
+    message(
+      "l'inventario non nomina `registro.segreto_soppressioni`: le liste ",
+      "di soppressione non si leggono."
+    )
+    NULL
+  } else {
+    tryCatch(
+      segreto_da_keyvault(as.character(nome), token),
+      error = function(e) {
+        message(
+          "il segreto delle soppressioni non si legge: ", conditionMessage(e)
+        )
+        NULL
+      }
+    )
+  }
+  if (is.null(chiave) || !nzchar(chiave)) {
+    NULL
+  } else {
+    function() ubep.azure:::suppression_read(api_key = chiave)
+  }
+})
+
+# `approvers` c'e' dalla 0.25.0 e `suppressions` dalla 0.26.0: un pacchetto
+# piu' vecchio rifiuta l'argomento e la lavorazione esce con un errore,
+# senza record. Per questo si installa prima il pacchetto e poi questo file,
+# e al ritorno il contrario.
 esito <- ubep.azure:::provisioning_report(
   register_url = as.character(registro[["host"]]),
   register_token = registro_token,
@@ -273,7 +308,8 @@ esito <- ubep.azure:::provisioning_report(
   channel_account = CANALE_UTENTE,
   hosts = host,
   secrets = segreti,
-  approvers = APPROVATORI_IT
+  approvers = APPROVATORI_IT,
+  suppressions = soppressioni
 )
 
 # Il record e' anche il riassunto sullo standard output: cio' che si stampa e
@@ -291,6 +327,18 @@ cat(json, "\n")
 if (nrow(esito[["rapporti"]]) > 0L) {
   utils::write.table(
     esito[["rapporti"]],
+    file = stderr(), sep = "\t", quote = FALSE, row.names = FALSE
+  )
+}
+
+# Gli indirizzi in soppressione, con la lista, la classe, le righe, la data
+# della voce e il motivo del servizio: nel journal e mai nel record, come la
+# tabella dei rapporti qui sopra. E' cio' che IT legge quando suona una delle
+# regole delle soppressioni.
+if (nrow(esito[["soppressioni"]]) > 0L) {
+  message("soppressioni:")
+  utils::write.table(
+    esito[["soppressioni"]],
     file = stderr(), sep = "\t", quote = FALSE, row.names = FALSE
   )
 }
