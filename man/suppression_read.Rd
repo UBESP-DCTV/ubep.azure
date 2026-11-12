@@ -34,6 +34,9 @@ service's own words on the standard error, which is the journal of the
 unit: on 2026-08-27 the same refusal by IP Access Management answered 403
 on one endpoint and 401 on another.
 
+Each request waits thirty seconds at most, and a time out is a failure
+like any other: the reading comes before the report, and must not hold it.
+
 The first failure stops the reading: a list read in part is not a list
 read, and nothing that follows would change that. A failure on the first
 page of a list is \code{TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI} (the network, a

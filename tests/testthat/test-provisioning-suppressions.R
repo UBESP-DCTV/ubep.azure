@@ -525,3 +525,40 @@ test_that("registro non letto: la casella di IT si giudica, il resto no", {
   expect_true(is.na(m[["soppressi_recapiti"]]))
   expect_true(is.na(m[["bloccati_nuovi"]]))
 })
+
+
+test_that("ogni richiesta delle soppressioni ha un tempo massimo", {
+  # Dalla revisione del 2026-11-12 (R2): la lettura sta prima del rapporto,
+  # in un'unita' oneshot senza TimeoutStartSec, e un servizio che accetta la
+  # connessione e non risponde la terrebbe ferma.
+  viste <- list()
+  httr2::local_mocked_responses(function(req) {
+    viste[[length(viste) + 1L]] <<- req
+    httr2::response_json(body = list())
+  })
+
+  esito <- suppression_read(api_key = finti[["chiave"]])
+
+  expect_true(esito[["ok"]])
+  expect_length(viste, 5L)
+  for (req in viste) {
+    expect_false(is.null(req[["options"]][["timeout_ms"]]))
+  }
+})
+
+
+test_that("un tempo scaduto e' una lettura non riuscita", {
+  letto <- suppressMessages(httr2::with_mocked_responses(
+    function(req) {
+      stop(structure(
+        class = c("httr2_failure", "httr2_error", "rlang_error", "error",
+                  "condition"),
+        list(message = "Timeout was reached", call = NULL)
+      ))
+    },
+    suppression_read(finti[["chiave"]])
+  ))
+
+  expect_false(letto[["ok"]])
+  expect_equal(letto[["errors"]], "TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI")
+})

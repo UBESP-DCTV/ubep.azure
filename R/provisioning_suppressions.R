@@ -46,6 +46,9 @@ suppression_lists <- function() {
 #' unit: on 2026-08-27 the same refusal by IP Access Management answered 403
 #' on one endpoint and 401 on another.
 #'
+#' Each request waits thirty seconds at most, and a time out is a failure
+#' like any other: the reading comes before the report, and must not hold it.
+#'
 #' The first failure stops the reading: a list read in part is not a list
 #' read, and nothing that follows would change that. A failure on the first
 #' page of a list is `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` (the network, a
@@ -107,6 +110,13 @@ suppression_read <- function(api_key, limit = 500L, max_pages = 200L) {
           httr2::req_method("GET") |>
           httr2::req_url_query(limit = limit, offset = offset) |>
           httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
+          # The reading comes before the report, in a oneshot unit with no
+          # start timeout: a service that takes the connection and does not
+          # answer would hold the report and its record for good. A page of
+          # 500 entries is a few tens of kilobytes, answered in about a
+          # second; thirty seconds is that with a wide margin, and a page
+          # that takes longer fails the reading like any other failure.
+          httr2::req_timeout(30) |>
           httr2::req_error(is_error = function(resp) FALSE) |>
           httr2::req_perform(),
         error = function(e) {
