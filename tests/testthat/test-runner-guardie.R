@@ -185,12 +185,12 @@ test_that("le lavorazioni pretendono l'utenza del canale e la passano", {
 
 
 test_that("il rapporto legge gli approvatori di IT come il giro e li passa", {
-  # Same limit as the guards above. The report reads the name a stopped row
-  # was executed with from the log, `log_executed_values()`, which needs the
-  # IT approvers to know which writes an approval covered: without them a
-  # change IT approved is passed over, and the name read is the one before.
-  # The reading is taken out of both scripts and run, so the two read the
-  # variable of the shared environment file the same way.
+  # Same limit as the guards above. The report of the 0.25.0 read the name
+  # a stopped row was executed with from the log with the IT approvers; since
+  # the 0.26.0 it reads the version the seal verifies, `log_executed_row()`,
+  # and needs them no more, but the runner still passes them. The reading is
+  # taken out of both scripts and run, so the two read the variable of the
+  # shared environment file the same way.
   dev <- testthat::test_path("..", "..", "dev")
   skip_if_not(dir.exists(dev), "dev/ is not in the built package")
   legge <- function(nome, valore) {

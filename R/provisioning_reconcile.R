@@ -97,9 +97,12 @@
 #'
 #' **A row the channel has carried out does not change its pair**, decided on
 #' 2026-11-09: the instance, the project and the person it was carried out
-#' for: the row as read when its seal did not move, and otherwise as the
-#' owners' log holds them below the channel's last seal
-#' (`log_executed_values()`). Whoever wrote the change, the owner included,
+#' for: the row as read when its seal did not move, and otherwise the
+#' version the owners' log rebuilds and the channel's last seal verifies
+#' (`log_executed_row()`, decided on 2026-11-12), or, where none does, the
+#' log read as the 0.25.0 read it (`log_executed_unverified()`). With the
+#' version verified, the person is rewritten when the register's differs
+#' from the one carried out. Whoever wrote the change, the owner included,
 #' approved or not, the row stops before the plan (`pair_change()`): nothing
 #' is written on the instance, nobody is created on Entra, the row keeps its
 #' seal and its owner. `DATO_COPPIA_CAMBIATA` when the referent moved it, the
@@ -108,7 +111,15 @@
 #' another account, or create one, and nobody wrote the person in the row:
 #' the account changed on Entra, and it is for IT. Both come before a held
 #' change, since no approval lets them through, and before the identity's own
-#' codes. A row never carried out changes as before.
+#' codes. A row never carried out changes as before. On a row stopped on
+#' either code, and on a sealed row whose pair the round could not judge,
+#' the identity door writes neither *Username (UPN)* nor *Identity
+#' resolution* (decided on 2026-11-12): the register keeps the name carried
+#' out, and the channel does not move the seal itself. A revoked row whose
+#' version carried out is certain, on the instance and the project carried
+#' out, revokes the username carried out whatever the resolution says now
+#' (`revocation_exits()`, decided on 2026-11-12): the way out of the register
+#' for an account renamed on Entra.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -434,19 +445,28 @@ provisioning_reconcile <- function(register_url,
   # and stays that way: it is what the two comparisons below are made against,
   # and a frame already carrying this round's answers would compare a value
   # with itself and report that nothing ever changes.
-  identity_written <- register_identity_import(
-    register_url, register_token,
-    round_changed(
-      register,
-      do.call(rbind, c(
-        list(identity_payload("", "", "")[0, , drop = FALSE]),
-        lapply(seq_along(record_ids), function(i) {
-          identity_payload(record_ids[[i]], resolved_names[[i]], verdicts[[i]])
-        })
-      )),
-      fields = c("username", "identity")
+  #
+  # Written once the rule of the pair has judged the rows, decided on
+  # 2026-11-12 (L6), and for the rows `open` names: nothing below reads what
+  # it writes, so the moment changes no decision of this round, only where
+  # the write stands in the log, still below the outcome, the owner and the
+  # seal.
+  write_identities <- function(open, names = resolved_names,
+                               verdicts_of = verdicts) {
+    register_identity_import(
+      register_url, register_token,
+      round_changed(
+        register,
+        do.call(rbind, c(
+          list(identity_payload("", "", "")[0, , drop = FALSE]),
+          lapply(which(open), function(i) {
+            identity_payload(record_ids[[i]], names[[i]], verdicts_of[[i]])
+          })
+        )),
+        fields = c("username", "identity")
+      )
     )
-  )
+  }
 
   # What the gate refuses stops here and enters nothing that follows: not the
   # desired state, not the scope question, not an instance. `ambiguous` and
@@ -583,9 +603,12 @@ provisioning_reconcile <- function(register_url,
         # channel has sealed: a name typed wrong, or the old account dropped
         # too early. Every write of the channel would read as somebody
         # else's, so the round stops here, before it judges or writes
-        # anything but the identities, which do not depend on it.
+        # anything but the identities of the rows never sealed, which the
+        # rule of the pair does not concern; a sealed row waits for a round
+        # that judges it (L6).
         if (!is.null(channel_account) &&
               log_channel_absent(reading_owners[["log"]], channel_account)) {
+          identity_written <- write_identities(!nzchar(carried))
           return(halted(
             c(identity_written[["errors"]],
               "TRASPORTO_REGISTRO_CANALE_ASSENTE"),
@@ -674,6 +697,109 @@ provisioning_reconcile <- function(register_url,
   awaiting <- awaiting & !unheard
   checked <- checked & !(unheard & !tampered)
 
+  # The version carried out is read from the owners' log, which the round
+  # holds whole, and not from the row's own log: an account renamed on Entra
+  # moves no seal, since the register still holds the old name when it is
+  # read, so that row is never among the ones whose log is asked for.
+  #
+  # Rebuilt and verified by the channel's seal, `log_executed_row()`
+  # (decided on 2026-11-12): a write made before the round read the row is
+  # carried out whoever made it, one made while it ran is not, whoever made
+  # it. Where no version of the log gives the seal, the pair is read as the
+  # 0.25.0 read it, `log_executed_unverified()`, and the person as well: the
+  # rule is never worse than it was.
+  person_fields <- c("first_name", "last_name", "contact_email")
+  resolvable <- identity_normalize(verdicts) %in%
+    c("existing", "created", "disabled")
+  # A row whose seal did not move is the version carried out: the channel's
+  # seal covers every intent field, and the register as read matches it.
+  # Read from the log instead, a version the log cannot rebuild would leave
+  # the row unknown with nothing changed. An account renamed on Entra is
+  # still seen: the register as read holds the old name.
+  from_log <- !is.null(owners_log) & nzchar(sealed) &
+    (is.null(channel_account) | tampered)
+  executed_row <- lapply(seq_along(record_ids), function(i) {
+    if (!from_log[[i]]) {
+      return(NULL)
+    }
+    log_executed_row(owners_log, record_ids[[i]], channel_account)
+  })
+  pair_fields <- c("server", "project_id", "username")
+  executed_pair <- lapply(seq_along(record_ids), function(i) {
+    if (is.null(owners_log) || !nzchar(sealed[[i]])) {
+      return(NULL)
+    }
+    if (!from_log[[i]]) {
+      at <- function(field) {
+        value <- trimws(as.character(register[[field]][[i]]))
+        if (length(value) != 1L || is.na(value)) "" else value
+      }
+      return(vapply(pair_fields, at, character(1)))
+    }
+    verified <- executed_row[[i]]
+    if (!is.null(verified)) {
+      return(vapply(pair_fields, function(field) {
+        as.character(verified[["row"]][[field]])
+      }, character(1)))
+    }
+    log_executed_unverified(
+      owners_log, record_ids[[i]], creators[[i]],
+      approvers = approvers, channel_account = channel_account
+    )
+  })
+
+  # The way out of the register for a renamed account, decided on
+  # 2026-11-12 (item 12): a revoked row the channel carried out, whose
+  # version carried out is certain (the seal did not move, or the log
+  # rebuilds it and the seal verifies it), on the instance and the project
+  # carried out, revokes the username carried out, whatever the resolution
+  # says now: the account renamed, an internal contact the tenant no longer
+  # holds, `ambiguous`, a collision nobody answered. `revocation_exits()`.
+  # Revoking another name would take away an access the row never gave, and
+  # leave the one it gave on the instance with no row to govern it.
+  #
+  # For such a row the name for the whole round is the one carried out:
+  # the plan, the gate, the claims of the duplicates, the mail and the seal,
+  # so that the version revoked is sealed under the name carried out. Sealed
+  # under the resolved one, the next round would find the row intact, read
+  # the pair from the register and revoke every night the new name, the
+  # login a new request gives the person. It is admitted at the gate like
+  # any other revocation, and leaves the creation branch: a collision nobody
+  # answered creates nobody.
+  #
+  # Outside: a person the tenant no longer holds, whose revocation closes
+  # before any instance is asked, as before (decided on 2026-11-12); and an
+  # instance or a project moved, which stays a change of pair.
+  certain <- vapply(seq_along(record_ids), function(i) {
+    !is.null(executed_pair[[i]]) &&
+      (!from_log[[i]] || !is.null(executed_row[[i]]))
+  }, logical(1))
+  # And only on a name the channel gave an access to on this row, sealing it
+  # active (`log_granted_names()`, RC1 of the review): a request withdrawn
+  # before its person was created is sealed under a name nobody was given.
+  # Read on the channel's own seals, so with the channel's account
+  # configured only.
+  exiting <- vapply(seq_along(record_ids), function(i) {
+    ask <- function(granted) {
+      revocation_exits(
+        executed_pair[[i]], register[i, , drop = FALSE],
+        certain = certain[[i]], creating = creating[[i]] && !unheard[[i]],
+        granted = granted
+      )
+    }
+    # The log is read again only for a row that would exit on its own name.
+    name <- identity_normalize(executed_pair[[i]][["username"]] %||% "")
+    ask(name) && !is.null(channel_account) &&
+      ask(log_granted_names(owners_log, record_ids[[i]], channel_account))
+  }, logical(1))
+  resolved_names[exiting] <- vapply(
+    executed_pair[exiting], function(pair) pair[["username"]], character(1)
+  )
+  admitted <- admitted | exiting
+  creating <- creating & !exiting
+  withdrawn <- withdrawn & !exiting
+  awaiting <- awaiting & !exiting
+
   # The register as this round will have left it, and not as it read it. The
   # round resolves `username` and writes it back in this same pass, so sealing
   # the row as read would seal a version the register is about to stop
@@ -736,48 +862,28 @@ provisioning_reconcile <- function(register_url,
   # nothing written on the instance, nobody created, no new seal and the
   # same owner. Rows never carried out are not concerned.
   #
-  # The pair carried out is read from the owners' log, which the round holds
-  # whole, and not from the row's own log: an account renamed on Entra moves
-  # no seal, since the register still holds the old name when it is read, so
-  # that row is never among the ones whose log is asked for. Whether somebody
-  # wrote the person is read from the row's log, which is asked for every row
-  # whose seal moved; a row whose seal did not move holds the person carried
-  # out.
-  person_fields <- c("first_name", "last_name", "contact_email")
-  resolvable <- identity_normalize(verdicts) %in%
-    c("existing", "created", "disabled")
-  executed_pair <- lapply(seq_along(record_ids), function(i) {
-    if (is.null(owners_log) || !nzchar(sealed[[i]])) {
-      return(NULL)
-    }
-    # A row whose seal did not move is the version carried out: the channel's
-    # seal covers `server`, `project_id` and `username`, and the register as
-    # read matches it. Read from the log instead, a change carried out with
-    # no approval above it (the history before 2026-10-14, or IT correcting a
-    # row by hand) would be passed over as uncovered, and the row would stop
-    # on a change nobody made. An account renamed on Entra is still seen: the
-    # register as read holds the old name.
-    if (!is.null(channel_account) && !tampered[[i]]) {
-      at <- function(field) {
-        value <- trimws(as.character(register[[field]][[i]]))
-        if (length(value) != 1L || is.na(value)) "" else value
-      }
-      return(c(
-        server = at("server"), project_id = at("project_id"),
-        username = at("username")
-      ))
-    }
-    log_executed_values(
-      owners_log, record_ids[[i]], creators[[i]],
-      approvers = approvers, channel_account = channel_account
-    )
-  })
   shifts <- lapply(seq_along(record_ids), function(i) {
-    if (is.null(executed_pair[[i]]) || blind[[i]]) {
+    if (is.null(executed_pair[[i]]) || blind[[i]] || exiting[[i]]) {
       return(list(code = "", changed = character()))
     }
+    # Whether somebody wrote the person: with the version verified, the
+    # person as read differs from the one carried out, whoever wrote it and
+    # wherever the write stands, above the seal or below it while the round
+    # ran. Only somebody writes the person: the channel never does. Without
+    # it, the writes above the seal in the row's log, as before; a row whose
+    # seal did not move holds the person carried out.
     rewritten <- FALSE
-    if (checked[[i]] && !unread[[i]]) {
+    verified <- executed_row[[i]]
+    if (!is.null(verified)) {
+      now <- vapply(person_fields, function(field) {
+        value <- trimws(as.character(register[[field]][[i]]))
+        if (length(value) != 1L || is.na(value)) "" else value
+      }, character(1))
+      was <- vapply(person_fields, function(field) {
+        as.character(verified[["row"]][[field]])
+      }, character(1))
+      rewritten <- any(now != was)
+    } else if (checked[[i]] && !unread[[i]]) {
       who <- log_change_authors(
         events, record_ids[[i]], fields = person_fields,
         channel_account = channel_account,
@@ -798,6 +904,48 @@ provisioning_reconcile <- function(register_url,
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
   moved <- nzchar(shift_code)
   awaiting <- awaiting & !moved
+
+  # The identity door, decided on 2026-11-12 (L6): not on a row stopped on
+  # its pair, nor on a sealed row whose pair this round could not judge (the
+  # owners' log not read, or the row blind). There the round would write the
+  # name it stops on: the register would lose the name carried out, and the
+  # channel's own write would move the seal. `username` and `identity` go
+  # together or not at all, so the verdict beside the name stays the one of
+  # the execution, and the next round reads the name as the channel's, not
+  # as a declaration.
+  sealed_row <- if (is.null(owners_log)) nzchar(carried) else nzchar(sealed)
+  unjudged <- vapply(seq_along(record_ids), function(i) {
+    is.null(executed_pair[[i]]) || blind[[i]]
+  }, logical(1))
+  # A revocation on the name carried out (item 12) keeps the verdict the
+  # register holds beside that name, and writes the name back only where the
+  # door of the 0.24.0 or the 0.25.0 had written the new one: the register
+  # then holds again what the seal of the revoked version covers.
+  verdict_read <- trimws(as.character(register[["identity"]] %||% ""))
+  verdict_read[is.na(verdict_read) |
+                 !verdict_read %in% identity_vocabulary()] <- ""
+  identity_written <- write_identities(
+    !moved & !(sealed_row & unjudged),
+    names = resolved_names,
+    verdicts_of = ifelse(exiting, verdict_read, verdicts)
+  )
+
+  # A row whose name carried out the door had to write back, and could not
+  # (RC2 of the review): register and seal would disagree, the next round
+  # could not rebuild the version, and would read the new name as carried
+  # out. The row stops before the plan, unsealed, on the register's code,
+  # and the next round does it again. Which rows of the import REDCap took
+  # is not known, so every row that needed it stops.
+  as_read_name <- trimws(as.character(register[["username"]] %||% ""))
+  as_read_name[is.na(as_read_name)] <- ""
+  door_codes <- grep(
+    "^TRASPORTO_", identity_written[["errors"]], value = TRUE
+  )
+  if (length(door_codes) == 0L) {
+    door_codes <- "TRASPORTO_REGISTRO_RIFIUTATO"
+  }
+  unwritten <- exiting & !moved & as_read_name != resolved_names &
+    length(identity_written[["errors"]]) > 0L
 
   # A revocation and nothing else, by somebody other than the owner, is free
   # when they manage the project, and only the instance can say whether they
@@ -834,8 +982,8 @@ provisioning_reconcile <- function(register_url,
 
   # A pair that moved stops before a held change: an approval cannot let it
   # through, so the message asks for what can.
-  held <- awaits & !cleared & !blind & !withdrawal & !moved
-  standing <- (admitted | awaiting) & !held & !blind & !moved
+  held <- awaits & !cleared & !blind & !withdrawal & !moved & !unwritten
+  standing <- (admitted | awaiting) & !held & !blind & !moved & !unwritten
 
   held_outcome <- function(i) {
     outcome_payload(
@@ -878,6 +1026,12 @@ provisioning_reconcile <- function(register_url,
           record_ids[[i]],
           round_outcome_kind("TRASPORTO_AUTORE_NON_LEGGIBILE", dry_run),
           detail = "TRASPORTO_AUTORE_NON_LEGGIBILE", at = at
+        ))
+      }
+      if (unwritten[[i]]) {
+        return(outcome_payload(
+          record_ids[[i]], round_outcome_kind(door_codes, dry_run),
+          detail = paste(door_codes, collapse = ","), at = at
         ))
       }
 

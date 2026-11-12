@@ -532,7 +532,10 @@ log_current_life <- function(events) {
 #' Which events wrote one of these fields
 #'
 #' Reads `details`, which REDCap fills with the fields an event wrote and the
-#' values it gave them, `role_name = 'read only'`.
+#' values it gave them, `role_name = 'read only'`, the fields apart by a
+#' comma. A field counts where a field can start, `log_field_at()`: at the
+#' start of `details` or after that comma, never inside the value of another
+#' field.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param fields Field names to look for.
@@ -544,11 +547,40 @@ log_wrote <- function(events, fields) {
   if (length(fields) == 0L || nrow(events) == 0L) {
     return(logical(nrow(events)))
   }
-  # `\b` and `=` together: without the word boundary `seal_state` would match
-  # inside nothing, but `name` would match inside `role_name`, and the answer
-  # would be an author who touched a different field.
-  pattern <- paste0("\\b(", paste(fields, collapse = "|"), ")\\s*=")
-  grepl(pattern, as.character(events[["details"]]))
+  grepl(log_field_at(fields), as.character(events[["details"]]), perl = TRUE)
+}
+
+
+#' Where a field written by an event starts in its details
+#'
+#' REDCap logs an edit as `field = 'value'`, the fields apart by a comma and
+#' a space or a line break. So a field starts at the start of `details`, or
+#' right after a comma, and its name is followed by `=` and the apostrophe
+#' that opens the value. Searched anywhere in `details`, as before
+#' 2026-11-12, a field name matched inside the value of another field: the
+#' channel's *Read back as*, `applied_as = 'role_name=...; dag_name=...;
+#' expiration=...'` (`round_applied_as()`), read as a write of all three,
+#' measured on 2026-11-12 (M1b) on 46 events out of 102 that "wrote"
+#' `role_name`, on every row of the register. The name has to be followed by
+#' the apostrophe too, which a value that quotes `name=` does not carry.
+#'
+#' What it cannot tell apart is a value that holds `', field = '` itself: the
+#' log does not escape an apostrophe inside a value, and no reading of the
+#' text can say where such a value ends.
+#'
+#' The one pattern every reader of a field in `details` starts from:
+#' `log_wrote()`, `log_value()`, `log_written_value()`, and the check of a
+#' whole value in `log_change_authors()`.
+#'
+#' @param fields Field names, one or more.
+#'
+#' @return A regular expression, Perl syntax, that matches up to and
+#'   including the apostrophe that opens the value.
+#'
+#' @keywords internal
+log_field_at <- function(fields) {
+  stopifnot(is.character(fields), length(fields) > 0L)
+  paste0("(?:^|,)\\s*(?:", paste(fields, collapse = "|"), ")\\s*=\\s*'")
 }
 
 
@@ -674,14 +706,31 @@ log_executions <- function(events, channel, channel_account) {
   if (is.null(channel_account)) {
     return(which(wrote))
   }
+  which(
+    wrote & log_seals_door(events) &
+      trimws(as.character(events[["username"]])) %in% channel
+  )
+}
+
+
+#' Which events have the form of the seals door
+#'
+#' `details` holding `applied_seal` and at most `seal_state` beside it,
+#' nothing else: the door has written only those two fields since the seal
+#' exists, and REDCap logs only the fields an import changed. A seal written
+#' with any other field, a referent's CSV carrying the row and its seal, or
+#' an outcome whose *Read back as* quotes a seal, does not have it.
+#'
+#' @param events Events of the log, as `register_log()` returns them.
+#'
+#' @return A logical vector, one answer per event.
+#'
+#' @keywords internal
+log_seals_door <- function(events) {
   one <- "(applied_seal|seal_state)\\s*=\\s*'[^']*'"
-  door <- grepl(
+  grepl(
     paste0("^\\s*", one, "(\\s*,\\s*", one, ")?\\s*$"),
     as.character(events[["details"]])
-  )
-  which(
-    wrote & door &
-      trimws(as.character(events[["username"]])) %in% channel
   )
 }
 
@@ -735,6 +784,14 @@ log_channel_seal <- function(events, record, channel_account) {
 #' hand other than the owner's held. A register where nothing was ever
 #' sealed answers `FALSE`: there is no channel yet to have seen.
 #'
+#' Only a seal in the form of the seals door counts, `log_seals_door()`,
+#' decided on 2026-11-12 (RC3 of the review of unit G). The identity door
+#' writes after this question is asked (L6), so on a register the channel
+#' has never written on, a referent's CSV carrying the row and its seal
+#' stopped every round, and the channel could never write to be seen. A
+#' seal imported alone, in the door's form, still stops the round: from the
+#' log it cannot be told from the channel's under a name typed wrong.
+#'
 #' @param events The owners' log, `logtype = "record"`.
 #' @param channel_account The REDCap usernames that hold the round's token,
 #'   one or more. Not `NULL`.
@@ -748,7 +805,7 @@ log_channel_absent <- function(events, channel_account) {
     channel_account_valid(channel_account)
   )
 
-  if (!any(log_wrote(events, "applied_seal"))) {
+  if (!any(log_wrote(events, "applied_seal") & log_seals_door(events))) {
     return(FALSE)
   }
   authors <- tolower(trimws(as.character(events[["username"]])))
@@ -1143,9 +1200,9 @@ log_change_authors <- function(events, record,
     # apostrophe, `D'Amico` reads `D`, and a later `D` would read as no
     # change. Unknown, as when the log does not hold it.
     whole <- paste0(
-      "\\b", field, "\\s*=\\s*'[^']*'(\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+      log_field_at(field), "[^']*'(\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
     )
-    if (!grepl(whole, as.character(carried[["details"]]))) {
+    if (!grepl(whole, as.character(carried[["details"]]), perl = TRUE)) {
       return(any(wrote & window))
     }
     now(field) != log_value(carried, field)
@@ -1183,15 +1240,202 @@ log_value <- function(events, field) {
   stopifnot(is.character(field), length(field) == 1L)
 
   details <- as.character(events[["details"]])
-  pattern <- paste0("\\b", field, "\\s*=\\s*'([^']*)'")
-  found <- regmatches(details, regexec(pattern, details))
+  pattern <- paste0(log_field_at(field), "([^']*)'")
+  found <- regmatches(details, regexec(pattern, details, perl = TRUE))
   vapply(found, function(hit) {
     if (length(hit) < 2L) "" else trimws(hit[[2L]])
   }, character(1))
 }
 
 
-#' The pair a row's last execution carried out, from the log
+#' The version a row's last execution carried out, rebuilt from the log
+#'
+#' Every intent field as the round read it when it last carried the row out,
+#' accepted only when its seal, `request_seal()`, is the one the channel wrote
+#' at that execution, `log_executions()`. The seal proves the reading: a
+#' version rebuilt wrong does not give the channel's seal, and the answer is
+#' then `NULL`, never a value that may be wrong.
+#'
+#' **How it is rebuilt**, decided on 2026-11-12. The round reads the
+#' register, then the identity door writes the username it resolved, then
+#' the round carries the row out and writes the seal, which covers the row as
+#' read with the resolved name in place of the one read. In the log, between
+#' the execution before (or the creation) and the newest one, stand the
+#' writes the round read and, above them, those made while it ran, by
+#' anybody. So the version carried out is the state of the log at a **cut**
+#' below the seal:
+#'
+#' - each intent field holds the newest write at the cut or below it, in the
+#'   row's current life, `log_of_record()`, by anybody, the channel included;
+#'   a field never written is `""`; `record_id` is the record;
+#' - `username` holds instead the channel's write between the cut and the
+#'   seal, when there is one: the identity door of the round that carried the
+#'   row out, written after the reading;
+#' - the cuts are tried from the highest (right below the seal, no write
+#'   left out) to the lowest (right above the execution before), and the
+#'   first whose seal is the channel's is the answer. Two cuts that both give
+#'   the channel's seal give the same values, so which one is taken does not
+#'   matter.
+#'
+#' A write made before the reading is carried out whoever made it, with or
+#' without an approval; one made after it is not, whoever made it: the
+#' owner's own write while the round ran, the person written while it ran, a
+#' revocation written while it ran. Who approved what is not needed.
+#'
+#' The values are read with `log_written_value()`, whole up to the apostrophe
+#' that closes them, and brought to the form of the register by
+#' `log_value_as_register()`. A value the log holds in another form makes no
+#' cut give the seal, and the answer is `NULL`: the row is not verified, and
+#' no value is guessed. Measured on 2026-11-12 on the live register (M1 and
+#' M1b): the reconstruction gives the channel's seal on every row whose seal
+#' did not move, once the field names inside *Read back as* are no longer
+#' read as writes (`log_field_at()`); non-ASCII letters, capitals in an
+#' address, spaces at the edges of the register's values and fields never
+#' written among them. Not measured yet: apostrophes, `& < >` and quotes,
+#' dates written by the form, a `project_id` with a leading zero, values
+#' longer than 100 characters, emptied fields.
+#'
+#' No intent field is a checkbox. One that were would be logged as
+#' `field(code) = checked`, and this function would have to learn it first.
+#'
+#' @param events The event log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured: then every write of
+#'   the seal counts as an execution, as for `log_executions()`.
+#'
+#' @return `NULL` when the row was never carried out in its current life,
+#'   the channel is not known, `log_channel_unknown()`, or no cut gives the
+#'   channel's seal. Otherwise a list: `row`, a data frame of one row holding
+#'   `record_id` and every intent field as carried out; `seal`, the seal it
+#'   gives; `at`, the position of the execution in `log_of_record()`; `cut`,
+#'   the position of the cut, the newest event the version holds.
+#'
+#' @keywords internal
+log_executed_row <- function(events, record, channel_account = NULL) {
+  stopifnot(is.data.frame(events), channel_account_valid(channel_account))
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  if (log_channel_unknown(channel, channel_account)) {
+    return(NULL)
+  }
+  executed <- log_executions(mine, channel, channel_account)
+  if (length(executed) == 0L) {
+    return(NULL)
+  }
+  top <- executed[[1L]]
+  seal <- log_value(mine[top, , drop = FALSE], "applied_seal")
+  if (!nzchar(seal)) {
+    return(NULL)
+  }
+
+  # Newest first: the stretch is what stands below the newest execution and
+  # above the one before it, or the whole life when there is none.
+  bottom <- if (length(executed) > 1L) executed[[2L]] else nrow(mine) + 1L
+  rows <- seq_len(nrow(mine))
+  authors <- trimws(as.character(mine[["username"]]))
+  fields <- setdiff(register_intent_fields(), "record_id")
+  wrote <- lapply(stats::setNames(nm = fields), function(field) {
+    log_wrote(mine, field)
+  })
+  value <- lapply(stats::setNames(nm = fields), function(field) {
+    log_written_value(mine, field)
+  })
+  door <- wrote[["username"]] & authors %in% channel
+
+  for (cut in seq.int(top + 1L, bottom)) {
+    version <- list(record_id = as.character(record))
+    for (field in fields) {
+      at <- which(wrote[[field]] & rows >= cut)
+      if (identical(field, "username")) {
+        resolved <- which(door & rows > top & rows < cut)
+        if (length(resolved) > 0L) {
+          at <- resolved
+        }
+      }
+      version[[field]] <- if (length(at) == 0L) {
+        ""
+      } else {
+        value[[field]][[at[[1L]]]]
+      }
+    }
+    # A write whose value does not read leaves this cut unknown; a lower one
+    # may stand below it.
+    if (anyNA(unlist(version))) {
+      next
+    }
+    version <- as.data.frame(version, stringsAsFactors = FALSE)
+    if (identical(request_seal(version), seal)) {
+      return(list(row = version, seal = seal, at = top, cut = cut))
+    }
+  }
+  NULL
+}
+
+
+#' The usernames the channel carried out on a row while it was active
+#'
+#' For each of the channel's executions in the row's current life,
+#' `log_executions()`, the version that execution sealed, rebuilt from the
+#' log below it and verified by its seal, `log_executed_row()`; of those, the
+#' usernames of the versions whose `request_status` is not `revoked`. They
+#' are the names the channel gave an access to on this row: an execution of
+#' such a version brought its pair onto the instance. Not `revoked` rather
+#' than `active`, as `register_to_desired()` reads the field: a row imported
+#' without the state, which the form requires and the API does not, is
+#' served as active and sealed with the state empty (U8e of the review,
+#' 2026-11-12).
+#'
+#' What `revocation_exits()` asks, decided on 2026-11-12 after the review of
+#' unit G (RC1): the channel also seals a request withdrawn before its person
+#' was created, without asking any instance, and under the name the round
+#' would have created, a collision's proposal among them. That seal covers a
+#' name nobody was ever given, which may later be another person's; the row
+#' never granted it, and must not take it away. The guard of item 7,
+#' `seal_holds_but_revocation()`, asks the same question of the seal alone;
+#' here the name is asked too, so a revocation carried out together with
+#' another change (the role, say), whose revoked version was never sealed
+#' active, still finds the name it was given at an earlier execution.
+#'
+#' A version the log does not verify names nobody: the answer can only be
+#' shorter, the direction that revokes less.
+#'
+#' @param events The owners' log, `logtype = "record"`.
+#' @param record The record id.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them any account's seal would count.
+#'
+#' @return A character vector of usernames as carried out, each once (folded
+#'   as addresses are); empty when the channel never carried the row out
+#'   active, or the log does not say.
+#'
+#' @keywords internal
+log_granted_names <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  names <- vapply(executed, function(at) {
+    version <- log_executed_row(
+      mine[seq.int(at, nrow(mine)), , drop = FALSE], record, channel_account
+    )
+    if (is.null(version) ||
+          identical(version[["row"]][["request_status"]], "revoked")) {
+      return(NA_character_)
+    }
+    version[["row"]][["username"]]
+  }, character(1))
+  names <- identity_normalize(names[!is.na(names) & nzchar(names)])
+  unique(names[!is.na(names)])
+}
+
+
+#' The pair a row's last execution carried out, read as the 0.25.0 read it
 #'
 #' The value each of `fields` had in the version the round last carried
 #' out: the newest write of the field below the round's newest execution,
@@ -1203,11 +1447,15 @@ log_value <- function(events, field) {
 #' made while the round ran, it holds a value the round had not read, and
 #' the one below it is what was carried out.
 #'
+#' Not verified by the seal, and wrong in three cases the reconstruction
+#' gets right (review of the 0.24.0): a change carried out with no approval
+#' above it (A4), the owner's own write while the round ran (B), the person
+#' written while it ran (B2). Kept for the rows whose reconstruction is not
+#' verified, and for the rule of the pair only (decided on 2026-11-12).
+#'
 #' The value is read whole, up to the apostrophe that closes it, the one
 #' followed by the next field or by the end of `details`: a UPN can hold an
 #' apostrophe, and cut at the first one `luca.d'amico` would read `luca.d`.
-#' Meant for `server`, `project_id` and `username`, whose values never hold
-#' the text `', name = '` that would end them early.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param record The record id to look at.
@@ -1224,10 +1472,12 @@ log_value <- function(events, field) {
 #'   read, or the channel is not known.
 #'
 #' @keywords internal
-log_executed_values <- function(events, record, creator,
-                                fields = c("server", "project_id", "username"),
-                                approvers = character(),
-                                channel_account = NULL) {
+log_executed_unverified <- function(events, record, creator,
+                                    fields = c(
+                                      "server", "project_id", "username"
+                                    ),
+                                    approvers = character(),
+                                    channel_account = NULL) {
   stopifnot(
     is.data.frame(events), is.character(creator), length(creator) == 1L,
     is.character(fields), is.character(approvers)
@@ -1268,12 +1518,13 @@ log_executed_values <- function(events, record, creator,
 #'
 #' Up to the apostrophe that closes the value, the one followed by the next
 #' field or by the end of `details`: a UPN can hold an apostrophe, and cut at
-#' the first one `luca.d'amico` would read `luca.d`. Meant for `server`,
-#' `project_id` and `username`, whose values never hold the text
-#' `', name = '` that would end them early. The one reader of a whole value:
-#' `log_executed_values()` reads the pair executed with it, and the monthly
-#' report the name each execution carried out (`report_person_since()`), so
-#' that the names the two compare are read the same way.
+#' the first one `luca.d'amico` would read `luca.d`. For every intent field;
+#' a value ends early only where somebody typed `', name = '` inside it. The
+#' one reader of a whole value: `log_executed_row()` rebuilds the version
+#' carried out with it, and the monthly report reads the name each execution
+#' carried out (`report_person_since()`), so that the values the two compare
+#' are read the same way, and brought to the register's form in the same
+#' place, `log_value_as_register()`.
 #'
 #' @param events The event log, as `register_log()` returns it.
 #' @param field One field name.
@@ -1288,13 +1539,45 @@ log_written_value <- function(events, field) {
   details <- as.character(events[["details"]])
   details[is.na(details)] <- ""
   pattern <- paste0(
-    "\\b", field,
-    "\\s*=\\s*'(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
+    log_field_at(field),
+    "(.*?)'(?=\\s*,\\s*[A-Za-z0-9_]+\\s*=\\s*'|\\s*$)"
   )
-  vapply(details, function(said) {
+  read <- vapply(details, function(said) {
     hit <- regmatches(said, regexec(pattern, said, perl = TRUE))[[1L]]
     if (length(hit) < 2L) NA_character_ else trimws(hit[[2L]])
   }, character(1), USE.NAMES = FALSE)
+  log_value_as_register(read, field)
+}
+
+
+#' A value of the log in the form the register gives it
+#'
+#' The one place where a value read from `details` would be brought to the
+#' form the API gives for the same field, before anything compares the two:
+#' the seal of a version rebuilt from the log, `log_executed_row()`, and the
+#' names the report dates, `report_person_since()`, both read through
+#' `log_written_value()`, which calls this.
+#'
+#' Today it changes nothing, decided on 2026-11-12: M1 found no difference
+#' on the live register between the values the log carries and those of the
+#' register (non-ASCII letters, capitals, spaces at the edges, fields never
+#' written), and the forms it did not cover (apostrophes, `& < >`, quotes,
+#' dates written by the form, emptied fields, a `project_id` with a leading
+#' zero) are to be measured on the test instance (M2). A difference found
+#' there, systematic and reversible (an HTML entity, the order of a date), is
+#' undone here, by field. A wrong undoing cannot pass for a right one: the
+#' rebuilt version would no longer give the channel's seal, and the row would
+#' read as not verified.
+#'
+#' @param value Values as `details` carries them, `NA` where none was read.
+#' @param field The field they were written into.
+#'
+#' @return `value`, in the register's form.
+#'
+#' @keywords internal
+log_value_as_register <- function(value, field) {
+  stopifnot(is.character(value), is.character(field), length(field) == 1L)
+  value
 }
 
 
@@ -1342,12 +1625,15 @@ log_written_value <- function(events, field) {
 #' before any instance is asked, as it did before the rule. Stopped for IT,
 #' the rows long closed that way would bring an outcome and a copy each on
 #' the first round. A revoked row that resolves to another account that
-#' exists still stops: revoking that account would take away an access the
-#' row never gave.
+#' exists still stops here: revoking that account would take away an access
+#' the row never gave. Since 2026-11-12 the round does not ask this function
+#' about a revoked row whose version carried out is certain and whose
+#' instance and project did not move, `revocation_exits()`: it revokes the
+#' username carried out instead.
 #'
 #' @param executed The `server`, `project_id` and `username` carried out:
 #'   the row as read when its seal did not move, otherwise what
-#'   `log_executed_values()` answered.
+#'   `log_executed_row()` or `log_executed_unverified()` answered.
 #' @param current The row as the register holds it, a list or a one-row data
 #'   frame with `server` and `project_id`.
 #' @param target The username the round would now serve, `""` when the
@@ -1378,15 +1664,6 @@ pair_change <- function(executed, current, target, creating, rewritten,
     value <- trimws(as.character(current[[field]] %||% ""))
     if (length(value) != 1L || is.na(value)) "" else value
   }
-  # A project is a number, and `09003` is the project `9003`.
-  same_project <- function(a, b) {
-    if (grepl("^[0-9]+$", a) && grepl("^[0-9]+$", b)) {
-      as.numeric(a) == as.numeric(b)
-    } else {
-      identical(a, b)
-    }
-  }
-
   changed <- character()
   if (!is.na(executed[["server"]]) && now("server") != executed[["server"]]) {
     changed <- c(changed, "server")
@@ -1415,6 +1692,100 @@ pair_change <- function(executed, current, target, creating, rewritten,
     return(list(code = "TRASPORTO_IDENTITA_CAMBIATA", changed = "account"))
   }
   list(code = "", changed = character())
+}
+
+
+#' Whether two project ids name the same project
+#'
+#' A project is a number, and `09003` is the project `9003`. Anything that is
+#' not all digits is compared as it is.
+#'
+#' @param a,b Two project ids, one string each.
+#'
+#' @return `TRUE` or `FALSE`.
+#'
+#' @keywords internal
+same_project <- function(a, b) {
+  if (grepl("^[0-9]+$", a) && grepl("^[0-9]+$", b)) {
+    as.numeric(a) == as.numeric(b)
+  } else {
+    identical(a, b)
+  }
+}
+
+
+#' Whether a revoked row takes the access away from the name carried out
+#'
+#' Decided on 2026-11-12 (item 12, widened): a revoked row the channel
+#' carried out revokes the username carried out on the pair carried out,
+#' whatever the resolution says now, when the version carried out is
+#' **certain** and the row still names the instance and the project carried
+#' out. The account renamed on Entra stays the way it is (option (a) of the
+#' 2026-11-10): the owner revokes the old row, which takes the old login off
+#' the project, and files a new one, which finds the new name; IT does not
+#' touch the instance. Widened to every verdict that names nobody, because a
+#' renamed account with an internal contact does not reach
+#' `TRASPORTO_IDENTITA_CAMBIATA`: its contact is the old UPN, which the tenant
+#' no longer holds, and the resolution stops on
+#' `DATO_RECAPITO_INTERNO_INESISTENTE`. The same for `ambiguous` and for a
+#' collision nobody answered.
+#'
+#' Certain means the seal of the channel did not move and the register as
+#' read is the version carried out, or `log_executed_row()` rebuilt it and
+#' the seal verified it. On a version the log does not verify the row stays
+#' where the rule of the pair puts it, as before.
+#'
+#' Outside, decided on 2026-11-12:
+#'
+#' - an instance or a project moved: the gate would judge the rights on the
+#'   wrong project, and the row stays on `DATO_COPPIA_CAMBIATA` until the
+#'   referent brings them back;
+#' - a person the tenant no longer holds, a row to create: its revocation
+#'   closes before any instance is asked (`pair_change()`), and the old login
+#'   stays for IT to take off by hand, as before;
+#' - a row carried out for nobody, closed before anybody was resolved;
+#' - a name the channel never carried out on the row while it was active,
+#'   `log_granted_names()`: a request withdrawn before its person was
+#'   created is sealed under the name the round would have created, a
+#'   collision's proposal among them, and that name may be somebody else's
+#'   later (RC1 of the review of unit G, 2026-11-12).
+#'
+#' @param executed The `server`, `project_id` and `username` carried out, as
+#'   for `pair_change()`, or `NULL` when the row was never carried out.
+#' @param current The row as the register holds it, a list or a one-row data
+#'   frame with `server`, `project_id` and `request_status`.
+#' @param certain Whether `executed` is the version carried out for certain.
+#' @param creating Whether the round would create a person for the row.
+#' @param granted The usernames the channel carried out on the row while it
+#'   was active, `log_granted_names()`.
+#'
+#' @return `TRUE` when the row revokes the username carried out.
+#'
+#' @keywords internal
+revocation_exits <- function(executed, current, certain, creating,
+                             granted = character()) {
+  pair <- c("server", "project_id", "username")
+  stopifnot(
+    is.null(executed) ||
+      (is.character(executed) && all(pair %in% names(executed))),
+    is.logical(certain), length(certain) == 1L, !is.na(certain),
+    is.logical(creating), length(creating) == 1L, !is.na(creating),
+    is.character(granted)
+  )
+
+  now <- function(field) {
+    value <- trimws(as.character(current[[field]] %||% ""))
+    if (length(value) != 1L || is.na(value)) "" else value
+  }
+  if (!identical(now("request_status"), "revoked") || !certain || creating ||
+        is.null(executed) || anyNA(executed)) {
+    return(FALSE)
+  }
+
+  nzchar(executed[["username"]]) &&
+    identity_normalize(executed[["username"]]) %in% granted &&
+    identical(now("server"), executed[["server"]]) &&
+    same_project(now("project_id"), executed[["project_id"]])
 }
 
 

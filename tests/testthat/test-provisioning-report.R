@@ -4699,9 +4699,25 @@ bruno <- "bruno.fittizio@ubep.unipd.it"
 elena <- "elena.supposta@ubep.unipd.it"
 elena_nuova <- "elena.rinominata@ubep.unipd.it"
 
+# The seal the channel writes on the version `log_eseguita()` logs: the
+# creation's fields and the name the identity door wrote, every other intent
+# field empty, as `log_executed_row()` rebuilds it; `...` changes some.
+sigillo_log <- function(record, nome, ...) {
+  campi <- setdiff(register_intent_fields(), "record_id")
+  versione <- stats::setNames(as.list(rep("", length(campi))), campi)
+  versione <- utils::modifyList(versione, list(
+    server = "edc10", project_id = "9301", role_name = "user", username = nome
+  ))
+  versione <- utils::modifyList(versione, list(...))
+  request_seal(as.data.frame(
+    c(list(record_id = record), versione), stringsAsFactors = FALSE
+  ))
+}
+
 # The log of a row the round executed in August for `nome`, newest first, with
-# `sopra` on top: what happened after the execution.
-log_eseguita <- function(record, nome, sigillo = "aaaaaaaaaaaa",
+# `sopra` on top: what happened after the execution. The seal is the one of
+# the version logged, as the channel writes it.
+log_eseguita <- function(record, nome, sigillo = sigillo_log(record, nome),
                          sopra = NULL, creatore = referente) {
   rbind(
     sopra,
@@ -4811,7 +4827,7 @@ test_that("the name executed comes from the register or from the log", {
 })
 
 
-test_that("without the IT approvers a moved seal is a log that does not say", {
+test_that("without the IT approvers the name executed is read all the same", {
   # eval
   registro <- registro_di(
     richiesta(record_id = "44", username = elena_nuova,
@@ -4825,17 +4841,18 @@ test_that("without the IT approvers a moved seal is a log that does not say", {
     log_eseguita("42", carla, sigillo = registro[["applied_seal"]][[2L]])
   )
 
-  # A runner of the 0.24.0 passes no approvers: a change IT approved would
-  # be passed over as not covered, and the name read would be the one before.
+  # A runner of the 0.24.0 passes no approvers. The version rebuilt from the
+  # log and verified by the seal does not need them (0.26.0): the 0.25.0
+  # left the name not known.
   eseguito <- report_executed_register(
     registro, logs, rep(referente, 2L), approvers = NULL,
     channel_account = canale
   )
 
   # test
-  expect_equal(eseguito[["username"]], c("", carla))
-  expect_equal(eseguito[["nome_eseguito"]], c("", "registro"))
-  expect_equal(eseguito[["nome_motivo"]], c("approvatori", ""))
+  expect_equal(eseguito[["username"]], c(elena, carla))
+  expect_equal(eseguito[["nome_eseguito"]], c("log", "registro"))
+  expect_equal(eseguito[["nome_motivo"]], c("", ""))
 })
 
 
@@ -5097,7 +5114,7 @@ test_that("a whole run reads the stopped rows and asks the name executed", {
   )
   dati[["eventi"]] <- rbind(
     dati[["eventi"]],
-    log_eseguita("44", elena, creatore = bruno, sigillo = "dddddddddddd",
+    log_eseguita("44", elena, creatore = bruno,
                  sopra = evento(
                    "2026-11-01 00:02", canale,
                    paste0("username = '", elena_nuova, "'"), record = "44"
@@ -5143,7 +5160,7 @@ test_that("a whole run reads the stopped rows and asks the name executed", {
 })
 
 
-test_that("a run without the approvers asks nobody for a moved seal's name", {
+test_that("a run without the approvers asks the name executed all the same", {
   # eval
   dati <- scenario()
   dati[["registro"]] <- rbind(
@@ -5160,7 +5177,7 @@ test_that("a run without the approvers asks nobody for a moved seal's name", {
     dati[["creazioni"]]
   )
   dati[["eventi"]] <- rbind(
-    dati[["eventi"]], log_eseguita("44", elena, sigillo = "dddddddddddd")
+    dati[["eventi"]], log_eseguita("44", elena)
   )
   chiamate <- doppie(dati)
   posta <- posta_finta()
@@ -5169,14 +5186,18 @@ test_that("a run without the approvers asks nobody for a moved seal's name", {
   esegui(withr::local_tempdir(), posta, channel_account = canale)
 
   # test
+  # The 0.25.0 asked nobody, the name read without the approvers being
+  # possibly the one before a change IT approved; the verified version does
+  # not need them.
   asked <- chiamate[["server"]][["edc10.example.org"]]
-  expect_false(any(c(elena, elena_nuova) %in% asked))
+  expect_true(elena %in% asked)
+  expect_false(elena_nuova %in% asked)
   mail <- posta[["inviate"]][["mail"]]
   it <- mail[[match(it_prova, vapply(mail, `[[`, "", "to"))]][["body"]]
-  expect_match(
-    it, "La lavorazione del rapporto non riceve gli approvatori di IT",
+  expect_false(grepl(
+    "La lavorazione del rapporto non riceve gli approvatori di IT", it,
     fixed = TRUE
-  )
+  ))
 })
 
 
@@ -5349,7 +5370,8 @@ test_that("a revocation carried out and then touched is not stopped", {
   registro[["expiration"]] <- "2026-12-31"
   registro[["outcome"]] <- "held"
   registro[["outcome_detail"]] <- "SIGILLO_DIVERSO:bbbbbbbbbbbb"
-  sigillo <- eseguita[["applied_seal"]][[1L]]
+  # The seal of the revoked version the log holds.
+  sigillo <- sigillo_log("45", elena, request_status = "revoked")
   chiusa <- log_eseguita("45", elena, sopra = rbind(
     evento("2026-11-05 10:00", bruno, "expiration = '2026-12-31'",
            record = "45"),
@@ -5379,4 +5401,108 @@ test_that("a revocation carried out and then touched is not stopped", {
   expect_equal(
     report_held_rows(ancora, owners = referente)[["record_id"]], "45"
   )
+})
+
+
+# --- the version executed, verified by the seal (0.26.0) ---------------------
+
+test_that("the server is asked the name executed, written by another and never approved (R4)", { # nolint: line_length_linter.
+  # eval
+  # Executed in August for Carla Vecchia; on 30 September Bruno, who is not
+  # the owner, wrote Carla Inventata's name, with no approval (before
+  # 2026-10-14), and the round executed it on 1 October. Today Anna changes
+  # the role, the seal moves, and the row stops.
+  vecchio <- "carla.vecchia@ubep.unipd.it"
+  registro <- registro_di(richiesta(
+    record_id = "48", username = carla, role_name = "data_entry",
+    outcome = "data_error", outcome_detail = "DATO_COPPIA_CAMBIATA"
+  ))
+  log <- rbind(
+    evento("2026-11-05 10:00", referente, "role_name = 'data_entry'",
+           record = "48"),
+    evento("2026-10-01 05:00", canale,
+           paste0("applied_seal = '", sigillo_log("48", carla), "'"),
+           record = "48"),
+    evento("2026-09-30 10:00", bruno, paste0("username = '", carla, "'"),
+           record = "48"),
+    log_eseguita("48", vecchio)
+  )
+
+  eseguito <- report_executed_register(
+    registro, list(log), referente, approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  # The 0.25.0 passed Bruno's write over as not covered, and asked the
+  # server about the name of August.
+  expect_equal(eseguito[["username"]], carla)
+  expect_equal(eseguito[["nome_eseguito"]], "log")
+  expect_equal(report_server_asks(eseguito), list(edc10 = carla))
+})
+
+
+test_that("a revocation written while the round ran stays stopped (G1)", {
+  # eval
+  # The owner revoked while the round that executed the row ran: after the
+  # identity door, before the seal. The access executed is still there.
+  registro <- registro_di(richiesta(
+    record_id = "45", username = elena, first_name = "Elena",
+    last_name = "Supposta", request_status = "revoked",
+    expiration = "2026-12-31",
+    outcome = "held", outcome_detail = "SIGILLO_DIVERSO:bbbbbbbbbbbb"
+  ))
+  log <- rbind(
+    evento("2026-11-05 10:00", bruno, "expiration = '2026-12-31'",
+           record = "45"),
+    evento("2026-08-03 23:03", canale,
+           paste0("applied_seal = '", sigillo_log("45", elena), "'"),
+           record = "45"),
+    evento("2026-08-03 23:02", referente, "request_status = 'revoked'",
+           record = "45"),
+    evento("2026-08-03 23:02", canale, paste0("username = '", elena, "'"),
+           record = "45"),
+    evento("2026-08-03 10:00", referente,
+           "server = 'edc10', project_id = '9301', role_name = 'user'",
+           record = "45", action = "Create record 45")
+  )
+
+  eseguito <- report_executed_register(
+    registro, list(log), referente, approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  # Read below the seal, as the 0.25.0 read it, the revocation passed for
+  # executed, and the row left the stopped ones with the access still on
+  # the instance.
+  expect_false(eseguito[["revoca_eseguita"]])
+  expect_equal(
+    report_held_rows(eseguito, owners = referente)[["record_id"]], "45"
+  )
+  expect_equal(report_server_asks(eseguito), list(edc10 = elena))
+})
+
+
+test_that("a version the log does not verify asks no server about any name", {
+  # eval
+  registro <- registro_di(richiesta(
+    record_id = "44", username = elena_nuova, outcome = "transport_error",
+    outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA"
+  ))
+  # A seal no state of the log gives.
+  log <- log_eseguita("44", elena, sigillo = "dddddddddddd")
+
+  eseguito <- report_executed_register(
+    registro, list(log), referente, approvers = character(),
+    channel_account = canale
+  )
+
+  # test
+  # Decided on 2026-11-12: the report does not fall back on the reading of
+  # the 0.25.0, which the round keeps for the rule of the pair.
+  expect_equal(eseguito[["username"]], "")
+  expect_equal(eseguito[["nome_eseguito"]], "")
+  expect_equal(eseguito[["nome_motivo"]], "log")
+  expect_length(report_server_asks(eseguito), 0L)
 })

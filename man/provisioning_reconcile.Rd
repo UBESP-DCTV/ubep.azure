@@ -195,9 +195,12 @@ nobody whose rights to ask.
 
 \strong{A row the channel has carried out does not change its pair}, decided on
 2026-11-09: the instance, the project and the person it was carried out
-for: the row as read when its seal did not move, and otherwise as the
-owners' log holds them below the channel's last seal
-(\code{log_executed_values()}). Whoever wrote the change, the owner included,
+for: the row as read when its seal did not move, and otherwise the
+version the owners' log rebuilds and the channel's last seal verifies
+(\code{log_executed_row()}, decided on 2026-11-12), or, where none does, the
+log read as the 0.25.0 read it (\code{log_executed_unverified()}). With the
+version verified, the person is rewritten when the register's differs
+from the one carried out. Whoever wrote the change, the owner included,
 approved or not, the row stops before the plan (\code{pair_change()}): nothing
 is written on the instance, nobody is created on Entra, the row keeps its
 seal and its owner. \code{DATO_COPPIA_CAMBIATA} when the referent moved it, the
@@ -206,7 +209,15 @@ somebody else; \code{TRASPORTO_IDENTITA_CAMBIATA} when the round would serve
 another account, or create one, and nobody wrote the person in the row:
 the account changed on Entra, and it is for IT. Both come before a held
 change, since no approval lets them through, and before the identity's own
-codes. A row never carried out changes as before.
+codes. A row never carried out changes as before. On a row stopped on
+either code, and on a sealed row whose pair the round could not judge,
+the identity door writes neither \emph{Username (UPN)} nor \emph{Identity
+resolution} (decided on 2026-11-12): the register keeps the name carried
+out, and the channel does not move the seal itself. A revoked row whose
+version carried out is certain, on the instance and the project carried
+out, revokes the username carried out whatever the resolution says now
+(\code{revocation_exits()}, decided on 2026-11-12): the way out of the register
+for an account renamed on Entra.
 
 \strong{The oldest row of a pair keeps it whether the round serves it or not.}
 A row the round stops (held, blind, on its identity, on a pair that moved)

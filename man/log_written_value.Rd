@@ -18,11 +18,12 @@ not write the field or the value does not read.
 \description{
 Up to the apostrophe that closes the value, the one followed by the next
 field or by the end of \code{details}: a UPN can hold an apostrophe, and cut at
-the first one \verb{luca.d'amico} would read \code{luca.d}. Meant for \code{server},
-\code{project_id} and \code{username}, whose values never hold the text
-\code{', name = '} that would end them early. The one reader of a whole value:
-\code{log_executed_values()} reads the pair executed with it, and the monthly
-report the name each execution carried out (\code{report_person_since()}), so
-that the names the two compare are read the same way.
+the first one \verb{luca.d'amico} would read \code{luca.d}. For every intent field;
+a value ends early only where somebody typed \code{', name = '} inside it. The
+one reader of a whole value: \code{log_executed_row()} rebuilds the version
+carried out with it, and the monthly report reads the name each execution
+carried out (\code{report_person_since()}), so that the values the two compare
+are read the same way, and brought to the register's form in the same
+place, \code{log_value_as_register()}.
 }
 \keyword{internal}

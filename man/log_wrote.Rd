@@ -16,6 +16,9 @@ A logical vector, one answer per event.
 }
 \description{
 Reads \code{details}, which REDCap fills with the fields an event wrote and the
-values it gave them, \code{role_name = 'read only'}.
+values it gave them, \code{role_name = 'read only'}, the fields apart by a
+comma. A field counts where a field can start, \code{log_field_at()}: at the
+start of \code{details} or after that comma, never inside the value of another
+field.
 }
 \keyword{internal}

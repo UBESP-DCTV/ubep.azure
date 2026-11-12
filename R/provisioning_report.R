@@ -566,19 +566,24 @@ report_scope <- function(register) {
 #'   is the channel's last one in the row's log, `log_channel_seal()`, when
 #'   the channel's account is configured, as the round reads it; otherwise
 #'   the field;
-#' - **the seal moved**: the values the round last carried out, read from
-#'   the log by `log_executed_values()`, which needs the IT approvers to know
-#'   which writes an approval covered. A seal moves on a row `held` on its
-#'   role, and on a row the identity door rewrote after an account changed on
-#'   Entra, which stops on `TRASPORTO_IDENTITA_CAMBIATA` with the new name in
-#'   the register and the old one on the instance.
+#' - **the seal moved**: the version the round last carried out, rebuilt
+#'   from the log and verified by the channel's seal, `log_executed_row()`
+#'   (decided on 2026-11-12). A seal moves on a row `held` on its role, and
+#'   on a row the identity door rewrote after an account changed on Entra,
+#'   which stops on `TRASPORTO_IDENTITA_CAMBIATA` with the new name in the
+#'   register and the old one on the instance. A name written by somebody
+#'   else and carried out with no approval is the name executed, and the
+#'   one the servers are asked about; a revocation written while a round ran
+#'   was not carried out, and the row stays among the stopped ones.
 #'
-#' Where the log does not say, or the caller gave no approvers (`NULL`, a
-#' runner older than this function: without them a change IT approved would
-#' be passed over and the name read would be the one before it), the name
-#' executed is not known: `username` is emptied, so that no server is asked
-#' about a name that may not be the one executed, and the row is not judged
-#' on its access. `server` and `project_id` stay the register's then.
+#' Where the version is not verified, no cut of the log giving the channel's
+#' seal, or the log was not read, the name executed is not known: `username`
+#' is emptied, so that no server is asked about a name that may not be the
+#' one executed, and the row is not judged on its access. `server` and
+#' `project_id` stay the register's then. The reading of the 0.25.0, which
+#' the round keeps for the rule of the pair, is not used here (decided on
+#' 2026-11-12): it names the wrong person in the cases the reconstruction
+#' does not verify, and the report would ask a server about them.
 #'
 #' Applied rows, and every row outside `conta` and `ferma` of
 #' `report_scope()`, keep the register's values.
@@ -586,9 +591,13 @@ report_scope <- function(register) {
 #' @param register The register as read.
 #' @param logs One element per row, in the register's order: the row's log,
 #'   or `NULL` where it was not read.
-#' @param creators Who created each row, as `log_creators()` answers.
+#' @param creators Who created each row, as `log_creators()` answers. Not
+#'   read any more: the reconstruction does not need it. Kept for the
+#'   runners that pass it.
 #' @param approvers The IT accounts whose approval counts on any row, or
-#'   `NULL` when the caller does not know them.
+#'   `NULL` when the caller does not know them. Not read any more, for the
+#'   same reason: a runner that does not pass them no longer loses the name
+#'   executed.
 #' @param channel_account The REDCap usernames that hold the register's
 #'   token, or `NULL` when they are not configured.
 #'
@@ -596,11 +605,11 @@ report_scope <- function(register) {
 #'   executed, and four columns more: `username_registro`, the name the
 #'   register holds; `nome_eseguito`, `registro` or `log`, where the name
 #'   executed was read, `""` when it is not known; `nome_motivo`, why not:
-#'   `log` or `approvatori`, `""` when it is known; `revoca_eseguita`, `TRUE`
-#'   on a revoked row whose state executed, `log_executed_values()` on
-#'   `request_status`, is `revoked`: carried out, then touched, so that
-#'   `report_scope()` leaves it out of `ferma`. A log that does not say
-#'   leaves it `FALSE`.
+#'   `log`, `""` when it is known; `revoca_eseguita`, `TRUE` on a revoked
+#'   row whose state executed, in the verified version, is `revoked`:
+#'   carried out, then touched, so that `report_scope()` leaves it out of
+#'   `ferma`. A version not verified leaves it `FALSE`, the side that shows
+#'   more.
 #'
 #' @keywords internal
 report_executed_register <- function(register, logs, creators,
@@ -641,20 +650,21 @@ report_executed_register <- function(register, logs, creators,
   for (i in which(stopped)) {
     log <- logs[[i]]
 
+    # One reading per row, for the state executed and the pair executed.
+    executed <- if (!is.null(log)) {
+      log_executed_row(log, ids[[i]], channel_account)
+    }
+
     # A revoked row the round has already carried out as revoked, and that
     # somebody touched afterwards: its seal moved and it stopped, but the
-    # access is gone. The log says it, the state executed being `revoked`;
-    # where it does not say, the row stays, the side that shows more.
-    if (identical(field("request_status")[[i]], "revoked") && !is.null(log)) {
-      done <- log_executed_values(
-        log, ids[[i]], creators[[i]], fields = "request_status",
-        approvers = approvers %||% character(),
-        channel_account = channel_account
-      )
-      if (identical(unname(done[["request_status"]]), "revoked")) {
-        out[["revoca_eseguita"]][[i]] <- TRUE
-        next
-      }
+    # access is gone. A revocation written while a round ran was not carried
+    # out, and a version not verified does not say: the row stays, the side
+    # that shows more.
+    if (identical(field("request_status")[[i]], "revoked") &&
+          !is.null(executed) &&
+          identical(executed[["row"]][["request_status"]], "revoked")) {
+      out[["revoca_eseguita"]][[i]] <- TRUE
+      next
     }
 
     believed <- if (!is.null(channel_account) && !is.null(log)) {
@@ -667,25 +677,15 @@ report_executed_register <- function(register, logs, creators,
       next
     }
 
-    values <- if (!is.null(log) && !is.null(approvers)) {
-      log_executed_values(
-        log, ids[[i]], creators[[i]], approvers = approvers,
-        channel_account = channel_account
-      )
-    }
-    if (is.null(values) || anyNA(values) || !nzchar(values[["username"]])) {
+    if (is.null(executed) || !nzchar(executed[["row"]][["username"]])) {
       out[["username"]][[i]] <- ""
       out[["nome_eseguito"]][[i]] <- ""
-      out[["nome_motivo"]][[i]] <- if (is.null(approvers)) {
-        "approvatori"
-      } else {
-        "log"
-      }
+      out[["nome_motivo"]][[i]] <- "log"
       next
     }
-    out[["server"]][[i]] <- values[["server"]]
-    out[["project_id"]][[i]] <- values[["project_id"]]
-    out[["username"]][[i]] <- values[["username"]]
+    out[["server"]][[i]] <- executed[["row"]][["server"]]
+    out[["project_id"]][[i]] <- executed[["row"]][["project_id"]]
+    out[["username"]][[i]] <- executed[["row"]][["username"]]
     out[["nome_eseguito"]][[i]] <- "log"
   }
 
