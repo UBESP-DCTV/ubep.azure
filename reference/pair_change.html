@@ -73,7 +73,7 @@ instance, nobody is created, and the row keeps its seal and its owner.</p>
 <dl><dt id="arg-executed">executed<a class="anchor" aria-label="anchor" href="#arg-executed"></a></dt>
 <dd><p>The <code>server</code>, <code>project_id</code> and <code>username</code> carried out:
 the row as read when its seal did not move, otherwise what
-<code><a href="log_executed_values.html">log_executed_values()</a></code> answered.</p></dd>
+<code><a href="log_executed_row.html">log_executed_row()</a></code> or <code><a href="log_executed_unverified.html">log_executed_unverified()</a></code> answered.</p></dd>
 
 
 <dt id="arg-current">current<a class="anchor" aria-label="anchor" href="#arg-current"></a></dt>
@@ -136,8 +136,11 @@ to take the access from and nobody to create, and the round closes the row
 before any instance is asked, as it did before the rule. Stopped for IT,
 the rows long closed that way would bring an outcome and a copy each on
 the first round. A revoked row that resolves to another account that
-exists still stops: revoking that account would take away an access the
-row never gave.</p>
+exists still stops here: revoking that account would take away an access
+the row never gave. Since 2026-11-12 the round does not ask this function
+about a revoked row whose version carried out is certain and whose
+instance and project did not move, <code><a href="revocation_exits.html">revocation_exits()</a></code>: it revokes the
+username carried out instead.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

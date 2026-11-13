@@ -1207,7 +1207,7 @@ mai governato. Il giro confronta quindi ogni riga sigillata, prima del
 piano, con la coppia della sua ultima esecuzione. Se il sigillo non si è
 mosso, la coppia eseguita è la riga come letta: il sigillo del canale la
 copre. Altrimenti si legge dal log dei proprietari sotto l’ultimo
-sigillo del canale (<code><a href="../reference/log_executed_values.html">log_executed_values()</a></code>):
+sigillo del canale (<code>log_executed_values()</code>):
 <code>server</code> e <code>project_id</code> dalla creazione o
 dall’ultima modifica sotto il sigillo, il nome utente dalla porta delle
 identità, che lo scrive prima del sigillo nello stesso giro. Una
@@ -2426,10 +2426,10 @@ ha l’accesso, non quello che il registro porta adesso
 (<code><a href="../reference/report_executed_register.html">report_executed_register()</a></code>). Col sigillo fermo è il
 registro; col sigillo mosso (una riga <code>held</code>, una riga su cui
 la porta delle identità ha scritto il nome nuovo dopo un account
-cambiato su Entra) sono i valori che <code><a href="../reference/log_executed_values.html">log_executed_values()</a></code>
+cambiato su Entra) sono i valori che <code>log_executed_values()</code>
 legge sotto l’ultimo sigillo del canale, istanza e progetto compresi. Il
 sigillo creduto è quello del log, come nel giro, quando l’utenza del
-canale è configurata. <code><a href="../reference/log_executed_values.html">log_executed_values()</a></code> ha bisogno
+canale è configurata. <code>log_executed_values()</code> ha bisogno
 degli approvatori di IT: la lavorazione li legge da
 <code>UBEP_APPROVATORI_IT</code>, la stessa variabile del giro nel file
 d’ambiente comune. Se il log non dice il nome, o la lavorazione non
@@ -2437,7 +2437,7 @@ passa gli approvatori, la riga conta senza giudizio e senza domande ai
 server, e la mail a IT dice quale dei due. Accanto a ogni riga ferma le
 voci scrivono l’esito. Una revoca eseguita dal giro e poi toccata da
 qualcuno ha il sigillo mosso ma l’accesso tolto: il log lo dice
-(<code><a href="../reference/log_executed_values.html">log_executed_values()</a></code> su <code>request_status</code>) e la
+(<code>log_executed_values()</code> su <code>request_status</code>) e la
 riga non è ferma.</p>
 <p>Nella voce A una richiesta nuova dice se l’account era nuovo: lo è
 quando Entra l’ha creato non prima del minuto in cui è nata la riga,

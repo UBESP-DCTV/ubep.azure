@@ -94,8 +94,13 @@ lost still misses a report (<code>mesi_persi</code>).</p>
 <code>voci_senza_accessi</code> counts the pairs of person and server listed in full
 for the year without access: those already named in an earlier report and
 those on a server not read are not in it.</p>
-<p>Names and codes only, and never a person: the record is shipped to a
-workspace and kept.</p>
+<p>The six columns of the suppressions, from 0.26.0, are
+<code><a href="suppression_match.html">suppression_match()</a></code>'s counts: <code>soppressioni_lette</code>, always true or
+false, and five that are null when not computed, which the rule on the
+incomplete record does not ask about (a null there has a legitimate
+reason). A record of an esito without them says the lists were not read.</p>
+<p>Names, codes and counts only, and never a person or an address, nor a
+hash of one: the record is shipped to a workspace and kept.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

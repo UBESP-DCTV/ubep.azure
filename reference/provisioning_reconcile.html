@@ -66,6 +66,7 @@ and the order is the design:</p>
 <span>  reply_to <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  approvers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  channel_account <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  banchi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  at <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.time</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"%Y-%m-%d %H:%M"</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -151,6 +152,13 @@ round writes no <code>owned_by</code>. The runner reads it from
 <code>UBEP_CANALE_UTENTE</code>, a list separated by commas, which it requires.</p></dd>
 
 
+<dt id="arg-banchi">banchi<a class="anchor" aria-label="anchor" href="#arg-banchi"></a></dt>
+<dd><p>The instances of <code>hosts</code> that are benches, which step 3b
+never asks. Empty by default, so every instance counts as a production:
+in doubt an instance is asked, as the observer watches it. The runner
+reads them from the inventory, <code>"banco": true</code>.</p></dd>
+
+
 <dt id="arg-at">at<a class="anchor" aria-label="anchor" href="#arg-at"></a></dt>
 <dd><p>When the round ran, as <code>YYYY-MM-DD HH:MM</code>.</p></dd>
 
@@ -179,7 +187,9 @@ accounts of <code>channel_account</code> in its log stops, <code>fermato</code>,
 round reads;</p></li>
 <li><p>read the register;</p></li>
 <li><p>resolve <strong>who each row is talking about</strong>, against the tenant read whole,
-and write the verdict back;</p></li>
+and write the verdict back; for the rows that could create an account,
+first ask the production instances which of the names they could be
+created under REDCap still knows (3b), and resolve them again;</p></li>
 <li><p>turn what the gate admits into the desired state, keeping the form
 errors;</p></li>
 <li><p>per instance, read the state <strong>once</strong> for the grantees and the requesters
@@ -260,9 +270,12 @@ could give, from an owner nobody could name, and the gate would have
 nobody whose rights to ask.</p>
 <p><strong>A row the channel has carried out does not change its pair</strong>, decided on
 2026-11-09: the instance, the project and the person it was carried out
-for: the row as read when its seal did not move, and otherwise as the
-owners' log holds them below the channel's last seal
-(<code><a href="log_executed_values.html">log_executed_values()</a></code>). Whoever wrote the change, the owner included,
+for: the row as read when its seal did not move, and otherwise the
+version the owners' log rebuilds and the channel's last seal verifies
+(<code><a href="log_executed_row.html">log_executed_row()</a></code>, decided on 2026-11-12), or, where none does, the
+log read as the 0.25.0 read it (<code><a href="log_executed_unverified.html">log_executed_unverified()</a></code>). With the
+version verified, the person is rewritten when the register's differs
+from the one carried out. Whoever wrote the change, the owner included,
 approved or not, the row stops before the plan (<code><a href="pair_change.html">pair_change()</a></code>): nothing
 is written on the instance, nobody is created on Entra, the row keeps its
 seal and its owner. <code>DATO_COPPIA_CAMBIATA</code> when the referent moved it, the
@@ -271,7 +284,15 @@ somebody else; <code>TRASPORTO_IDENTITA_CAMBIATA</code> when the round would ser
 another account, or create one, and nobody wrote the person in the row:
 the account changed on Entra, and it is for IT. Both come before a held
 change, since no approval lets them through, and before the identity's own
-codes. A row never carried out changes as before.</p>
+codes. A row never carried out changes as before. On a row stopped on
+either code, and on a sealed row whose pair the round could not judge,
+the identity door writes neither <em>Username (UPN)</em> nor <em>Identity
+resolution</em> (decided on 2026-11-12): the register keeps the name carried
+out, and the channel does not move the seal itself. A revoked row whose
+version carried out is certain, on the instance and the project carried
+out, revokes the username carried out whatever the resolution says now
+(<code><a href="revocation_exits.html">revocation_exits()</a></code>, decided on 2026-11-12): the way out of the register
+for an account renamed on Entra.</p>
 <p><strong>The oldest row of a pair keeps it whether the round serves it or not.</strong>
 A row the round stops (held, blind, on its identity, on a pair that moved)
 still holds its pair, the one carried out when it is known, and a
@@ -287,6 +308,24 @@ own would make every new row wait one more cycle to be looked at. It follows
 that the gate has no window at all: it asks after the verdict it has just
 computed, never after the one the register carries, and writing <code>identity</code>
 back is the minutes of the verdict rather than the input to the next step.</p>
+<p><strong>A name REDCap still knows counts as taken</strong>, decided on 2026-11-10 and
+2026-11-12 (item 4 (b') of the 0.26.0). Whoever were created under a name
+a production instance remembers, as an account or as rights on a project,
+would find there the projects of the old login. So step 3b asks, once per
+production instance and round, about every name a row could be created
+under (<code><a href="upn_window.html">upn_window()</a></code>, <code><a href="round_known_names.html">round_known_names()</a></code>), and resolves those rows
+again: a composed name free on Entra and known to REDCap is a <code>collision</code>,
+and a proposal skips the names REDCap knows. Asked only when a row could
+create: verdict <code>absent</code> or <code>collision</code>, not revoked, and <code>applied_seal</code>
+empty. The benches, <code>banchi</code>, are never asked. A production instance not
+read stops every such row on <code>TRASPORTO_NOME_NON_VERIFICATO</code>, with the
+reason in the round's errors, and the row keeps in the register the name
+and the verdict it holds: a proposal rewritten without that instance would
+stand above an answer already given, and <code><a href="log_answer_stands.html">log_answer_stands()</a></code> would drop
+it. And step 10 creates a name only for a row it asked about and found
+unknown in this pass, so a row whose <code>applied_seal</code> an import filled, which
+is not asked, creates nobody. Asked in a simulation too, and with the post
+off: a reading, and the verdict the real round would give.</p>
 <p><strong>Step 10 is last because it needs step 6's answer</strong>, and that is the whole
 shape of it. A row whose verdict is <code>absent</code> is not a pair — there is nobody
 to grant a right to — so it never enters the desired state; but it does

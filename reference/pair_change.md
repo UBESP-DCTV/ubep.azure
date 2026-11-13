@@ -22,7 +22,9 @@ pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
 
   The `server`, `project_id` and `username` carried out: the row as read
   when its seal did not move, otherwise what
-  [`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
+  [`log_executed_row()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_row.md)
+  or
+  [`log_executed_unverified()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_unverified.md)
   answered.
 
 - current:
@@ -91,5 +93,9 @@ nobody to take the access from and nobody to create, and the round
 closes the row before any instance is asked, as it did before the rule.
 Stopped for IT, the rows long closed that way would bring an outcome and
 a copy each on the first round. A revoked row that resolves to another
-account that exists still stops: revoking that account would take away
-an access the row never gave.
+account that exists still stops here: revoking that account would take
+away an access the row never gave. Since 2026-11-12 the round does not
+ask this function about a revoked row whose version carried out is
+certain and whose instance and project did not move,
+[`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md):
+it revokes the username carried out instead.

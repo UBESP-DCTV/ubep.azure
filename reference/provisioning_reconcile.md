@@ -23,6 +23,7 @@ provisioning_reconcile(
   reply_to = NULL,
   approvers = character(),
   channel_account = NULL,
+  banchi = character(),
   at = format(Sys.time(), "%Y-%m-%d %H:%M", tz = "UTC")
 )
 ```
@@ -107,6 +108,13 @@ provisioning_reconcile(
   writes no `owned_by`. The runner reads it from `UBEP_CANALE_UTENTE`, a
   list separated by commas, which it requires.
 
+- banchi:
+
+  The instances of `hosts` that are benches, which step 3b never asks.
+  Empty by default, so every instance counts as a production: in doubt
+  an instance is asked, as the observer watches it. The runner reads
+  them from the inventory, `"banco": true`.
+
 - at:
 
   When the round ran, as `YYYY-MM-DD HH:MM`.
@@ -137,7 +145,10 @@ of `channel_account` in its log stops, `fermato`, with
 2.  read the register;
 
 3.  resolve **who each row is talking about**, against the tenant read
-    whole, and write the verdict back;
+    whole, and write the verdict back; for the rows that could create an
+    account, first ask the production instances which of the names they
+    could be created under REDCap still knows (3b), and resolve them
+    again;
 
 4.  turn what the gate admits into the desired state, keeping the form
     errors;
@@ -240,11 +251,15 @@ name, and the gate would have nobody whose rights to ask.
 
 **A row the channel has carried out does not change its pair**, decided
 on 2026-11-09: the instance, the project and the person it was carried
-out for: the row as read when its seal did not move, and otherwise as
-the owners' log holds them below the channel's last seal
-([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)).
-Whoever wrote the change, the owner included, approved or not, the row
-stops before the plan
+out for: the row as read when its seal did not move, and otherwise the
+version the owners' log rebuilds and the channel's last seal verifies
+([`log_executed_row()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_row.md),
+decided on 2026-11-12), or, where none does, the log read as the 0.25.0
+read it
+([`log_executed_unverified()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_unverified.md)).
+With the version verified, the person is rewritten when the register's
+differs from the one carried out. Whoever wrote the change, the owner
+included, approved or not, the row stops before the plan
 ([`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md)):
 nothing is written on the instance, nobody is created on Entra, the row
 keeps its seal and its owner. `DATO_COPPIA_CAMBIATA` when the referent
@@ -254,7 +269,16 @@ round would serve another account, or create one, and nobody wrote the
 person in the row: the account changed on Entra, and it is for IT. Both
 come before a held change, since no approval lets them through, and
 before the identity's own codes. A row never carried out changes as
-before.
+before. On a row stopped on either code, and on a sealed row whose pair
+the round could not judge, the identity door writes neither *Username
+(UPN)* nor *Identity resolution* (decided on 2026-11-12): the register
+keeps the name carried out, and the channel does not move the seal
+itself. A revoked row whose version carried out is certain, on the
+instance and the project carried out, revokes the username carried out
+whatever the resolution says now
+([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md),
+decided on 2026-11-12): the way out of the register for an account
+renamed on Entra.
 
 **The oldest row of a pair keeps it whether the round serves it or
 not.** A row the round stops (held, blind, on its identity, on a pair
@@ -273,6 +297,30 @@ It follows that the gate has no window at all: it asks after the verdict
 it has just computed, never after the one the register carries, and
 writing `identity` back is the minutes of the verdict rather than the
 input to the next step.
+
+**A name REDCap still knows counts as taken**, decided on 2026-11-10 and
+2026-11-12 (item 4 (b') of the 0.26.0). Whoever were created under a
+name a production instance remembers, as an account or as rights on a
+project, would find there the projects of the old login. So step 3b
+asks, once per production instance and round, about every name a row
+could be created under
+([`upn_window()`](https://ubesp-dctv.github.io/ubep.azure/reference/upn_window.md),
+[`round_known_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_known_names.md)),
+and resolves those rows again: a composed name free on Entra and known
+to REDCap is a `collision`, and a proposal skips the names REDCap knows.
+Asked only when a row could create: verdict `absent` or `collision`, not
+revoked, and `applied_seal` empty. The benches, `banchi`, are never
+asked. A production instance not read stops every such row on
+`TRASPORTO_NOME_NON_VERIFICATO`, with the reason in the round's errors,
+and the row keeps in the register the name and the verdict it holds: a
+proposal rewritten without that instance would stand above an answer
+already given, and
+[`log_answer_stands()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_answer_stands.md)
+would drop it. And step 10 creates a name only for a row it asked about
+and found unknown in this pass, so a row whose `applied_seal` an import
+filled, which is not asked, creates nobody. Asked in a simulation too,
+and with the post off: a reading, and the verdict the real round would
+give.
 
 **Step 10 is last because it needs step 6's answer**, and that is the
 whole shape of it. A row whose verdict is `absent` is not a pair — there

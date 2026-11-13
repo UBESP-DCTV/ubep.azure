@@ -1,7 +1,11 @@
 # Which events wrote one of these fields
 
 Reads `details`, which REDCap fills with the fields an event wrote and
-the values it gave them, `role_name = 'read only'`.
+the values it gave them, `role_name = 'read only'`, the fields apart by
+a comma. A field counts where a field can start,
+[`log_field_at()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_field_at.md):
+at the start of `details` or after that comma, never inside the value of
+another field.
 
 ## Usage
 

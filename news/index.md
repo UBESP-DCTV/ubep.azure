@@ -22,8 +22,7 @@ and external address, or to the owner.
   ([`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md)),
   and the report says the outcome beside it wherever an item lists it.
   The servers are asked about the account executed: the register’s when
-  the seal did not move, otherwise the values
-  [`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
+  the seal did not move, otherwise the values `log_executed_values()`
   reads below the channel’s last seal
   ([`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md));
   where the log does not say, the row counts without being judged on its
@@ -229,12 +228,11 @@ on: the instance, the project and the person.
   before the plan, with the pair its last execution carried out: the row
   as read when its seal did not move, since the channel’s seal covers
   it, and otherwise the values the owners’ log holds below the channel’s
-  last seal
-  ([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)).
-  When `server` or `project_id` differ, or when somebody wrote the first
-  name, the last name or the contact address and the round would now
-  serve another account or create a person, the row takes `data_error`
-  with `DATO_COPPIA_CAMBIATA`
+  last seal (`log_executed_values()`). When `server` or `project_id`
+  differ, or when somebody wrote the first name, the last name or the
+  contact address and the round would now serve another account or
+  create a person, the row takes `data_error` with
+  `DATO_COPPIA_CAMBIATA`
   ([`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md)):
   nothing is written on the instance, nobody is created, the row is not
   sealed again and its owner does not change. It holds whoever wrote the

@@ -1,0 +1,99 @@
+# The version a row's last execution carried out, rebuilt from the log
+
+Every intent field as the round read it when it last carried the row
+out, accepted only when its seal,
+[`request_seal()`](https://ubesp-dctv.github.io/ubep.azure/reference/request_seal.md),
+is the one the channel wrote at that execution,
+[`log_executions()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executions.md).
+The seal proves the reading: a version rebuilt wrong does not give the
+channel's seal, and the answer is then `NULL`, never a value that may be
+wrong.
+
+## Usage
+
+``` r
+log_executed_row(events, record, channel_account = NULL)
+```
+
+## Arguments
+
+- events:
+
+  The event log, as
+  [`register_log()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_log.md)
+  returns it.
+
+- record:
+
+  The record id to look at.
+
+- channel_account:
+
+  The REDCap usernames that hold the round's token, one or more, or
+  `NULL` when they are not configured: then every write of the seal
+  counts as an execution, as for
+  [`log_executions()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executions.md).
+
+## Value
+
+`NULL` when the row was never carried out in its current life, the
+channel is not known,
+[`log_channel_unknown()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_unknown.md),
+or no cut gives the channel's seal. Otherwise a list: `row`, a data
+frame of one row holding `record_id` and every intent field as carried
+out; `seal`, the seal it gives; `at`, the position of the execution in
+[`log_of_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_of_record.md);
+`cut`, the position of the cut, the newest event the version holds.
+
+## Details
+
+**How it is rebuilt**, decided on 2026-11-12. The round reads the
+register, then the identity door writes the username it resolved, then
+the round carries the row out and writes the seal, which covers the row
+as read with the resolved name in place of the one read. In the log,
+between the execution before (or the creation) and the newest one, stand
+the writes the round read and, above them, those made while it ran, by
+anybody. So the version carried out is the state of the log at a **cut**
+below the seal:
+
+- each intent field holds the newest write at the cut or below it, in
+  the row's current life,
+  [`log_of_record()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_of_record.md),
+  by anybody, the channel included; a field never written is `""`;
+  `record_id` is the record;
+
+- `username` holds instead the channel's write between the cut and the
+  seal, when there is one: the identity door of the round that carried
+  the row out, written after the reading;
+
+- the cuts are tried from the highest (right below the seal, no write
+  left out) to the lowest (right above the execution before), and the
+  first whose seal is the channel's is the answer. Two cuts that both
+  give the channel's seal give the same values, so which one is taken
+  does not matter.
+
+A write made before the reading is carried out whoever made it, with or
+without an approval; one made after it is not, whoever made it: the
+owner's own write while the round ran, the person written while it ran,
+a revocation written while it ran. Who approved what is not needed.
+
+The values are read with
+[`log_written_value()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_written_value.md),
+whole up to the apostrophe that closes them, and brought to the form of
+the register by
+[`log_value_as_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_value_as_register.md).
+A value the log holds in another form makes no cut give the seal, and
+the answer is `NULL`: the row is not verified, and no value is guessed.
+Measured on 2026-11-12 on the live register (M1 and M1b): the
+reconstruction gives the channel's seal on every row whose seal did not
+move, once the field names inside *Read back as* are no longer read as
+writes
+([`log_field_at()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_field_at.md));
+non-ASCII letters, capitals in an address, spaces at the edges of the
+register's values and fields never written among them. Not measured yet:
+apostrophes, `& < >` and quotes, dates written by the form, a
+`project_id` with a leading zero, values longer than 100 characters,
+emptied fields.
+
+No intent field is a checkbox. One that were would be logged as
+`field(code) = checked`, and this function would have to learn it first.

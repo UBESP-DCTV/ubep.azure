@@ -5,7 +5,13 @@ Say what the resolution decided about one row
 ## Usage
 
 ``` r
-identity_verdict(identity, username = "", errors = character(), composed = "")
+identity_verdict(
+  identity,
+  username = "",
+  errors = character(),
+  composed = "",
+  known_to_redcap = FALSE
+)
 ```
 
 ## Arguments
@@ -33,6 +39,13 @@ identity_verdict(identity, username = "", errors = character(), composed = "")
   thing as `username`: a name that does not exist yet is not a
   confirmation and does not belong in the register.
 
+- known_to_redcap:
+
+  Whether the composed name is free on Entra and known to REDCap on a
+  production instance (0.26.0): a `collision` with nobody in the
+  directory to look at, whose message says so.
+
 ## Value
 
-A list with `identity`, `username`, `errors` and `composed`.
+A list with `identity`, `username`, `errors`, `composed` and
+`known_to_redcap`.

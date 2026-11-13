@@ -7,7 +7,7 @@ username it wrote itself and keeps the one it did not.**
 ## Usage
 
 ``` r
-resolve_identity(request, directory, domain = "ubep.unipd.it")
+resolve_identity(request, directory, domain = "ubep.unipd.it", redcap = NULL)
 ```
 
 ## Arguments
@@ -39,9 +39,26 @@ resolve_identity(request, directory, domain = "ubep.unipd.it")
   does, so that what counts as an internal address and what a composed
   UPN looks like cannot drift apart.
 
+- redcap:
+
+  What the production instances said about the names this row could be
+  created under (decided on 2026-11-10, item 4 (b') of the 0.26.0): a
+  list with `asked`, the names the round asked, and `known`, those
+  REDCap knows, as an account or as rights on a project. `NULL`, the
+  default, judges the directory alone, as before. Read only where the
+  verdict could create, `absent` and `collision`: a name REDCap knows is
+  taken as a UPN held on Entra is, so a composed name free on Entra and
+  known to REDCap is a `collision` (`known_to_redcap`), and the proposal
+  skips the names REDCap knows. The proposal is taken from
+  [`upn_window()`](https://ubesp-dctv.github.io/ubep.azure/reference/upn_window.md);
+  a window not asked whole, or known whole, is no verdict at all,
+  `TRASPORTO_NOME_NON_VERIFICATO`: the round creates no name it has not
+  found unknown in this pass.
+
 ## Value
 
-A list with `identity`, `username`, `errors` and `composed`.
+A list with `identity`, `username`, `errors`, `composed` and
+`known_to_redcap`.
 
 ## Details
 

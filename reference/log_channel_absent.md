@@ -31,3 +31,14 @@ log_channel_absent(events, channel_account)
 ## Value
 
 `TRUE` or `FALSE`.
+
+## Details
+
+Only a seal in the form of the seals door counts,
+[`log_seals_door()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_seals_door.md),
+decided on 2026-11-12 (RC3 of the review of unit G). The identity door
+writes after this question is asked (L6), so on a register the channel
+has never written on, a referent's CSV carrying the row and its seal
+stopped every round, and the channel could never write to be seen. A
+seal imported alone, in the door's form, still stops the round: from the
+log it cannot be told from the channel's under a name typed wrong.

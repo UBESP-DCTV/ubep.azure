@@ -11,7 +11,12 @@ row.
 ## Usage
 
 ``` r
-resolve_against_directory(request, directory, domain = "ubep.unipd.it")
+resolve_against_directory(
+  request,
+  directory,
+  domain = "ubep.unipd.it",
+  redcap = NULL
+)
 ```
 
 ## Arguments
@@ -43,11 +48,28 @@ resolve_against_directory(request, directory, domain = "ubep.unipd.it")
   does, so that what counts as an internal address and what a composed
   UPN looks like cannot drift apart.
 
+- redcap:
+
+  What the production instances said about the names this row could be
+  created under (decided on 2026-11-10, item 4 (b') of the 0.26.0): a
+  list with `asked`, the names the round asked, and `known`, those
+  REDCap knows, as an account or as rights on a project. `NULL`, the
+  default, judges the directory alone, as before. Read only where the
+  verdict could create, `absent` and `collision`: a name REDCap knows is
+  taken as a UPN held on Entra is, so a composed name free on Entra and
+  known to REDCap is a `collision` (`known_to_redcap`), and the proposal
+  skips the names REDCap knows. The proposal is taken from
+  [`upn_window()`](https://ubesp-dctv.github.io/ubep.azure/reference/upn_window.md);
+  a window not asked whole, or known whole, is no verdict at all,
+  `TRASPORTO_NOME_NON_VERIFICATO`: the round creates no name it has not
+  found unknown in this pass.
+
 ## Value
 
-A list with `identity`, `username` and `errors`. The username is what
-the **directory** says, so it is empty on every verdict that did not
-resolve; giving the row back what its filer typed is
+A list with `identity`, `username`, `errors`, `composed` and
+`known_to_redcap`. The username is what the **directory** says, so it is
+empty on every verdict that did not resolve; giving the row back what
+its filer typed is
 [`resolve_identity()`](https://ubesp-dctv.github.io/ubep.azure/reference/resolve_identity.md),
 which is the only caller and the only place that knows whose the value
 is.

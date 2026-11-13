@@ -57,7 +57,7 @@ whoever read it understood that an access had been granted.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_status_words</span><span class="op">(</span><span class="va">request_status</span>, applied_as <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mail_status_words</span><span class="op">(</span><span class="va">request_status</span>, applied_as <span class="op">=</span> <span class="st">""</span>, at <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -72,6 +72,12 @@ whoever read it understood that an access had been granted.</p>
 <dd><p>The row's read-back, <code>"absent"</code> when the pair is not on
 the instance. Empty when the caller does not say.</p></dd>
 
+
+<dt id="arg-at">at<a class="anchor" aria-label="anchor" href="#arg-at"></a></dt>
+<dd><p>The time of the round, UTC, <code>"%Y-%m-%d %H:%M"</code>: the day against
+which the stored expiration of <code>applied_as</code> is read. Empty or not a date,
+and the fourth fact is not told.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -83,6 +89,12 @@ the instance. Empty when the caller does not say.</p></dd>
 carried out and unchanged, and whose person somebody removed from the
 project. The round writes nothing and reads the pair back as absent, which
 is the row's own wish, and the message says that instead of a grant.</p>
+<p>A fourth fact has the same word again: an active row whose last day has
+passed on the day of the round and whose person is on the project all the
+same, because somebody put them back by hand, with the day the row says or
+with another that the round brought back to it. REDCap stores the day after
+the last, and on it does not let the person in. Whether the channel wrote
+is no part of the sentence, which is the same for both.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

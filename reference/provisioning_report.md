@@ -23,7 +23,8 @@ provisioning_report(
   channel_account = NULL,
   hosts = character(),
   secrets = character(),
-  approvers = NULL
+  approvers = NULL,
+  suppressions = NULL
 )
 ```
 
@@ -97,6 +98,19 @@ provisioning_report(
   runner older than the argument: those rows enter without the name
   executed, and the mail to IT says why.
 
+- suppressions:
+
+  A function with no arguments that reads the suppression lists of the
+  mail service and answers as
+  [`suppression_read()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_read.md),
+  built by the runner around the read-only key as the `mailer` is around
+  the sending one. Asked first, before the register, and nothing it
+  answers stops the report: a failure, or an error it throws, is
+  `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` and null columns. `NULL`, the
+  default, is a runner without the key or older than the argument:
+  `soppressioni_lette` is false and no code is added, so the record
+  shows it without passing for a clean reading.
+
 ## Value
 
 A list that
@@ -108,7 +122,10 @@ late report, with the `mese` it covers, for whoever reads a single run;
 answered for each server asked; `recuperati`, the late reports tried (a
 data frame of `mese`, `destinatario` and `esito`, `mandato` or
 `fallito`); and `mesi_persi`, the months still missing a report after
-the round.
+the round; the six counts of
+[`suppression_match()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_match.md),
+and `soppressioni`, its detail with the addresses, for the journal and
+never for the record.
 
 ## Details
 

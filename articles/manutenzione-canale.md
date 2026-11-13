@@ -1107,16 +1107,15 @@ governato. Il giro confronta quindi ogni riga sigillata, prima del
 piano, con la coppia della sua ultima esecuzione. Se il sigillo non si è
 mosso, la coppia eseguita è la riga come letta: il sigillo del canale la
 copre. Altrimenti si legge dal log dei proprietari sotto l’ultimo
-sigillo del canale
-([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)):
-`server` e `project_id` dalla creazione o dall’ultima modifica sotto il
-sigillo, il nome utente dalla porta delle identità, che lo scrive prima
-del sigillo nello stesso giro. Una scrittura sotto il sigillo che
-l’esecuzione non ha coperto, fatta mentre il giro girava, non è il
-valore eseguito, e si legge quella sotto. Letta dal log, una modifica
-eseguita senza un’approvazione sopra (lo storico di prima del
-2026-10-14, o una correzione di IT) passerebbe per scoperta: è per
-questo che col sigillo fermo conta la riga. La regola è
+sigillo del canale (`log_executed_values()`): `server` e `project_id`
+dalla creazione o dall’ultima modifica sotto il sigillo, il nome utente
+dalla porta delle identità, che lo scrive prima del sigillo nello stesso
+giro. Una scrittura sotto il sigillo che l’esecuzione non ha coperto,
+fatta mentre il giro girava, non è il valore eseguito, e si legge quella
+sotto. Letta dal log, una modifica eseguita senza un’approvazione sopra
+(lo storico di prima del 2026-10-14, o una correzione di IT) passerebbe
+per scoperta: è per questo che col sigillo fermo conta la riga. La
+regola è
 [`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md),
 con due codici:
 
@@ -2232,21 +2231,18 @@ non quello che il registro porta adesso
 ([`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md)).
 Col sigillo fermo è il registro; col sigillo mosso (una riga `held`, una
 riga su cui la porta delle identità ha scritto il nome nuovo dopo un
-account cambiato su Entra) sono i valori che
-[`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
+account cambiato su Entra) sono i valori che `log_executed_values()`
 legge sotto l’ultimo sigillo del canale, istanza e progetto compresi. Il
 sigillo creduto è quello del log, come nel giro, quando l’utenza del
-canale è configurata.
-[`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
-ha bisogno degli approvatori di IT: la lavorazione li legge da
-`UBEP_APPROVATORI_IT`, la stessa variabile del giro nel file d’ambiente
-comune. Se il log non dice il nome, o la lavorazione non passa gli
-approvatori, la riga conta senza giudizio e senza domande ai server, e
-la mail a IT dice quale dei due. Accanto a ogni riga ferma le voci
-scrivono l’esito. Una revoca eseguita dal giro e poi toccata da qualcuno
-ha il sigillo mosso ma l’accesso tolto: il log lo dice
-([`log_executed_values()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_values.md)
-su `request_status`) e la riga non è ferma.
+canale è configurata. `log_executed_values()` ha bisogno degli
+approvatori di IT: la lavorazione li legge da `UBEP_APPROVATORI_IT`, la
+stessa variabile del giro nel file d’ambiente comune. Se il log non dice
+il nome, o la lavorazione non passa gli approvatori, la riga conta senza
+giudizio e senza domande ai server, e la mail a IT dice quale dei due.
+Accanto a ogni riga ferma le voci scrivono l’esito. Una revoca eseguita
+dal giro e poi toccata da qualcuno ha il sigillo mosso ma l’accesso
+tolto: il log lo dice (`log_executed_values()` su `request_status`) e la
+riga non è ferma.
 
 Nella voce A una richiesta nuova dice se l’account era nuovo: lo è
 quando Entra l’ha creato non prima del minuto in cui è nata la riga,
