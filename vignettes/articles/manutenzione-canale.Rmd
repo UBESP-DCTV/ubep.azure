@@ -1113,8 +1113,11 @@ riga è allora cambiata dopo il sigillo, e la persona viene creata di nuovo e
 riceve la mail d'accesso. Una riga cambiata dopo il sigillo o mai eseguita
 resta rifiutata su una data passata, con la persona sul progetto o senza. Una
 persona ancora sul progetto con un nome utente che differisce solo nelle
-maiuscole, perché su Entra è cambiato, non è una persona tolta: la riga prende
-`DATO_SCADENZA_NON_VALIDA` come prima (`recased`). Una data che non è una data
+maiuscole, perché su Entra è cambiato, non è una persona tolta: il giro la
+cerca sotto il nome che l'istanza tiene (`held_as()`) e la tratta come con le
+stesse maiuscole, `noop` o la scadenza riportata a quella della riga (dalla
+0.26.0; fino alla 0.25.0 la riga prendeva `DATO_SCADENZA_NON_VALIDA`). Una
+data che non è una data
 è rifiutata su ogni riga. Il rapporto mensile continua a contare la riga,
 come ogni riga scaduta e non revocata, finché nessuno la revoca (`keep` di
 `report_rows()` e `conta` di `report_scope()`).
@@ -1145,14 +1148,18 @@ sui diritti di chi l'ha scritta, e la coppia assente la chiude. Una revoca
 chiusa così non passa la riga a nessuno: il cancello non ha fatto passare la
 modifica di nessuno.
 
-**Il nome della revoca.** La revoca si manda col nome utente che l'istanza
-tiene, letto dallo stato che il giro ha già, non con quello del registro: il
-modulo pianifica la revoca su una chiave esatta (`Planner::planRevoke()`),
-mentre REDCap tiene gli utenti senza guardare le maiuscole. Un account
-cambiato su Entra solo nelle maiuscole, con la revoca mandata come scritta nel
-registro, dava `noop` sull'istanza e una riga chiusa in falso. Se l'istanza ne
-tenesse due che differiscono nelle maiuscole, va prima quello scritto come nel
-registro. Le concessioni si confrontano come prima. La rilettura di una revoca
+**Il nome della revoca e della concessione.** La revoca e la concessione si
+mandano col nome utente che l'istanza tiene, letto dallo stato che il giro ha
+già (`held_as()`), non con quello del registro: il modulo pianifica su una
+chiave esatta (`Planner::planRevoke()`, `Planner::planApply()`), mentre REDCap
+tiene gli utenti senza guardare le maiuscole. Un account cambiato su Entra solo
+nelle maiuscole, con la richiesta mandata come scritta nel registro, dava
+`noop` sull'istanza per la revoca, e una riga chiusa in falso; per la
+concessione una creazione che REDCap rifiuta o tiene due volte, e una riga in
+errore a ogni giro (fino alla 0.25.0). Il registro tiene il nome di Entra.
+Se l'istanza ne tenesse due che differiscono nelle maiuscole, va prima quello
+scritto come nel registro. Una persona assente sotto ogni grafia si crea col
+nome del registro. La rilettura di una revoca
 cerca anch'essa la coppia senza maiuscole: se mostra ancora la persona, la
 riga prende `TRASPORTO_SCRITTURA_NON_CONFERMATA`.
 
