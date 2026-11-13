@@ -131,8 +131,10 @@ l’osservatore doveva restare senza confronto, stanno nel §2.
 **Dalla 0.20.0 la macchina ne ospita una terza**, il rapporto mensile ai
 referenti. Legge il registro e l’anagrafica e manda posta, e basta: non
 scrive nel registro, non tocca Entra, e alle istanze chiede una cosa
-sola: l’operazione `accounts`, di sola lettura. Ha la sua unità, la sua
-tabella e i suoi allarmi, e sta nel §9.
+sola: l’operazione `accounts`, di sola lettura. Dalla 0.26.0 legge
+anche, con una chiave che sa solo leggerle, le liste di soppressione del
+servizio di posta. Ha la sua unità, la sua tabella e i suoi allarmi, e
+sta nel §9.
 
 **La cadenza di quattro ore è una decisione, non un caso.** Dice: chi
 compila una richiesta sa entro quattro ore se è formalmente corretta e,
@@ -142,12 +144,14 @@ giro valida e applica nella stessa passata.
 **L’ordine dentro un giro, che è la parte da avere in testa.** Il giro
 (1) legge il dizionario del registro e si ferma se è derivato da quello
 impacchettato; (2) legge le richieste; (3) risolve l’identità di ogni
-riga contro l’anagrafica, e **crea** l’utenza dove manca; (4) scrive
-identità e username nel registro, per una porta che non prende altro;
-(5) chiede a ogni istanza il cancello sull’ambito e confronta desiderato
-e reale per le sole coppie di cui qualcuno ha chiesto; (6) applica; (7)
-rilegge; (8) **manda la posta**, compresa la mail che dice alla persona
-che ora ha l’accesso; (9) scrive l’esito, poi il proprietario della riga
+riga contro l’anagrafica, chiede alle istanze di produzione se REDCap
+conosce già i nomi che potrebbe creare (dalla 0.26.0, §4, «Una persona
+da creare»), e **crea** l’utenza dove manca; (4) scrive identità e
+username nel registro, per una porta che non prende altro; (5) chiede a
+ogni istanza il cancello sull’ambito e confronta desiderato e reale per
+le sole coppie di cui qualcuno ha chiesto; (6) applica; (7) rilegge; (8)
+**manda la posta**, compresa la mail che dice alla persona che ora ha
+l’accesso; (9) scrive l’esito, poi il proprietario della riga
 (`owned_by`), poi il sigillo. Le scritture nel registro passano da porte
 distinte e restano tali (§4): la prima porta i verbali del verdetto, le
 altre l’esito, il proprietario e il sigillo.
@@ -1106,16 +1110,40 @@ riga revocata spostata altrove toglierebbe un accesso che non ha mai
 governato. Il giro confronta quindi ogni riga sigillata, prima del
 piano, con la coppia della sua ultima esecuzione. Se il sigillo non si è
 mosso, la coppia eseguita è la riga come letta: il sigillo del canale la
-copre. Altrimenti si legge dal log dei proprietari sotto l’ultimo
-sigillo del canale (`log_executed_values()`): `server` e `project_id`
-dalla creazione o dall’ultima modifica sotto il sigillo, il nome utente
-dalla porta delle identità, che lo scrive prima del sigillo nello stesso
-giro. Una scrittura sotto il sigillo che l’esecuzione non ha coperto,
-fatta mentre il giro girava, non è il valore eseguito, e si legge quella
-sotto. Letta dal log, una modifica eseguita senza un’approvazione sopra
-(lo storico di prima del 2026-10-14, o una correzione di IT) passerebbe
-per scoperta: è per questo che col sigillo fermo conta la riga. La
-regola è
+copre. Altrimenti la versione eseguita si ricostruisce dal log dei
+proprietari e vale solo se il sigillo del canale la conferma
+([`log_executed_row()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_row.md),
+dalla 0.26.0). Il giro legge il registro, la porta delle identità scrive
+il nome risolto, il giro esegue e scrive il sigillo: la versione
+eseguita è lo stato del log a un taglio sotto il sigillo, con il nome
+che la porta di quel giro ha scritto sopra il taglio. Si provano i tagli
+dal sigillo in giù e si prende il primo il cui
+[`request_seal()`](https://ubesp-dctv.github.io/ubep.azure/reference/request_seal.md)
+è il sigillo del canale. Una scrittura fatta prima della lettura è
+eseguita chiunque l’abbia fatta, con un’approvazione o no (lo storico di
+prima del 2026-10-14, una correzione di IT); una fatta mentre il giro
+girava non lo è, chiunque l’abbia fatta, il proprietario compreso. Dove
+nessun taglio coincide (un formato del log che la lettura non conosce,
+un log tagliato) la regola della coppia legge il log come la 0.25.0,
+[`log_executed_unverified()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_unverified.md);
+il rapporto mensile e la revoca sul nome eseguito invece non lo leggono,
+e la riga resta col nome non noto. Le forme del log misurate il
+2026-11-12 sono scritte nella documentazione della funzione; una
+normalizzazione, se una misura la chiederà, va in
+[`log_value_as_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_value_as_register.md),
+che la ricostruzione e il rapporto leggono tutti e due.
+
+Un campo è scritto in un evento del log solo dove un campo comincia,
+all’inizio dei dettagli o dopo una virgola, seguito da `=` e
+dall’apostrofo
+([`log_field_at()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_field_at.md),
+dalla 0.26.0). Prima i tre nomi dentro *Read back as*, che il canale
+scrive come `role_name=...; dag_name=...; expiration=...`, si leggevano
+come scritture di ruolo, gruppo e scadenza su ogni riga (misurato il
+2026-11-12); sul registro di produzione non hanno cambiato nessuna
+decisione.
+
+La regola è
 [`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md),
 con due codici:
 
@@ -1141,32 +1169,69 @@ con due codici:
   senza dire niente, ricreava l’account cancellato con lo stesso nome
   (che su REDCap ritrova tutti i diritti di prima) o ne creava un
   secondo per la stessa persona. L’esito va al proprietario con IT in
-  copia, e dice che la riga non va modificata. Lo prende anche una riga
-  revocata che risolve un altro account esistente: revocarlo toglierebbe
-  un accesso che la riga non ha mai dato. Una riga revocata la cui
-  persona non è più nel tenant, senza che nessuno l’abbia scritta, si
-  chiude invece come prima, `applied` con `absent`, prima delle istanze
-  (deciso il 2026-11-10): non c’è nessuno a cui togliere l’accesso e
-  nessuno da creare. La riga riparte da sola quando la risoluzione
-  ritrova l’account eseguito, per esempio un account cancellato e
-  ripristinato; per un account rinominato che resta tale questa versione
-  non ha un’uscita dal registro, e la decisione è di IT.
+  copia, e dice che la riga non va modificata. Una riga revocata con la
+  versione eseguita certa (sigillo fermo, o ricostruzione verificata) e
+  con istanza e progetto eseguiti non prende né questo codice né quello
+  della sua identità: revoca il nome utente eseguito, qualunque cosa
+  dica la risoluzione, un account rinominato, un recapito interno che il
+  tenant non ha più, `ambiguous` o una collisione senza risposta
+  ([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md),
+  dalla 0.26.0). Solo un nome che il canale ha eseguito sulla riga in
+  una versione non revocata
+  ([`log_granted_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_granted_names.md)):
+  una richiesta ritirata prima che la persona nascesse è sigillata sotto
+  il nome che il giro avrebbe creato, anche la proposta di una
+  collisione, e quel nome può diventare di un altro. Per tutto il giro
+  il nome della riga è quello eseguito, sigillo compreso, così il giro
+  dopo trova la riga intatta e non revoca il nome nuovo. Dove il
+  registro tiene un altro nome (scritto dalla porta della 0.24.0 o della
+  0.25.0) la porta delle identità riscrive quello eseguito; se il
+  registro rifiuta la scrittura, la riga si ferma sul codice del
+  registro, senza revoca e senza sigillo nuovo, e il giro dopo la rifà.
+  È l’uscita per un account rinominato che resta tale: il proprietario
+  revoca la riga vecchia e ne crea una nuova, e IT non concede a mano su
+  una coppia che una riga revocata governa, perché il giro la revoca.
+  Una riga revocata la cui persona non è più nel tenant, senza che
+  nessuno l’abbia scritta, si chiude invece come prima, `applied` con
+  `absent`, prima delle istanze (deciso il 2026-11-10): non c’è nessuno
+  da creare, e il vecchio login lo toglie IT. Restano su questo codice
+  una riga revocata che il log non verifica, una riga nata revocata, e
+  ogni riga se l’utenza del canale non è configurata: limiti accettati,
+  nel verso che revoca meno. La riga attiva riparte da sola quando la
+  risoluzione ritrova l’account eseguito, per esempio un account
+  cancellato e ripristinato.
 
 In tutti e due i casi sull’istanza non si scrive niente, nessuno nasce
-su Entra, il sigillo e il proprietario restano. Una riga sigillata la
-cui risoluzione non nomina nessuno, `ambiguous` o una collisione senza
-risposta, resta sul codice della sua identità come prima: non concede
-niente, e la correzione del referente la porta o alla stessa persona o a
-uno dei due casi. Le righe mai eseguite cambiano come prima.
+su Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta
+delle identità non scrive né il nome né il verdetto: il registro tiene
+il nome eseguito. Lo stesso su una riga sigillata di cui il giro non ha
+potuto giudicare la coppia (log dei proprietari non letto, riga cieca).
+La porta scrive dopo la lettura del log dei proprietari, quindi la sua
+scrittura del giro non dice più che il canale c’è:
+[`log_channel_absent()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.md)
+conta solo i sigilli scritti nella forma della porta dei sigilli
+([`log_seals_door()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_seals_door.md)),
+e un import di un referente con la riga e il suo sigillo non ferma più
+ogni giro su un registro dove il canale non ha mai scritto. Un sigillo
+importato da solo, in quella forma, lo ferma ancora: dal log non si
+distingue dal canale configurato con un nome sbagliato. Una riga
+sigillata la cui risoluzione non nomina nessuno, `ambiguous` o una
+collisione senza risposta, resta sul codice della sua identità come
+prima, se è attiva: non concede niente, e la correzione del referente la
+porta o alla stessa persona o a uno dei due casi. Su quella riga la
+porta scrive ancora la proposta, o il nome vuoto, e il sigillo si muove
+per mano del canale: un limite accettato. Le righe mai eseguite cambiano
+come prima.
 
-Che una persona sia stata scritta si legge nel log della riga, chiesto
-per ogni riga il cui sigillo si è mosso
+Che una persona sia stata scritta si legge dalla versione eseguita:
+nome, cognome o indirizzo di contatto del registro letto diversi da
+quelli eseguiti, chiunque li abbia scritti e anche sotto il sigillo,
+mentre il giro girava. Dove la versione non è verificata, dal log della
+riga sopra il sigillo, come prima
 ([`log_change_authors()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_change_authors.md)
 sui tre campi). Una riga il cui sigillo non si è mosso porta la persona
 eseguita: un account rinominato su Entra non muove il sigillo, perché il
-registro letto ha ancora il nome vecchio, ed è per questo che la coppia
-eseguita si legge dal log dei proprietari, che il giro ha già, e non dal
-log della riga.
+registro letto ha ancora il nome vecchio.
 
 **Il doppione guarda anche le righe che il giro non serve.** La riga più
 vecchia di una coppia la tiene anche quando il giro la ferma:
@@ -1222,14 +1287,23 @@ per una riga che la 0.24.0 aveva fermato su `DATO_SCADENZA_NON_VALIDA` è
 la mail che sostituisce l’errore. Il sigillo non si muove: la riga è
 intatta e non c’è niente da riscrivere. Se qualcuno rimette la persona a
 mano, il giro la confronta con la riga: stessa scadenza, `noop`;
-un’altra, riportata a quella della riga, e l’accesso si chiude. Per
-riaprire l’accesso il referente sposta la data: la riga è allora
-cambiata dopo il sigillo, e la persona viene creata di nuovo e riceve la
-mail d’accesso. Una riga cambiata dopo il sigillo o mai eseguita resta
-rifiutata su una data passata, con la persona sul progetto o senza. Una
-persona ancora sul progetto con un nome utente che differisce solo nelle
-maiuscole, perché su Entra è cambiato, non è una persona tolta: la riga
-prende `DATO_SCADENZA_NON_VALIDA` come prima (`recased`). Una data che
+un’altra, riportata a quella della riga, e l’accesso si chiude. In tutti
+e due i casi la persona è sul progetto e non può entrare: dalla 0.26.0
+la mail d’esito al proprietario dice che l’ultimo giorno di accesso
+della richiesta è passato e che REDCap non la fa entrare, non che
+l’accesso è concesso
+([`mail_status_words()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_status_words.md),
+quando la scadenza memorizzata in *Read back as* non viene dopo il
+giorno UTC di `outcome_at`). Per riaprire l’accesso il referente sposta
+la data: la riga è allora cambiata dopo il sigillo, e la persona viene
+creata di nuovo e riceve la mail d’accesso. Una riga cambiata dopo il
+sigillo o mai eseguita resta rifiutata su una data passata, con la
+persona sul progetto o senza. Una persona ancora sul progetto con un
+nome utente che differisce solo nelle maiuscole, perché su Entra è
+cambiato, non è una persona tolta: il giro la cerca sotto il nome che
+l’istanza tiene (`held_as()`) e la tratta come con le stesse maiuscole,
+`noop` o la scadenza riportata a quella della riga (dalla 0.26.0; fino
+alla 0.25.0 la riga prendeva `DATO_SCADENZA_NON_VALIDA`). Una data che
 non è una data è rifiutata su ogni riga. Il rapporto mensile continua a
 contare la riga, come ogni riga scaduta e non revocata, finché nessuno
 la revoca (`keep` di
@@ -1269,17 +1343,21 @@ chi l’ha scritta, e la coppia assente la chiude. Una revoca chiusa così
 non passa la riga a nessuno: il cancello non ha fatto passare la
 modifica di nessuno.
 
-**Il nome della revoca.** La revoca si manda col nome utente che
-l’istanza tiene, letto dallo stato che il giro ha già, non con quello
-del registro: il modulo pianifica la revoca su una chiave esatta
-(`Planner::planRevoke()`), mentre REDCap tiene gli utenti senza guardare
+**Il nome della revoca e della concessione.** La revoca e la concessione
+si mandano col nome utente che l’istanza tiene, letto dallo stato che il
+giro ha già (`held_as()`), non con quello del registro: il modulo
+pianifica su una chiave esatta (`Planner::planRevoke()`,
+`Planner::planApply()`), mentre REDCap tiene gli utenti senza guardare
 le maiuscole. Un account cambiato su Entra solo nelle maiuscole, con la
-revoca mandata come scritta nel registro, dava `noop` sull’istanza e una
-riga chiusa in falso. Se l’istanza ne tenesse due che differiscono nelle
-maiuscole, va prima quello scritto come nel registro. Le concessioni si
-confrontano come prima. La rilettura di una revoca cerca anch’essa la
-coppia senza maiuscole: se mostra ancora la persona, la riga prende
-`TRASPORTO_SCRITTURA_NON_CONFERMATA`.
+richiesta mandata come scritta nel registro, dava `noop` sull’istanza
+per la revoca, e una riga chiusa in falso; per la concessione una
+creazione che REDCap rifiuta o tiene due volte, e una riga in errore a
+ogni giro (fino alla 0.25.0). Il registro tiene il nome di Entra. Se
+l’istanza ne tenesse due che differiscono nelle maiuscole, va prima
+quello scritto come nel registro. Una persona assente sotto ogni grafia
+si crea col nome del registro. La rilettura di una revoca cerca
+anch’essa la coppia senza maiuscole: se mostra ancora la persona, la
+riga prende `TRASPORTO_SCRITTURA_NON_CONFERMATA`.
 
 ### Una persona da creare
 
@@ -1287,7 +1365,7 @@ Il giro chiude creando due righe: quella il cui verdetto è `absent`, e
 dalla 0.22.0 quella in collisione a cui il referente ha risposto che si
 tratta di un’altra persona (più sotto). Creare è l’unico atto che un
 giro dopo non disfa: l’utenza esiste. Dalla 0.19.0 tre controlli stanno
-prima della nascita, e non dopo.
+prima della nascita, e non dopo; dalla 0.26.0 un quarto.
 
 - **Validata prima di nascere.** La riga si giudica come la coppia che
   diventerà, con il nome che il giro sta per creare: una scadenza
@@ -1309,6 +1387,39 @@ prima della nascita, e non dopo.
   la posta. Con `UBEP_SCRITTURA=1` e `UBEP_POSTA` spenta il giro non
   crea nessuno: la riga resta in attesa, e nei giri in cui qualcuno
   sarebbe nato gli `errori` portano `TRASPORTO_CREAZIONE_SENZA_POSTA`.
+- **Un nome che REDCap conosce non nasce**, dalla 0.26.0. Prima di
+  decidere un verdetto che può creare (`absent` o `collision`, non
+  revocata, con `applied_seal` vuoto) il giro chiede alle istanze di
+  produzione, con una chiamata `accounts` per istanza e una lettura
+  intera di `state`, quali dei nomi che potrebbe creare REDCap conosce,
+  come account o come diritti su un progetto (passo 3b,
+  [`round_known_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_known_names.md)).
+  I nomi sono il composto, se libero su Entra, e i primi cinque suffissi
+  liberi su Entra
+  ([`upn_window()`](https://ubesp-dctv.github.io/ubep.azure/reference/upn_window.md)).
+  Un composto libero su Entra e noto a REDCap è una collisione, e ogni
+  proposta salta i nomi noti: chi lo ricevesse troverebbe i progetti del
+  vecchio login. Se i cinque suffissi sono tutti noti la riga si ferma,
+  e serve IT. I banchi non si chiedono mai (`banchi`, `"banco": true`
+  nell’inventario). Una produzione che non risponde, al contratto 3, o
+  che non ha nessuna coppia in `state` (`StateReader::read()` risponde
+  vuoto anche quando la query fallisce; negli `errori` del giro
+  `TRASPORTO_STATO_VUOTO`) ferma ogni riga così su
+  `TRASPORTO_NOME_NON_VERIFICATO`, con il motivo dell’istanza negli
+  `errori` del giro; la porta delle identità non scrive quelle righe,
+  così una risposta già data resta valida e al giro dopo, con l’istanza
+  su, la riga crea. Una produzione spenta ferma quindi le creazioni di
+  tutta la flotta finché non torna. La creazione (passo 10 di
+  [`provisioning_reconcile()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_reconcile.md))
+  prende solo un nome chiesto e trovato sconosciuto in quel giro: una
+  riga col sigillo importato e mai sigillata dal canale non crea, e
+  resta su quel codice finché IT non svuota il campo. Le candidate si
+  scelgono dal campo `applied_seal` e non dal sigillo del log: su una
+  riga eseguita il campo si svuota solo se è ferma su
+  `TRASPORTO_NOME_NON_VERIFICATO` (limite accettato). Un giro con sole
+  righe candidate legge anche il log dei proprietari, così il messaggio
+  arriva al referente e non solo a IT. Nella notte ordinaria nessuna
+  riga è candidata e non si chiede niente.
 
 L’account nasce sempre allo stesso modo: con il cambio della chiave
 obbligatorio al primo accesso e senza licenze, in una sola chiamata a
@@ -1341,21 +1452,26 @@ sono una di due cose:
 
 **La risposta a una collisione**, dalla 0.22.0. `collision` vuol dire
 che il nome utente composto è di un account con nome o cognome diversi
-da quelli della riga. Il giro scrive in `username` la proposta, il nome
-col primo suffisso libero, e ferma la riga su
-`DATO_IDENTITA_IN_COLLISIONE:<proposta>`; il messaggio al proprietario
-nomina il nome occupato, porta la proposta su una riga a sé e spiega le
-due risposte. Se l’account che c’è non è la persona della riga, il
-referente incolla la proposta nel campo `distinct_username` (*Another
-person: create this username*, visibile solo su una collisione o quando
-è pieno), e il giro dopo crea l’account con quel nome, come per una riga
-`absent`: la chiave al proprietario, il benvenuto alla persona, e al
-giro successivo, quando la riga diventa `created`, la mail di accesso.
-Se è la stessa persona il campo resta vuoto, e si corregge la riga, o IT
-corregge l’account. Il canale non lega mai una riga a un account
-esistente sulla parola del referente, e gli omonimi, `ambiguous`,
-restano alla posta a IT. Quattro regole tengono la risposta legata alla
-domanda:
+da quelli della riga. Dalla 0.26.0 vuol dire anche che il nome composto,
+libero su Entra, è noto a REDCap su un’istanza di produzione: il
+messaggio lo dice, non manda a guardare nessun account in rubrica, e la
+sola risposta è incollare la proposta. Se la persona è la stessa che
+aveva quel nome, riceve un nome nuovo e non ritrova i progetti del
+vecchio login, che restano sulle istanze finché IT non li toglie. Il
+giro scrive in `username` la proposta, il nome col primo suffisso
+libero, e ferma la riga su `DATO_IDENTITA_IN_COLLISIONE:<proposta>`; il
+messaggio al proprietario nomina il nome occupato, porta la proposta su
+una riga a sé e spiega le due risposte. Se l’account che c’è non è la
+persona della riga, il referente incolla la proposta nel campo
+`distinct_username` (*Another person: create this username*, visibile
+solo su una collisione o quando è pieno), e il giro dopo crea l’account
+con quel nome, come per una riga `absent`: la chiave al proprietario, il
+benvenuto alla persona, e al giro successivo, quando la riga diventa
+`created`, la mail di accesso. Se è la stessa persona il campo resta
+vuoto, e si corregge la riga, o IT corregge l’account. Il canale non
+lega mai una riga a un account esistente sulla parola del referente, e
+gli omonimi, `ambiguous`, restano alla posta a IT. Quattro regole
+tengono la risposta legata alla domanda:
 
 - **il valore è la proposta, non una spunta.** Il giro lo confronta,
   senza maiuscole e senza spazi ai bordi, con la proposta che ha appena
@@ -1363,10 +1479,10 @@ domanda:
   ([`collision_answered()`](https://ubesp-dctv.github.io/ubep.azure/reference/collision_answered.md)),
   e se non coincide non fa niente. Il nome creato è sempre la proposta
   del giro, libera per costruzione, mai il valore del campo. Se la
-  proposta cambia, perché il nome è stato corretto o il suffisso è stato
-  preso nel frattempo, la risposta non vale più: il dettaglio porta la
-  proposta, quindi l’esito cambia e il messaggio riparte con quella
-  nuova;
+  proposta cambia, perché il nome è stato corretto, il suffisso è stato
+  preso nel frattempo su Entra o è diventato noto a REDCap, la risposta
+  non vale più: il dettaglio porta la proposta, quindi l’esito cambia e
+  il messaggio riparte con quella nuova;
 - **vale solo se scritta dopo la domanda.** La sua scrittura più recente
   nel log deve stare sopra quella della proposta in `username` da parte
   del canale
@@ -1478,6 +1594,23 @@ la mail non parte; il giro dopo, se il diritto c’è, trova la coppia a
 posto (`noop`) e non ha niente da mandare. Non si conta in
 `accessi_persi`, perché nessun invio è fallito: la persona non viene
 avvisata, e lo dice solo quel codice sulla riga.
+
+**Lo stesso per una scrittura senza risposta.** Dalla 0.26.0 ogni
+chiamata al modulo ha un tempo massimo
+([`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md)):
+cinque minuti in tutto, trenta secondi per connettersi. Una scrittura
+che lo supera, o la cui rilettura fallisce
+(`TRASPORTO_RILETTURA_FALLITA`), può essere arrivata: la riga prende
+`transport_error`, con `TRASPORTO_NON_RAGGIUNGIBILE` per il tempo
+scaduto, resta senza sigillo, e il giro dopo rilegge la coppia. Se il
+diritto c’è è un `noop`: la riga chiude `applied`, niente viene scritto
+due volte, e la mail di accesso non parte. Un’istanza appesa costa al
+giro al più due attese, una al passo 3b e una al passo 5; una che
+risponde alle letture e non alle scritture, un’attesa per lotto. Il
+tempo massimo vale per il modulo soltanto: il registro, Graph e il
+servizio di posta si chiamano ancora senza, e se l’istanza che ospita il
+registro accetta la connessione e non risponde il giro resta fermo come
+prima.
 
 **Va alla persona, e a nessun altro**: niente copia al referente, niente
 copia a IT. Con un recapito esterno va a `contact_email`; con un
@@ -2093,6 +2226,15 @@ in PowerShell la pipe fra `git archive` e `ssh` **corrompe l’archivio**:
 la pipe non è binaria. Si scrive il tar su file e lo si trasferisce, in
 due passi.
 
+**[`httr2::req_timeout()`](https://httr2.r-lib.org/reference/req_timeout.html)
+rimette il tempo di connessione al valore di libcurl.** Imposta
+`connecttimeout = 0`, cioè 300 secondi: il tempo di connessione va messo
+dopo, con `req_options()`, o sparisce. E un nome d’opzione che libcurl
+non conosce non è un avviso: è un errore prima della chiamata, che
+[`module_call()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_call.md)
+leggerebbe come istanza irraggiungibile su ogni chiamata. Lo prova un
+test che manda la richiesta vera al loopback.
+
 **Il verde di un controllo mai stato rosso vale poco.** Ogni guardia di
 questo canale è stata provata in entrambe le direzioni, e in un caso
 pinnando la finestra su record storici di stato noto invece di iniettare
@@ -2112,7 +2254,10 @@ Il foglio raccoglie otto famiglie:
 - l’utenza di servizio: nome utente, gruppo di appartenenza, stato
   dell’account, ruolo sul registro;
 - i segreti **per nome**: il Key Vault, il token del registro, il
-  segreto del modulo per ciascuna istanza;
+  segreto del modulo per ciascuna istanza, e dalla 0.26.0 la chiave di
+  sola lettura delle soppressioni del servizio di posta, il cui nome la
+  lavorazione del rapporto legge da `registro.segreto_soppressioni`
+  nell’inventario delle istanze;
 - la macchina del perimetro: nome, dimensione, indirizzo pubblico, alias
   di connessione, unità di sistema e orario;
 - la telemetria: workspace, tabella, punto di raccolta, regola di
@@ -2124,6 +2269,12 @@ Il foglio raccoglie otto famiglie:
   loro gravità, la finestra e lo stato di collaudo;
 - la flotta osservata: quali istanze hanno il modulo, le due impronte
   correnti, il numero di coppie e quante hanno una scadenza.
+
+I tempi massimi delle chiamate al modulo non stanno nel foglio ma nel
+pacchetto,
+[`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md)
+(dalla 0.26.0: 300 secondi in tutto, 30 per connettersi); le unità
+`systemd` non ne hanno.
 
 **Dalla 0.21.0 una variabile dell’unità è sempre obbligatoria e un’altra
 lo è con la posta accesa**, e senza la prima la lavorazione non parte:
@@ -2176,7 +2327,10 @@ misurata direbbe il falso.
 
 **Il rapporto legge e manda posta, e basta.** Non scrive nel registro,
 non tocca Entra. Alle istanze chiede **solo `accounts`**, che legge
-soltanto, e solo i nomi delle righe di quel server. È questo che gli
+soltanto, e solo i nomi delle righe di quel server. Al servizio di
+posta, dalla 0.26.0, solo `GET` sulle liste di soppressione
+([`suppression_read()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_read.md),
+una porta che la guardia controlla come le altre). È questo che gli
 permette di stare fuori dal cammino del canale, e una guardia in
 `tests/testthat/test-runner-guardie.R` lo tiene tale: segue per nome
 ogni funzione che
@@ -2230,19 +2384,23 @@ scadenza il punto è la riga `keep` di
 non quello che il registro porta adesso
 ([`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md)).
 Col sigillo fermo è il registro; col sigillo mosso (una riga `held`, una
-riga su cui la porta delle identità ha scritto il nome nuovo dopo un
-account cambiato su Entra) sono i valori che `log_executed_values()`
-legge sotto l’ultimo sigillo del canale, istanza e progetto compresi. Il
-sigillo creduto è quello del log, come nel giro, quando l’utenza del
-canale è configurata. `log_executed_values()` ha bisogno degli
-approvatori di IT: la lavorazione li legge da `UBEP_APPROVATORI_IT`, la
-stessa variabile del giro nel file d’ambiente comune. Se il log non dice
-il nome, o la lavorazione non passa gli approvatori, la riga conta senza
-giudizio e senza domande ai server, e la mail a IT dice quale dei due.
-Accanto a ogni riga ferma le voci scrivono l’esito. Una revoca eseguita
-dal giro e poi toccata da qualcuno ha il sigillo mosso ma l’accesso
-tolto: il log lo dice (`log_executed_values()` su `request_status`) e la
-riga non è ferma.
+riga su cui la porta delle identità della 0.24.0 o della 0.25.0 ha
+scritto il nome nuovo dopo un account cambiato su Entra) è la versione
+eseguita che
+[`log_executed_row()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_row.md)
+ricostruisce dal log e il sigillo del canale verifica (§4, «Una riga
+eseguita non cambia coppia»), istanza e progetto compresi. Il sigillo
+creduto è quello del log, come nel giro, quando l’utenza del canale è
+configurata. Dalla 0.26.0 la lettura non ha bisogno degli approvatori di
+IT: la lavorazione li passa ancora, e il rapporto non li legge. Se la
+versione non è verificata, o il log non dice il nome, la riga conta
+senza giudizio e senza domande ai server, e la mail a IT dice che il
+registro degli eventi non dice con quale nome è stata eseguita. Accanto
+a ogni riga ferma le voci scrivono l’esito. Una revoca eseguita dal giro
+e poi toccata da qualcuno ha il sigillo mosso ma l’accesso tolto: la
+versione verificata lo dice (`request_status` eseguito `revoked`) e la
+riga non è ferma; una revoca scritta mentre un giro girava non è
+eseguita, e resta fra le ferme, come una versione non verificata.
 
 Nella voce A una richiesta nuova dice se l’account era nuovo: lo è
 quando Entra l’ha creato non prima del minuto in cui è nata la riga,
@@ -2319,7 +2477,21 @@ in una mail sola e solo quando c’è qualcosa, allo stesso indirizzo:
   proprietario. Non una revoca che il log dice eseguita e poi toccata,
   né una riga con `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici, che ha
   la sua sezione. Una riga può stare anche fra quelle senza referente, e
-  conta una volta in N.
+  conta una volta in N;
+- **i recapiti e i referenti in soppressione presso il servizio di
+  posta** (dalla 0.26.0, «Ogni giorno, non una volta al mese» sotto): le
+  richieste attive con un recapito della persona in una lista che
+  sopprime, una riga per richiesta con istanza, progetto, nome,
+  indirizzo, lista e data della voce, e gli indirizzi dei referenti in
+  una lista che sopprime, ciascuno una volta. Una riga per dire che cosa
+  significa e che cosa fare: capire la causa, correggere il recapito con
+  il referente o revocare la richiesta, poi togliere l’indirizzo dalla
+  lista nella console del servizio. La casella di IT non è elencata: la
+  mail non le arriverebbe, e la dice la sua regola. Le due sezioni si
+  scrivono con la lettura del giorno; rendono dovuta la mail a IT da
+  sole solo alla prima lettura intera del mese, il giorno d’invio, e
+  dopo si aggiungono a una mail a IT dovuta per altro, mai a metà mese
+  da sole.
 
 L’oggetto e la prima riga della mail a IT hanno la stessa forma di
 quella dei referenti (`Da guardare (N): rapporto REDCap per IT`), con N
@@ -2544,11 +2716,14 @@ non entra in `errori`, non tocca `letture_complete` e non ferma l’invio.
 Si conta in `istanze_non_lette`, va nella mail a IT, e le sue coppie
 ricadono su Entra (voce 1) o restano «non controllate» (voce 2).
 Altrimenti un banco spento con righe sopra, o il primo passo della posa,
-farebbe fallire ogni esecuzione giornaliera. Quel giorno non sa nemmeno
-chi è dovuto, quindi **giudica il mese sui dovuti dell’ultima lettura
-completa**, che ogni lettura completa tiene accanto al registro degli
-invii (`AAAA-MM.dovuti.json`, i soli nomi che il registro degli invii
-già porta). Così una lettura mancata il 15 non fa sembrare in ritardo un
+farebbe fallire ogni esecuzione giornaliera. Lo stesso, dalla 0.26.0,
+per la lettura delle soppressioni (sotto): mancata, mette il suo codice
+in `errori` e lascia nulle le sue colonne, ma non ferma l’invio. Un
+giorno in cui il resto non si è letto non sa nemmeno chi è dovuto,
+quindi **giudica il mese sui dovuti dell’ultima lettura completa**, che
+ogni lettura completa tiene accanto al registro degli invii
+(`AAAA-MM.dovuti.json`, i soli nomi che il registro degli invii già
+porta). Così una lettura mancata il 15 non fa sembrare in ritardo un
 mese consegnato il primo; senza nessuna lettura completa del mese, il
 mese non si dice in ritardo, e a parlare è l’allarme sull’assenza.
 
@@ -2588,6 +2763,43 @@ rapporto del mese corrente. Un mese che dopo il giro è ancora perso
 `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO`, e il registro o i dovuti
 illeggibili di un mese vecchio lo escludono con
 `RAPPORTO_INVII_ILLEGGIBILI` o `RAPPORTO_DOVUTI_ILLEGGIBILI`.
+
+**Le soppressioni del servizio di posta**, dalla 0.26.0. SendGrid tiene
+cinque liste per account. Su *Bounces*, *Spam Reports*, *Invalid Emails*
+e *Global Unsubscribes* un indirizzo è soppresso: ogni invio successivo
+risponde 202 e non parte, e il canale lo conta come recapitato. Su
+*Blocks* no: il blocco riguarda un invio, e il successivo può passare.
+La lavorazione del rapporto legge ogni mattina le cinque liste per
+intero, con una chiave che sa solo leggerle
+([`suppression_read()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_read.md):
+solo `GET`, a pagine fino alla prima vuota, trenta secondi per
+richiesta), prima di tutto il resto e senza che una lettura mancata
+fermi qualcosa: `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` se non si legge
+la prima pagina di una lista, `TRASPORTO_SOPPRESSIONI_INCOMPLETE` se
+manca una pagina dopo o la lista non finisce. Poi le incrocia, senza
+badare a maiuscole e spazi, con tre classi di destinatari
+([`suppression_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_recipients.md),
+[`suppression_match()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_match.md)):
+la casella di IT (`UBEP_POSTA_COPIA`), i referenti delle righe attive
+(il proprietario che il log nomina, `owned_by`, il creatore) e i
+recapiti delle persone, calcolati con la funzione del giro
+([`mail_access_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.md))
+più *Contact e-mail* quando il canale ha creato l’account. Le quattro
+liste che sopprimono sono uno stato; *Blocks* e le voci nuove dei
+recapiti sono un evento: le voci create nelle 24 ore prima dell’ultimo
+taglio delle 06:30 UTC, l’ora del timer, così che ogni voce conti un
+giorno solo; se il timer cambia ora, il taglio va cambiato con lui. Il
+record porta solo conteggi; gli indirizzi, con lista, classe, righe,
+data della voce e motivo, vanno nel journal dell’unità, dopo la riga
+`soppressioni:`. Un indirizzo lo toglie dalla lista IT, a mano, nella
+console di SendGrid, dopo averne corretto la causa: la chiave del
+rapporto non può farlo.
+
+Senza il nome del segreto nell’inventario, o con un segreto illeggibile,
+la lavorazione non legge le liste, non mette nessun codice in `errori`
+ed esce come prima: lo dice solo `soppressioni_lette` falso. Con la
+chiave e una lettura fallita il codice entra in `errori`, e la
+lavorazione esce con 1 come per ogni altro codice.
 
 ### Le variabili, e il mese forzato
 
@@ -2662,8 +2874,23 @@ codici in `errori` propri del rapporto cominciano per `RAPPORTO_`: il
 registro degli invii o i dovuti non letti o non scritti, un registro di
 un mese vecchio illeggibile, il mese prima rimasto incompleto.
 
-Tre regole, con la forma di quelle del canale e i nomi nel foglio dei
-parametri:
+Dalla 0.26.0 il record ha sei colonne in più, prima di `errori`, tutte
+conteggi e mai un indirizzo:
+
+| Colonna | Tipo | Nulla quando |
+|----|----|----|
+| `soppressioni_lette` | boolean | mai: falsa senza lettura, con una lettura fallita, con registro o anagrafica non letti |
+| `soppressa_casella_it` | boolean | liste non lette, `UBEP_POSTA_COPIA` vuota |
+| `soppressi_referenti` | int | `soppressioni_lette` falso |
+| `soppressi_recapiti` | int | `soppressioni_lette` falso |
+| `soppressi_recapiti_nuovi` | int | `soppressioni_lette` falso |
+| `bloccati_nuovi` | int | `soppressioni_lette` falso |
+
+Una colonna nulla è `null` nel record, non `NA`. Le colonne vanno nella
+tabella e nel flusso della regola di raccolta prima del pacchetto.
+
+Tre regole, più quattro dalla 0.26.0, con la forma di quelle del canale
+e i nomi nel foglio dei parametri:
 
 - **nessuna esecuzione ha letto registro e anagrafica nelle ultime 26
   ore** (gravità 1): la lavorazione non è partita, è morta prima di
@@ -2680,7 +2907,35 @@ parametri:
   richiude da sé quando l’ultimo è partito, recuperi compresi: il primo
   giro che riesce a mandare manda anche i mesi persi. Un mese rimasto
   indietro che non si recupera lo dice
-  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`.
+  `RAPPORTO_MESE_PRECEDENTE_INCOMPLETO` in `errori`;
+- **la casella di IT è in soppressione** (gravità 1, dalla 0.26.0,
+  `soppressa_casella_it` vero sull’ultimo record): le copie a IT e la
+  mail a IT non arrivano. Nel journal del rapporto, dopo la riga
+  `soppressioni:`, lista, data e motivo; capita la causa, si toglie
+  l’indirizzo dalla lista nella console di SendGrid;
+- **un referente è in soppressione** (gravità 2, `soppressi_referenti`
+  sopra zero): chiavi, esiti e rapporti non gli arrivano. Stessa
+  procedura, con il referente;
+- **un recapito di una persona è entrato in soppressione** (gravità 2,
+  `soppressi_recapiti_nuovi` sopra zero): un benvenuto o una mail di
+  accesso persi nel giorno prima della lettura. Si correggono il
+  recapito con il referente, o la richiesta si revoca, e poi si toglie
+  l’indirizzo dalla lista; IT scrive alla persona ciò che non ha
+  ricevuto;
+- **le soppressioni non si sono lette** (gravità 2, `soppressioni_lette`
+  falso): chiave assente o rifiutata, liste lette a metà, oppure
+  registro o anagrafica non letti (in quel caso suona anche la prima
+  regola di questo elenco). Il codice in `errori` e il journal dicono
+  quale; senza codice, la chiave manca dall’inventario o dal Key Vault.
+
+Casella di IT e referenti sono uno stato: la regola resta accesa finché
+l’indirizzo è in lista. Il recapito di una persona è un evento: la
+regola scatta il giorno dopo il rimbalzo e si richiude da sola; chi
+resta in soppressione lo elenca il rapporto mensile per IT. Una colonna
+nulla tace in tutte e quattro: lo coprono `soppressioni_lette` falso e
+la regola sul record incompleto, che dalla 0.26.0 chiede anche
+`soppressioni_lette` e va posata dopo il primo record che la porta.
+`bloccati_nuovi` non ha una regola: si vede solo nel record.
 
 ### La forma del rilascio
 
@@ -2743,6 +2998,45 @@ IT, e i dovuti e gli N sono quelli di prima, salvo una riga in
 `transport_error` passeggero al momento della lettura (entra come ferma)
 e una persona il cui nome è stato riscritto e ripristinato (ora è
 datata, e può entrare nella voce 1).
+
+**La 0.26.0 non tocca il modulo né il dizionario, e cambia due
+lavorazioni e il record del rapporto.** In quest’ordine:
+
+1.  **le sei colonne nuove** in `UbepRapporto_CL` e nel flusso della
+    regola di raccolta del rapporto, con i tipi della tabella sopra;
+    **la chiave di sola lettura delle soppressioni** nel Key Vault, e il
+    nome del suo segreto in `registro.segreto_soppressioni`
+    nell’inventario, che il giro e l’osservatore ignorano;
+2.  **il pacchetto**, e solo dopo **le due lavorazioni in `/opt`**:
+    `dev/runner-canale.R`, che passa al giro `banchi`, e
+    `dev/runner-rapporto.R`, che passa `suppressions`. Una lavorazione
+    nuova con il pacchetto vecchio si ferma sull’argomento sconosciuto e
+    non lascia record (suona l’allarme sull’assenza); la lavorazione
+    vecchia del canale con il pacchetto nuovo tratta i banchi come
+    produzioni non lette, e un giro con una riga da creare la ferma su
+    `TRASPORTO_NOME_NON_VERIFICATO` per quel giro, senza danni; la
+    lavorazione vecchia del rapporto col pacchetto nuovo non legge le
+    liste, e `soppressioni_lette` è falso;
+3.  **un giro e un rapporto a mano**, per leggere i record: il rapporto
+    col mese forzato e la posta spenta deve portare le sei colonne
+    valorizzate e `soppressioni_lette` vero, e il dettaglio nel journal
+    dopo la riga `soppressioni:`;
+4.  **per ultime**, dopo il primo record che porta le colonne, le
+    quattro regole nuove e quella sul record incompleto del rapporto con
+    `soppressioni_lette`: posata prima, scatterebbe su ogni record
+    vecchio.
+
+Al ritorno, prima le lavorazioni e poi il pacchetto; colonne, voce
+dell’inventario e segreto possono restare, e le regole nuove tacciono
+senza dati. Al primo giro, su un registro le cui righe sono tutte
+sigillate col sigillo fermo, nessuna revocata e nessuna in attesa di un
+account, non cambia nessun esito: nessuna riga si ricostruisce dal log,
+nessuna revoca esce sul nome eseguito, e alle produzioni non si chiede
+nessun nome. Da contare prima, nel registro: le righe col sigillo mosso,
+le revocate e sigillate ferme su un codice di coppia o d’identità, le
+righe attive in `absent` o `collision` col sigillo vuoto, e quelle col
+sigillo importato che aspettano una creazione, che al primo giro si
+fermano su `TRASPORTO_NOME_NON_VERIFICATO`.
 
 ## Che cosa questa guida non copre
 

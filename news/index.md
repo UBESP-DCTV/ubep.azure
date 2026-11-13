@@ -1,5 +1,224 @@
 # Changelog
 
+## ubep.azure 0.26.0
+
+The pair a row carried out is rebuilt from the log and verified by the
+seal, and a revoked row takes off the name it was carried out on, also
+when the account was renamed on Entra. Before it creates an account the
+round asks the production instances whether REDCap still knows the name.
+Every call to the REDCap module has a time limit. The report’s job reads
+the suppression lists of the mail service every day. A grant goes under
+the name the instance holds, as a revocation does.
+
+- **The version a row carried out is rebuilt from the log and verified
+  by the seal.** Decided on 2026-11-12. For a row whose seal moved, the
+  round reads the instance, the project, the username and the person
+  carried out from the version
+  [`log_executed_row()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_row.md)
+  rebuilds: the state of the owners’ log at the first cut below the
+  channel’s last seal whose
+  [`request_seal()`](https://ubesp-dctv.github.io/ubep.azure/reference/request_seal.md)
+  is that seal. A write made before the round read the row is carried
+  out whoever made it, approved or not; one made while the round ran is
+  not, the owner’s included. Three cases the 0.25.0 read wrong are now
+  read right: a change carried out with no approval above it is the pair
+  carried out; the owner moving the instance while the round ran stops
+  on `DATO_COPPIA_CAMBIATA`, also with an approval; the person written
+  while the round ran stops on `DATO_COPPIA_CAMBIATA` and not on
+  `TRASPORTO_IDENTITA_CAMBIATA`. Where no cut gives the seal, the rule
+  of the pair reads the log as the 0.25.0 did
+  ([`log_executed_unverified()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_executed_unverified.md)).
+  The monthly report reads the name and the state executed of a stopped
+  row from the same version
+  ([`report_executed_register()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_executed_register.md)),
+  and asks no server where it is not verified; it no longer needs the IT
+  approvers, and the mail to IT no longer says that the job does not
+  pass them. `log_executed_values()` is gone. A revocation written while
+  a round ran stays among the stopped rows.
+
+- **The log is read only where a field starts.** Measured on 2026-11-12:
+  the channel’s *Read back as*,
+  `role_name=...; dag_name=...; expiration=...`, read as a write of
+  those three fields on every row of the register. A field is now a
+  write only at the start of the event’s details or after a comma,
+  followed by `=` and a quote
+  ([`log_field_at()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_field_at.md)).
+  On the live register the reading changed no decision.
+
+- **The identity door does not write on a row stopped on its pair.** On
+  a row stopped on `DATO_COPPIA_CAMBIATA` or
+  `TRASPORTO_IDENTITA_CAMBIATA`, and on a sealed row whose pair the
+  round could not judge, the round writes neither *Username (UPN)* nor
+  *Identity resolution*: the register keeps the name carried out, and
+  the seal does not move by the channel’s hand. The door now writes
+  after the round has read the owners’ log, so
+  [`log_channel_absent()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.md)
+  counts only the seals written in the form of the channel’s seal door
+  ([`log_seals_door()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_seals_door.md)):
+  a referent’s import carrying a row and its seal no longer stops every
+  round on a register the channel never wrote. A seal imported alone, in
+  that form, still does.
+
+- **A revoked row revokes the name carried out.** Decided on 2026-11-12.
+  A row the channel carried out, revoked, whose version carried out is
+  certain (the seal did not move, or the rebuilt version is verified)
+  and whose instance and project did not move, revokes the username
+  carried out whatever the resolution says now: an account renamed on
+  Entra, an internal contact the tenant no longer holds, `ambiguous`, a
+  collision nobody answered
+  ([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md)).
+  Only a name the channel carried out on the row in a version not
+  revoked counts
+  ([`log_granted_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_granted_names.md)):
+  a request withdrawn before its person was created was sealed under the
+  name the round would have created, which may later be somebody else’s.
+  For the whole round the row’s name is the one carried out, seal
+  included; where the register holds another name, the identity door
+  writes the one carried out back, and if the register refuses that
+  write the row stops on the register’s code, unsealed, until a round
+  writes it. The way out for a renamed account: the owner revokes the
+  old row and files a new one; IT does not touch the instance, and
+  grants nothing by hand on a pair a revoked row governs, since the
+  round revokes it. A person the tenant no longer holds closes as
+  before, without asking any instance. A row the log does not verify, a
+  row born revoked, or a round without the channel’s account configured,
+  stays where the rule of the pair puts it.
+
+- **A name REDCap still knows counts as taken.** Decided on 2026-11-10
+  and 2026-11-12. Before a verdict that can make an account (`absent` or
+  `collision`, not revoked, `applied_seal` empty) the round asks every
+  production instance, once per round, which of the names it could
+  create REDCap knows: as an account (`accounts`, contract 4) or as
+  rights on a project (the whole-instance read of `state`). Measured on
+  2026-11-12, most productions hold names with rights and no account:
+  people added to a project before their first sign-in. A composed name
+  free on Entra and known to REDCap is a `collision`, and every proposal
+  skips the names REDCap knows: whoever got such a name would find the
+  old login’s projects. The code is
+  `DATO_IDENTITA_IN_COLLISIONE:<proposal>` as before; the message says
+  there is nobody in the directory to look at, and that a person who
+  comes back gets a new name. The names asked are the composed one and
+  the first five suffixes free on Entra
+  ([`upn_window()`](https://ubesp-dctv.github.io/ubep.azure/reference/upn_window.md),
+  [`round_known_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_known_names.md));
+  a window REDCap knows whole stops the row. The benches are never asked
+  (`banchi`, read by the runner from the inventory). A production
+  instance that does not answer, is at contract 3, or reads no pair at
+  all (`TRASPORTO_STATO_VUOTO`) stops every such row on
+  `TRASPORTO_NOME_NON_VERIFICATO`, with the instance’s reason in the
+  round’s `errori`; the row keeps its name and verdict in the register,
+  so an answer already given still holds when the instance is back. A
+  name is created only when the round asked about it and found it
+  unknown in that pass, so a row whose `applied_seal` an import filled,
+  never sealed by the channel, creates nobody. Asked in a simulation and
+  with the post off too. A round whose only rows are such candidates
+  reads the owners’ log as well, so their messages reach the owner and
+  not IT alone. The runner of the channel changes: install it after the
+  package.
+
+- **Every call to the REDCap module has a time limit.**
+  [`module_call()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_call.md)
+  waited without limit, and the units of the round, the observer and the
+  report have none either: a production that took the connection and
+  never answered held the round for good, and since a name REDCap knows
+  counts as taken the round asks every production, those without rows
+  too. Five minutes for the whole call and thirty seconds to connect
+  ([`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md));
+  the observer reads the whole fleet in about 75 seconds. A call that
+  runs out of time is `TRASPORTO_NON_RAGGIUNGIBILE`, as before. On a
+  write it does not mean that nothing was written: the row stays
+  unsealed and the next round decides from the instance’s state, so
+  nothing is granted twice; as with a write the read-back does not
+  confirm, the access message of that row is not sent. The register,
+  Graph and the mail service are still called without a limit.
+
+- **The suppression lists of the mail service are read every day.**
+  Decided on 2026-11-12. SendGrid answers 202 to a send to an address on
+  its Bounces, Spam Reports, Invalid Emails or Global Unsubscribes, and
+  drops it: the channel counted as delivered a message nobody received,
+  and a bounce of October was found by hand weeks later. The report’s
+  job now reads the five lists whole, with a read-only key of its own
+  ([`suppression_read()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_read.md),
+  `GET` only, thirty seconds per request, a list read to its first empty
+  page), and crosses them with the channel’s recipients
+  ([`suppression_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_recipients.md),
+  [`suppression_match()`](https://ubesp-dctv.github.io/ubep.azure/reference/suppression_match.md)):
+  IT’s address, the referents of the active rows, and the person’s
+  recipients as the round computes them
+  ([`mail_access_recipients()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.md),
+  plus the contact of an account the channel created). Blocks are
+  counted as an event and suppress nothing; an entry on a person’s
+  recipient is new in the 24 hours before the last 06:30 UTC, the
+  timer’s hour, so each counts one day only. A reading that fails stops
+  nothing: `TRASPORTO_SOPPRESSIONI_NON_LEGGIBILI` or
+  `TRASPORTO_SOPPRESSIONI_INCOMPLETE` in `errori`, null columns, and the
+  job exits 1 as for any other code.
+
+- **Six columns of counts in `UbepRapporto_CL`, never an address:**
+  `soppressioni_lette`, `soppressa_casella_it`, `soppressi_referenti`,
+  `soppressi_recapiti`, `soppressi_recapiti_nuovi`, `bloccati_nuovi`.
+  Four alert rules watch them. The addresses go to the journal of the
+  unit, after the line `soppressioni:`. The monthly mail to IT has two
+  more sections, “Recapiti in soppressione presso il servizio di posta”
+  and “Referenti in soppressione presso il servizio di posta”, written
+  with the reading of the day: they make the mail to IT due on their own
+  only on the first full reading of the month, and never send one in mid
+  month. The referents’ reports do not change. `dev/runner-rapporto.R`
+  reads the name of the key’s secret from
+  `registro.segreto_soppressioni` in the inventory; without it the
+  report runs as before and says the lists were not read.
+  [`provisioning_report()`](https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.md)
+  takes `suppressions`: install the package before the job.
+
+- **A grant goes under the name the instance holds, as a revocation
+  does.** REDCap compares usernames without regard to case, and the
+  module keys a request on the name as written. A grant under
+  `Name.Surname@` on a project where the instance holds `name.surname@`,
+  the username having changed on Entra in its capitals alone, was
+  planned as a creation REDCap refuses or stores twice, and the row
+  stayed on `TRASPORTO_SCRITTURA_NON_CONFERMATA` or an internal error at
+  every round, with a message to the owner. The round now sends it under
+  the name the instance holds, which the module finds: nothing is
+  written when the instance already says what the row asks, an update
+  otherwise, and the register keeps the username of Entra. A person
+  absent under every capitalization is created under the register’s name
+  as before; if the instance holds two names that differ in capitals,
+  the one written as in the register goes first. For the same reason an
+  expired row whose person is still on the project under other capitals
+  is no longer refused with `DATO_SCADENZA_NON_VALIDA` on its last day:
+  it is compared with the instance as with the same capitals, `applied`
+  with nothing written if it already says what the row asks.
+
+- **A last day that has passed, on a person put back.** A row the
+  channel closed `applied` with *Read back as* `absent` because its last
+  day had passed and the person was gone, whose person somebody puts
+  back by hand, used to get the message “the access has been granted”,
+  with the same expiration or with another that the round writes back to
+  the row’s, and the person cannot get in. The outcome message now says
+  that the person is on the project but the last day of access of the
+  request has passed and REDCap does not let them in
+  ([`mail_status_words()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_status_words.md)),
+  whether or not the channel wrote. The day is that of the round, UTC; a
+  row without a readable expiration says what it said.
+
+- **Shape of the release.** No dictionary or module changes. First the
+  six columns in `UbepRapporto_CL` and in the report’s collection rule,
+  and the read-only key of the mail service in the Key Vault, named in
+  the inventory; then the package; then the channel’s job
+  (`dev/runner-canale.R`, which passes `banchi`) and the report’s job
+  (`dev/runner-rapporto.R`, which passes `suppressions`) in `/opt`. A
+  new job with the old package stops on the unknown argument and leaves
+  no record; the old channel job with the new package treats every bench
+  as a production not read, and a round with a row to create stops it on
+  `TRASPORTO_NOME_NON_VERIFICATO` for that round, with no harm. The four
+  new alert rules, and `record-incompleto` of the report with
+  `soppressioni_lette`, come after the first record that carries the
+  columns. Back, the reverse: the jobs first, then the package. On a
+  register whose rows are all sealed with their seal unmoved, with none
+  waiting for an account and none revoked, the first round changes no
+  outcome: no row is rebuilt from the log, no revocation takes the name
+  carried out by the new way, and no name is asked of the productions.
+
 ## ubep.azure 0.25.0
 
 A row the channel has carried out stays in view when it stops, and two
