@@ -9249,6 +9249,49 @@ test_that("una produzione muta ferma la creazione anche su un'altra istanza", {
 })
 
 
+# A production that answers `accounts` and lets the whole-instance read of
+# `state` run out of time: libcurl gives up after `module_timeouts()` and
+# httr2 raises this. Without a time limit the same instance held the round
+# for good, which no double can show; what the test can show is that every
+# request carried the limit.
+scade_sulla_lettura_intera <- function(istanza = istanza_doppia(list())) {
+  function(data) {
+    if (identical(data[["operation"]], "state") &&
+          length(data[["requests"]] %||% list()) == 0L) {
+      stop(structure(
+        class = c("httr2_failure", "httr2_error", "rlang_error", "error",
+                  "condition"),
+        list(message = "Timeout was reached", call = NULL)
+      ))
+    }
+    istanza(data)
+  }
+}
+
+
+test_that("una produzione che scade nel passo 3b ferma la creazione come una muta", { # nolint: line_length_linter.
+  # eval
+  # RN3 of the review of item 4 (b'): step 3b reads every production whole,
+  # those with no row in the register too.
+  esito <- giro_nuovo(
+    istanze_per_host(istanza_doppia(list()), scade_sulla_lettura_intera()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_null(identita_scritte())
+  expect_equal(dettaglio(esito), "TRASPORTO_NOME_NON_VERIFICATO")
+  expect_equal(esito[["errori"]], "TRASPORTO_NON_RAGGIUNGIBILE")
+  # The read that ran out of time had a limit, and so had every other.
+  expect_true(length(letture_intere()) >= 1L)
+  for (req in interrogazioni()) {
+    expect_false(is.null(req[["options"]][["timeout_ms"]]))
+    expect_false(is.null(req[["options"]][["connecttimeout"]]))
+  }
+})
+
+
 test_that("una risposta data resta valida dopo un giro con la produzione muta", { # nolint: line_length_linter.
   # eval
   primo <- giro_collisione(
