@@ -5206,12 +5206,6 @@ test_that("a run without the approvers asks the name executed all the same", {
   asked <- chiamate[["server"]][["edc10.example.org"]]
   expect_true(elena %in% asked)
   expect_false(elena_nuova %in% asked)
-  mail <- posta[["inviate"]][["mail"]]
-  it <- mail[[match(it_prova, vapply(mail, `[[`, "", "to"))]][["body"]]
-  expect_false(grepl(
-    "La lavorazione del rapporto non riceve gli approvatori di IT", it,
-    fixed = TRUE
-  ))
 })
 
 

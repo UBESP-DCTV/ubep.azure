@@ -2584,7 +2584,6 @@ report_it_message <- function(it, period) {
     } else {
       nzchar(value(held, "nome_eseguito"))
     }
-    no_approvers <- value(held, "nome_motivo") == "approvatori"
     revoked <- value(held, "request_status") == "revoked"
     owner <- value(held, "creator")
     words <- row_words(held)
@@ -2604,16 +2603,9 @@ report_it_message <- function(it, period) {
           ifelse(revoked, " Revocata, revoca non eseguita.", ""),
           ifelse(
             !known,
-            ifelse(
-              no_approvers,
-              paste0(
-                " La lavorazione del rapporto non riceve gli approvatori di ",
-                "IT, e il nome eseguito non si legge."
-              ),
-              paste0(
-                " Il registro degli eventi non dice con quale nome e' stata ",
-                "eseguita."
-              )
+            paste0(
+              " Il registro degli eventi non dice con quale nome e' stata ",
+              "eseguita."
             ),
             ifelse(entered == "si", paste0(
               " La persona e' gia' entrata su ", server, "."
@@ -2638,14 +2630,7 @@ report_it_message <- function(it, period) {
           ifelse(revoked, " Revoked, revocation not carried out.", ""),
           ifelse(
             !known,
-            ifelse(
-              no_approvers,
-              paste0(
-                " The report's job is not given the IT approvers, and the ",
-                "name executed cannot be read."
-              ),
-              " The event log does not say which name it was executed with."
-            ),
+            " The event log does not say which name it was executed with.",
             ifelse(entered == "si", paste0(
               " The person has entered ", server, "."
             ), ifelse(entered == "no", paste0(
