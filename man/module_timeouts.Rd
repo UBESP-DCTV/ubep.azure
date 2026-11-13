@@ -25,7 +25,8 @@ write that runs out of time may have been carried out, so the limit errs
 long rather than short: a write too slow for it is a row that converges
 one round later, and its access message is lost (see
 \code{mail_round()}), while an instance that never answers costs at most two
-waits per round.
+waits per round. One that answers reads and hangs on writes costs a wait
+for every batch it is sent, one per project.
 
 Connecting does nothing on the instance, so a short limit costs no write.
 Thirty seconds is far above a connection inside the network and well
