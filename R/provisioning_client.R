@@ -45,6 +45,7 @@ module_call <- function(server,
     "https://", base,
     "/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"
   )
+  limits <- module_timeouts()
 
   response <- tryCatch(
     httr2::request(url) |>
@@ -61,11 +62,24 @@ module_call <- function(server,
         ),
         auto_unbox = TRUE
       ) |>
+      # A time limit, which the units that run the round, the observer and
+      # the report do not set: they are oneshot with no start timeout, and
+      # an instance that takes the connection and never answers held them
+      # for good. Connecting gets the short limit and the whole call the
+      # long one, `module_timeouts()`. The connection limit after
+      # `req_timeout()`, which sets it back to libcurl's default.
+      httr2::req_timeout(limits[["total"]]) |>
+      httr2::req_options(connecttimeout = limits[["connect"]]) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
   )
 
+  # A call that ran out of time is a transport error like any other, and on
+  # a write it does not say that nothing was written: the answer may be what
+  # was lost. The round never takes it as either. The row stays unsealed and
+  # is asked again next round, where the instance's own state decides: a
+  # right already there is a `noop` and is not written twice.
   if (is.null(response)) {
     return(list(
       ok = FALSE,
@@ -101,6 +115,37 @@ module_call <- function(server,
   }
 
   c(parsed, list(gate = gate))
+}
+
+
+#' Time limits of a call to the module
+#'
+#' Five minutes for the whole call and thirty seconds to connect, the
+#' connection taking in name resolution and the TLS handshake as libcurl
+#' counts it.
+#'
+#' The whole call is the longest thing the module is asked: the read of
+#' `state` of a whole instance, which step 3b of the round makes on every
+#' production, and a write of many rows. Measured on 2026-11-10 and
+#' 2026-11-11, the observer read all nine instances it reaches whole, about
+#' 18,450 pairs, Key Vault included, in about 75 seconds; the largest
+#' instance alone took less. Five minutes is four times the whole fleet. A
+#' write that runs out of time may have been carried out, so the limit errs
+#' long rather than short: a write too slow for it is a row that converges
+#' one round later, and its access message is lost (see
+#' `mail_round()`), while an instance that never answers costs at most two
+#' waits per round. One that answers reads and hangs on writes costs a wait
+#' for every batch it is sent, one per project.
+#'
+#' Connecting does nothing on the instance, so a short limit costs no write.
+#' Thirty seconds is far above a connection inside the network and well
+#' below libcurl's default of 300 seconds.
+#'
+#' @return A list with `total` and `connect`, in seconds.
+#'
+#' @keywords internal
+module_timeouts <- function() {
+  list(total = 300, connect = 30)
 }
 
 

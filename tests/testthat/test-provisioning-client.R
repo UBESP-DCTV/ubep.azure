@@ -763,3 +763,129 @@ test_that("un nome ripetuto con altre maiuscole parte una volta", {
     sent[["requests"]][[1L]][["username"]], "carla.inventata@ubep.unipd.it"
   )
 })
+
+
+# Tempo massimo delle chiamate al modulo (0.26.0, RN3 della revisione della
+# voce 4 (b')). Una produzione che accetta la connessione e non risponde
+# fermava il giro senza limite: l'unita' e' oneshot senza TimeoutStartSec, e
+# dalla 4 (b') il giro chiede `accounts` e `state` anche alle produzioni senza
+# righe.
+risposta_vuota <- function(req) {
+  httr2::response(
+    status_code = 200L,
+    body = charToRaw(
+      '{"contract_version": 4, "server": "redcap.example.org",
+      "redcap_version": "17.3.3", "redcap_major": 17,
+      "module_version": "0.11.0", "version_gate": "collaudata",
+      "surface_fingerprint": "16faf46d5ab1",
+      "allowlist_fingerprint": "aabbccddeeff",
+      "dry_run": true, "results": [], "accounts": [], "summary": {},
+      "errors": []}'
+    )
+  )
+}
+
+tempo_scaduto <- function(req) {
+  stop(structure(
+    class = c("httr2_failure", "httr2_error", "rlang_error", "error",
+              "condition"),
+    list(message = "Timeout was reached", call = NULL)
+  ))
+}
+
+coppia <- list(list(username = "mario.rossi@ubep.unipd.it", project_id = 9003L))
+
+
+test_that("ogni chiamata al modulo ha un tempo massimo e uno di connessione", {
+  # eval
+  viste <- list()
+  httr2::with_mocked_responses(
+    function(req) {
+      viste[[length(viste) + 1L]] <<- req
+      risposta_vuota(req)
+    },
+    {
+      module_state("edc10.example.org", "s3cret")
+      module_state("edc10.example.org", "s3cret", pairs = coppia)
+      module_accounts(
+        "edc10.example.org", "s3cret", "mario.rossi@ubep.unipd.it"
+      )
+      module_apply("edc10.example.org", "s3cret", requests = coppia)
+      module_apply(
+        "edc10.example.org", "s3cret", requests = coppia, dry_run = FALSE
+      )
+      module_revoke(
+        "edc10.example.org", "s3cret", requests = coppia, dry_run = FALSE
+      )
+    }
+  )
+
+  # test
+  # Cinque minuti in tutto e trenta secondi per connettersi: le misure e il
+  # perche' stanno accanto a `module_timeouts()`.
+  expect_length(viste, 6L)
+  for (req in viste) {
+    expect_equal(req[["options"]][["timeout_ms"]], 300000)
+    expect_equal(req[["options"]][["connecttimeout"]], 30)
+  }
+})
+
+
+test_that("un tempo scaduto e' TRASPORTO_NON_RAGGIUNGIBILE, anche scrivendo", {
+  # eval
+  esiti <- httr2::with_mocked_responses(tempo_scaduto, list(
+    lettura = module_state("edc10.example.org", "s3cret"),
+    nomi = module_accounts(
+      "edc10.example.org", "s3cret", "mario.rossi@ubep.unipd.it"
+    ),
+    scrittura = module_apply(
+      "edc10.example.org", "s3cret", requests = coppia, dry_run = FALSE
+    ),
+    revoca = module_revoke(
+      "edc10.example.org", "s3cret", requests = coppia, dry_run = FALSE
+    )
+  ))
+
+  # test
+  # Il codice di sempre, che le regole d'allarme e la SOP conoscono. Su una
+  # scrittura non dice che il modulo non ha scritto: la risposta puo' essersi
+  # persa, e il giro dopo rilegge la coppia prima di decidere.
+  for (nome in names(esiti)) {
+    expect_false(esiti[[nome]][["ok"]], info = nome)
+    expect_equal(
+      esiti[[nome]][["errors"]], "TRASPORTO_NON_RAGGIUNGIBILE", info = nome
+    )
+    expect_null(esiti[[nome]][["payload"]], info = nome)
+    expect_true(is.na(esiti[[nome]][["gate"]]), info = nome)
+  }
+})
+
+
+test_that("libcurl conosce le opzioni del tempo massimo", {
+  # eval
+  # Un'opzione che libcurl non conosce e' un errore prima della chiamata, e
+  # `module_call()` lo leggerebbe come istanza irraggiungibile: ogni
+  # chiamata fallirebbe, e i test con le risposte finte non lo vedono,
+  # perche' non passano da libcurl. Qui la richiesta vera parte verso una
+  # porta chiusa del loopback: deve fallire nel trasporto, non nelle opzioni.
+  skip_on_cran()
+  local_mocked_bindings(module_timeouts = function() {
+    list(total = 3, connect = 1)
+  })
+  vista <- NULL
+  httr2::with_mocked_responses(
+    function(req) {
+      vista <<- req
+      risposta_vuota(req)
+    },
+    module_state("edc10.example.org", "s3cret")
+  )
+
+  # test
+  expect_equal(vista[["options"]][["timeout_ms"]], 3000)
+  expect_equal(vista[["options"]][["connecttimeout"]], 1)
+  expect_error(
+    httr2::req_perform(httr2::req_url(vista, "https://127.0.0.1:1/")),
+    class = "httr2_failure"
+  )
+})
