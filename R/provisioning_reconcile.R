@@ -437,8 +437,8 @@ provisioning_reconcile <- function(register_url,
 
   # 3. who each row is talking about. The sweep reads the tenant whole because
   # the contact address is not filterable server-side, which also makes the
-  # comparison ours and therefore able to normalize -- 74 accounts carry the
-  # address with spaces at the edges, and an `eq` would have called all 74
+  # comparison ours and therefore able to normalize -- some accounts carry the
+  # address with spaces at the edges, and an `eq` would have called them all
   # `absent`, which is the verdict that opens the creation branch.
   #
   # An endpoint that is not there is not a crash: the parameters sheet says a

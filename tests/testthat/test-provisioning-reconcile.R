@@ -9067,7 +9067,7 @@ test_that("un nome composto che REDCap conosce non si crea: collisione col .2", 
 
 test_that("un nome con diritti e senza account su REDCap vale come preso", {
   # eval
-  # Measured on 2026-11-12 on seven productions out of eight: people added
+  # Measured on 2026-11-12 on most productions: people added
   # to a project before their first sign-in have rights and no account row.
   esito <- giro_nuovo(
     istanza_doppia(

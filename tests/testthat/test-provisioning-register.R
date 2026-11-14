@@ -3426,8 +3426,8 @@ test_that("log_channel_seals reads every seal of the channel, newest first", {
 
 # What the outcome door of the channel leaves in the log: *Read back as*
 # names the role, the group and the last day inside its own value, in the
-# form `round_applied_as()` writes. Measured on 2026-11-12 (M1b): 46 events
-# out of 102 read as a write of `role_name`, on every row of the register.
+# form `round_applied_as()` writes. Measured on 2026-11-12 (M1b): events read
+# as a write of `role_name`, on every row of the register.
 letto_dal_canale <- function(scadenza = "", dopo = "") {
   list(
     username = canale, action = "Update record (API) 1",

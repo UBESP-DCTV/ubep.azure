@@ -26,7 +26,7 @@ which of the names it could create REDCap already knows. Known means a row
 in \code{redcap_user_information}, which \code{accounts} reads
 (\code{\link[=module_accounts]{module_accounts()}}, through \code{\link[=report_server_reads]{report_server_reads()}}), or a row in
 \code{redcap_user_rights}, which the whole-instance read of \code{state} carries:
-measured on 2026-11-12, seven productions out of eight hold names with
+measured on 2026-11-12, most productions hold names with
 rights and no account, people added to a project before their first
 sign-in.
 }

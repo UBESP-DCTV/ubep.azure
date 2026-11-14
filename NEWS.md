@@ -1818,8 +1818,8 @@ Both are now read from the server itself.
   means contact address. The old carrier is read for as long as accounts carry
   it — the sweep counts them, and the day the count is zero the fallback is
   dead — and written never again. A guard arms the not-inheriting, because the
-  serialized authorization is a live mechanism and not a fossil: 2.828 accounts
-  carry it, 254 of them created in 2026.
+  serialized authorization is a live mechanism and not a fossil: accounts
+  created this year still carry it.
 
   **The row it creates stays `absent` for that pass** and becomes `created` at
   the next one. That is not a delay being tolerated: `created` is defined as
@@ -1963,8 +1963,8 @@ Both are now read from the server itself.
   account carrying the surname — and the given name too, when the account
   carries one — is a candidate for being this person; whether it is *the* one
   is settled by the contact address. Read the other way round, the resolution
-  would call an ambiguity what is merely a shared address: 99 addresses in the
-  tenant sit on more than one account, 221 accounts involved, and a mailbox
+  would call an ambiguity what is merely a shared address: many addresses in the
+  tenant sit on more than one account, and a mailbox
   shared by a lab says nothing about who anybody is. It would also miss the
   failure that matters most — a person who exists under a UPN this package
   would not have composed, whose contact address has since changed, read as
@@ -1975,9 +1975,9 @@ Both are now read from the server itself.
   same person, with an address we did not know" from "somebody else with the
   same name", and the second reading is the one that creates a duplicate. The
   addresses are read from `officeLocation`, where the historical flow put them
-  and where 6.494 accounts still carry them, from `otherMails`, and from the
+  and where thousands of accounts still carry them, from `otherMails`, and from the
   UPN, because an address in the tenant's domain **is** a UPN. Both sides are
-  normalized: 74 accounts carry the address with spaces at the edges, and an
+  normalized: some accounts carry the address with spaces at the edges, and an
   exact comparison would report `absent` for people who exist. Guests are
   excluded by invariant, not by measurement.
 
@@ -2023,15 +2023,15 @@ Both are now read from the server itself.
   `directory_users()` is the only function that speaks to Microsoft Graph, and
   it does one thing: it sweeps. It does not filter, and that is a measurement
   rather than a preference — `officeLocation`, where the historical flow put
-  the contact address and where 6.494 accounts still carry it, is not
+  the contact address and where thousands of accounts still carry it, is not
   filterable server-side at all, and `mail`, which would be, is `null` on
-  6.412 accounts out of 7.664. The obvious attribute is empty on exactly the
-  population to be found. Reading in full costs 8 pages and 3,5 seconds
-  measured on 2026-08-15, less than the round that will consume it, and it
+  most accounts. The obvious attribute is empty on exactly the
+  population to be found. Reading in full costs a handful of pages and a few
+  seconds, measured on 2026-08-15, less than the round that will consume it, and it
   yields decision 4 of the channel's design by construction rather than by
   discipline: no local copy of the state, the real one re-read every round. It
   also buys a property a server-side filter could not have given — the
-  comparison is ours, so it can normalize, and it has to, because 74 accounts
+  comparison is ours, so it can normalize, and it has to, because some accounts
   carry the address with spaces at the edges and an `eq` would have missed
   them in silence.
 
@@ -2047,7 +2047,7 @@ Both are now read from the server itself.
 
   Two bounds beyond what the plan asked for, both on the continuation Graph
   hands back. The sweep stops after 100 pages rather than following a
-  continuation that never ends: the measured shape is 8 pages, and the failure
+  continuation that never ends: the measured shape is a handful of pages, and the failure
   avoided is the one this project can least afford, a round that never returns
   and so leaves no record, with the severity-1 alarm reporting that the channel
   is not running while it runs very hard. And a continuation is followed only

@@ -89,7 +89,7 @@ test_that("directory_users reads one page and returns the sweep as a frame", {
     c("mario.rossi@ubep.unipd.it", "anna.bianchi@ubep.unipd.it")
   )
   # A field the record does not carry is an empty string and not the word "NA":
-  # the second user has no `officeLocation`, and 1.170 accounts on the tenant
+  # the second user has no `officeLocation`, and many accounts on the tenant
   # are in that position.
   expect_equal(
     answer[["users"]][["officeLocation"]],
@@ -272,8 +272,8 @@ test_that("a continuation that never ends stops instead of looping forever", {
   )
 
   # test
-  # The measured sweep is 8 pages over 7.664 accounts, so the ceiling is more
-  # than ten times the real shape. It exists because the alternative failure is
+  # The measured sweep is a handful of pages, so the ceiling is far above the
+  # real shape. It exists because the alternative failure is
   # the worst kind this project knows: a round that never returns leaves no
   # record, and `ubep-canale-assenza` reports "the channel is not running"
   # while the channel is running very hard.
@@ -776,12 +776,12 @@ test_that("the new path writes neither of the carriers it is replacing", {
   sent <- captured[["body"]][["data"]]
 
   # test
-  # `jobTitle` is a live mechanism, not a fossil: 2.828 accounts carry the
-  # serialized authorization and 254 of them were created in 2026, because it
+  # `jobTitle` is a live mechanism, not a fossil: accounts created this year
+  # carry the serialized authorization, because it
   # is still the only channel of the three machines on major 11. What has to be
   # armed is the not-inheriting. `officeLocation` is the other half: the
   # contact address goes in the field that means contact address, and the old
-  # one is read for as long as 6.494 accounts carry it and written never again.
+  # one is read for as long as accounts carry it and written never again.
   expect_false("jobTitle" %in% names(sent))
   expect_false("officeLocation" %in% names(sent))
 })

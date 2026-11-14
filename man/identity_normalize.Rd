@@ -14,9 +14,9 @@ A character vector, trimmed and folded to lower case.
 }
 \description{
 The whole resolution rests on this being applied to both sides of every
-comparison. Measured on the tenant on 2026-08-15: 74 accounts carry the
+comparison. Measured on the tenant on 2026-08-15: some accounts carry the
 contact address with spaces at the edges, and a service-side \code{eq} would have
-missed all 74 in silence — reporting \code{absent} for people who exist, which is
+missed all of them in silence — reporting \code{absent} for people who exist, which is
 the verdict that opens the creation branch. Reading the directory whole is
 what makes the comparison ours, and therefore able to normalize at all.
 }

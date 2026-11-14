@@ -34,17 +34,17 @@ pure and live elsewhere.
 \details{
 \strong{It sweeps rather than filters, and that is a measurement and not a
 preference.} \code{officeLocation} — where the historical flow put the contact
-address, and where 6.494 accounts still carry it — is not filterable
+address, and where thousands of accounts still carry it — is not filterable
 server-side at all: Graph answers \code{Request_UnsupportedQuery}. \code{mail}, which
-would be filterable, is \code{null} on 6.412 accounts out of 7.664, so the
+would be filterable, is \code{null} on most accounts, so the
 obvious attribute is empty on exactly the population to be found. Measured
-on 2026-08-15 the whole sweep costs 8 pages and 3,5 seconds, which is less
-than the round that consumes it. It is also decision 4 of the channel's
+on 2026-08-15 the whole sweep costs a handful of pages and a few seconds,
+which is less than the round that consumes it. It is also decision 4 of the channel's
 design obtained by construction rather than by discipline: no local copy of
 the state, the real one is re-read every round.
 
 Reading in full has a property a server-side filter would not have given:
-the comparison is ours, so it can normalize. It has to — 74 accounts carry
+the comparison is ours, so it can normalize. It has to — some accounts carry
 the address with spaces at the edges, and an \code{eq} would have missed them in
 silence, reporting \code{absent} for people who exist.
 }

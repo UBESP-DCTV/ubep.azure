@@ -600,8 +600,8 @@ log_wrote <- function(events, fields) {
 #' 2026-11-12, a field name matched inside the value of another field: the
 #' channel's *Read back as*, `applied_as = 'role_name=...; dag_name=...;
 #' expiration=...'` (`round_applied_as()`), read as a write of all three,
-#' measured on 2026-11-12 (M1b) on 46 events out of 102 that "wrote"
-#' `role_name`, on every row of the register. The name has to be followed by
+#' measured on 2026-11-12 (M1b), events that "wrote"
+#' `role_name` on every row of the register. The name has to be followed by
 #' the apostrophe too, which a value that quotes `name=` does not carry.
 #'
 #' What it cannot tell apart is a value that holds `', field = '` itself: the

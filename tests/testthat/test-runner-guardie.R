@@ -478,8 +478,8 @@ test_that("the creation path does not take over the carriers it replaces", {
   # Guard C. The failure to fear is not "we forgot to delete compose_jobtitle",
   # which is harmless, but "the new path has started writing jobTitle again",
   # which puts two transports back on the same thing. And it is not a
-  # hypothetical: the serialized form sits on 2.828 accounts, 254 of them
-  # created in 2026, because it is still the only channel of the three machines
+  # hypothetical: the serialized form sits on accounts created this year,
+  # because it is still the only channel of the three machines
   # on major 11. What is being prevented is a live mechanism entering the new
   # path, not a fossil being tidied away.
   namespace <- asNamespace("ubep.azure")

@@ -20,8 +20,8 @@ right after a comma, and its name is followed by \code{=} and the apostrophe
 that opens the value. Searched anywhere in \code{details}, as before
 2026-11-12, a field name matched inside the value of another field: the
 channel's \emph{Read back as}, \code{applied_as = 'role_name=...; dag_name=...; expiration=...'} (\code{round_applied_as()}), read as a write of all three,
-measured on 2026-11-12 (M1b) on 46 events out of 102 that "wrote"
-\code{role_name}, on every row of the register. The name has to be followed by
+measured on 2026-11-12 (M1b), events that "wrote"
+\code{role_name} on every row of the register. The name has to be followed by
 the apostrophe too, which a value that quotes \verb{name=} does not carry.
 }
 \details{

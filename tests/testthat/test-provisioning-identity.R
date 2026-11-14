@@ -226,8 +226,8 @@ test_that("a collision proposal takes the first free suffix, not always .2", {
 
 test_that("more than one match is ambiguous, and proposes nothing", {
   # eval
-  # Measured on the tenant: 99 contact addresses appear on more than one
-  # account, 221 accounts involved, about 3% of the population. This branch is
+  # Measured on the tenant: many contact addresses appear on more than one
+  # account. This branch is
   # not written for completeness — it will fire.
   answer <- resolve_identity(
     a_request(),
@@ -250,7 +250,7 @@ test_that("more than one match is ambiguous, and proposes nothing", {
 
 test_that("the contact is matched in otherMails as well as officeLocation", {
   # eval
-  # `officeLocation` is where the historical flow put it, on 6.494 accounts;
+  # `officeLocation` is where the historical flow put it, on thousands of accounts;
   # `otherMails` is where this package writes it from now on. Both are read,
   # and the fallback retires when the sweep counts zero of the first — a
   # number, not an intention.
@@ -267,7 +267,7 @@ test_that("the contact is matched in otherMails as well as officeLocation", {
 })
 
 
-test_that("the comparison normalizes, because 74 accounts carry spaces", {
+test_that("the comparison normalizes, because some accounts carry spaces", {
   # eval
   # An `eq` on the service side would have missed these in silence and
   # reported `absent` for people who exist — which is the verdict that opens

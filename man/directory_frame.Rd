@@ -17,7 +17,7 @@ A data frame with one row per account and the columns
 Every column keeps the type the wire gives it, which is not the same as
 guessing one. Ten of the twelve fields arrive as strings and stay character,
 with a field the record does not carry becoming \code{""} rather than \code{NA} — the
-absence is what it means, and 1.170 accounts of the tenant have no
+absence is what it means, and many accounts of the tenant have no
 \code{officeLocation}. \code{accountEnabled} is a JSON boolean and stays logical:
 carried as the string \code{"FALSE"} it would be a value every \verb{if ()} reads as
 false and every \code{nzchar()} reads as present. \code{otherMails} is the one field
