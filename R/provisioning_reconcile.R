@@ -2218,9 +2218,14 @@ provisioning_reconcile <- function(register_url,
   # a value as it was. So for those rows the door first writes the owner of
   # today, which differs, and then the new one: two writes of the channel,
   # the newest of them the passage. If the first is refused the passage is
-  # not in the log, and the round's record says so,
-  # `TRASPORTO_PASSAGGIO_NON_REGISTRATO`; if the second is, the field and the
-  # log both keep the owner of today, the direction that does not grant.
+  # not in the log; if the second is, the field and the log both keep the
+  # owner of today, the direction that does not grant.
+  #
+  # A passage in the usual form, one write because the field does not show
+  # the new owner yet, is not in the log either when that write is refused or
+  # runs out of time. In either form the round's record says so,
+  # `TRASPORTO_PASSAGGIO_NON_REGISTRATO`, and only when the round passed a
+  # row on: a write of owners that carries no passage fails without it.
   shown <- trimws(as.character(register[["owned_by"]] %||% ""))
   shown[is.na(shown)] <- ""
   relog <- passed & nzchar(owners_now) & shown == owner_after
@@ -2253,8 +2258,10 @@ provisioning_reconcile <- function(register_url,
         fields = "owned_by"
       )
     )
-    lost <- any(relog) &&
+    lost_two <- any(relog) &&
       !(isTRUE(first[["ok"]]) && isTRUE(written[["ok"]]))
+    lost_one <- any(passed & !relog) && !isTRUE(written[["ok"]])
+    lost <- lost_two || lost_one
     written[["errors"]] <- c(
       first[["errors"]], written[["errors"]],
       if (lost) "TRASPORTO_PASSAGGIO_NON_REGISTRATO"

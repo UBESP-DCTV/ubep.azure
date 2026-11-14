@@ -4857,9 +4857,13 @@ test_that("una porta del proprietario rifiutata arriva al record del giro, e il 
 
   # test
   # The passage is lost and the round says so, in its record and nowhere
-  # else; the seal of what it carried out is written all the same.
+  # else, with the register's refusal and the code of the lost passage; the
+  # seal of what it carried out is written all the same.
   expect_length(importazioni(c("record_id", "owned_by")), 1L)
-  expect_equal(esito[["errori"]], "TRASPORTO_REGISTRO_RIFIUTATO")
+  expect_equal(
+    esito[["errori"]],
+    c("TRASPORTO_REGISTRO_RIFIUTATO", "TRASPORTO_PASSAGGIO_NON_REGISTRATO")
+  )
   expect_equal(
     as.character(sigilli_scritti()[["applied_seal"]]), sigillo_cambiata()
   )
@@ -9925,4 +9929,85 @@ test_that("un passaggio arrivato a meta' senza risposta si perde come uno rifiut
     expect_equal(rifiutato$proprietario, anna)
     expect_equal(scaduto$esito2, rifiutato$esito2)
   }
+})
+
+
+# Il passaggio a una scrittura sola (il campo dice ancora Anna): Bruno ha
+# cambiato la riga di Anna, Anna ha approvato, il giro esegue e passa la riga
+# a Bruno con l'unica scrittura di `owned_by`. Quella scrittura scade senza
+# arrivare, oppure il registro la rifiuta. L'esito e' partito e dice a Bruno
+# che la riga e' sua; il passaggio non e' nel log, e il giro dopo non lo
+# rifa'. Il record deve dirlo con il codice su cui IT avvisa Bruno.
+passaggio_a_una_scrittura <- function(guasto) {
+  # La prima importazione che porta `owned_by = bruno` scade senza che il
+  # registro la riceva: non e' la scrittura del sigillo ne' dell'esito.
+  scade_su_bruno <- function(dentro) {
+    restano <- 1L
+    function(data) {
+      if (identical(form_field_value(data[["action"]]), "import") &&
+            restano > 0L) {
+        sent <- jsonlite::fromJSON(
+          form_field_value(data[["data"]]), simplifyVector = FALSE
+        )
+        if (length(sent) > 0L && identical(sent[[1L]][["owned_by"]], bruno)) {
+          restano <<- 0L # nolint: assignment_linter.
+          scade_ora()
+        }
+      }
+      dentro(data)
+    }
+  }
+  vivo <- registro_vivo(
+    record_json(utils::modifyList(
+      riga_cambiata(), list(approved_seal = sigillo_cambiata())
+    )),
+    storia = list(approvazione(anna), cambio(bruno), esecuzione())
+  )
+  registro <- switch(guasto,
+    scade = scade_su_bruno(vivo),
+    rifiuta = rifiuta_proprietari(vivo)
+  )
+  esito <- giro(
+    registro, istanza_che_scrive(richiedenti = bruno), dry_run = FALSE
+  )
+  list(esito = esito, proprietario = riga_nel_registro(vivo)[["owned_by"]])
+}
+
+
+test_that("un passaggio a una scrittura sola che scade si dice perso nel record", { # nolint: line_length_linter.
+  # eval
+  g <- passaggio_a_una_scrittura("scade")
+
+  # test
+  expect_equal(as.character(esito_di(g$esito, "1")[["outcome"]]), "applied")
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$esito[["errori"]])
+  expect_false(identical(g$proprietario, bruno))
+  expect_true("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% g$esito[["errori"]])
+})
+
+
+test_that("un passaggio a una scrittura sola rifiutato si dice perso nel record", { # nolint: line_length_linter.
+  # eval
+  g <- passaggio_a_una_scrittura("rifiuta")
+
+  # test
+  expect_equal(as.character(esito_di(g$esito, "1")[["outcome"]]), "applied")
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% g$esito[["errori"]])
+  expect_false(identical(g$proprietario, bruno))
+  expect_true("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% g$esito[["errori"]])
+})
+
+
+test_that("una scrittura dei proprietari senza passaggi che fallisce non dice un passaggio perso", { # nolint: line_length_linter.
+  # eval
+  # La prima esecuzione scrive il creatore in `owned_by`: nessuno e' passato
+  # a nessuno, e il registro rifiuta la scrittura.
+  esito <- giro(
+    rifiuta_proprietari(registro_doppio(record_json(list(record_id = "1")))),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+  expect_false("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% esito[["errori"]])
 })
