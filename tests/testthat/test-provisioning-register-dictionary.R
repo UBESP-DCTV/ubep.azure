@@ -875,7 +875,9 @@ test_that("applied_entra_id e' un campo del canale, fuori dal sigillo, dopo appl
   expect_equal(
     match("applied_entra_id", campi), match("applied_seal", campi) + 1L
   )
-  expect_equal(match("seal_state", campi), match("applied_entra_id", campi) + 1L)
+  expect_equal(
+    match("seal_state", campi), match("applied_entra_id", campi) + 1L
+  )
   expect_equal(riga[["Form Name"]], "request_register")
   expect_true(is.na(riga[["Section Header"]]))
   expect_equal(riga[["Field Type"]], "text")
@@ -898,7 +900,7 @@ test_that("applied_entra_id e' un campo del canale, fuori dal sigillo, dopo appl
 })
 
 
-test_that("senza applied_entra_id sul progetto il pacchetto nuovo ferma il giro", {
+test_that("senza applied_entra_id sul progetto il pacchetto nuovo ferma il giro", { # nolint: line_length_linter.
   # eval
   vivo <- register_dictionary(c("edc10", "edc12"))
   vivo <- vivo[

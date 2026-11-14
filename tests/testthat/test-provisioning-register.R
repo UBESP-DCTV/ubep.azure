@@ -3930,7 +3930,9 @@ test_that("un id scritto da un referente non e' creduto", {
   # test
   expect_equal(log_channel_entra_id(eventi, "1", canale), id_a)
   expect_equal(
-    log_channel_entra_id(eventi_finti(id_scritto(chi = creatrice)), "1", canale),
+    log_channel_entra_id(
+      eventi_finti(id_scritto(chi = creatrice)), "1", canale
+    ),
     ""
   )
 })
@@ -4047,7 +4049,8 @@ test_that("lo stesso account, uno cancellato o una spazzata strana non danno cod
                nessuno)
   expect_equal(
     entra_account_change(
-      nome_eseguito, id_a, spazzata(list(userPrincipalName = "altro@x.it", id = id_b))
+      nome_eseguito, id_a,
+      spazzata(list(userPrincipalName = "altro@x.it", id = id_b))
     ),
     nessuno
   )

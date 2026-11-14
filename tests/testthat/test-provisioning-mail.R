@@ -2887,8 +2887,12 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
     "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto 9029.",
     fixed = TRUE
   )
-  expect_match(corpo, "IT verifica su Entra chi porta ora il nome", fixed = TRUE)
-  expect_match(corpo, "revoca la riga: la revoca toglie l'accesso", fixed = TRUE)
+  expect_match(
+    corpo, "IT verifica su Entra chi porta ora il nome", fixed = TRUE
+  )
+  expect_match(
+    corpo, "revoca la riga: la revoca toglie l'accesso", fixed = TRUE
+  )
   expect_match(
     corpo,
     "The username the channel had given the access to belongs now to another",

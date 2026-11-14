@@ -120,10 +120,9 @@ test_that("the guard goes red on a planted identifier", {
 # 11 of the 0.27.0 the register carries the account's own.
 fixture_guids <- function(file) {
   text <- paste(readLines(file, warn = FALSE), collapse = " ")
-  regmatches(text, gregexpr(
-    "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
-    text
-  ))[[1]]
+  hex <- function(n) paste0("[0-9A-Fa-f]{", n, "}")
+  shape <- paste(hex(8), hex(4), hex(4), hex(4), hex(12), sep = "-")
+  regmatches(text, gregexpr(shape, text))[[1]]
 }
 
 # The only shape a fixture GUID takes: eight, four, four and four zeros,

@@ -10165,7 +10165,7 @@ test_that("un id importato da un referente non e' creduto, e il giro riscrive qu
 })
 
 
-test_that("un id gia' nel campo ma non nel log del canale si scrive due volte", {
+test_that("un id gia' nel campo ma non nel log del canale si scrive due volte", { # nolint: line_length_linter.
   # eval
   esito <- giro_coppia(
     list(applied_entra_id = graph_user()[["id"]]),
@@ -10348,7 +10348,9 @@ test_that("una riga passata da una persona a un'altra prima della 0.24.0 non da'
   storia[[4L]][["timestamp"]] <- "2026-07-01 05:00"
   esito <- giro(
     registro_con_log(
-      do.call(record_json, list(eseguita_row(applied_seal = sigillo_eseguito()))),
+      do.call(record_json, list(
+        eseguita_row(applied_seal = sigillo_eseguito())
+      )),
       storia = storia,
       creazioni = creazioni_finte(creata_da_anna())
     ),

@@ -643,7 +643,8 @@ test_that("un corpo dell'account su Entra vuoto non chiama nessuno", {
       httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
     },
     register_entra_id_import(
-      "registro.example.org", "t0ken", entra_id_payload("1", "")[0L, , drop = FALSE]
+      "registro.example.org", "t0ken",
+      entra_id_payload("1", "")[0L, , drop = FALSE]
     )
   )
   expect_false(chiamato)
