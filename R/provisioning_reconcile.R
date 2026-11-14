@@ -114,10 +114,12 @@
 #' the account changed on Entra, and it is for IT. Both come before a held
 #' change, since no approval lets them through, and before the identity's own
 #' codes. A row never carried out changes as before. On a row stopped on
-#' either code, and on a sealed row whose pair the round could not judge,
-#' the identity door writes neither *Username (UPN)* nor *Identity
-#' resolution* (decided on 2026-11-12): the register keeps the name carried
-#' out, and the channel does not move the seal itself. A revoked row whose
+#' either code, on a sealed row whose pair the round could not judge, and on
+#' a sealed row whose resolution names nobody (a collision nobody answered,
+#' `ambiguous`, no verdict; RR1 of the review of the 0.26.0), the identity
+#' door writes neither *Username (UPN)* nor *Identity resolution* (decided on
+#' 2026-11-12): the register keeps the name carried out, and the channel does
+#' not move the seal itself. A revoked row whose
 #' version carried out is certain, on the instance and the project carried
 #' out, revokes the username carried out whatever the resolution says now
 #' (`revocation_exits()`, decided on 2026-11-12): the way out of the register
@@ -1013,8 +1015,17 @@ provisioning_reconcile <- function(register_url,
   verdict_read <- trimws(as.character(register[["identity"]] %||% ""))
   verdict_read[is.na(verdict_read) |
                  !verdict_read %in% identity_vocabulary()] <- ""
+  # Nor on a sealed row whose resolution names nobody (RR1 of the review of
+  # the 0.26.0): a collision nobody answered, `ambiguous`, or no verdict at
+  # all (a name that diverges, an internal contact the tenant no longer
+  # holds). `pair_change()` does not stop such a row, and the door would
+  # write the proposal or the empty name over the one carried out, moving
+  # the seal by the channel's hand. A row the round creates for, a
+  # revocation closed on a person the tenant no longer holds, and a row that
+  # leaves by the item 12 are written as before.
+  nobody <- !resolvable & !(creating & !unheard) & !exiting
   identity_written <- write_identities(
-    !moved & !(sealed_row & unjudged),
+    !moved & !(sealed_row & (unjudged | nobody)),
     names = resolved_names,
     verdicts_of = ifelse(exiting, verdict_read, verdicts)
   )

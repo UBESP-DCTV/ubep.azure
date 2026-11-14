@@ -9560,3 +9560,202 @@ test_that("con un'altra riga ammessa la collisione su un nome noto arriva al ref
   expect_true(length(per_mario) > 0L)
   expect_true(anna %in% unlist(lapply(per_mario, `[[`, "to")))
 })
+
+
+# ---- The identity door and a sealed row that names nobody (RR1, 0.27.0) ----
+
+# Mario's row 1, carried out and sealed by the channel, with a second row
+# beside it, as in production, where rows the gate admits make the round
+# read the owners' log on every round. Ported from the review of the 0.26.0
+# (`revisione-nome/test-zz-revisione-rn1.R`, RN1-q1).
+luca_rr1 <- "luca.neri@ubep.unipd.it"
+
+riga_luca_rr1 <- function() {
+  list(
+    record_id = "2", first_name = "Luca", last_name = "Neri",
+    contact_email = "luca.neri@example.org"
+  )
+}
+
+creata_luca_rr1 <- function() {
+  list(
+    username = anna, action = "Create record 2", record = "2",
+    details = "record_id = '2'"
+  )
+}
+
+carla_rr1 <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000c3",
+    userPrincipalName = "carla.verdi@ubep.unipd.it",
+    givenName = "Carla", surname = "Verdi",
+    officeLocation = "carla.verdi@example.org"
+  )
+}
+
+riga_carla_rr1 <- function() {
+  list(
+    record_id = "2", first_name = "Carla", last_name = "Verdi",
+    contact_email = "carla.verdi@example.org"
+  )
+}
+
+# Two accounts for Mario's contact: the resolution is `ambiguous`.
+ambigua_rr1 <- function(...) {
+  directory_doppia(
+    graph_user(),
+    graph_user(
+      id = "00000000-0000-0000-0000-000000000009",
+      userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+    ),
+    ...
+  )
+}
+
+giro_eseguita_rr1 <- function(seconda, directory,
+                              riga = eseguita_row(
+                                applied_seal = sigillo_eseguito()
+                              ),
+                              storia = carried_out(sigillo_eseguito()),
+                              creata = creata_da_anna(), ...) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga, seconda)),
+      storia = storia,
+      creazioni = creazioni_finte(creata, creata_luca_rr1())
+    ),
+    istanza_doppia(
+      list(),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = luca_rr1
+    ),
+    directory = directory, dry_run = FALSE, copy_to = "it@example.org", ...
+  )
+}
+
+identita_della_riga <- function(id) {
+  scritte <- identita_scritte()
+  if (is.null(scritte)) {
+    return(data.frame())
+  }
+  scritte[as.character(scritte[["record_id"]]) == id, , drop = FALSE]
+}
+
+
+test_that("RN1-q1: accanto a una collisione nuova la porta non scrive la proposta su una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  # `mario.rossi` on Entra is somebody else's now, and the resolution is a
+  # collision with the .2. `pair_change()` does not stop the row, and on
+  # the 0.26.0 the door wrote the proposal over the name carried out.
+  giro_eseguita_rr1(riga_luca_rr1(), occupata(), mailer = posta_accesa)
+
+  # test
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_null(sigilli_scritti())
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+})
+
+
+test_that("RN1-q1-ambigua: accanto a una collisione nuova la porta non svuota il nome di una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  giro_eseguita_rr1(riga_luca_rr1(), ambigua_rr1(), mailer = posta_accesa)
+
+  # test
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+})
+
+
+test_that("RN1-q1-controllo: accanto a una riga ammessa la porta non scrive la proposta su una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  giro_eseguita_rr1(
+    riga_carla_rr1(), occupata(carla_rr1()), mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  # The row beside it is never sealed, and the door writes it as before.
+  expect_equal(identita_della_riga("2")[["identity"]], "existing")
+})
+
+
+test_that("su una riga eseguita col nome divergente la porta non svuota il nome (V11-2)", { # nolint: line_length_linter.
+  # eval
+  # The internal contact is Mario's UPN, and the account that holds it now
+  # carries another surname: no verdict, `DATO_NOME_DIVERGENTE`.
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(
+      graph_user(id = "00000000-0000-0000-0000-00000000000b", surname = "Neri"),
+      carla_rr1()
+    ),
+    riga = eseguita_row(
+      applied_seal = sigillo_interna(), contact_email = mario
+    ),
+    storia = carried_out(sigillo_interna()),
+    creata = creata_interna(),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  expect_false(
+    "applied" %in% as.character(esito_di(esito, "1")[["outcome"]])
+  )
+})
+
+
+test_that("su una rinomina col recapito interno la porta non svuota il nome (V11-3)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(graph_user(userPrincipalName = rinominato), carla_rr1()),
+    riga = eseguita_row(
+      applied_seal = sigillo_interna(), contact_email = mario
+    ),
+    storia = carried_out(sigillo_interna()),
+    creata = creata_interna(),
+    mailer = posta_accesa
+  )
+
+  # test
+  # On the 0.26.0 the door wrote an empty name and an empty verdict on the
+  # row carried out, and the channel moved its seal.
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  expect_length(
+    Filter(function(req) {
+      any(vapply(req[["body"]][["data"]][["requests"]], function(r) {
+        identical(as.character(r[["username"]]), mario)
+      }, logical(1)))
+    }, scritture()),
+    0L
+  )
+})
+
+
+test_that("la revoca chiusa su una persona assente si scrive ancora, col nome vuoto", { # nolint: line_length_linter.
+  # eval
+  # A revoked row whose person the tenant no longer holds is closed before
+  # any instance is asked, and the door writes the empty name, as before.
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(carla_rr1()),
+    riga = eseguita_row(
+      applied_seal = sigillo_eseguito(), request_status = "revoked"
+    ),
+    storia = c(
+      list(cambio(anna, "request_status = 'revoked'")),
+      carried_out(sigillo_eseguito())
+    ),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito_di(esito, "1")[["outcome"]]), "applied")
+  expect_equal(identita_della_riga("1")[["username"]], "")
+  expect_equal(identita_della_riga("1")[["identity"]], "absent")
+})

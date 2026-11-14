@@ -218,10 +218,12 @@ another account, or create one, and nobody wrote the person in the row:
 the account changed on Entra, and it is for IT. Both come before a held
 change, since no approval lets them through, and before the identity's own
 codes. A row never carried out changes as before. On a row stopped on
-either code, and on a sealed row whose pair the round could not judge,
-the identity door writes neither \emph{Username (UPN)} nor \emph{Identity
-resolution} (decided on 2026-11-12): the register keeps the name carried
-out, and the channel does not move the seal itself. A revoked row whose
+either code, on a sealed row whose pair the round could not judge, and on
+a sealed row whose resolution names nobody (a collision nobody answered,
+\code{ambiguous}, no verdict; RR1 of the review of the 0.26.0), the identity
+door writes neither \emph{Username (UPN)} nor \emph{Identity resolution} (decided on
+2026-11-12): the register keeps the name carried out, and the channel does
+not move the seal itself. A revoked row whose
 version carried out is certain, on the instance and the project carried
 out, revokes the username carried out whatever the resolution says now
 (\code{revocation_exits()}, decided on 2026-11-12): the way out of the register
