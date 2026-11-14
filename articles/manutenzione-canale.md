@@ -152,9 +152,10 @@ ogni istanza il cancello sull’ambito e confronta desiderato e reale per
 le sole coppie di cui qualcuno ha chiesto; (6) applica; (7) rilegge; (8)
 **manda la posta**, compresa la mail che dice alla persona che ora ha
 l’accesso; (9) scrive l’esito, poi il proprietario della riga
-(`owned_by`), poi il sigillo. Le scritture nel registro passano da porte
-distinte e restano tali (§4): la prima porta i verbali del verdetto, le
-altre l’esito, il proprietario e il sigillo.
+(`owned_by`), poi l’account su Entra (`applied_entra_id`, dalla 0.27.0),
+poi il sigillo. Le scritture nel registro passano da porte distinte e
+restano tali (§4): la prima porta i verbali del verdetto, le altre
+l’esito, il proprietario, l’account su Entra e il sigillo.
 
 **«Manda prima, scrivi dopo» è un contratto, non un ordine di comodo.**
 Una riga entra nel registro **solo se la sua notizia è partita**: se
@@ -488,20 +489,36 @@ Il proprietario si legge con **una sola chiamata per giro**,
 più vecchio di qualunque finestra, e la riga tornerebbe al suo creatore.
 Il costo è che quel log contiene creazioni, modifiche e cancellazioni di
 tutto il registro, e **cresce con il traffico**: più richieste, più
-modifiche, più risposta a ogni giro. Si chiede solo se una riga è da
-giudicare o è cambiata dopo l’applicazione, e solo dopo il log delle
-creazioni, da cui il proprietario ripiega; ma basta una riga attiva da
-giudicare, quindi in pratica a ogni giro.
+modifiche, più risposta a ogni giro. Si chiede se una riga è da
+giudicare, è cambiata dopo l’applicazione o porta un sigillo (dalla
+0.27.0: serve all’`id` dell’account su Entra), e solo dopo il log delle
+creazioni, da cui il proprietario ripiega; in pratica a ogni giro.
 
-### Il giro scrive da quattro porte, e restano separate
+**`applied_entra_id` lo scrive solo il canale, e il suo valore non si
+crede**, dalla 0.27.0. Dice a quale account su Entra il canale ha dato
+l’accesso, e sul form si vede (`@READONLY`, etichetta *Entra account
+applied*, visibile quando è pieno). Come per `owned_by`, la marca
+governa il form e non l’API: un valore importato da un referente non
+vale. Vale l’ultima scrittura del campo fatta dall’account del canale,
+letta nel registro degli eventi
+([`log_channel_entra_id()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_entra_id.md)),
+nella forma della sua porta, `applied_entra_id = '<valore>'` e
+nient’altro. Sta fuori dal sigillo: scriverlo non muove il sigillo, e il
+dizionario che torna indietro toglie il valore dalle righe ma non dal
+registro degli eventi, dove il canale lo ritrova.
+
+### Il giro scrive da cinque porte, e restano separate
 
 La prima porta deposita **identità e username** appena la risoluzione è
 fatta, e non prende altro. La seconda deposita **l’esito**, e avviene
 dopo l’invio della notifica. In mezzo c’è la posta. La terza deposita
 **il proprietario**, `owned_by`
 ([`register_owner_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_owner_import.md),
-che non prende altro campo). La quarta deposita **il sigillo**, per
-ultima.
+che non prende altro campo). La quarta deposita **l’account su Entra**,
+`applied_entra_id`
+([`register_entra_id_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_entra_id_import.md),
+che non prende altro campo; dalla 0.27.0). La quinta deposita **il
+sigillo**, per ultima.
 
 **`owned_by` va prima del sigillo, e l’ordine è ciò che regge il
 meccanismo.** Il proprietario di un tratto della vita della riga si
@@ -517,9 +534,25 @@ giro dopo legge dal log il vecchio proprietario e la riga chiede le
 approvazioni a lui. Il corpo rifiutato va negli `errori` del record, ed
 è lì che IT lo trova; l’esito è già partito, e il nuovo proprietario ha
 già letto che la riga è sua. Per i casi in cui un passaggio o un sigillo
-non entra nel log c’è un codice a parte (più sotto, «Tre codici del
-proprietario e del sigillo»). Senza l’account del canale configurato la
-porta non viene chiamata.
+non entra nel log c’è un codice a parte (più sotto, «Quattro codici del
+proprietario, del sigillo e dell’account su Entra»). Senza l’account del
+canale configurato la porta non viene chiamata.
+
+**L’account su Entra va dopo il proprietario e prima del sigillo.**
+L’`id` si scrive alla prima esecuzione, cioè per una riga che il giro
+chiude `applied` senza un sigillo del canale prima del giro, ed è l’`id`
+del titolare del nome servito nella spazzata; sulle righe già sigillate
+lo scrive solo il riempimento (§4, «Una riga eseguita non cambia
+coppia»). Un `id` scritto e un sigillo no lasciano una riga mai
+eseguita, che il giro dopo trova conforme e sigilla; un sigillo scritto
+e un `id` no lasciano una riga sigillata senza `id`, che prende il
+riempimento. Un valore che il campo mostra già e che il log non ha si
+scrive due volte, vuoto e poi il valore, come `owned_by`: REDCap non
+registra una scrittura che lascia il campo com’è. Una scrittura
+dell’`id` rifiutata o scaduta, una delle due o l’unica, è
+`TRASPORTO_ENTRA_ID_NON_REGISTRATO` negli `errori`. Non in un giro
+simulato, né senza l’account del canale o senza il log dei proprietari:
+dove nessun valore si crede, la porta non si chiama.
 
 Il sigillo ha una porta sua e non è una colonna dell’esito, e la ragione
 è che il corpo dell’esito si scrive a ogni esito: una colonna del
@@ -1008,7 +1041,7 @@ sua dicitura non è misurata e un evento che le somigliasse dentro la
 vita attuale ne toglierebbe le modifiche, nella direzione che concede.
 Un log senza creazione si legge intero, come prima.
 
-### Tre codici del proprietario e del sigillo
+### Quattro codici del proprietario, del sigillo e dell’account su Entra
 
 Stanno negli `errori` del record del giro, non sulla riga, e dicono che
 il registro degli eventi e i campi del registro non concordano. Nessuno
@@ -1040,15 +1073,17 @@ qui.
   un import lo aveva scritto prima, e REDCap non registra una scrittura
   che lascia il valore com’è: il giro scrive allora due volte, prima il
   proprietario di oggi e poi il nuovo, e il codice dice che una delle
-  due è stata rifiutata. Nel log la riga resta del vecchio proprietario.
-  L’esito è già partito, quindi il nuovo proprietario ha letto che la
-  riga è sua, e il giro non ritenta: finché una modifica sua non viene
-  approvata ed eseguita, le approvazioni le dà il vecchio proprietario o
-  IT (§4, «IT approva come il proprietario»). Allo stesso modo restano
-  al vecchio proprietario l’esito, la chiave di un account nuovo e il
-  rapporto mensile, perché si leggono dal log, e il cancello: finché
-  nessuno cambia la riga, giudica il vecchio proprietario a ogni giro.
-  Se ha perso i diritti sul progetto, che è spesso la ragione del
+  due è stata rifiutata. Dalla 0.27.0 il codice vale anche per il
+  passaggio a una scrittura sola, il campo che non mostrava ancora il
+  nuovo, rifiutata o scaduta. Nel log la riga resta del vecchio
+  proprietario. L’esito è già partito, quindi il nuovo proprietario ha
+  letto che la riga è sua, e il giro non ritenta: finché una modifica
+  sua non viene approvata ed eseguita, le approvazioni le dà il vecchio
+  proprietario o IT (§4, «IT approva come il proprietario»). Allo stesso
+  modo restano al vecchio proprietario l’esito, la chiave di un account
+  nuovo e il rapporto mensile, perché si leggono dal log, e il cancello:
+  finché nessuno cambia la riga, giudica il vecchio proprietario a ogni
+  giro. Se ha perso i diritti sul progetto, che è spesso la ragione del
   passaggio, la riga va in `data_error` con
   `DATO_AMBITO_NON_AUTORIZZATO`, e l’esito va a lui. IT avvisa il nuovo
   proprietario. La riga ne esce con una modifica del nuovo che resti
@@ -1056,6 +1091,9 @@ qui.
   IT la approva al posto del vecchio, il cancello giudica i diritti del
   nuovo, e il giro che la esegue scrive di nuovo il passaggio. Senza una
   modifica del nuovo, l’approvazione di IT non ha niente da sbloccare.
+  Con `TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE` accanto la scrittura può
+  essere arrivata: leggere nel log di REDCap l’ultima scrittura di *Row
+  owner* del canale prima di avvisare.
 - **`TRASPORTO_SIGILLO_NON_REGISTRATO`**: una riga eseguita ha nel campo
   `applied_seal` il sigillo che il giro scriverebbe, per un import,
   mentre l’ultimo sigillo del canale nel log è un altro. La porta dei
@@ -1065,6 +1103,15 @@ qui.
   visto. Per fermarla si cambia con un import il valore di
   `applied_seal` di quella riga: al giro dopo il canale scrive il
   sigillo giusto, la scrittura cambia il valore e il log la registra.
+- **`TRASPORTO_ENTRA_ID_NON_REGISTRATO`**, dalla 0.27.0: l’`id`
+  dell’account su Entra non è entrato nel registro degli eventi. Succede
+  quando una scrittura dell’`id` è stata rifiutata o è scaduta: una
+  delle due del giro, se il campo `applied_entra_id` mostrava già il
+  valore (prima il vuoto e poi il valore), oppure l’unica, alla prima
+  esecuzione e nel riempimento. Non ferma il giro e non muove nessun
+  sigillo: il giro dopo lo riscrive. Finché non è nel log il canale non
+  crede al valore, e la riga non ha il controllo dell’account. Se si
+  ripete, IT guarda i permessi dell’utenza del canale sul registro.
 
 **La stessa mossa sposta il tratto scoperto.** Una riga ferma sul tratto
 fra le due ultime esecuzioni (il proprietario di quel tratto non si
@@ -1082,19 +1129,21 @@ incolla in `approved_seal` il sigillo della riga riportata, di norma
 quello che il campo `applied_seal` porta ancora, e l’approvazione le
 copre. Anche questa procedura è da confermare al primo caso.
 
-I due codici che non fermano il giro,
-`TRASPORTO_PASSAGGIO_NON_REGISTRATO` e
-`TRASPORTO_SIGILLO_NON_REGISTRATO`, stanno negli `errori` del record del
-giro, e gli allarmi del §5 li vedono. La regola sugli esiti non scritti
-(`ubep-canale-esiti-non-scritti`: giro non fermato, `fermato == false`,
-con almeno un errore, `array_length(errori) > 0`) scatta su qualunque
-codice negli `errori`, quindi anche su questi due. Dal rilascio della
-0.21.0 c’è in più una regola dedicata alle scritture non registrate,
-`ubep-canale-scrittura-non-registrata`, a gravità 2. Per questi due
-codici le notifiche sono quindi due, quella della regola sugli esiti non
-scritti e quella della regola dedicata: è voluto, e non è un errore
-della sottoscrizione. `TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il giro,
-e lo si vede anche dal giro fermato prima di agire.
+I tre codici che non fermano il giro,
+`TRASPORTO_PASSAGGIO_NON_REGISTRATO`, `TRASPORTO_SIGILLO_NON_REGISTRATO`
+e `TRASPORTO_ENTRA_ID_NON_REGISTRATO`, stanno negli `errori` del record
+del giro, e gli allarmi del §5 li vedono. La regola sugli esiti non
+scritti (`ubep-canale-esiti-non-scritti`: giro non fermato,
+`fermato == false`, con almeno un errore, `array_length(errori) > 0`)
+scatta su qualunque codice negli `errori`, quindi anche su questi tre.
+Dal rilascio della 0.21.0 c’è in più una regola dedicata alle scritture
+non registrate, `ubep-canale-scrittura-non-registrata`, a gravità 2, che
+dalla 0.27.0 porta nella query anche
+`TRASPORTO_ENTRA_ID_NON_REGISTRATO`. Per questi codici le notifiche sono
+quindi due, quella della regola sugli esiti non scritti e quella della
+regola dedicata: è voluto, e non è un errore della sottoscrizione.
+`TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il giro, e lo si vede anche
+dal giro fermato prima di agire.
 
 Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla
 colonna `accessi_persi > 0`, a gravità 2.
@@ -1145,7 +1194,7 @@ decisione.
 
 La regola è
 [`pair_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/pair_change.md),
-con due codici:
+con quattro codici:
 
 - **`DATO_COPPIA_CAMBIATA`**, `data_error`: `server` o `project_id`
   diversi da quelli eseguiti, oppure una scrittura dei campi della
@@ -1161,20 +1210,39 @@ con due codici:
   un altro progetto, riportare i campi, revocare questa richiesta e
   crearne una nuova. Una revoca senza i campi riportati resta ferma,
   perché colpirebbe la coppia nuova.
+- **`TRASPORTO_NOME_RIASSEGNATO`**, `transport_error`, dalla 0.27.0: il
+  nome utente eseguito è ora di un altro account su Entra, con un altro
+  `id` (cancellato e ridato, o ricreato a mano). La risoluzione può non
+  vederlo: con il recapito interno e gli stessi nome e cognome la riga
+  restava `applied`. Mai su una riga revocata, che governa la sua
+  coppia. L’esito va al proprietario con IT in copia, e dice che la riga
+  non va modificata. Se l’accesso non serve più, il proprietario revoca
+  la riga e la revoca toglie il nome eseguito (la regola della revoca,
+  sotto). IT verifica su Entra chi porta il nome e da quando (*Audit
+  logs*), e sulle istanze i diritti del login con quel nome, che il
+  nuovo titolare può avere ereditato anche su altri progetti.
+- **`TRASPORTO_ACCOUNT_RINOMINATO`**, `transport_error`, dalla 0.27.0:
+  nessuno porta il nome eseguito, e l’account dell’`id` è su Entra sotto
+  un altro nome, che il messaggio dice. Prima era
+  `TRASPORTO_IDENTITA_CAMBIATA` con il recapito esterno e
+  `DATO_RECAPITO_INTERNO_INESISTENTE` con quello interno. L’esito va al
+  proprietario con IT in copia, e dice che la riga non va modificata.
+  L’uscita è la revoca della riga e una richiesta nuova.
 - **`TRASPORTO_IDENTITA_CAMBIATA`**, `transport_error`: il giro
   servirebbe un altro account, o ne creerebbe uno, e nella riga nessuno
   ha scritto la persona. È l’account che è cambiato su Entra:
-  rinominato, cancellato, o con nome o cognome corretti in modo che la
-  riga non lo trova più. Fino alla 0.23.0 il giro eseguiva il nome nuovo
-  senza dire niente, ricreava l’account cancellato con lo stesso nome
-  (che su REDCap ritrova tutti i diritti di prima) o ne creava un
-  secondo per la stessa persona. L’esito va al proprietario con IT in
-  copia, e dice che la riga non va modificata. Una riga revocata con la
-  versione eseguita certa (sigillo fermo, o ricostruzione verificata) e
-  con istanza e progetto eseguiti non prende né questo codice né quello
-  della sua identità: revoca il nome utente eseguito, qualunque cosa
-  dica la risoluzione, un account rinominato, un recapito interno che il
-  tenant non ha più, `ambiguous` o una collisione senza risposta
+  cancellato, rinominato su una riga senza `id`, o con nome o cognome
+  corretti in modo che la riga non lo trova più. Fino alla 0.23.0 il
+  giro eseguiva il nome nuovo senza dire niente, ricreava l’account
+  cancellato con lo stesso nome (che su REDCap ritrova tutti i diritti
+  di prima) o ne creava un secondo per la stessa persona. L’esito va al
+  proprietario con IT in copia, e dice che la riga non va modificata.
+  Una riga revocata con la versione eseguita certa (sigillo fermo, o
+  ricostruzione verificata) e con istanza e progetto eseguiti non prende
+  né questo codice né quello della sua identità: revoca il nome utente
+  eseguito, qualunque cosa dica la risoluzione, un account rinominato,
+  un recapito interno che il tenant non ha più, `ambiguous` o una
+  collisione senza risposta
   ([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md),
   dalla 0.26.0). Solo un nome che il canale ha eseguito sulla riga in
   una versione non revocata
@@ -1188,21 +1256,27 @@ con due codici:
   0.25.0) la porta delle identità riscrive quello eseguito; se il
   registro rifiuta la scrittura, la riga si ferma sul codice del
   registro, senza revoca e senza sigillo nuovo, e il giro dopo la rifà.
-  È l’uscita per un account rinominato che resta tale: il proprietario
-  revoca la riga vecchia e ne crea una nuova, e IT non concede a mano su
-  una coppia che una riga revocata governa, perché il giro la revoca.
-  Una riga revocata la cui persona non è più nel tenant, senza che
-  nessuno l’abbia scritta, si chiude invece come prima, `applied` con
-  `absent`, prima delle istanze (deciso il 2026-11-10): non c’è nessuno
-  da creare, e il vecchio login lo toglie IT. Restano su questo codice
-  una riga revocata che il log non verifica, una riga nata revocata, e
-  ogni riga se l’utenza del canale non è configurata: limiti accettati,
-  nel verso che revoca meno. La riga attiva riparte da sola quando la
-  risoluzione ritrova l’account eseguito, per esempio un account
-  cancellato e ripristinato.
+  È l’uscita per un account rinominato che resta tale (dalla 0.27.0 con
+  il suo codice): il proprietario revoca la riga vecchia e ne crea una
+  nuova, e IT non concede a mano su una coppia che una riga revocata
+  governa, perché il giro la revoca. Dalla 0.27.0 per un account
+  rinominato su una riga con l’`id` il codice è
+  `TRASPORTO_ACCOUNT_RINOMINATO`, e `TRASPORTO_IDENTITA_CAMBIATA` resta
+  per l’account cancellato e per la risoluzione che trova un altro
+  account su una riga senza `id`. Una riga revocata la cui persona non è
+  più nel tenant, senza che nessuno l’abbia scritta, si chiude invece
+  come prima, `applied` con `absent`, prima delle istanze (deciso il
+  2026-11-10): non c’è nessuno da creare, e il vecchio login lo toglie
+  IT. Restano su questo codice una riga revocata che il log non
+  verifica, una riga nata revocata (dalla 0.27.0, se il suo account è
+  stato rinominato, su `TRASPORTO_ACCOUNT_RINOMINATO`), e ogni riga se
+  l’utenza del canale non è configurata: limiti accettati, nel verso che
+  revoca meno. La riga attiva riparte da sola quando la risoluzione
+  ritrova l’account eseguito, per esempio un account cancellato e
+  ripristinato.
 
-In tutti e due i casi sull’istanza non si scrive niente, nessuno nasce
-su Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta
+In tutti i casi sull’istanza non si scrive niente, nessuno nasce su
+Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta
 delle identità non scrive né il nome né il verdetto: il registro tiene
 il nome eseguito. Lo stesso su una riga sigillata di cui il giro non ha
 potuto giudicare la coppia (log dei proprietari non letto, riga cieca).
@@ -1219,9 +1293,22 @@ sigillata la cui risoluzione non nomina nessuno, `ambiguous` o una
 collisione senza risposta, resta sul codice della sua identità come
 prima, se è attiva: non concede niente, e la correzione del referente la
 porta o alla stessa persona o a uno dei due casi. Su quella riga la
-porta scrive ancora la proposta, o il nome vuoto, e il sigillo si muove
-per mano del canale: un limite accettato. Le righe mai eseguite cambiano
-come prima.
+porta non scrive né il nome né il verdetto, dalla 0.27.0: il registro
+tiene il nome eseguito, e la riga trattenuta chiede il sigillo del nome
+eseguito, così l’approvazione del proprietario passa. Prima la porta
+scriveva la proposta, o il nome vuoto, e il sigillo si muoveva per mano
+del canale. Su una riga ferma sul codice della sua identità la mail dice
+il nome eseguito alla riga del nome utente risolto, invece di «non
+ancora stabilito» o della proposta. Su una riga mossa che non nomina
+nessuno, `TRASPORTO_IDENTITA_CAMBIATA` dice «Account trovato ora:
+nessuno», non più la proposta. Una riga sigillata dal canale il cui
+campo `applied_seal` un import ha svuotato è una candidata del passo 3b
+(§4, «Una persona da creare»); se la persona non è più su Entra e REDCap
+conosce il nome composto, la risoluzione dà una collisione, e per la
+regola della coppia una persona da creare su una riga eseguita è
+un’altra persona: `TRASPORTO_IDENTITA_CAMBIATA`, come nella 0.25.0. La
+riga continua a far chiedere alle produzioni a ogni giro finché qualcuno
+non la sistema. Le righe mai eseguite cambiano come prima.
 
 Che una persona sia stata scritta si legge dalla versione eseguita:
 nome, cognome o indirizzo di contatto del registro letto diversi da
@@ -1232,6 +1319,37 @@ riga sopra il sigillo, come prima
 sui tre campi). Una riga il cui sigillo non si è mosso porta la persona
 eseguita: un account rinominato su Entra non muove il sigillo, perché il
 registro letto ha ancora il nome vecchio.
+
+**L’account su Entra, dalla 0.27.0.** Dal primo giro dopo l’esecuzione
+la riga porta l’`id` dell’account a cui il canale ha dato l’accesso (§4,
+«Il giro scrive da cinque porte»), e a ogni giro lo si confronta con la
+spazzata di Entra. L’ordine dei controlli è
+`TRASPORTO_AUTORE_NON_LEGGIBILE`, `DATO_COPPIA_CAMBIATA`,
+`TRASPORTO_NOME_RIASSEGNATO`, `TRASPORTO_ACCOUNT_RINOMINATO`,
+`TRASPORTO_IDENTITA_CAMBIATA`, `held`, i codici dell’identità. Il
+controllo vale solo sulle righe con la versione eseguita certa, come la
+revoca sul nome eseguito (deciso il 2026-11-14: con un nome eseguito
+sbagliato darebbe un falso `TRASPORTO_NOME_RIASSEGNATO`, il codice che
+manda IT a togliere diritti), e non su una riga che esce dalla revoca.
+Con due titolari del nome, o con due account con lo stesso `id`, non dà
+niente.
+
+Le righe eseguite prima della 0.27.0 non hanno l’`id` e lo prendono
+dalla spazzata, una volta
+([`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md)),
+se un solo account porta il nome eseguito ed è nato prima del primo
+sigillo del tratto più recente di esecuzioni di quel nome
+([`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md)).
+Il confronto si fa fino alla fine di quel minuto, il log essendo in ora
+di Roma e Graph in UTC. Nato dopo, è un nome ridato,
+`TRASPORTO_NOME_RIASSEGNATO`. Il primo sigillo del tratto e non
+l’ultimo: un nome ridato e poi una riesecuzione per un cambio di ruolo
+passerebbero. Un `id` che la porta rifiuterebbe, con un apice, non si
+scrive. Il riempimento scrive l’`id` anche su una riga ferma per
+un’altra ragione: descrive l’account eseguito, non ciò che la riga
+chiede ora, e aggiunge solo fermate. Limiti noti: la guardia non vede un
+account più vecchio rinominato sul nome liberato, e una riga col sigillo
+mosso e non verificata resta senza il controllo.
 
 **Il doppione guarda anche le righe che il giro non serve.** La riga più
 vecchia di una coppia la tiene anche quando il giro la ferma:
@@ -1598,19 +1716,29 @@ avvisata, e lo dice solo quel codice sulla riga.
 **Lo stesso per una scrittura senza risposta.** Dalla 0.26.0 ogni
 chiamata al modulo ha un tempo massimo
 ([`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md)):
-cinque minuti in tutto, trenta secondi per connettersi. Una scrittura
-che lo supera, o la cui rilettura fallisce
-(`TRASPORTO_RILETTURA_FALLITA`), può essere arrivata: la riga prende
-`transport_error`, con `TRASPORTO_NON_RAGGIUNGIBILE` per il tempo
+cinque minuti in tutto e, per connettersi, trenta secondi nella 0.26.0 e
+dieci dalla 0.27.0. Una scrittura che lo supera, o la cui rilettura
+fallisce (`TRASPORTO_RILETTURA_FALLITA`), può essere arrivata: la riga
+prende `transport_error`, con `TRASPORTO_NON_RAGGIUNGIBILE` per il tempo
 scaduto, resta senza sigillo, e il giro dopo rilegge la coppia. Se il
 diritto c’è è un `noop`: la riga chiude `applied`, niente viene scritto
 due volte, e la mail di accesso non parte. Un’istanza appesa costa al
 giro al più due attese, una al passo 3b e una al passo 5; una che
-risponde alle letture e non alle scritture, un’attesa per lotto. Il
-tempo massimo vale per il modulo soltanto: il registro, Graph e il
-servizio di posta si chiamano ancora senza, e se l’istanza che ospita il
-registro accetta la connessione e non risponde il giro resta fermo come
-prima.
+risponde alle letture e non alle scritture, un’attesa per lotto.
+
+Dalla 0.27.0 anche il registro, Graph e il servizio di posta hanno un
+tempo massimo: un minuto per chiamata, dieci secondi per connettersi
+([`register_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_timeouts.md),
+[`directory_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_timeouts.md),
+[`mail_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_timeouts.md)).
+Un tempo scaduto dà il codice che la stessa porta dava per una rete giù.
+Su una scrittura nel registro la risposta può essere ciò che si è perso:
+il codice va in `errori` e suona `ubep-canale-esiti-non-scritti`, sia
+che l’esito sia arrivato sia che no; se non è arrivato, il giro dopo
+rimanda anche la mail d’esito. Il giro non concede due volte, perché ciò
+che il registro riceve lo ricalcola dallo stato delle istanze. Un
+registro appeso dopo la lettura delle righe costa al giro al più nove
+attese, più una per ogni riga il cui log si legge da solo.
 
 **Va alla persona, e a nessun altro**: niente copia al referente, niente
 copia a IT. Con un recapito esterno va a `contact_email`; con un
@@ -2233,7 +2361,10 @@ dopo, con `req_options()`, o sparisce. E un nome d’opzione che libcurl
 non conosce non è un avviso: è un errore prima della chiamata, che
 [`module_call()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_call.md)
 leggerebbe come istanza irraggiungibile su ogni chiamata. Lo prova un
-test che manda la richiesta vera al loopback.
+test che manda la richiesta vera al loopback. Per questo i due limiti si
+mettono con
+[`req_limits()`](https://ubesp-dctv.github.io/ubep.azure/reference/req_limits.md),
+che li scrive nell’ordine giusto, in ogni porta del pacchetto.
 
 **Il verde di un controllo mai stato rosso vale poco.** Ogni guardia di
 questo canale è stata provata in entrambe le direzioni, e in un caso
@@ -2270,11 +2401,16 @@ Il foglio raccoglie otto famiglie:
 - la flotta osservata: quali istanze hanno il modulo, le due impronte
   correnti, il numero di coppie e quante hanno una scadenza.
 
-I tempi massimi delle chiamate al modulo non stanno nel foglio ma nel
-pacchetto,
+I tempi massimi delle chiamate non stanno nel foglio ma nel pacchetto:
 [`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md)
-(dalla 0.26.0: 300 secondi in tutto, 30 per connettersi); le unità
-`systemd` non ne hanno.
+per il modulo (300 secondi in tutto, 10 per connettersi, dalla 0.27.0),
+[`register_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_timeouts.md),
+[`directory_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_timeouts.md)
+e
+[`mail_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_timeouts.md)
+per registro, Graph e posta (60 e 10, dalla 0.27.0), 30 secondi per le
+soppressioni. Le unità `systemd` hanno un loro tempo massimo dalla
+0.26.0, nel foglio.
 
 **Dalla 0.21.0 una variabile dell’unità è sempre obbligatoria e un’altra
 lo è con la posta accesa**, e senza la prima la lavorazione non parte:
@@ -2470,14 +2606,18 @@ in una mail sola e solo quando c’è qualcosa, allo stesso indirizzo:
   righe sigillate e non `applied`, attive, o revocate e non eseguite
   (ferme sul cancello, in attesa del proprietario, o su un cambio di
   coppia o di account: `DATO_AMBITO_NON_AUTORIZZATO`, `held`,
-  `DATO_COPPIA_CAMBIATA`, `TRASPORTO_IDENTITA_CAMBIATA`). Per ciascuna
-  l’esito con i codici (senza il sigillo che `SIGILLO_DIVERSO` porta per
-  il proprietario), se è revocata, se la persona è mai entrata sul
-  server col nome eseguito, oppure perché quel nome non si sa, e il
-  proprietario. Non una revoca che il log dice eseguita e poi toccata,
-  né una riga con `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici, che ha
-  la sua sezione. Una riga può stare anche fra quelle senza referente, e
-  conta una volta in N;
+  `DATO_COPPIA_CAMBIATA`, `TRASPORTO_NOME_RIASSEGNATO`,
+  `TRASPORTO_ACCOUNT_RINOMINATO`, `TRASPORTO_IDENTITA_CAMBIATA`). Per
+  ciascuna l’esito con i codici (senza il sigillo che `SIGILLO_DIVERSO`
+  porta per il proprietario), se è revocata, se la persona è mai entrata
+  sul server col nome eseguito, oppure perché quel nome non si sa, e il
+  proprietario. Una riga su `TRASPORTO_NOME_RIASSEGNATO` compare senza
+  il nome eseguito (dalla 0.27.0), perché è di un altro account e i suoi
+  accessi non sono della persona. Non una revoca che il log dice
+  eseguita e poi toccata, né una riga con
+  `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici, che ha la sua sezione.
+  Una riga può stare anche fra quelle senza referente, e conta una volta
+  in N;
 - **i recapiti e i referenti in soppressione presso il servizio di
   posta** (dalla 0.26.0, «Ogni giorno, non una volta al mese» sotto): le
   richieste attive con un recapito della persona in una lista che
@@ -3037,6 +3177,22 @@ le revocate e sigillate ferme su un codice di coppia o d’identità, le
 righe attive in `absent` o `collision` col sigillo vuoto, e quelle col
 sigillo importato che aspettano una creazione, che al primo giro si
 fermano su `TRASPORTO_NOME_NON_VERIFICATO`.
+
+**La 0.27.0 tocca il dizionario, non il modulo e non le lavorazioni.**
+Il campo `applied_entra_id` è uno solo, quindi due tempi e non l’atto
+unico, come per `owned_by`: **prima** il dizionario, con la riga del
+campo impacchettata (`request_register`, subito dopo `applied_seal`,
+testo, etichetta *Entra account applied*, `@READONLY`, visibile quando è
+pieno), poi il pacchetto. La 0.26.0 sul dizionario nuovo incontra
+`DIZIONARIO_CAMPO_IN_PIU` e continua; la 0.27.0 sul dizionario vecchio
+si ferma su `DIZIONARIO_CAMPO_ASSENTE`. Nessuna colonna nuova nel
+record, nessuna lavorazione da sostituire: le due chiamano il pacchetto
+come prima. Al ritorno, il pacchetto; il dizionario resta. Al primo giro
+le righe sigillate il cui nome eseguito è di un account nato prima del
+loro primo sigillo prendono l’`id` dal riempimento, senza posta; il
+secondo giro non ne scrive nessuno. L’allarme
+`ubep-canale-scrittura-non-registrata` guadagna
+`TRASPORTO_ENTRA_ID_NON_REGISTRATO` nella query.
 
 ## Che cosa questa guida non copre
 

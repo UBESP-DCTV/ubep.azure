@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.26.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.27.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,12 +75,13 @@ of its own, <code>disattivata</code>;</p></li>
 executed: sealed, not <code>applied</code>, active or revoked. A revocation of an
 executed row that the round did not carry out, stopped at the gate on
 <code>DATO_AMBITO_NON_AUTORIZZATO</code>, waiting for its owner as <code>held</code>, or on
-<code>DATO_COPPIA_CAMBIATA</code> or <code>TRASPORTO_IDENTITA_CAMBIATA</code>, is an access
-that should be gone and is not, and it is no longer in any referent's
-report. Not the rows with <code>TRASPORTO_ACCOUNT_DISATTIVATO</code> among their
-codes, active or revoked: the active ones are <code>disattivata</code>, and none is
-listed twice. Not a revocation the log says was carried out and that
-somebody touched afterwards, <code>revoca_eseguita</code> of
+<code>DATO_COPPIA_CAMBIATA</code>, <code>TRASPORTO_NOME_RIASSEGNATO</code>,
+<code>TRASPORTO_ACCOUNT_RINOMINATO</code> or <code>TRASPORTO_IDENTITA_CAMBIATA</code>, is an
+access that should be gone and is not, and it is no longer in any
+referent's report. Not the rows with <code>TRASPORTO_ACCOUNT_DISATTIVATO</code>
+among their codes, active or revoked: the active ones are <code>disattivata</code>,
+and none is listed twice. Not a revocation the log says was carried out
+and that somebody touched afterwards, <code>revoca_eseguita</code> of
 <code><a href="report_executed_register.html">report_executed_register()</a></code>: its seal moved, but the access is gone;</p></li>
 <li><p><code>disattivata</code>, the active rows stopped on a disabled account:
 <code>transport_error</code> with <code>TRASPORTO_ACCOUNT_DISATTIVATO</code> among the codes

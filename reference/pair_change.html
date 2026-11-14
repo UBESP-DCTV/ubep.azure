@@ -21,7 +21,7 @@ instance, nobody is created, and the row keeps its seal and its owner."></head><
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.26.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.27.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,15 @@ instance, nobody is created, and the row keeps its seal and its owner.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">pair_change</span><span class="op">(</span><span class="va">executed</span>, <span class="va">current</span>, <span class="va">target</span>, <span class="va">creating</span>, <span class="va">rewritten</span>, revoked <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">pair_change</span><span class="op">(</span></span>
+<span>  <span class="va">executed</span>,</span>
+<span>  <span class="va">current</span>,</span>
+<span>  <span class="va">target</span>,</span>
+<span>  <span class="va">creating</span>,</span>
+<span>  <span class="va">rewritten</span>,</span>
+<span>  revoked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  account <span class="op">=</span> <span class="st">""</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -99,12 +107,17 @@ the log does not say who wrote it, which counts as a write.</p></dd>
 <dt id="arg-revoked">revoked<a class="anchor" aria-label="anchor" href="#arg-revoked"></a></dt>
 <dd><p>Whether the row asks for <code>revoked</code>.</p></dd>
 
+
+<dt id="arg-account">account<a class="anchor" aria-label="anchor" href="#arg-account"></a></dt>
+<dd><p>What the identifier on Entra says, <code>""</code> when it says
+nothing: <code>TRASPORTO_NOME_RIASSEGNATO</code> or <code>TRASPORTO_ACCOUNT_RINOMINATO</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>code</code>, one of the two codes or <code>""</code>, and <code>changed</code>,
+    <p>A list with <code>code</code>, one of the four codes or <code>""</code>, and <code>changed</code>,
 which of <code>"server"</code>, <code>"project_id"</code> and <code>"person"</code> moved, or <code>"account"</code>
-for the second code.</p>
+for the other three.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -118,11 +131,23 @@ another project is a new request, and this one is revoked, its fields
 back first;</p></li>
 <li><p><code>TRASPORTO_IDENTITA_CAMBIATA</code>, for IT, decided on 2026-11-09 as well: the
 round would serve another account or create one while nobody wrote the
-person in the row, so the account changed on Entra (renamed, deleted,
-its name corrected). Nothing in the row explains it, and the referent has
-nothing to undo.</p></li>
+person in the row, so the account changed on Entra (renamed, on a row
+with no identifier; deleted; its name corrected). Nothing in the row
+explains it, and the referent has nothing to undo.</p></li>
 </ul><p>The pair comes first: it is a change the referent made and can undo, and
 the account is looked at once it is back.</p>
+<p><strong>The account carried out is the identifier on Entra too</strong>, decided on
+2026-11-12 (item 11 of the 0.27.0). Two codes more, for IT, read from
+<code>applied_entra_id</code> and handed in as <code>account</code> (<code><a href="entra_account_change.html">entra_account_change()</a></code>,
+<code><a href="entra_fill.html">entra_fill()</a></code>), after <code>DATO_COPPIA_CAMBIATA</code> and before
+<code>TRASPORTO_IDENTITA_CAMBIATA</code>, with <code>changed = "account"</code>:</p><ul><li><p><code>TRASPORTO_NOME_RIASSEGNATO</code>: the username carried out names now
+another account, deleted and given again, or made again by hand under
+the same name. The resolution may see nothing, since the name and the
+contact are the same;</p></li>
+<li><p><code>TRASPORTO_ACCOUNT_RINOMINATO</code>: nobody carries the username carried out,
+and the account carried out is on Entra under another one.</p></li>
+</ul><p>The identifier only adds stops: one that matches lets nothing through
+that the rest of this function stops.</p>
 <p>Who the round would serve is the resolution's to say. A verdict that
 names nobody, <code>ambiguous</code> or a collision nobody answered, is left to the
 code of the identity, which concedes nothing either; a person to create is

@@ -13,7 +13,7 @@ pure and live elsewhere."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.26.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.27.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,16 +85,16 @@ with zero rows.</p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><strong>It sweeps rather than filters, and that is a measurement and not a
 preference.</strong> <code>officeLocation</code> — where the historical flow put the contact
-address, and where 6.494 accounts still carry it — is not filterable
+address, and where thousands of accounts still carry it — is not filterable
 server-side at all: Graph answers <code>Request_UnsupportedQuery</code>. <code>mail</code>, which
-would be filterable, is <code>null</code> on 6.412 accounts out of 7.664, so the
+would be filterable, is <code>null</code> on most accounts, so the
 obvious attribute is empty on exactly the population to be found. Measured
-on 2026-08-15 the whole sweep costs 8 pages and 3,5 seconds, which is less
-than the round that consumes it. It is also decision 4 of the channel's
-design obtained by construction rather than by discipline: no local copy of
-the state, the real one is re-read every round.</p>
+on 2026-08-15 the whole sweep costs a handful of pages and a few seconds,
+which is less than the round that consumes it. It is also decision 4 of
+the channel's design obtained by construction rather than by discipline:
+no local copy of the state, the real one is re-read every round.</p>
 <p>Reading in full has a property a server-side filter would not have given:
-the comparison is ours, so it can normalize. It has to — 74 accounts carry
+the comparison is ours, so it can normalize. It has to — some accounts carry
 the address with spaces at the edges, and an <code>eq</code> would have missed them in
 silence, reporting <code>absent</code> for people who exist.</p>
     </div>

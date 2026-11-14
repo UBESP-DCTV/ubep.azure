@@ -11,7 +11,7 @@ the one the register holds now. Two ways of knowing it, as in the round:"></head
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.26.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.27.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -94,7 +94,9 @@ token, or <code>NULL</code> when they are not configured.</p></dd>
 executed, and four columns more: <code>username_registro</code>, the name the
 register holds; <code>nome_eseguito</code>, <code>registro</code> or <code>log</code>, where the name
 executed was read, <code>""</code> when it is not known; <code>nome_motivo</code>, why not:
-<code>log</code>, <code>""</code> when it is known; <code>revoca_eseguita</code>, <code>TRUE</code> on a revoked
+<code>log</code>, or <code>account</code> on a row stopped on <code>TRASPORTO_NOME_RIASSEGNATO</code>,
+whose name belongs now to another account, <code>""</code> when it is known;
+<code>revoca_eseguita</code>, <code>TRUE</code> on a revoked
 row whose state executed, in the verified version, is <code>revoked</code>:
 carried out, then touched, so that <code><a href="report_scope.html">report_scope()</a></code> leaves it out of
 <code>ferma</code>. A version not verified leaves it <code>FALSE</code>, the side that shows

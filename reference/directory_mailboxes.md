@@ -46,8 +46,7 @@ reads it.
 
 `mailbox` is the account's `mail`, when it carries one: Exchange writes
 the primary address there when it gives the account a mailbox, and on
-about 6.400 of the 7.700 accounts it is empty. The UPN does not count as
-one.
+most accounts it is empty. The UPN does not count as one.
 
 `external` is the first address the account carries outside the domain:
 the first of `otherMails`, otherwise `officeLocation`, the historical

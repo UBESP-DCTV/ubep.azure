@@ -1,5 +1,158 @@
 # Changelog
 
+## ubep.azure 0.27.0
+
+A row the channel carried out is tied to the id of its account on Entra,
+and the round stops on a username given again to another account or on
+an account renamed. Connecting to an instance takes at most ten seconds,
+and the register, Graph and the mail service have a time limit of their
+own. The round no longer cleans the whole directory once for every row
+of the register. The identity door leaves alone a sealed row that names
+nobody.
+
+- **A row the channel carried out is tied to the id of its account on
+  Entra.** Decided on 2026-11-12 (item 11). The register has a field
+  more, `applied_entra_id`, `@READONLY` and outside the seal. The round
+  writes in it the `id` of the account it served at a row’s first
+  execution, through a door of its own
+  ([`register_entra_id_import()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_entra_id_import.md)),
+  after the owner and before the seal, and believes the value only from
+  its own writes in the log
+  ([`log_channel_entra_id()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_entra_id.md)),
+  as it does `owned_by`. The door is not called on a simulated round,
+  nor without the channel’s account or the owners’ log. A value the
+  field shows and the log does not hold is written twice, empty and then
+  the value. A write of the `id`, the only one or either of the two,
+  that is refused or runs out of time gives
+  `TRASPORTO_ENTRA_ID_NON_REGISTRATO` in the round’s `errori`, which
+  stops nothing, and the next round writes it again. A value a referent
+  imports is not believed, and the round writes its own back. The rows
+  carried out before the field existed get the `id` from the sweep, if
+  the account that holds the name was born before the first seal of the
+  newest run of executions of that name
+  ([`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md)).
+  The owners’ log is read also when the only rows are sealed ones.
+
+- **Two codes for IT when the account is not the one carried out.**
+  Decided on 2026-11-12; decided on 2026-11-14 that the check is made
+  only on a row whose version carried out is certain, as for the
+  revocation. After `DATO_COPPIA_CAMBIATA` and before
+  `TRASPORTO_IDENTITA_CAMBIATA` the rule of the pair stops such a row on
+  `TRASPORTO_NOME_RIASSEGNATO`, when the username carried out belongs
+  now to another account (deleted and given again, or made again by
+  hand), which the resolution may not see at all when the name and the
+  contact are the same and the row stayed `applied`; or on
+  `TRASPORTO_ACCOUNT_RINOMINATO`, when nobody holds the name carried out
+  and the account of the `id` has another username, which the message
+  names (it was `TRASPORTO_IDENTITA_CAMBIATA` with an external contact
+  and `DATO_RECAPITO_INTERNO_INESISTENTE` with an internal one). A
+  revoked row never takes the first, and a row that leaves through the
+  revocation
+  ([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md))
+  takes neither. A name given again to an account born after the first
+  seal gets the first code at the fill too; two holders of the name, or
+  an `id` that is not in the sweep, stop nothing. The `id` only adds
+  stops. The owner gets the outcome with IT in copy, in two new
+  paragraphs of the message, and the row is not to be changed; the way
+  out is the owner revoking the row and, for an account renamed, filing
+  a new request. The monthly report lists a row stopped on a name given
+  again without the name carried out, which is somebody else’s now.
+
+- **The identity door does not write on a sealed row that names
+  nobody.** A collision nobody answered, `ambiguous`, or no verdict at
+  all (`DATO_NOME_DIVERGENTE`, `DATO_RECAPITO_INTERNO_INESISTENTE`): the
+  door wrote the proposal or the empty name over the one carried out,
+  and the channel moved the seal itself (RR1 of the review of the
+  0.26.0). A revocation closed on a person the tenant no longer holds is
+  written as before. Such a row asks for the seal of the name carried
+  out, which is the row the register keeps, so that the approval of its
+  owner passes (RE1); its message says that name on the line of the
+  resolved username instead of “not yet established” or the proposal. On
+  a row moved that names nobody, `TRASPORTO_IDENTITA_CAMBIATA` says
+  “Account found now: none” and no longer gives the proposal as the
+  account found.
+
+- **A row carried out whose seal field was emptied, with its person gone
+  from Entra, stops on `TRASPORTO_IDENTITA_CAMBIATA` again.** Decided on
+  2026-11-14 (RN2 of the review of the 0.26.0). Step 3b picked it by the
+  field, and a composed name known to REDCap made it a collision that
+  the rule of the pair let through: for that rule a person to create on
+  a row carried out is somebody else. The row keeps asking the
+  productions about the name at every round while it is there.
+
+- **Connecting to an instance takes at most ten seconds, benches and
+  productions alike**
+  ([`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md)).
+  Decided on 2026-11-14. With 0.26.0 it was thirty, and a bench that is
+  switched off cost the observer the whole limit for each. Ten seconds
+  is what the `curl` R package set by itself up to 0.25.0, and a whole
+  call to a production that is on takes a fraction of that. The call
+  keeps its five minutes.
+
+- **The register, Graph and the mail service have a time limit too.**
+  Decided on 2026-11-14 (RT1 of the review of the 0.26.0). Their calls
+  waited without limit, and a service that took the connection and never
+  answered held the round until systemd stopped it, with no record and
+  the losses of that round uncounted. One minute for a call and ten
+  seconds to connect
+  ([`register_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/register_timeouts.md),
+  [`directory_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_timeouts.md),
+  [`mail_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_timeouts.md)),
+  put on the request by one helper,
+  [`req_limits()`](https://ubesp-dctv.github.io/ubep.azure/reference/req_limits.md),
+  in the order `httr2` needs: `req_timeout()` sets the connection limit
+  back to the default of `libcurl`. A call that runs out of time has the
+  code a network that is down already had:
+  `TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE`,
+  `TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE` (a page of the sweep: the
+  round asks no instance), `TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE`
+  (unconfirmed, the key counted lost) and
+  `TRASPORTO_POSTA_NON_RAGGIUNGIBILE`. The reading of the suppressions
+  keeps its thirty seconds in all. A write to the register that runs out
+  of time puts its code in `errori` and sounds the alarm on outcomes not
+  written, whether or not it had arrived; if it had not, the next round
+  also sends the outcome message again. The next round computes the
+  register from the instances and grants nothing twice.
+
+- **A passage of a row to a new owner written once, that does not
+  arrive, is reported.** Decided on 2026-11-14 (review of the time
+  limits). A passage written in one write, with the owner’s field
+  already holding the old owner, that was refused or ran out of time
+  gave only the code of the door: it gives now also
+  `TRASPORTO_PASSAGGIO_NON_REGISTRATO`, as the double write did. The
+  passage is lost as before, and IT warns the new owner.
+
+- **The round no longer cleans the whole directory once for every row.**
+  Decided on 2026-11-14.
+  [`directory_named()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_named.md)
+  and the check of an unreadable surname applied `clean_string()` to the
+  surname and the given name of every account of the directory, one
+  account at a time, in every resolution, that is once for each row of
+  the register; the transliteration it calls builds its tables on every
+  call. They now clean the directory in one call on the vector, and
+  [`directory_contacts()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_contacts.md)
+  normalizes the contacts in one pass. The result is the same, tested
+  against the element-by-element rule on names with accents,
+  apostrophes, capitals, other alphabets, empty and `NA`.
+  [`directory_contacts()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_contacts.md)
+  stops on a frame it cannot line up, which
+  [`directory_frame()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_frame.md)
+  never builds.
+
+- **Shape of the release.** The dictionary gains a field,
+  `applied_entra_id`: import it before the package. The 0.26.0 meets it
+  as `DIZIONARIO_CAMPO_IN_PIU` and goes on; the 0.27.0 on the old
+  dictionary stops on `DIZIONARIO_CAMPO_ASSENTE`. No module change, no
+  change to the jobs in `/opt`, no new column in the records: install
+  the package alone. Back, the package first, and the dictionary may
+  stay. At the first round the sealed rows whose name carried out is
+  held by an account born before their first seal get their `id` through
+  the fill, with no message, and the second round writes none. On a
+  register where every row is sealed with its seal unmoved, none is
+  revoked and none waits for an account, no outcome changes. The alarm
+  rule on writes not registered (`ubep-canale-scrittura-non-registrata`)
+  is to carry `TRASPORTO_ENTRA_ID_NON_REGISTRATO` in its query.
+
 ## ubep.azure 0.26.0
 
 The pair a row carried out is rebuilt from the log and verified by the
@@ -124,9 +277,9 @@ the name the instance holds, as a revocation does.
   counts as taken the round asks every production, those without rows
   too. Five minutes for the whole call and thirty seconds to connect
   ([`module_timeouts()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_timeouts.md));
-  the observer reads the whole fleet in about 75 seconds. A call that
-  runs out of time is `TRASPORTO_NON_RAGGIUNGIBILE`, as before. On a
-  write it does not mean that nothing was written: the row stays
+  the observer reads the whole fleet well within five minutes. A call
+  that runs out of time is `TRASPORTO_NON_RAGGIUNGIBILE`, as before. On
+  a write it does not mean that nothing was written: the row stays
   unsealed and the next round decides from the instance’s state, so
   nothing is granted twice; as with a write the read-back does not
   confirm, the access message of that row is not sent. The register,
@@ -1900,8 +2053,7 @@ checked. Both are now read from the server itself.
   accounts carry it — the sweep counts them, and the day the count is
   zero the fallback is dead — and written never again. A guard arms the
   not-inheriting, because the serialized authorization is a live
-  mechanism and not a fossil: 2.828 accounts carry it, 254 of them
-  created in 2026.
+  mechanism and not a fossil: accounts created this year still carry it.
 
   **The row it creates stays `absent` for that pass** and becomes
   `created` at the next one. That is not a delay being tolerated:
@@ -2068,24 +2220,24 @@ checked. Both are now read from the server itself.
   account carries one — is a candidate for being this person; whether it
   is *the* one is settled by the contact address. Read the other way
   round, the resolution would call an ambiguity what is merely a shared
-  address: 99 addresses in the tenant sit on more than one account, 221
-  accounts involved, and a mailbox shared by a lab says nothing about
-  who anybody is. It would also miss the failure that matters most — a
-  person who exists under a UPN this package would not have composed,
-  whose contact address has since changed, read as “nobody matched” and
-  given a second account.
+  address: many addresses in the tenant sit on more than one account,
+  and a mailbox shared by a lab says nothing about who anybody is. It
+  would also miss the failure that matters most — a person who exists
+  under a UPN this package would not have composed, whose contact
+  address has since changed, read as “nobody matched” and given a second
+  account.
 
   So one homonym is enough to stop the row. An account with this surname
   whose contact address is not the one given is `ambiguous`: nothing
   here tells “the same person, with an address we did not know” from
   “somebody else with the same name”, and the second reading is the one
   that creates a duplicate. The addresses are read from
-  `officeLocation`, where the historical flow put them and where 6.494
-  accounts still carry them, from `otherMails`, and from the UPN,
-  because an address in the tenant’s domain **is** a UPN. Both sides are
-  normalized: 74 accounts carry the address with spaces at the edges,
-  and an exact comparison would report `absent` for people who exist.
-  Guests are excluded by invariant, not by measurement.
+  `officeLocation`, where the historical flow put them and where
+  thousands of accounts still carry them, from `otherMails`, and from
+  the UPN, because an address in the tenant’s domain **is** a UPN. Both
+  sides are normalized: some accounts carry the address with spaces at
+  the edges, and an exact comparison would report `absent` for people
+  who exist. Guests are excluded by invariant, not by measurement.
 
   `collision` therefore means something narrower than it looks. A
   homonym is caught by the surname rule and never reaches it, so
@@ -2133,17 +2285,17 @@ checked. Both are now read from the server itself.
   is the only function that speaks to Microsoft Graph, and it does one
   thing: it sweeps. It does not filter, and that is a measurement rather
   than a preference — `officeLocation`, where the historical flow put
-  the contact address and where 6.494 accounts still carry it, is not
-  filterable server-side at all, and `mail`, which would be, is `null`
-  on 6.412 accounts out of 7.664. The obvious attribute is empty on
-  exactly the population to be found. Reading in full costs 8 pages and
-  3,5 seconds measured on 2026-08-15, less than the round that will
+  the contact address and where thousands of accounts still carry it, is
+  not filterable server-side at all, and `mail`, which would be, is
+  `null` on most accounts. The obvious attribute is empty on exactly the
+  population to be found. Reading in full costs a handful of pages and a
+  few seconds, measured on 2026-08-15, less than the round that will
   consume it, and it yields decision 4 of the channel’s design by
   construction rather than by discipline: no local copy of the state,
   the real one re-read every round. It also buys a property a
   server-side filter could not have given — the comparison is ours, so
-  it can normalize, and it has to, because 74 accounts carry the address
-  with spaces at the edges and an `eq` would have missed them in
+  it can normalize, and it has to, because some accounts carry the
+  address with spaces at the edges and an `eq` would have missed them in
   silence.
 
   It answers in the shape the other adapters answer in — `ok`, `errors`,
@@ -2158,13 +2310,13 @@ checked. Both are now read from the server itself.
 
   Two bounds beyond what the plan asked for, both on the continuation
   Graph hands back. The sweep stops after 100 pages rather than
-  following a continuation that never ends: the measured shape is 8
-  pages, and the failure avoided is the one this project can least
-  afford, a round that never returns and so leaves no record, with the
-  severity-1 alarm reporting that the channel is not running while it
-  runs very hard. And a continuation is followed only when it is https
-  on the host the caller named, compared on the parsed host rather than
-  on a prefix, because `https://graph.example.org@elsewhere.test/`
+  following a continuation that never ends: the measured shape is a
+  handful of pages, and the failure avoided is the one this project can
+  least afford, a round that never returns and so leaves no record, with
+  the severity-1 alarm reporting that the channel is not running while
+  it runs very hard. And a continuation is followed only when it is
+  https on the host the caller named, compared on the parsed host rather
+  than on a prefix, because `https://graph.example.org@elsewhere.test/`
   starts with the right text and resolves to the wrong machine.
   Following it blindly would hand an application credential to whatever
   host the other end names.

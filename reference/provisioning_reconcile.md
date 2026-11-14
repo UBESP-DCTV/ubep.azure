@@ -128,12 +128,16 @@ families, and one counter for both would be a number nobody could read
 back into either. `credenziali` carries what the accounts created this
 round were born with, and it is the only road those take. `errori`
 carries the codes of every write and log that failed, and
-`TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage the field already
-showed could not be written into the log, and
+`TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage could not be written
+into the log, whether it takes two writes (the field already showed the
+new owner) or one that was refused or ran out of time, and
 `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
 held the seal the round writes and the channel's last seal in the log is
-another. A round that finds the register sealed and none of the accounts
-of `channel_account` in its log stops, `fermato`, with
+another, and `TRASPORTO_ENTRA_ID_NON_REGISTRATO` when an Entra account
+could not be written into the log, whether it takes two writes (the
+field already showed it) or one that was refused or ran out of time. A
+round that finds the register sealed and none of the accounts of
+`channel_account` in its log stops, `fermato`, with
 `TRASPORTO_REGISTRO_CANALE_ASSENTE`
 ([`log_channel_absent()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_absent.md)).
 
@@ -168,8 +172,8 @@ of `channel_account` in its log stops, `fermato`, with
 10. **create the accounts the gate allowed and the tenant does not
     hold**;
 
-11. write back the outcome, then the owner, then the seal, and only what
-    changed.
+11. write back the outcome, then the owner, then the Entra account the
+    row was carried out for, then the seal, and only what changed.
 
 **The gate's subjects are read from the log, not from the row.**
 `requested_by` says who filed a request only because `@USERNAME` filled
@@ -269,16 +273,41 @@ round would serve another account, or create one, and nobody wrote the
 person in the row: the account changed on Entra, and it is for IT. Both
 come before a held change, since no approval lets them through, and
 before the identity's own codes. A row never carried out changes as
-before. On a row stopped on either code, and on a sealed row whose pair
-the round could not judge, the identity door writes neither *Username
-(UPN)* nor *Identity resolution* (decided on 2026-11-12): the register
-keeps the name carried out, and the channel does not move the seal
-itself. A revoked row whose version carried out is certain, on the
-instance and the project carried out, revokes the username carried out
-whatever the resolution says now
+before. On a row stopped on either code, on a sealed row whose pair the
+round could not judge, and on a sealed row whose resolution names nobody
+(a collision nobody answered, `ambiguous`, no verdict; RR1 of the review
+of the 0.26.0), the identity door writes neither *Username (UPN)* nor
+*Identity resolution* (decided on 2026-11-12): the register keeps the
+name carried out, and the channel does not move the seal itself. A
+revoked row whose version carried out is certain, on the instance and
+the project carried out, revokes the username carried out whatever the
+resolution says now
 ([`revocation_exits()`](https://ubesp-dctv.github.io/ubep.azure/reference/revocation_exits.md),
 decided on 2026-11-12): the way out of the register for an account
 renamed on Entra.
+
+**The account carried out is its identifier on Entra too**, decided on
+2026-11-12 (item 11 of the 0.27.0). The round writes `applied_entra_id`
+at a row's first execution, the `id` of the account of the sweep that
+holds the name served, through a door of its own, after the owner and
+before the seal; it believes the value from the channel's writes in the
+owners' log only
+([`log_channel_entra_id()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_channel_entra_id.md)).
+On every round, on a sealed row whose version carried out is certain and
+that does not leave by the item 12, the identifier is checked against
+the sweep
+([`entra_account_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_account_change.md)):
+the name carried out held by another account,
+`TRASPORTO_NOME_RIASSEGNATO` (not on a revoked row); nobody holding it
+and the account under another name, `TRASPORTO_ACCOUNT_RINOMINATO`. Both
+come after `DATO_COPPIA_CAMBIATA` and before
+`TRASPORTO_IDENTITA_CAMBIATA`, and stop the row as the rule of the pair
+does. A sealed row with no identifier gets it from the sweep, if the
+account that holds the name was born before the first seal of the newest
+run of executions of that name
+([`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md));
+born after, `TRASPORTO_NOME_RIASSEGNATO` on a row not revoked. The
+identifier only adds stops.
 
 **The oldest row of a pair keeps it whether the round serves it or
 not.** A row the round stops (held, blind, on its identity, on a pair

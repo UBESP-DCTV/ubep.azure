@@ -8,9 +8,9 @@ means a row in `redcap_user_information`, which `accounts` reads
 through
 [`report_server_reads()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_server_reads.md)),
 or a row in `redcap_user_rights`, which the whole-instance read of
-`state` carries: measured on 2026-11-12, seven productions out of eight
-hold names with rights and no account, people added to a project before
-their first sign-in.
+`state` carries: measured on 2026-11-12, most productions hold names
+with rights and no account, people added to a project before their first
+sign-in.
 
 ## Usage
 

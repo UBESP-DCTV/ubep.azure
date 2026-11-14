@@ -76,8 +76,7 @@ would have created the person and then told them for ever that their
 name is another person's.
 
 **No `jobTitle` and no `officeLocation`.** The first is a live mechanism
-and not a fossil — 2.828 accounts carry the serialized authorization,
-254 of them created in 2026 — so what has to be armed is the
-not-inheriting, and a guard does it. The second is the legacy carrier of
-the contact address: read for as long as accounts carry it, written
-never again.
+and not a fossil — accounts created this year still carry the serialized
+authorization — so what has to be armed is the not-inheriting, and a
+guard does it. The second is the legacy carrier of the contact address:
+read for as long as accounts carry it, written never again.

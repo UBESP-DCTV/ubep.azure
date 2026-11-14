@@ -13,7 +13,15 @@ its seal and its owner.
 ## Usage
 
 ``` r
-pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
+pair_change(
+  executed,
+  current,
+  target,
+  creating,
+  rewritten,
+  revoked = FALSE,
+  account = ""
+)
 ```
 
 ## Arguments
@@ -51,11 +59,16 @@ pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
 
   Whether the row asks for `revoked`.
 
+- account:
+
+  What the identifier on Entra says, `""` when it says nothing:
+  `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`.
+
 ## Value
 
-A list with `code`, one of the two codes or `""`, and `changed`, which
+A list with `code`, one of the four codes or `""`, and `changed`, which
 of `"server"`, `"project_id"` and `"person"` moved, or `"account"` for
-the second code.
+the other three.
 
 ## Details
 
@@ -72,12 +85,31 @@ at once what to do:
 
 - `TRASPORTO_IDENTITA_CAMBIATA`, for IT, decided on 2026-11-09 as well:
   the round would serve another account or create one while nobody wrote
-  the person in the row, so the account changed on Entra (renamed,
-  deleted, its name corrected). Nothing in the row explains it, and the
-  referent has nothing to undo.
+  the person in the row, so the account changed on Entra (renamed, on a
+  row with no identifier; deleted; its name corrected). Nothing in the
+  row explains it, and the referent has nothing to undo.
 
 The pair comes first: it is a change the referent made and can undo, and
 the account is looked at once it is back.
+
+**The account carried out is the identifier on Entra too**, decided on
+2026-11-12 (item 11 of the 0.27.0). Two codes more, for IT, read from
+`applied_entra_id` and handed in as `account`
+([`entra_account_change()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_account_change.md),
+[`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md)),
+after `DATO_COPPIA_CAMBIATA` and before `TRASPORTO_IDENTITA_CAMBIATA`,
+with `changed = "account"`:
+
+- `TRASPORTO_NOME_RIASSEGNATO`: the username carried out names now
+  another account, deleted and given again, or made again by hand under
+  the same name. The resolution may see nothing, since the name and the
+  contact are the same;
+
+- `TRASPORTO_ACCOUNT_RINOMINATO`: nobody carries the username carried
+  out, and the account carried out is on Entra under another one.
+
+The identifier only adds stops: one that matches lets nothing through
+that the rest of this function stops.
 
 Who the round would serve is the resolution's to say. A verdict that
 names nobody, `ambiguous` or a collision nobody answered, is left to the

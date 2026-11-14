@@ -51,9 +51,10 @@ The register, with `server`, `project_id` and `username` the ones
 executed, and four columns more: `username_registro`, the name the
 register holds; `nome_eseguito`, `registro` or `log`, where the name
 executed was read, `""` when it is not known; `nome_motivo`, why not:
-`log`, `""` when it is known; `revoca_eseguita`, `TRUE` on a revoked row
-whose state executed, in the verified version, is `revoked`: carried
-out, then touched, so that
+`log`, or `account` on a row stopped on `TRASPORTO_NOME_RIASSEGNATO`,
+whose name belongs now to another account, `""` when it is known;
+`revoca_eseguita`, `TRUE` on a revoked row whose state executed, in the
+verified version, is `revoked`: carried out, then touched, so that
 [`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md)
 leaves it out of `ferma`. A version not verified leaves it `FALSE`, the
 side that shows more.
