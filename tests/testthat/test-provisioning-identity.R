@@ -1559,9 +1559,10 @@ test_that("la risposta di REDCap non tocca un verdetto che non crea", {
 })
 
 
-# The reference the round used until the 0.27.0: one fold per element. The
-# vector form has to answer the same on every directory, and the tests below
-# say so on names that a fold has tripped on, not on a tidy one.
+# The references the round used until the 0.27.0: one fold per element, and one
+# `identity_normalize()` per row for the contacts. The vector forms have to
+# answer the same on every directory, and the tests below say so on names that
+# a fold has tripped on, not on a tidy one.
 reference_named <- function(directory, first_name, last_name) {
   wanted_first <- clean_string(as.character(first_name))
   wanted_last <- clean_string(as.character(last_name))
@@ -1574,6 +1575,17 @@ reference_named <- function(directory, first_name, last_name) {
       surnames == wanted_last &
       (!nzchar(givens) | givens == wanted_first)
   )
+}
+
+reference_contacts <- function(directory) {
+  lapply(seq_len(nrow(directory)), function(i) {
+    addresses <- identity_normalize(c(
+      directory[["otherMails"]][[i]],
+      directory[["officeLocation"]][[i]],
+      directory[["userPrincipalName"]][[i]]
+    ))
+    addresses[nzchar(addresses)]
+  })
 }
 
 hard_directory <- function() {
@@ -1652,4 +1664,21 @@ test_that("directory_named folds the directory whole, not once per row", {
   directory_named(directory, "Anna Maria", "Rossi")
 
   expect_lte(calls, 4L)
+})
+
+test_that("directory_contacts is the per-row rule, on hard frames", {
+  directory <- hard_directory()
+
+  expect_identical(directory_contacts(directory), reference_contacts(directory))
+  expect_identical(
+    directory_contacts(directory[0L, , drop = FALSE]),
+    reference_contacts(directory[0L, , drop = FALSE])
+  )
+
+  with_holes <- directory
+  with_holes[["officeLocation"]][2L] <- NA_character_
+  with_holes[["otherMails"]][5L] <- list(NULL)
+  expect_identical(
+    directory_contacts(with_holes), reference_contacts(with_holes)
+  )
 })

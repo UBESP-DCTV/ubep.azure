@@ -161,20 +161,38 @@ identity_stop_codes <- function(identity, errors = character(),
 #'
 #' @keywords internal
 directory_contacts <- function(directory) {
-  lapply(seq_len(nrow(directory)), function(i) {
-    addresses <- identity_normalize(c(
-      directory[["otherMails"]][[i]],
-      directory[["officeLocation"]][[i]],
-      # The UPN is read as a contact carrier too, and decision 12 is why: an
-      # address in the tenant's domain **is** a UPN, so an internal contact
-      # resolves by being found as one. Without this the second branch of that
-      # rule — fill the blank username from an internal contact and go on to
-      # confirm it — would have nothing to confirm against. It widens nothing
-      # for an external contact, which cannot equal an address in the domain.
-      directory[["userPrincipalName"]][[i]]
-    ))
-    addresses[nzchar(addresses)]
-  })
+  n <- nrow(directory)
+  other <- directory[["otherMails"]]
+
+  # One normalization for the whole directory, and the rows put back by index:
+  # a call per account is a call of the round per register row, and 7.700
+  # accounts made it the largest cost left once the names were folded whole.
+  # Inside a row the order is the one it always had, `otherMails` first, then
+  # `officeLocation`, then the UPN.
+  #
+  # The UPN is read as a contact carrier too, and decision 12 is why: an
+  # address in the tenant's domain **is** a UPN, so an internal contact
+  # resolves by being found as one. Without this the second branch of that
+  # rule -- fill the blank username from an internal contact and go on to
+  # confirm it -- would have nothing to confirm against. It widens nothing
+  # for an external contact, which cannot equal an address in the domain.
+  addresses <- identity_normalize(c(
+    unlist(other, use.names = FALSE),
+    directory[["officeLocation"]],
+    directory[["userPrincipalName"]]
+  ))
+  rows <- c(
+    rep(seq_len(n), lengths(other)),
+    seq_len(n),
+    seq_len(n)
+  )
+
+  kept <- nzchar(addresses)
+  keep_order <- order(rows[kept])
+  unname(split(
+    addresses[kept][keep_order],
+    factor(rows[kept][keep_order], levels = seq_len(n))
+  ))
 }
 
 
