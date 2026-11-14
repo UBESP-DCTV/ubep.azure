@@ -9559,3 +9559,370 @@ test_that("con un'altra riga ammessa la collisione su un nome noto arriva al ref
   expect_true(length(per_mario) > 0L)
   expect_true(anna %in% unlist(lapply(per_mario, `[[`, "to")))
 })
+
+
+# ---- Tempo massimo di registro e Graph nel giro (0.27.0, RT1) --------------
+
+# Un tempo scaduto come lo solleva httr2 quando libcurl si arrende.
+scade_ora <- function() {
+  stop(structure(
+    class = c("httr2_failure", "httr2_error", "rlang_error", "error",
+              "condition"),
+    list(message = "Timeout was reached", call = NULL)
+  ))
+}
+
+# I limiti che ogni richiesta del giro deve portare: le istanze cinque
+# minuti, il registro e Graph uno; dieci secondi per connettersi a tutti.
+limiti_attesi <- function(req) {
+  if (grepl("prefix=ubep_provisioning", req[["url"]], fixed = TRUE)) {
+    return(list(total = 300, connect = 10))
+  }
+  list(total = 60, connect = 10)
+}
+
+
+test_that("ogni richiesta di un giro ha un tempo massimo", {
+  # eval
+  # Due giri: uno che crea un account e uno che concede un diritto, cosi'
+  # passano dal filo lettura e scrittura del registro, spazzata e creazione
+  # su Graph, lettura e scrittura sull'istanza. La posta passa dal `mailer`,
+  # e il suo limite lo prova `mail_send()` nei test del client.
+  giro(
+    registro_doppio(record_json(list())), istanza_doppia(list()),
+    directory_vuota(), dry_run = FALSE, mailer = posta_accesa
+  )
+  del_primo <- inviate
+  expect_length(creazioni(), 1L)
+  giro(
+    registro_doppio(record_json(list())), istanza_che_scrive(),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+  expect_length(scritture(), 1L)
+  expect_true(length(importazioni()) >= 1L)
+  tutte <- c(del_primo, inviate)
+
+  # test
+  dove <- unique(vapply(tutte, host_di, ""))
+  expect_setequal(
+    dove, c("registro.example.org", "graph.example.org", "edc10.example.org",
+            "edc12.example.org")
+  )
+  for (req in tutte) {
+    atteso <- limiti_attesi(req)
+    expect_equal(
+      req[["options"]][["timeout_ms"]], atteso[["total"]] * 1000,
+      info = req[["url"]]
+    )
+    expect_equal(
+      req[["options"]][["connecttimeout"]], atteso[["connect"]],
+      info = req[["url"]]
+    )
+  }
+})
+
+
+# Una scrittura sul registro che il registro applica e la cui risposta si
+# perde (il rischio principale di RT1 nella bozza della 0.27.0). Il giro
+# scrive sul registro dopo aver mandato la posta, e ogni importazione
+# sovrascrive campi che il giro dopo ricalcola dallo stato dell'istanza: il
+# giro dopo deve convergere senza una seconda scrittura sull'istanza e senza
+# una seconda mail di accesso.
+
+# Un registro che ricorda: le importazioni del giro cambiano le righe che il
+# giro dopo esporta. Lo stesso registro passa da un giro all'altro; `...`
+# va a `registro_con_log()`.
+registro_vivo <- function(records, ...) {
+  dentro <- registro_con_log(records, ...)
+  righe <- jsonlite::fromJSON(records, simplifyVector = FALSE)
+  names(righe) <- vapply(
+    righe, function(r) as.character(r[["record_id"]]), character(1)
+  )
+  function(data) {
+    azione <- form_field_value(data[["action"]] %||% "")
+    contenuto <- form_field_value(data[["content"]] %||% "")
+    if (identical(azione, "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      for (r in sent) {
+        id <- as.character(r[["record_id"]])
+        campi <- setdiff(names(r), "record_id")
+        righe[[id]][campi] <<- r[campi] # nolint: assignment_linter.
+      }
+    }
+    if (identical(contenuto, "record") && identical(azione, "export")) {
+      return(as.character(jsonlite::toJSON(
+        unname(righe), auto_unbox = TRUE
+      )))
+    }
+    dentro(data)
+  }
+}
+
+# Davanti a `dentro`: la prima importazione che porta `campo` scade. Con
+# `applica` il registro l'ha applicata prima che la risposta si perdesse,
+# senza non l'ha ricevuta.
+registro_che_scade <- function(dentro, campo, applica) {
+  restano <- 1L
+  function(data) {
+    azione <- form_field_value(data[["action"]] %||% "")
+    if (identical(azione, "import") && restano > 0L) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (any(vapply(sent, function(r) campo %in% names(r), NA))) {
+        restano <<- 0L # nolint: assignment_linter.
+        if (applica) {
+          dentro(data)
+        }
+        scade_ora()
+      }
+    }
+    dentro(data)
+  }
+}
+
+# Un'istanza che concede quello che le si chiede, ne' piu' ne' meno: il
+# giro dopo trova il diritto com'e' stato chiesto e non ha niente da
+# scrivere. Anna gestisce il progetto 9003.
+istanza_che_concede <- function() {
+  concesso <- FALSE
+  function(data) {
+    if (identical(data[["operation"]], "apply") && isFALSE(data[["dry_run"]])) {
+      concesso <<- TRUE # nolint: assignment_linter.
+    }
+    righe <- list(list(user_rights = 1L))
+    if (concesso) {
+      righe <- c(righe, list(list(
+        username = "mario.rossi@ubep.unipd.it", role_name = "data entry",
+        user_rights = 0L
+      )))
+    }
+    do.call(istanza_doppia, righe)(data)
+  }
+}
+
+# La riga come il registro la tiene, dopo i giri.
+riga_nel_registro <- function(vivo) {
+  righe <- jsonlite::fromJSON(
+    vivo(list(content = "record", action = "export")),
+    simplifyVector = FALSE
+  )
+  Find(function(r) identical(as.character(r[["record_id"]]), "1"), righe)
+}
+
+# Il giro senza guasti: la riga come il registro la tiene alla fine.
+riga_di_riferimento <- function() {
+  vivo <- registro_vivo(record_json(list()))
+  giro(
+    vivo, istanza_che_concede(), dry_run = FALSE, mailer = posta_accesa,
+    at = "2026-08-14 03:00"
+  )
+  riga_nel_registro(vivo)
+}
+
+# Due giri sullo stesso registro e sulla stessa istanza: nel primo
+# l'importazione che porta `campo` scade, il secondo e' sano.
+due_giri_sul_registro <- function(campo, applica) {
+  vivo <- registro_vivo(record_json(list()))
+  istanza <- istanza_che_concede()
+  posta1 <- posta_raccolta()
+  primo <- giro(
+    registro_che_scade(vivo, campo, applica), istanza,
+    dry_run = FALSE, mailer = posta1[["mailer"]], at = "2026-08-14 03:00"
+  )
+  scritte1 <- length(scritture())
+  posta2 <- posta_raccolta()
+  secondo <- giro(
+    vivo, istanza, dry_run = FALSE, mailer = posta2[["mailer"]],
+    at = "2026-08-14 07:00"
+  )
+  list(
+    primo = primo, secondo = secondo, scritte1 = scritte1,
+    scritte2 = length(scritture()), posta1 = posta1, posta2 = posta2,
+    riga = riga_nel_registro(vivo)
+  )
+}
+
+
+test_that("un esito arrivato al registro senza risposta non si rimanda", {
+  # eval
+  rif <- riga_di_riferimento()
+  g <- due_giri_sul_registro("outcome", applica = TRUE)
+
+  # test
+  # Giro 1: la scrittura sull'istanza e la mail di accesso partono, poi la
+  # risposta del registro si perde. Il codice va in `errori`, e l'allarme
+  # `ubep-canale-esiti-non-scritti` suona anche se l'esito c'e': e' il costo
+  # accettato.
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$primo[["errori"]])
+  expect_equal(g$scritte1, 1L)
+  expect_length(accessi(g$posta1), 1L)
+  # Giro 2: trova l'esito che avrebbe scritto, non scrive sull'istanza e non
+  # manda niente; il registro tiene la riga del giro senza guasti.
+  expect_equal(esito_di(g$secondo, "1")[["outcome"]], "applied")
+  expect_equal(g$scritte2, 0L)
+  expect_length(g$posta2[["mandate"]](), 0L)
+  expect_length(g$secondo[["errori"]], 0L)
+  expect_equal(g$riga[["applied_seal"]], rif[["applied_seal"]])
+  expect_equal(g$riga[["outcome"]], rif[["outcome"]])
+})
+
+
+test_that("un esito che il registro non ha ricevuto si rimanda una volta", {
+  # eval
+  rif <- riga_di_riferimento()
+  g <- due_giri_sul_registro("outcome", applica = FALSE)
+
+  # test
+  # Il doppione che il disegno accetta, «a duplicate, never a loss»: la mail
+  # d'esito riparte, la mail di accesso no, e l'istanza non si riscrive.
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$primo[["errori"]])
+  expect_equal(g$scritte1, 1L)
+  expect_length(accessi(g$posta1), 1L)
+  expect_equal(g$scritte2, 0L)
+  expect_length(accessi(g$posta2), 0L)
+  expect_gte(length(g$posta2[["mandate"]]()), 1L)
+  expect_equal(esito_di(g$secondo, "1")[["outcome"]], "applied")
+  expect_length(g$secondo[["errori"]], 0L)
+  expect_equal(g$riga[["applied_seal"]], rif[["applied_seal"]])
+})
+
+
+test_that("un sigillo arrivato al registro senza risposta resta quello vero", {
+  # eval
+  rif <- riga_di_riferimento()
+  g <- due_giri_sul_registro("applied_seal", applica = TRUE)
+
+  # test
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$primo[["errori"]])
+  expect_equal(g$scritte1, 1L)
+  expect_equal(g$scritte2, 0L)
+  expect_length(g$posta2[["mandate"]](), 0L)
+  expect_length(g$secondo[["errori"]], 0L)
+  expect_equal(g$riga[["applied_seal"]], rif[["applied_seal"]])
+})
+
+
+test_that("un sigillo che il registro non ha ricevuto si scrive al giro dopo", {
+  # eval
+  rif <- riga_di_riferimento()
+  g <- due_giri_sul_registro("applied_seal", applica = FALSE)
+
+  # test
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$primo[["errori"]])
+  expect_equal(g$scritte1, 1L)
+  expect_equal(g$scritte2, 0L)
+  expect_length(accessi(g$posta2), 0L)
+  expect_equal(esito_di(g$secondo, "1")[["outcome"]], "applied")
+  expect_length(g$secondo[["errori"]], 0L)
+  expect_true(nzchar(rif[["applied_seal"]]))
+  expect_equal(g$riga[["applied_seal"]], rif[["applied_seal"]])
+})
+
+
+# Un registro che risponde a metadati e righe e poi non risponde piu': il
+# caso tipico di un aggiornamento del parco che trattiene le letture.
+registro_appeso_dopo_le_righe <- function(dentro) {
+  function(data) {
+    contenuto <- form_field_value(data[["content"]] %||% "")
+    azione <- form_field_value(data[["action"]] %||% "")
+    if (identical(contenuto, "metadata") ||
+          (identical(contenuto, "record") && identical(azione, "export"))) {
+      return(dentro(data))
+    }
+    scade_ora()
+  }
+}
+
+
+test_that("il registro appeso a meta' giro non trattiene il giro", {
+  # eval
+  vivo <- registro_vivo(record_json(list()))
+  istanza <- istanza_che_concede()
+  posta1 <- posta_raccolta()
+  primo <- giro(
+    registro_appeso_dopo_le_righe(vivo), istanza,
+    dry_run = FALSE, mailer = posta1[["mailer"]], at = "2026-08-14 03:00"
+  )
+  scritte1 <- length(scritture())
+  posta2 <- posta_raccolta()
+  secondo <- giro(
+    vivo, istanza, dry_run = FALSE, mailer = posta2[["mailer"]],
+    at = "2026-08-14 07:00"
+  )
+
+  # test
+  # Il giro ritorna, col codice del registro, e nel verso che non concede:
+  # senza il log non sa chi ha creato la riga, e non scrive sull'istanza. Il
+  # giro dopo, col registro sano, concede una volta sola.
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% primo[["errori"]])
+  expect_equal(scritte1, 0L)
+  expect_length(accessi(posta1), 0L)
+  expect_equal(esito_di(secondo, "1")[["outcome"]], "applied")
+  expect_length(scritture(), 1L)
+  expect_length(accessi(posta2), 1L)
+})
+
+
+
+# Il passaggio di proprietario che il campo mostra gia' si registra con due
+# scritture (vedi «un passaggio che il campo mostra gia' si registra con due
+# scritture»). Qui la prima, il proprietario di oggi, arriva al registro e la
+# risposta si perde, oppure il registro la rifiuta come nel test di prima;
+# poi un giro sano. `gestori` sono chi gestisce il progetto sull'istanza.
+passaggio_in_due_giri <- function(guasto, gestori) {
+  vivo <- registro_vivo(
+    record_json(utils::modifyList(
+      riga_cambiata(owned_by = bruno), list(approved_seal = sigillo_cambiata())
+    )),
+    storia = list(approvazione(anna), cambio(bruno), esecuzione())
+  )
+  istanza <- istanza_che_scrive(richiedenti = gestori)
+  restano <- 1L
+  primo <- giro(function(data) {
+    if (identical(form_field_value(data[["action"]]), "import") &&
+          restano > 0L) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (length(sent) > 0L && identical(sent[[1L]][["owned_by"]], anna)) {
+        restano <<- 0L # nolint: assignment_linter.
+        if (identical(guasto, "rifiuta")) {
+          return('{"error":"The field owned_by could not be saved"}')
+        }
+        vivo(data)
+        scade_ora()
+      }
+    }
+    vivo(data)
+  }, istanza, dry_run = FALSE)
+  secondo <- giro(vivo, istanza, dry_run = FALSE, at = "2026-08-14 07:00")
+  list(
+    primo = primo, esito2 = esito_di(secondo, "1"),
+    proprietario = riga_nel_registro(vivo)[["owned_by"]]
+  )
+}
+
+
+test_that("un passaggio arrivato a meta' senza risposta si perde come uno rifiutato", { # nolint: line_length_linter.
+  for (gestori in list(bruno, c(anna, bruno))) {
+    # eval
+    scaduto <- passaggio_in_due_giri("scade", gestori)
+    rifiutato <- passaggio_in_due_giri("rifiuta", gestori)
+
+    # test
+    # Il giro non scrive la seconda scrittura e lo dice nel record, con il
+    # codice della porta accanto. Il giro dopo trova nel registro il
+    # proprietario di oggi, come dopo un rifiuto, e decide come dopo un
+    # rifiuto: il passaggio e' perso, nel verso che non concede.
+    expect_true(all(
+      c("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE",
+        "TRASPORTO_PASSAGGIO_NON_REGISTRATO") %in% scaduto$primo[["errori"]]
+    ))
+    expect_equal(scaduto$proprietario, anna)
+    expect_equal(rifiutato$proprietario, anna)
+    expect_equal(scaduto$esito2, rifiutato$esito2)
+  }
+})

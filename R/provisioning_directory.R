@@ -166,6 +166,29 @@ directory_failure <- function(code, payload = NULL) {
 }
 
 
+#' Time limits of a call to Graph
+#'
+#' One minute for a page of the sweep and for a creation, and ten seconds to
+#' connect, the connection as for the module (`module_timeouts()`).
+#'
+#' The sweep measured on 2026-08-15 was 8 pages in 3.5 seconds, under half a
+#' second a page; a creation was never measured on its own. A page that runs
+#' out of time fails the whole sweep, `TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE`,
+#' and the round asks no instance. A creation that runs out of time may have
+#' made the account: it is `TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE` and
+#' unconfirmed, and the key and the welcome are counted lost, as for every
+#' creation without an answer. Without a limit the same creation held the
+#' round until systemd stopped it, with the key in the memory of the
+#' process and nothing counted.
+#'
+#' @return A list with `total` and `connect`, in seconds.
+#'
+#' @keywords internal
+directory_timeouts <- function() {
+  list(total = 60, connect = 10)
+}
+
+
 #' Fetch one page of the directory
 #'
 #' The answer is recognized by its shape and by its status, the way the
@@ -191,6 +214,9 @@ directory_page <- function(token, url) {
       # be spilled by printing it, by a condition carrying it, or by anything
       # that dumps a request while diagnosing a failed round.
       httr2::req_auth_bearer_token(token) |>
+      # A page that runs out of time fails the sweep like a network that is
+      # down: `directory_timeouts()`.
+      req_limits(directory_timeouts()) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
@@ -391,6 +417,10 @@ directory_create_user <- function(token, base_url, request, upn) {
       httr2::req_method("POST") |>
       httr2::req_auth_bearer_token(token) |>
       httr2::req_body_json(body, auto_unbox = TRUE) |>
+      # A creation that runs out of time is unconfirmed, below, like one
+      # whose network went down after the request left:
+      # `directory_timeouts()`.
+      req_limits(directory_timeouts()) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL

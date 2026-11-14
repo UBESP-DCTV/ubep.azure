@@ -63,13 +63,11 @@ module_call <- function(server,
         auto_unbox = TRUE
       ) |>
       # A time limit, which the units that run the round, the observer and
-      # the report do not set: they are oneshot with no start timeout, and
-      # an instance that takes the connection and never answers held them
-      # for good. Connecting gets the short limit and the whole call the
-      # long one, `module_timeouts()`. The connection limit after
-      # `req_timeout()`, which sets it back to libcurl's default.
-      httr2::req_timeout(limits[["total"]]) |>
-      httr2::req_options(connecttimeout = limits[["connect"]]) |>
+      # the report do not set: an instance that takes the connection and
+      # never answers held them until systemd stopped them, with no record.
+      # Connecting gets the short limit and the whole call the long one,
+      # `module_timeouts()`.
+      req_limits(limits) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
@@ -157,6 +155,36 @@ module_call <- function(server,
 #' @keywords internal
 module_timeouts <- function() {
   list(total = 300, connect = 10)
+}
+
+
+#' Put a time limit on a request
+#'
+#' One limit for the whole request and one for connecting, the connection
+#' taking in name resolution and the TLS handshake as libcurl counts it. The
+#' order is the point of having it written once: `httr2::req_timeout()` sets
+#' `connecttimeout` back to `0`, which is libcurl's default of 300 seconds,
+#' so the connection limit has to come after it. Found on 0.26.0, with the
+#' module.
+#'
+#' Every door of the package to a service goes through it: the module
+#' (`module_call()`), the register (`register_call()`), Graph
+#' (`directory_page()`, `directory_create_user()`) and the mail service
+#' (`mail_send()`). The values are each door's own, next to it. The one
+#' request left out is the reading of the suppressions (`suppression_read()`),
+#' which has had thirty seconds in all since 0.26.0; a total covers the
+#' connection too.
+#'
+#' @param req An `httr2` request.
+#' @param limits A list with `total` and `connect`, in seconds.
+#'
+#' @return The request, with `timeout_ms` and `connecttimeout` set.
+#'
+#' @keywords internal
+req_limits <- function(req, limits) {
+  req |>
+    httr2::req_timeout(limits[["total"]]) |>
+    httr2::req_options(connecttimeout = limits[["connect"]])
 }
 
 

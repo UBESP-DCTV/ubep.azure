@@ -890,3 +890,158 @@ test_that("libcurl conosce le opzioni del tempo massimo", {
     class = "httr2_failure"
   )
 })
+
+
+# Tempo massimo delle altre porte (0.27.0, RT1 della revisione dell'unita' T
+# della 0.26.0). Registro, Graph e posta non avevano limite: un servizio che
+# accetta la connessione e non risponde teneva il giro fino alle tre ore di
+# systemd, senza record, e le perdite di quel giro non erano contate.
+
+# Le quattro porte, ognuna con un argomento che basta a farla partire. Ogni
+# voce chiama la porta e ne restituisce l'esito.
+porte_dei_servizi <- list(
+  registro = function() {
+    register_call("registro.example.org", "t0ken", list(content = "metadata"))
+  },
+  pagina = function() {
+    directory_users("gr4ph", "graph.example.org/v1.0")
+  },
+  creazione = function() {
+    directory_create_user(
+      "gr4ph", "graph.example.org/v1.0",
+      list(
+        first_name = "Mario", last_name = "Rossi",
+        contact_email = "mario.rossi@example.org"
+      ),
+      "mario.rossi@ubep.unipd.it"
+    )
+  },
+  posta = function() {
+    mail_send(
+      "k3y", "canale@example.org", "anna.bianchi@example.org",
+      "Oggetto", "Corpo"
+    )
+  }
+)
+
+# Il codice che ogni porta dava gia' per una rete giu', prima della 0.27.0.
+codici_di_rete_giu <- c(
+  registro = "TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE",
+  pagina = "TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE",
+  creazione = "TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE",
+  posta = "TRASPORTO_POSTA_NON_RAGGIUNGIBILE"
+)
+
+rete_giu <- function(req) {
+  stop(structure(
+    class = c("httr2_failure", "httr2_error", "rlang_error", "error",
+              "condition"),
+    list(message = "Could not resolve host: registro.example.org", call = NULL)
+  ))
+}
+
+
+test_that("req_limits mette il totale e poi la connessione", {
+  # eval
+  req <- req_limits(
+    httr2::request("https://registro.example.org/api/"),
+    list(total = 60, connect = 10)
+  )
+
+  # test
+  # `req_timeout()` rimette `connecttimeout = 0`, cioe' i 300 secondi di
+  # libcurl: nell'ordine opposto la connessione resterebbe senza limite.
+  expect_equal(req[["options"]][["timeout_ms"]], 60000)
+  expect_equal(req[["options"]][["connecttimeout"]], 10)
+})
+
+
+test_that("registro, Graph e posta hanno un minuto e dieci secondi", {
+  # test
+  # Le misure e il perche' stanno accanto a ognuna.
+  for (limiti in list(register_timeouts(), directory_timeouts(),
+                      mail_timeouts())) {
+    expect_equal(limiti, list(total = 60, connect = 10))
+  }
+})
+
+
+test_that("ogni porta verso un servizio ha un tempo massimo", {
+  # eval
+  viste <- list()
+  httr2::with_mocked_responses(
+    function(req) {
+      viste[[length(viste) + 1L]] <<- req
+      httr2::response(status_code = 500L, body = charToRaw("{}"))
+    },
+    # La posta rifiutata lo dice sullo standard error.
+    suppressMessages(for (porta in porte_dei_servizi) porta())
+  )
+
+  # test
+  expect_length(viste, 4L)
+  for (req in viste) {
+    expect_equal(req[["options"]][["timeout_ms"]], 60000, info = req[["url"]])
+    expect_equal(req[["options"]][["connecttimeout"]], 10, info = req[["url"]])
+  }
+})
+
+
+test_that("un tempo scaduto e' in ogni porta il codice di una rete giu'", {
+  # eval
+  scaduti <- httr2::with_mocked_responses(
+    tempo_scaduto, lapply(porte_dei_servizi, function(porta) porta())
+  )
+  giu <- httr2::with_mocked_responses(
+    rete_giu, lapply(porte_dei_servizi, function(porta) porta())
+  )
+
+  # test
+  # Nessun codice nuovo: le regole d'allarme, la SOP e il rapporto conoscono
+  # gia' questi. Il tempo scaduto e la rete giu' danno lo stesso esito, campo
+  # per campo, e la creazione resta non confermata: la richiesta puo' essere
+  # arrivata, e l'account nato.
+  for (nome in names(porte_dei_servizi)) {
+    expect_equal(
+      scaduti[[nome]][["errors"]], codici_di_rete_giu[[nome]], info = nome
+    )
+    expect_false(scaduti[[nome]][["ok"]], info = nome)
+    expect_equal(scaduti[[nome]], giu[[nome]], info = nome)
+  }
+  expect_true(scaduti[["creazione"]][["unconfirmed"]])
+  expect_null(scaduti[["pagina"]][["users"]])
+})
+
+
+test_that("libcurl conosce le opzioni del tempo massimo, in ogni porta", {
+  # eval
+  # Come per il modulo: un'opzione che libcurl rifiuta sarebbe un errore
+  # prima della chiamata, letto come servizio irraggiungibile a ogni giro.
+  skip_on_cran()
+  piccoli <- function() list(total = 3, connect = 1)
+  local_mocked_bindings(
+    register_timeouts = piccoli,
+    directory_timeouts = piccoli,
+    mail_timeouts = piccoli
+  )
+  viste <- list()
+  httr2::with_mocked_responses(
+    function(req) {
+      viste[[length(viste) + 1L]] <<- req
+      httr2::response(status_code = 500L, body = charToRaw("{}"))
+    },
+    # La posta rifiutata lo dice sullo standard error.
+    suppressMessages(for (porta in porte_dei_servizi) porta())
+  )
+
+  # test
+  expect_length(viste, 4L)
+  for (req in viste) {
+    expect_equal(req[["options"]][["timeout_ms"]], 3000)
+    expect_equal(req[["options"]][["connecttimeout"]], 1)
+    expect_error(
+      httr2::req_perform(httr2::req_url(req, "https://127.0.0.1:1/")),
+      class = "httr2_failure"
+    )
+  }
+})
