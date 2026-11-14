@@ -35,7 +35,9 @@ The register, with \code{server}, \code{project_id} and \code{username} the ones
 executed, and four columns more: \code{username_registro}, the name the
 register holds; \code{nome_eseguito}, \code{registro} or \code{log}, where the name
 executed was read, \code{""} when it is not known; \code{nome_motivo}, why not:
-\code{log}, \code{""} when it is known; \code{revoca_eseguita}, \code{TRUE} on a revoked
+\code{log}, or \code{account} on a row stopped on \code{TRASPORTO_NOME_RIASSEGNATO},
+whose name belongs now to another account, \code{""} when it is known;
+\code{revoca_eseguita}, \code{TRUE} on a revoked
 row whose state executed, in the verified version, is \code{revoked}:
 carried out, then touched, so that \code{report_scope()} leaves it out of
 \code{ferma}. A version not verified leaves it \code{FALSE}, the side that shows

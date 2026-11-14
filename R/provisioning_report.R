@@ -605,7 +605,9 @@ report_scope <- function(register) {
 #'   executed, and four columns more: `username_registro`, the name the
 #'   register holds; `nome_eseguito`, `registro` or `log`, where the name
 #'   executed was read, `""` when it is not known; `nome_motivo`, why not:
-#'   `log`, `""` when it is known; `revoca_eseguita`, `TRUE` on a revoked
+#'   `log`, or `account` on a row stopped on `TRASPORTO_NOME_RIASSEGNATO`,
+#'   whose name belongs now to another account, `""` when it is known;
+#'   `revoca_eseguita`, `TRUE` on a revoked
 #'   row whose state executed, in the verified version, is `revoked`:
 #'   carried out, then touched, so that `report_scope()` leaves it out of
 #'   `ferma`. A version not verified leaves it `FALSE`, the side that shows
@@ -664,6 +666,20 @@ report_executed_register <- function(register, logs, creators,
           !is.null(executed) &&
           identical(executed[["row"]][["request_status"]], "revoked")) {
       out[["revoca_eseguita"]][[i]] <- TRUE
+      next
+    }
+
+    # A row stopped because its username names another account now (item 11
+    # of the 0.27.0): the register holds the name carried out, but that name
+    # is the new holder's, and their first sign-in and their account would
+    # be read as the person's. The name is not asked about anywhere.
+    codes <- sub(":.*$", "", trimws(strsplit(
+      field("outcome_detail")[[i]], ",", fixed = TRUE
+    )[[1]]))
+    if ("TRASPORTO_NOME_RIASSEGNATO" %in% codes) {
+      out[["username"]][[i]] <- ""
+      out[["nome_eseguito"]][[i]] <- ""
+      out[["nome_motivo"]][[i]] <- "account"
       next
     }
 

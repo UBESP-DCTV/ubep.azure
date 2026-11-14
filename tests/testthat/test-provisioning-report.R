@@ -5856,3 +5856,46 @@ test_that("the mail to IT names a referent the mail service suppresses", {
     testo[["en"]], fixed = TRUE
   )))
 })
+
+
+test_that("una riga ferma sul nome riassegnato e' fra le ferme senza il nome eseguito", { # nolint: line_length_linter.
+  # eval
+  # Item 11 of the 0.27.0: the seal did not move, so the register holds the
+  # name carried out, and that name belongs now to another account. Its
+  # first sign-in and its account are somebody else's.
+  registro <- registro_di(
+    intatta(record_id = "45", username = elena, first_name = "Elena",
+            last_name = "Supposta", outcome = "transport_error",
+            outcome_detail = "TRASPORTO_NOME_RIASSEGNATO")
+  )
+  logs <- list(
+    log_eseguita("45", elena, sigillo = registro[["applied_seal"]][[1L]])
+  )
+  eseguito <- report_executed_register(
+    registro, logs, referente, approvers = character(),
+    channel_account = canale
+  )
+  rapporto <- report_assemble(
+    report_rows(eseguito, referente, list("2026-08-03 23:03"), novembre()),
+    rubrica_mensile(), novembre(),
+    servers = list(edc10 = server_letto(entrata_su(elena))),
+    held = report_held_rows(eseguito, owners = referente)
+  )
+  testo <- parti(report_it_message(rapporto[["it"]], novembre()))
+
+  # test
+  expect_equal(eseguito[["username"]], "")
+  expect_equal(eseguito[["nome_eseguito"]], "")
+  expect_equal(eseguito[["nome_motivo"]], "account")
+  expect_equal(eseguito[["username_registro"]], elena)
+  expect_length(unlist(report_server_asks(eseguito)), 0L)
+  expect_true(any(grepl(
+    "Richieste ferme con un accesso eseguito (1)", testo[["it"]],
+    fixed = TRUE
+  )))
+  riga <- grep("Richiesta 45:", testo[["it"]], value = TRUE, fixed = TRUE)
+  expect_length(riga, 1L)
+  expect_match(riga, "TRASPORTO_NOME_RIASSEGNATO", fixed = TRUE)
+  expect_false(grepl(elena, riga, fixed = TRUE))
+  expect_false(grepl("entrata", riga, fixed = TRUE))
+})
