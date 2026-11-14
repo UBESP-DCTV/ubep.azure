@@ -10580,3 +10580,41 @@ test_that("l'approvazione del proprietario col sigillo chiesto passa al giro dop
     as.character(secondo[["esiti"]][["outcome_detail"]]), "^DATO_"
   )
 })
+
+
+# ---- A simulated round and the fill (RE2) ----
+
+# From the review of the unit E of the 0.27.0 (REx3): a sealed row, intact,
+# with no identifier, whose account was born before the seal. A real round
+# writes the identifier the fill finds; a simulated one writes nothing.
+giro_re2 <- function(dry_run) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(
+        eseguita_row(applied_seal = sigillo_eseguito())
+      )),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(graph_user(id = id_a)),
+    dry_run = dry_run, mailer = posta_accesa
+  )
+}
+
+
+test_that("il giro simulato non scrive l'id che il riempimento troverebbe (REx3)", { # nolint: line_length_linter.
+  # eval
+  giro_re2(dry_run = TRUE)
+
+  # test
+  expect_null(entra_scritti())
+})
+
+
+test_that("lo stesso giro vero scrive l'id che il riempimento trova (REx3-controllo)", { # nolint: line_length_linter.
+  # eval
+  giro_re2(dry_run = FALSE)
+
+  # test
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
+})
