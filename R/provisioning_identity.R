@@ -187,6 +187,16 @@ directory_contacts <- function(directory) {
     seq_len(n)
   )
 
+  # The addresses and the rows they belong to are two vectors built apart, and
+  # only their lengths hold them together. A column that is not there, or a
+  # cell that is not a flat vector, would make them differ and put an address
+  # on a row that is not its own: a contact found on the wrong account is the
+  # failure this resolution fears most, so it stops instead.
+  stopifnot(
+    "directory_contacts(): addresses and rows are out of step" =
+      length(addresses) == length(rows)
+  )
+
   kept <- nzchar(addresses)
   keep_order <- order(rows[kept])
   unname(split(

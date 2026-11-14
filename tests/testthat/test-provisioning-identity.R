@@ -1704,3 +1704,23 @@ test_that("directory_contacts is the per-row rule, on hard frames", {
     directory_contacts(with_holes), reference_contacts(with_holes)
   )
 })
+
+test_that("directory_contacts stops on a frame it cannot line up", {
+  # Shapes `directory_frame()` does not produce. The row index is built apart
+  # from the addresses, and what the per-row rule did here was to leave every
+  # address on its own row; the vector form must stop, not hand an address to
+  # the next account.
+  directory <- hard_directory()
+
+  no_office <- directory
+  no_office[["officeLocation"]] <- NULL
+  expect_error(directory_contacts(no_office))
+
+  no_other <- directory
+  no_other[["otherMails"]] <- NULL
+  expect_error(directory_contacts(no_other))
+
+  nested <- directory
+  nested[["otherMails"]][[2L]] <- list("a@x.org", NULL)
+  expect_error(directory_contacts(nested), "out of step")
+})
