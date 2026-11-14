@@ -9759,3 +9759,42 @@ test_that("la revoca chiusa su una persona assente si scrive ancora, col nome vu
   expect_equal(identita_della_riga("1")[["username"]], "")
   expect_equal(identita_della_riga("1")[["identity"]], "absent")
 })
+
+
+# ---- A sealed row whose seal field was emptied (RN2, 0.27.0) ----
+
+# Ported from the review of the 0.26.0 (`revisione-nome/
+# test-zz-revisione-nome.R`, RN2). A row the channel carried out and sealed
+# (the seal in the log), whose `applied_seal` field an import emptied, with
+# the person gone from Entra and the old login still known to REDCap. Step
+# 3b picks its candidates by the field, so the row is asked, becomes a
+# collision with the .2 and creates nobody: on the 0.26.0 `pair_change()`
+# no longer stopped it on the identity changed, and the door wrote the
+# proposal on a row carried out.
+test_that("RN2: una riga sigillata dal canale col campo svuotato resta sull'identita' cambiata", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(applied_seal = ""),
+    directory = directory_vuota(),
+    istanza = istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta_accesa, copy_to = "it@example.org"
+  )
+  scritte <- identita_scritte()
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_false(
+    !is.null(scritte) &&
+      any(scritte[["username"]] == "mario.rossi.2@ubep.unipd.it")
+  )
+  expect_length(creazioni(), 0L)
+  expect_length(scritture(), 0L)
+})
+

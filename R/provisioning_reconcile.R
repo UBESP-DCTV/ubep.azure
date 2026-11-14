@@ -953,6 +953,14 @@ provisioning_reconcile <- function(register_url,
   # nothing written on the instance, nobody created, no new seal and the
   # same owner. Rows never carried out are not concerned.
   #
+  # RN2 of the review of the 0.26.0: a row the channel sealed whose field an
+  # import emptied is a candidate of step 3b, and a composed name free on
+  # Entra and known to REDCap makes it a collision, which creates nobody. Its
+  # first verdict was `absent`: the person carried out is gone from Entra,
+  # and for the rule of the pair a person to create on a row carried out is
+  # somebody else, `TRASPORTO_IDENTITA_CAMBIATA` as in the 0.25.0.
+  reborn <- candidates & nzchar(sealed) & first_verdicts == "absent"
+
   shifts <- lapply(seq_along(record_ids), function(i) {
     if (is.null(executed_pair[[i]]) || blind[[i]] || exiting[[i]]) {
       return(list(code = "", changed = character()))
@@ -986,7 +994,7 @@ provisioning_reconcile <- function(register_url,
     pair_change(
       executed_pair[[i]], register[i, , drop = FALSE],
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
-      creating = creating[[i]] && !unheard[[i]],
+      creating = (creating[[i]] && !unheard[[i]]) || reborn[[i]],
       rewritten = rewritten,
       revoked = trimws(as.character(register[["request_status"]][[i]])) %in%
         "revoked"
