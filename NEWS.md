@@ -232,8 +232,8 @@ holds, as a revocation does.
   answered held the round for good, and since a name REDCap knows counts as
   taken the round asks every production, those without rows too. Five
   minutes for the whole call and thirty seconds to connect
-  (`module_timeouts()`); the observer reads the whole fleet in about 75
-  seconds. A call that runs out of time is `TRASPORTO_NON_RAGGIUNGIBILE`, as
+  (`module_timeouts()`); the observer reads the whole fleet well within
+  five minutes. A call that runs out of time is `TRASPORTO_NON_RAGGIUNGIBILE`, as
   before. On a write it does not mean that nothing was written: the row
   stays unsealed and the next round decides from the instance's state, so
   nothing is granted twice; as with a write the read-back does not confirm,

@@ -165,8 +165,9 @@ directory_contacts <- function(directory) {
   other <- directory[["otherMails"]]
 
   # One normalization for the whole directory, and the rows put back by index:
-  # a call per account is a call of the round per register row, and 7.700
-  # accounts made it the largest cost left once the names were folded whole.
+  # a call per account is a call of the round per register row, and a
+  # directory of thousands of accounts made it the largest cost left once
+  # the names were folded whole.
   # Inside a row the order is the one it always had, `otherMails` first, then
   # `officeLocation`, then the UPN.
   #
@@ -306,8 +307,8 @@ directory_address <- function(values) {
 #' own.
 #'
 #' `mailbox` is the account's `mail`, when it carries one: Exchange writes the
-#' primary address there when it gives the account a mailbox, and on about
-#' 6.400 of the 7.700 accounts it is empty. The UPN does not count as one.
+#' primary address there when it gives the account a mailbox, and on most
+#' accounts it is empty. The UPN does not count as one.
 #'
 #' `external` is the first address the account carries outside the domain:
 #' the first of `otherMails`, otherwise `officeLocation`, the historical

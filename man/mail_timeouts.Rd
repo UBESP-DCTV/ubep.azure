@@ -15,8 +15,8 @@ for the module (\code{module_timeouts()}).
 }
 \details{
 The service answers as soon as it has queued the message. The sending
-was never measured on its own; the readings of the suppressions, on the
-same service, fit in a report that lasts seconds. Every message costs its
+was never timed on its own; the readings of the suppressions, on the
+same service, fit in a short report. Every message costs its
 own wait, so a service that hangs costs a round a minute a message: as
 many minutes as rows changed together, plus the keys, the welcomes and
 the access messages.

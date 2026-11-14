@@ -14,8 +14,8 @@ One minute for a page of the sweep and for a creation, and ten seconds to
 connect, the connection as for the module (\code{module_timeouts()}).
 }
 \details{
-A page of the sweep, as measured, takes under half a second; a creation
-was never measured on its own. A page that runs
+A page of the sweep takes a fraction of a second; a creation was never
+timed on its own. A page that runs
 out of time fails the whole sweep, \code{TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE},
 and the round asks no instance. A creation that runs out of time may have
 made the account: it is \code{TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE} and

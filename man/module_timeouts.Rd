@@ -17,10 +17,9 @@ counts it.
 \details{
 The whole call is the longest thing the module is asked: the read of
 \code{state} of a whole instance, which step 3b of the round makes on every
-production, and a write of many rows. Measured on 2026-11-10 and
-2026-11-11, the observer read all nine instances it reaches whole, about
-18,450 pairs, Key Vault included, in about 75 seconds; the largest
-instance alone took less. Five minutes is four times the whole fleet. A
+production, and a write of many rows. The observer reads the whole of
+every instance it reaches, Key Vault included, well within five minutes,
+so only a call that has stopped answering reaches the limit. A
 write that runs out of time may have been carried out, so the limit errs
 long rather than short: a write too slow for it is a row that converges
 one round later, and its access message is lost (see
@@ -32,8 +31,8 @@ Connecting does nothing on the instance, so a short limit costs no write.
 Ten seconds holds for every instance, benches and productions alike. A
 bench that is switched off does not answer the connection, and the
 observer, which reads every instance one after the other, waits the whole
-limit for each: the thirty seconds of 0.26.0 made it last about three
-times as long as up to 0.25.0, when nobody set the limit and libcurl's R
+limit for each: the thirty seconds of 0.26.0 made it last several times
+as long as up to 0.25.0, when nobody set the limit and libcurl's R
 package put in ten seconds of its own. Ten seconds brings that back. A
 whole call to a production that is on, the connection and the handshake
 included, takes a fraction of a second, well under the limit; a limit

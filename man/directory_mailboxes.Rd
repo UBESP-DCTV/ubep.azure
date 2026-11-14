@@ -33,8 +33,8 @@ own.
 }
 \details{
 \code{mailbox} is the account's \code{mail}, when it carries one: Exchange writes the
-primary address there when it gives the account a mailbox, and on about
-6.400 of the 7.700 accounts it is empty. The UPN does not count as one.
+primary address there when it gives the account a mailbox, and on most
+accounts it is empty. The UPN does not count as one.
 
 \code{external} is the first address the account carries outside the domain:
 the first of \code{otherMails}, otherwise \code{officeLocation}, the historical
