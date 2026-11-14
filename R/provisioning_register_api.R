@@ -62,6 +62,12 @@ register_call <- function(url, token, params, writes = FALSE) {
 
   response <- tryCatch(
     request |>
+      # A register that takes the connection and never answers held the
+      # round until systemd stopped it, with no record. A call that runs out
+      # of time is `TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE`, like a network
+      # that is down, and on a write it does not say that nothing was
+      # written: see `register_timeouts()`.
+      req_limits(register_timeouts()) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
@@ -108,6 +114,42 @@ register_call <- function(url, token, params, writes = FALSE) {
   }
 
   list(ok = TRUE, errors = character(), payload = payload)
+}
+
+
+#' Time limits of a call to the register
+#'
+#' One minute for a call and ten seconds to connect, the connection as for
+#' the module (`module_timeouts()`).
+#'
+#' The register lives on a REDCap instance like the others, and an update of
+#' the fleet, a table change that holds the readings, is the typical case of
+#' a connection taken and no answer. Its calls are short: as measured, a
+#' read of the event log takes a fraction of a second, and the whole report,
+#' which reads the rows and the log, a few seconds. A minute is hundreds of
+#' times the read of the log.
+#'
+#' Not the five minutes of the module, because the register is asked many
+#' times in a round and every question costs its own wait. A register that
+#' hangs after the round has read the rows makes it wait at most seven
+#' times, plus one for every row whose log is read on its own, and the
+#' report twice plus one per row: with five minutes the round would reach
+#' the three hours of its unit with 29 such rows, and the report its hour
+#' with 10; with one minute the report reaches it with 58.
+#'
+#' A write that runs out of time may have been carried out, and the answer
+#' be what was lost. The round writes to the register after the mail
+#' ("send first, write after", see `provisioning_reconcile()`), and the next
+#' round computes again what the register is told from the instances'
+#' state, so nothing is granted twice. What it costs: the code goes into
+#' `errori` and the alarm on outcomes not written sounds when the write had
+#' arrived, or an outcome message is sent twice when it had not.
+#'
+#' @return A list with `total` and `connect`, in seconds.
+#'
+#' @keywords internal
+register_timeouts <- function() {
+  list(total = 60, connect = 10)
 }
 
 

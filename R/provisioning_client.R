@@ -62,14 +62,11 @@ module_call <- function(server,
         ),
         auto_unbox = TRUE
       ) |>
-      # A time limit, which the units that run the round, the observer and
-      # the report do not set: they are oneshot with no start timeout, and
-      # an instance that takes the connection and never answers held them
-      # for good. Connecting gets the short limit and the whole call the
-      # long one, `module_timeouts()`. The connection limit after
-      # `req_timeout()`, which sets it back to libcurl's default.
-      httr2::req_timeout(limits[["total"]]) |>
-      httr2::req_options(connecttimeout = limits[["connect"]]) |>
+      # A time limit: without it an instance that takes the connection and
+      # never answers would hold the round, the observer or the report until
+      # systemd stopped them, with no record. Connecting gets the short limit
+      # and the whole call the long one, `module_timeouts()`.
+      req_limits(limits) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
@@ -120,7 +117,7 @@ module_call <- function(server,
 
 #' Time limits of a call to the module
 #'
-#' Five minutes for the whole call and thirty seconds to connect, the
+#' Five minutes for the whole call and ten seconds to connect, the
 #' connection taking in name resolution and the TLS handshake as libcurl
 #' counts it.
 #'
@@ -138,14 +135,54 @@ module_call <- function(server,
 #' for every batch it is sent, one per project.
 #'
 #' Connecting does nothing on the instance, so a short limit costs no write.
-#' Thirty seconds is far above a connection inside the network and well
-#' below libcurl's default of 300 seconds.
+#' Ten seconds holds for every instance, benches and productions alike. A
+#' bench that is switched off does not answer the connection, and the
+#' observer, which reads every instance one after the other, waits the whole
+#' limit for each: the thirty seconds of 0.26.0 made it last about three
+#' times as long as up to 0.25.0, when nobody set the limit and libcurl's R
+#' package put in ten seconds of its own. Ten seconds brings that back. A
+#' whole call to a production that is on, the connection and the handshake
+#' included, takes a fraction of a second, well under the limit; a limit
+#' too short would read a production that is on as
+#' `TRASPORTO_NON_RAGGIUNGIBILE`, which is why it does not go lower. Only
+#' the connection is shorter: what PHP does keeps the five minutes, benches
+#' included.
 #'
 #' @return A list with `total` and `connect`, in seconds.
 #'
 #' @keywords internal
 module_timeouts <- function() {
-  list(total = 300, connect = 30)
+  list(total = 300, connect = 10)
+}
+
+
+#' Put a time limit on a request
+#'
+#' One limit for the whole request and one for connecting, the connection
+#' taking in name resolution and the TLS handshake as libcurl counts it. The
+#' order is the point of having it written once: `httr2::req_timeout()` sets
+#' `connecttimeout` back to `0`, which is libcurl's default of 300 seconds,
+#' so the connection limit has to come after it. Found on 0.26.0, with the
+#' module.
+#'
+#' Every door of the package to a service goes through it: the module
+#' (`module_call()`), the register (`register_call()`), Graph
+#' (`directory_page()`, `directory_create_user()`) and the mail service
+#' (`mail_send()`). The values are each door's own, next to it. The one
+#' request left out is the reading of the suppressions (`suppression_read()`),
+#' which has had thirty seconds in all since 0.26.0; a total covers the
+#' connection too.
+#'
+#' @param req An `httr2` request.
+#' @param limits A list with `total` and `connect`, in seconds.
+#'
+#' @return The request, with `timeout_ms` and `connecttimeout` set.
+#'
+#' @keywords internal
+req_limits <- function(req, limits) {
+  req |>
+    httr2::req_timeout(limits[["total"]]) |>
+    httr2::req_options(connecttimeout = limits[["connect"]])
 }
 
 

@@ -1612,6 +1612,33 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 }
 
 
+#' Time limits of a message to the mail service
+#'
+#' One minute for a message and ten seconds to connect, the connection as
+#' for the module (`module_timeouts()`).
+#'
+#' The service answers as soon as it has queued the message. The sending
+#' was never measured on its own; the readings of the suppressions, on the
+#' same service, fit in a report that lasts seconds. Every message costs its
+#' own wait, so a service that hangs costs a round a minute a message: as
+#' many minutes as rows changed together, plus the keys, the welcomes and
+#' the access messages.
+#'
+#' A message that runs out of time may have been accepted. It is
+#' `TRASPORTO_POSTA_NON_RAGGIUNGIBILE`, like a service that cannot be
+#' reached, and is never sent a second time in the same round, since a
+#' transport that failed may have failed after the service took the
+#' message: an outcome is not written and goes again next round, and a key,
+#' a welcome or an access message is counted lost even if it left.
+#'
+#' @return A list with `total` and `connect`, in seconds.
+#'
+#' @keywords internal
+mail_timeouts <- function() {
+  list(total = 60, connect = 10)
+}
+
+
 #' Hand one message to the mail service
 #'
 #' REDCap on the register's instance does not send over SMTP: it sends through
@@ -1680,6 +1707,9 @@ mail_send <- function(api_key,
       httr2::req_method("POST") |>
       httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
       httr2::req_body_json(payload, auto_unbox = TRUE) |>
+      # A message that runs out of time is a service that cannot be reached:
+      # `mail_timeouts()`.
+      req_limits(mail_timeouts()) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
     error = function(e) NULL
