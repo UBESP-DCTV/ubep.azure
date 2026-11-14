@@ -131,19 +131,22 @@ register_call <- function(url, token, params, writes = FALSE) {
 #'
 #' Not the five minutes of the module, because the register is asked many
 #' times in a round and every question costs its own wait. A register that
-#' hangs after the round has read the rows makes it wait at most seven
-#' times, plus one for every row whose log is read on its own, and the
-#' report twice plus one per row: with five minutes the round would reach
-#' the three hours of its unit with 29 such rows, and the report its hour
-#' with 10; with one minute the report reaches it with 58.
+#' hangs after the round has read the rows makes it wait at most nine
+#' times (the log of the creations, the log of the owners, the identities,
+#' the outcome, the owner twice, the Entra account twice, the seals), plus
+#' one for every row whose log is read on its own, and the report twice plus
+#' one per row: with five minutes the round would reach the three hours of
+#' its unit with 27 such rows, and the report its hour with 10; with one
+#' minute the report reaches it with 58.
 #'
 #' A write that runs out of time may have been carried out, and the answer
 #' be what was lost. The round writes to the register after the mail
 #' ("send first, write after", see `provisioning_reconcile()`), and the next
 #' round computes again what the register is told from the instances'
 #' state, so nothing is granted twice. What it costs: the code goes into
-#' `errori` and the alarm on outcomes not written sounds when the write had
-#' arrived, or an outcome message is sent twice when it had not.
+#' `errori` and the alarm on outcomes not written sounds, whether or not the
+#' write had arrived; when it had not, the next round sends the outcome
+#' message again.
 #'
 #' @return A list with `total` and `connect`, in seconds.
 #'

@@ -16,7 +16,8 @@ register. The identity door leaves alone a sealed row that names nobody.
   (`log_channel_entra_id()`), as it does `owned_by`. The door is not called
   on a simulated round, nor without the channel's account or the owners'
   log. A value the field shows and the log does not hold is written twice,
-  empty and then the value; a write refused gives
+  empty and then the value. A write of the `id`, the only one or either of
+  the two, that is refused or runs out of time gives
   `TRASPORTO_ENTRA_ID_NON_REGISTRATO` in the round's `errori`, which stops
   nothing, and the next round writes it again. A value a referent imports is
   not believed, and the round writes its own back. The rows carried out
@@ -56,8 +57,9 @@ register. The identity door leaves alone a sealed row that names nobody.
   before. Such a row asks for the seal of the name carried out, which is the
   row the register keeps, so that the approval of its owner passes (RE1); its
   message says that name on the line of the resolved username instead of
-  "not yet established" or the proposal, and no longer gives the proposal as
-  the account found.
+  "not yet established" or the proposal. On a row moved that names nobody,
+  `TRASPORTO_IDENTITA_CAMBIATA` says "Account found now: none" and no longer
+  gives the proposal as the account found.
 
 * **A row carried out whose seal field was emptied, with its person gone
   from Entra, stops on `TRASPORTO_IDENTITA_CAMBIATA` again.** Decided on
@@ -88,14 +90,15 @@ register. The identity door leaves alone a sealed row that names nobody.
   asks no instance), `TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE` (unconfirmed,
   the key counted lost) and `TRASPORTO_POSTA_NON_RAGGIUNGIBILE`. The reading
   of the suppressions keeps its thirty seconds in all. A write to the
-  register that arrived and whose answer was lost sounds the alarm on
-  outcomes not written, or sends an outcome message twice when it had not
-  arrived; the next round computes the register again from the instances and
-  grants nothing twice.
+  register that runs out of time puts its code in `errori` and sounds the
+  alarm on outcomes not written, whether or not it had arrived; if it had
+  not, the next round also sends the outcome message again. The next round
+  computes the register from the instances and grants nothing twice.
 
 * **A passage of a row to a new owner written once, that does not arrive,
-  is reported.** Decided on 2026-11-14 (review of the time limits). A passage written in one write, with the owner's field already
-  holding the old owner, that was refused or ran out of time gave only the
+  is reported.** Decided on 2026-11-14 (review of the time limits). A passage
+  written in one write, with the owner's field already holding the old
+  owner, that was refused or ran out of time gave only the
   code of the door: it gives now also `TRASPORTO_PASSAGGIO_NON_REGISTRATO`,
   as the double write did. The passage is lost as before, and IT warns the
   new owner.

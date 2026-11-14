@@ -64,9 +64,9 @@ another project is a new request, and this one is revoked, its fields
 back first;
 \item \code{TRASPORTO_IDENTITA_CAMBIATA}, for IT, decided on 2026-11-09 as well: the
 round would serve another account or create one while nobody wrote the
-person in the row, so the account changed on Entra (renamed, deleted,
-its name corrected). Nothing in the row explains it, and the referent has
-nothing to undo.
+person in the row, so the account changed on Entra (renamed, on a row
+with no identifier; deleted; its name corrected). Nothing in the row
+explains it, and the referent has nothing to undo.
 }
 
 The pair comes first: it is a change the referent made and can undo, and

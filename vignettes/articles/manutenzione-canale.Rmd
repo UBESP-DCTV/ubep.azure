@@ -450,9 +450,10 @@ Il proprietario si legge con **una sola chiamata per giro**,
 vecchio di qualunque finestra, e la riga tornerebbe al suo creatore. Il costo è
 che quel log contiene creazioni, modifiche e cancellazioni di tutto il registro,
 e **cresce con il traffico**: più richieste, più modifiche, più risposta a ogni
-giro. Si chiede solo se una riga è da giudicare o è cambiata dopo
-l'applicazione, e solo dopo il log delle creazioni, da cui il proprietario
-ripiega; ma basta una riga attiva da giudicare, quindi in pratica a ogni giro.
+giro. Si chiede se una riga è da giudicare, è cambiata dopo l'applicazione o
+porta un sigillo (dalla 0.27.0: serve all'`id` dell'account su Entra), e solo
+dopo il log delle creazioni, da cui il proprietario ripiega; in pratica a ogni
+giro.
 
 **`applied_entra_id` lo scrive solo il canale, e il suo valore non si crede**,
 dalla 0.27.0. Dice a quale account su Entra il canale ha dato l'accesso, e sul
@@ -488,8 +489,8 @@ legge dal log il vecchio proprietario e la riga chiede le approvazioni a lui. Il
 corpo rifiutato va negli `errori` del record, ed è lì che IT lo trova; l'esito è
 già partito, e il nuovo proprietario ha già letto che la riga è sua. Per i casi
 in cui un passaggio o un sigillo non entra nel log c'è un codice a parte (più
-sotto, «Quattro codici del proprietario, del sigillo e dell'account su Entra»). Senza l'account del canale
-configurato la porta non viene chiamata.
+sotto, «Quattro codici del proprietario, del sigillo e dell'account su
+Entra»). Senza l'account del canale configurato la porta non viene chiamata.
 
 **L'account su Entra va dopo il proprietario e prima del sigillo.** L'`id` si
 scrive alla prima esecuzione, cioè per una riga che il giro chiude `applied`
@@ -500,7 +501,8 @@ sigillo no lasciano una riga mai eseguita, che il giro dopo trova conforme e
 sigilla; un sigillo scritto e un `id` no lasciano una riga sigillata senza
 `id`, che prende il riempimento. Un valore che il campo mostra già e che il log
 non ha si scrive due volte, vuoto e poi il valore, come `owned_by`: REDCap non
-registra una scrittura che lascia il campo com'è. Una scrittura rifiutata è
+registra una scrittura che lascia il campo com'è. Una scrittura dell'`id`
+rifiutata o scaduta, una delle due o l'unica, è
 `TRASPORTO_ENTRA_ID_NON_REGISTRATO` negli `errori`. Non in un giro simulato,
 né senza l'account del canale o senza il log dei proprietari: dove nessun
 valore si crede, la porta non si chiama.
@@ -998,10 +1000,11 @@ esegue la verifica e, se il fatto la smentisce, corregge qui.
   import il valore di `applied_seal` di quella riga: al giro dopo il canale
   scrive il sigillo giusto, la scrittura cambia il valore e il log la registra.
 - **`TRASPORTO_ENTRA_ID_NON_REGISTRATO`**, dalla 0.27.0: l'`id` dell'account su
-  Entra non è entrato nel registro degli eventi. Succede quando il campo
-  `applied_entra_id` mostrava già il valore e una delle due scritture del giro,
-  prima il vuoto e poi il valore, è stata rifiutata; o quando la scrittura
-  semplice è stata rifiutata. Non ferma il giro e non muove nessun sigillo: il
+  Entra non è entrato nel registro degli eventi. Succede quando una scrittura
+  dell'`id` è stata rifiutata o è scaduta: una delle due del giro, se il campo
+  `applied_entra_id` mostrava già il valore (prima il vuoto e poi il valore),
+  oppure l'unica, alla prima esecuzione e nel riempimento. Non ferma il giro e
+  non muove nessun sigillo: il
   giro dopo lo riscrive. Finché non è nel log il canale non crede al valore, e
   la riga non ha il controllo dell'account. Se si ripete, IT guarda i permessi
   dell'utenza del canale sul registro.
@@ -1110,8 +1113,9 @@ La regola è `pair_change()`, con quattro codici:
   modificata. L'uscita è la revoca della riga e una richiesta nuova.
 - **`TRASPORTO_IDENTITA_CAMBIATA`**, `transport_error`: il giro servirebbe un
   altro account, o ne creerebbe uno, e nella riga nessuno ha scritto la
-  persona. È l'account che è cambiato su Entra: rinominato, cancellato, o con
-  nome o cognome corretti in modo che la riga non lo trova più. Fino alla
+  persona. È l'account che è cambiato su Entra: cancellato, rinominato su una
+  riga senza `id`, o con nome o cognome corretti in modo che la riga non lo
+  trova più. Fino alla
   0.23.0 il giro eseguiva il nome nuovo senza dire niente, ricreava l'account
   cancellato con lo stesso nome (che su REDCap ritrova tutti i diritti di
   prima) o ne creava un secondo per la stessa persona. L'esito va al
@@ -1133,20 +1137,21 @@ La regola è `pair_change()`, con quattro codici:
   rifiuta la scrittura, la riga si ferma sul codice del registro, senza
   revoca e senza sigillo nuovo, e il giro dopo la rifà. È l'uscita per un
   account rinominato che resta tale (dalla 0.27.0 con il suo codice): il
-  proprietario revoca la riga vecchia e ne crea una nuova, e IT non concede a mano su una coppia che una riga
-  revocata governa, perché il giro la revoca. Dalla 0.27.0 per un account
-  rinominato su una riga con l'`id` il codice è `TRASPORTO_ACCOUNT_RINOMINATO`,
-  e questo resta per l'account cancellato e per la risoluzione che trova un
-  altro account su una riga senza `id`. Una riga revocata la cui
+  proprietario revoca la riga vecchia e ne crea una nuova, e IT non concede a
+  mano su una coppia che una riga revocata governa, perché il giro la revoca.
+  Dalla 0.27.0 per un account rinominato su una riga con l'`id` il codice è
+  `TRASPORTO_ACCOUNT_RINOMINATO`, e `TRASPORTO_IDENTITA_CAMBIATA` resta per
+  l'account cancellato e per la risoluzione che trova un altro account su una
+  riga senza `id`. Una riga revocata la cui
   persona non è più nel tenant, senza che nessuno l'abbia scritta, si chiude
   invece come prima, `applied` con `absent`, prima delle istanze (deciso il
   2026-11-10): non c'è nessuno da creare, e il vecchio login lo toglie IT.
   Restano su questo codice una riga revocata che il log non verifica, una
   riga nata revocata (dalla 0.27.0, se il suo account è stato rinominato, su
   `TRASPORTO_ACCOUNT_RINOMINATO`), e ogni riga se l'utenza del canale non è
-  configurata: limiti accettati, nel verso che revoca meno. La riga attiva riparte da sola
-  quando la risoluzione ritrova l'account eseguito, per esempio un account
-  cancellato e ripristinato.
+  configurata: limiti accettati, nel verso che revoca meno. La riga attiva
+  riparte da sola quando la risoluzione ritrova l'account eseguito, per
+  esempio un account cancellato e ripristinato.
 
 In tutti i casi sull'istanza non si scrive niente, nessuno nasce su
 Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta delle
@@ -1167,8 +1172,11 @@ Su quella riga la porta non scrive né il nome né il verdetto, dalla 0.27.0:
 il registro tiene il nome eseguito, e la riga trattenuta chiede il sigillo del
 nome eseguito, così l'approvazione del proprietario passa. Prima la porta
 scriveva la proposta, o il nome vuoto, e il sigillo si muoveva per mano del
-canale. La mail di una riga così dice il nome eseguito alla riga del nome
-utente risolto, e non dà più la proposta come account trovato. Una riga
+canale. Su una riga ferma sul codice della sua identità la mail dice il nome
+eseguito alla riga del nome utente risolto, invece di «non ancora stabilito» o
+della proposta. Su una riga mossa che non nomina nessuno,
+`TRASPORTO_IDENTITA_CAMBIATA` dice «Account trovato ora: nessuno», non più la
+proposta. Una riga
 sigillata dal canale il cui campo `applied_seal` un import ha svuotato è una
 candidata del passo 3b (§4, «Una persona da creare»); se la persona non è più
 su Entra e REDCap conosce il nome composto, la risoluzione dà una collisione, e
@@ -1528,9 +1536,9 @@ ha niente da mandare. Non si conta in `accessi_persi`, perché nessun invio è
 fallito: la persona non viene avvisata, e lo dice solo quel codice sulla riga.
 
 **Lo stesso per una scrittura senza risposta.** Dalla 0.26.0 ogni chiamata al
-modulo ha un tempo massimo (`module_timeouts()`): cinque minuti in tutto,
-dieci secondi per connettersi (trenta con la 0.26.0). Una scrittura che lo supera, o la cui
-rilettura fallisce (`TRASPORTO_RILETTURA_FALLITA`), può essere arrivata: la
+modulo ha un tempo massimo (`module_timeouts()`): cinque minuti in tutto e,
+per connettersi, trenta secondi nella 0.26.0 e dieci dalla 0.27.0. Una
+scrittura che lo supera, o la cui rilettura fallisce (`TRASPORTO_RILETTURA_FALLITA`), può essere arrivata: la
 riga prende `transport_error`, con `TRASPORTO_NON_RAGGIUNGIBILE` per il tempo
 scaduto, resta senza sigillo, e il giro dopo rilegge la coppia. Se il diritto
 c'è è un `noop`: la riga chiude `applied`, niente viene scritto due volte, e
@@ -1543,11 +1551,12 @@ massimo: un minuto per chiamata, dieci secondi per connettersi
 (`register_timeouts()`, `directory_timeouts()`, `mail_timeouts()`). Un tempo
 scaduto dà il codice che la stessa porta dava per una rete giù. Su una
 scrittura nel registro la risposta può essere ciò che si è perso: il codice va
-in `errori` e suona `ubep-canale-esiti-non-scritti` anche se l'esito è
-arrivato, oppure, se non è arrivato, il giro dopo rimanda la mail d'esito; non
-concede due volte, perché ciò che il registro riceve il giro lo ricalcola dallo
-stato delle istanze. Un registro appeso dopo la lettura delle righe costa al
-giro al più sette attese, più una per ogni riga il cui log si legge da solo.
+in `errori` e suona `ubep-canale-esiti-non-scritti`, sia che l'esito sia
+arrivato sia che no; se non è arrivato, il giro dopo rimanda anche la mail
+d'esito. Il giro non concede due volte, perché ciò che il registro riceve lo
+ricalcola dallo stato delle istanze. Un registro appeso dopo la lettura delle
+righe costa al giro al più nove attese, più una per ogni riga il cui log si
+legge da solo.
 
 **Va alla persona, e a nessun altro**: niente copia al referente, niente copia
 a IT. Con un recapito esterno va a `contact_email`; con un indirizzo vuoto la
@@ -2338,8 +2347,8 @@ mail sola e solo quando c'è qualcosa, allo stesso indirizzo:
   la persona è mai entrata sul server col nome eseguito, oppure perché quel
   nome non si sa, e il proprietario. Una riga su `TRASPORTO_NOME_RIASSEGNATO`
   compare senza il nome eseguito (dalla 0.27.0), perché è di un altro account
-  e i suoi accessi non sono della persona. Non una revoca che il log dice eseguita e
-  poi toccata, né una riga con `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici,
+  e i suoi accessi non sono della persona. Non una revoca che il log dice
+  eseguita e poi toccata, né una riga con `TRASPORTO_ACCOUNT_DISATTIVATO` fra i codici,
   che ha la sua sezione. Una riga può stare anche fra quelle senza referente, e
   conta una volta in N;
 - **i recapiti e i referenti in soppressione presso il servizio di posta**

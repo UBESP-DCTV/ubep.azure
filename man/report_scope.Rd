@@ -32,9 +32,10 @@ of its own, \code{disattivata};
 executed: sealed, not \code{applied}, active or revoked. A revocation of an
 executed row that the round did not carry out, stopped at the gate on
 \code{DATO_AMBITO_NON_AUTORIZZATO}, waiting for its owner as \code{held}, or on
-\code{DATO_COPPIA_CAMBIATA} or \code{TRASPORTO_IDENTITA_CAMBIATA}, is an access
-that should be gone and is not, and it is no longer in any referent's
-report. Not the rows with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among their
+\code{DATO_COPPIA_CAMBIATA}, \code{TRASPORTO_NOME_RIASSEGNATO},
+\code{TRASPORTO_ACCOUNT_RINOMINATO} or \code{TRASPORTO_IDENTITA_CAMBIATA}, is an
+access that should be gone and is not, and it is no longer in any
+referent's report. Not the rows with \code{TRASPORTO_ACCOUNT_DISATTIVATO} among their
 codes, active or revoked: the active ones are \code{disattivata}, and none is
 listed twice. Not a revocation the log says was carried out and that
 somebody touched afterwards, \code{revoca_eseguita} of

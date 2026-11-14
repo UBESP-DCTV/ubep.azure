@@ -118,12 +118,12 @@ suppression_read <- function(api_key, limit = 500L, max_pages = 200L) {
           httr2::req_method("GET") |>
           httr2::req_url_query(limit = limit, offset = offset) |>
           httr2::req_headers(Authorization = paste("Bearer", api_key)) |>
-          # The reading comes before the report, in a oneshot unit with no
-          # start timeout: a service that takes the connection and does not
-          # answer would hold the report and its record for good. A page of
-          # 500 entries is a few tens of kilobytes, answered in about a
-          # second; thirty seconds is that with a wide margin, and a page
-          # that takes longer fails the reading like any other failure.
+          # The reading comes before the report: a service that takes the
+          # connection and does not answer would hold the report and its
+          # record until systemd stops the unit. A page of 500 entries is a
+          # few tens of kilobytes, answered in about a second; thirty seconds
+          # is that with a wide margin, and a page that takes longer fails
+          # the reading like any other failure.
           httr2::req_timeout(30) |>
           httr2::req_error(is_error = function(resp) FALSE) |>
           httr2::req_perform(),

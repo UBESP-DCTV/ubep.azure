@@ -499,9 +499,10 @@ report_expired <- function(expiration, today) {
 #'   executed: sealed, not `applied`, active or revoked. A revocation of an
 #'   executed row that the round did not carry out, stopped at the gate on
 #'   `DATO_AMBITO_NON_AUTORIZZATO`, waiting for its owner as `held`, or on
-#'   `DATO_COPPIA_CAMBIATA` or `TRASPORTO_IDENTITA_CAMBIATA`, is an access
-#'   that should be gone and is not, and it is no longer in any referent's
-#'   report. Not the rows with `TRASPORTO_ACCOUNT_DISATTIVATO` among their
+#'   `DATO_COPPIA_CAMBIATA`, `TRASPORTO_NOME_RIASSEGNATO`,
+#'   `TRASPORTO_ACCOUNT_RINOMINATO` or `TRASPORTO_IDENTITA_CAMBIATA`, is an
+#'   access that should be gone and is not, and it is no longer in any
+#'   referent's report. Not the rows with `TRASPORTO_ACCOUNT_DISATTIVATO` among their
 #'   codes, active or revoked: the active ones are `disattivata`, and none is
 #'   listed twice. Not a revocation the log says was carried out and that
 #'   somebody touched afterwards, `revoca_eseguita` of
