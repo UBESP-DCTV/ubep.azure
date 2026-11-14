@@ -17,7 +17,8 @@ dropped so that an empty criterion cannot match an empty field.
 Both carriers are read: \code{officeLocation}, where the historical flow put the
 contact address and where thousands of accounts still carry it, and
 \code{otherMails}, the proper carrier this package writes from now on. The
-fallback retires when the sweep counts zero accounts with an address in the first — a number,
-not an intention, and one the sweep produces by itself every round.
+fallback retires when the sweep counts zero accounts with an address in
+the first — a number, not an intention, and one the sweep produces by
+itself every round.
 }
 \keyword{internal}

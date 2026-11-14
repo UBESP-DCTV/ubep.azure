@@ -3,9 +3,10 @@
 #' The whole resolution rests on this being applied to both sides of every
 #' comparison. Measured on the tenant on 2026-08-15: some accounts carry the
 #' contact address with spaces at the edges, and a service-side `eq` would have
-#' missed all of them in silence — reporting `absent` for people who exist, which is
-#' the verdict that opens the creation branch. Reading the directory whole is
-#' what makes the comparison ours, and therefore able to normalize at all.
+#' missed all of them in silence — reporting `absent` for people who exist,
+#' which is the verdict that opens the creation branch. Reading the directory
+#' whole is what makes the comparison ours, and therefore able to normalize at
+#' all.
 #'
 #' @param values A character vector, or anything coercible to one.
 #'
@@ -151,8 +152,9 @@ identity_stop_codes <- function(identity, errors = character(),
 #' Both carriers are read: `officeLocation`, where the historical flow put the
 #' contact address and where thousands of accounts still carry it, and
 #' `otherMails`, the proper carrier this package writes from now on. The
-#' fallback retires when the sweep counts zero accounts with an address in the first — a number,
-#' not an intention, and one the sweep produces by itself every round.
+#' fallback retires when the sweep counts zero accounts with an address in
+#' the first — a number, not an intention, and one the sweep produces by
+#' itself every round.
 #'
 #' @param directory A directory frame as `directory_users()` returns.
 #'

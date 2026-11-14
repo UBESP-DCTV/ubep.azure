@@ -16,8 +16,9 @@ A character vector, trimmed and folded to lower case.
 The whole resolution rests on this being applied to both sides of every
 comparison. Measured on the tenant on 2026-08-15: some accounts carry the
 contact address with spaces at the edges, and a service-side \code{eq} would have
-missed all of them in silence — reporting \code{absent} for people who exist, which is
-the verdict that opens the creation branch. Reading the directory whole is
-what makes the comparison ours, and therefore able to normalize at all.
+missed all of them in silence — reporting \code{absent} for people who exist,
+which is the verdict that opens the creation branch. Reading the directory
+whole is what makes the comparison ours, and therefore able to normalize at
+all.
 }
 \keyword{internal}

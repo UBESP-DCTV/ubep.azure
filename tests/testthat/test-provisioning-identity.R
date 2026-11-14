@@ -250,10 +250,10 @@ test_that("more than one match is ambiguous, and proposes nothing", {
 
 test_that("the contact is matched in otherMails as well as officeLocation", {
   # eval
-  # `officeLocation` is where the historical flow put it, on thousands of accounts;
-  # `otherMails` is where this package writes it from now on. Both are read,
-  # and the fallback retires when the sweep counts zero of the first — a
-  # number, not an intention.
+  # `officeLocation` is where the historical flow put it, on thousands of
+  # accounts; `otherMails` is where this package writes it from now on. Both
+  # are read, and the fallback retires when the sweep counts zero of the
+  # first — a number, not an intention.
   answer <- resolve_identity(
     a_request(),
     dir_frame(dir_user(

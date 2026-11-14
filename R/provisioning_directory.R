@@ -521,9 +521,9 @@ directory_create_user <- function(token, base_url, request, upn) {
 #' would be filterable, is `null` on most accounts, so the
 #' obvious attribute is empty on exactly the population to be found. Measured
 #' on 2026-08-15 the whole sweep costs a handful of pages and a few seconds,
-#' which is less than the round that consumes it. It is also decision 4 of the channel's
-#' design obtained by construction rather than by discipline: no local copy of
-#' the state, the real one is re-read every round.
+#' which is less than the round that consumes it. It is also decision 4 of
+#' the channel's design obtained by construction rather than by discipline:
+#' no local copy of the state, the real one is re-read every round.
 #'
 #' Reading in full has a property a server-side filter would not have given:
 #' the comparison is ours, so it can normalize. It has to — some accounts carry
