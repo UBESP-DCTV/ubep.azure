@@ -1600,21 +1600,36 @@ hard_directory <- function() {
     "Andr\u00e9", "Andre\u0301", "\u00c9lodie", "Li", "", "Paolo",
     "Fran\u00e7ois", "Li", "", "Zo\u00eb"
   )
+  # `otherMails` goes in as `I()`, as the rest of this file writes it: a plain
+  # list handed to `dir_user()` is emptied by `modifyList()`, and the frame
+  # would carry no `otherMails` at all. Rows 7 and 16 carry no address anywhere
+  # (the last one is the case a row-index that loses its tail would miss).
+  bare <- c(7L, 16L)
   directory_frame(Map(
     function(surname, given, i) {
       dir_user(
         id = sprintf("id-%03d", i),
-        userPrincipalName = sprintf("persona.%03d@ubep.unipd.it", i),
+        userPrincipalName = if (i %in% bare) {
+          ""
+        } else {
+          sprintf("persona.%03d@ubep.unipd.it", i)
+        },
         givenName = given,
         surname = surname,
-        otherMails = if (i %% 3L == 0L) {
-          list(sprintf("  Altra.%03d@Example.org ", i), "")
+        otherMails = if (i %in% bare) {
+          I(character())
+        } else if (i %% 3L == 0L) {
+          I(c(sprintf("  Altra.%03d@Example.org ", i), ""))
         } else if (i %% 3L == 1L) {
-          list(sprintf("altra.%03d@example.org", i))
+          I(sprintf("altra.%03d@example.org", i))
         } else {
-          list()
+          I(character())
         },
-        officeLocation = if (i %% 4L == 0L) "" else sprintf("Old.%03d@x.org", i)
+        officeLocation = if (i %% 4L == 0L || i %in% bare) {
+          ""
+        } else {
+          sprintf("Old.%03d@x.org", i)
+        }
       )
     },
     surnames, givens, seq_along(surnames)
@@ -1646,7 +1661,10 @@ test_that("directory_named is the element-by-element rule, on hard names", {
     }
   }
   expect_true(any(directory_named(directory, "Anna Maria", "Rossi")))
-  expect_true(any(directory_named(directory, "Zoe", "Rossi") == FALSE))
+  # Among the four accounts of surname Rossi: the one given "Zoë" folds to
+  # the same name as "Zoe", the one with no given name stays in play, and the
+  # two given another name are out.
+  expect_identical(which(directory_named(directory, "Zoe", "Rossi")), c(3L, 15L))
 })
 
 test_that("directory_named folds the directory whole, not once per row", {
@@ -1668,6 +1686,10 @@ test_that("directory_named folds the directory whole, not once per row", {
 
 test_that("directory_contacts is the per-row rule, on hard frames", {
   directory <- hard_directory()
+  # The fixture has to carry what the test says it tests: `otherMails` on
+  # some rows, and rows with no address at all.
+  expect_gt(sum(lengths(directory[["otherMails"]])), 0L)
+  expect_true(any(lengths(directory_contacts(directory)) == 0L))
 
   expect_identical(directory_contacts(directory), reference_contacts(directory))
   expect_identical(
