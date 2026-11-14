@@ -1,3 +1,131 @@
+# ubep.azure 0.27.0
+
+A row the channel carried out is tied to the id of its account on Entra, and
+the round stops on a username given again to another account or on an account
+renamed. Connecting to an instance takes at most ten seconds, and the
+register, Graph and the mail service have a time limit of their own. The
+round no longer cleans the whole directory once for every row of the
+register. The identity door leaves alone a sealed row that names nobody.
+
+* **A row the channel carried out is tied to the id of its account on
+  Entra.** Decided on 2026-11-12 (item 11). The register has a field more,
+  `applied_entra_id`, `@READONLY` and outside the seal. The round writes in
+  it the `id` of the account it served at a row's first execution, through a
+  door of its own (`register_entra_id_import()`), after the owner and before
+  the seal, and believes the value only from its own writes in the log
+  (`log_channel_entra_id()`), as it does `owned_by`. The door is not called
+  on a simulated round, nor without the channel's account or the owners'
+  log. A value the field shows and the log does not hold is written twice,
+  empty and then the value; a write refused gives
+  `TRASPORTO_ENTRA_ID_NON_REGISTRATO` in the round's `errori`, which stops
+  nothing, and the next round writes it again. A value a referent imports is
+  not believed, and the round writes its own back. The rows carried out
+  before the field existed get the `id` from the sweep, if the account that
+  holds the name was born before the first seal of the newest run of
+  executions of that name (`entra_fill()`). The owners' log is read also when
+  the only rows are sealed ones.
+
+* **Two codes for IT when the account is not the one carried out.** Decided
+  on 2026-11-12; decided on 2026-11-14 that the check is made only on a row
+  whose version carried out is certain, as for the revocation. After
+  `DATO_COPPIA_CAMBIATA` and before `TRASPORTO_IDENTITA_CAMBIATA` the rule of
+  the pair stops such a row on `TRASPORTO_NOME_RIASSEGNATO`, when the
+  username carried out belongs now to another account (deleted and given
+  again, or made again by hand), which the resolution may not see at all
+  when the name and the contact are the same and the row stayed `applied`; or
+  on `TRASPORTO_ACCOUNT_RINOMINATO`, when nobody holds the name carried out
+  and the account of the `id` has another username, which the message names
+  (it was `TRASPORTO_IDENTITA_CAMBIATA` with an external contact and
+  `DATO_RECAPITO_INTERNO_INESISTENTE` with an internal one). A revoked row
+  never takes the first, and a row that leaves through the revocation
+  (`revocation_exits()`) takes neither. A name given again to an account born
+  after the first seal gets the first code at the fill too; two holders of
+  the name, or an `id` that is not in the sweep, stop nothing. The `id` only
+  adds stops. The owner gets the outcome with IT in copy, in two new
+  paragraphs of the message, and the row is not to be changed; the way out is
+  the owner revoking the row and, for an account renamed, filing a new
+  request. The monthly report lists a row stopped on a name given again
+  without the name carried out, which is somebody else's now.
+
+* **The identity door does not write on a sealed row that names nobody.**
+  A collision nobody answered, `ambiguous`, or no verdict at all
+  (`DATO_NOME_DIVERGENTE`, `DATO_RECAPITO_INTERNO_INESISTENTE`): the door
+  wrote the proposal or the empty name over the one carried out, and the
+  channel moved the seal itself (RR1 of the review of the 0.26.0). A
+  revocation closed on a person the tenant no longer holds is written as
+  before. Such a row asks for the seal of the name carried out, which is the
+  row the register keeps, so that the approval of its owner passes (RE1); its
+  message says that name on the line of the resolved username instead of
+  "not yet established" or the proposal, and no longer gives the proposal as
+  the account found.
+
+* **A row carried out whose seal field was emptied, with its person gone
+  from Entra, stops on `TRASPORTO_IDENTITA_CAMBIATA` again.** Decided on
+  2026-11-14 (RN2 of the review of the 0.26.0). Step 3b picked it by the
+  field, and a composed name known to REDCap made it a collision that the
+  rule of the pair let through: for that rule a person to create on a row
+  carried out is somebody else. The row keeps asking the productions about
+  the name at every round while it is there.
+
+* **Connecting to an instance takes at most ten seconds, benches and
+  productions alike** (`module_timeouts()`). Decided on 2026-11-14. With
+  0.26.0 it was thirty, and a bench that is switched off cost the observer
+  the whole limit for each. Ten seconds is what the `curl` R package set by
+  itself up to 0.25.0, and a whole call to a production that is on takes a
+  fraction of that. The call keeps its five minutes.
+
+* **The register, Graph and the mail service have a time limit too.**
+  Decided on 2026-11-14 (RT1 of the review of the 0.26.0). Their calls waited
+  without limit, and a service that took the connection and never answered
+  held the round until systemd stopped it, with no record and the losses of
+  that round uncounted. One minute for a call and ten seconds to connect
+  (`register_timeouts()`, `directory_timeouts()`, `mail_timeouts()`), put on
+  the request by one helper, `req_limits()`, in the order `httr2` needs:
+  `req_timeout()` sets the connection limit back to the default of
+  `libcurl`. A call that runs out of time has the code a network that is
+  down already had: `TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE`,
+  `TRASPORTO_DIRECTORY_NON_RAGGIUNGIBILE` (a page of the sweep: the round
+  asks no instance), `TRASPORTO_CREAZIONE_NON_RAGGIUNGIBILE` (unconfirmed,
+  the key counted lost) and `TRASPORTO_POSTA_NON_RAGGIUNGIBILE`. The reading
+  of the suppressions keeps its thirty seconds in all. A write to the
+  register that arrived and whose answer was lost sounds the alarm on
+  outcomes not written, or sends an outcome message twice when it had not
+  arrived; the next round computes the register again from the instances and
+  grants nothing twice.
+
+* **A passage of a row to a new owner written once, that does not arrive,
+  is reported.** Decided on 2026-11-14 (review of the time limits). A passage written in one write, with the owner's field already
+  holding the old owner, that was refused or ran out of time gave only the
+  code of the door: it gives now also `TRASPORTO_PASSAGGIO_NON_REGISTRATO`,
+  as the double write did. The passage is lost as before, and IT warns the
+  new owner.
+
+* **The round no longer cleans the whole directory once for every row.**
+  Decided on 2026-11-14. `directory_named()` and the check of an unreadable
+  surname applied `clean_string()` to the surname and the given name of every
+  account of the directory, one account at a time, in every resolution, that
+  is once for each row of the register; the transliteration it calls builds
+  its tables on every call. They now clean the directory in one call on the
+  vector, and `directory_contacts()` normalizes the contacts in one pass. The
+  result is the same, tested against the element-by-element rule on names
+  with accents, apostrophes, capitals, other alphabets, empty and `NA`.
+  `directory_contacts()` stops on a frame it cannot line up, which
+  `directory_frame()` never builds.
+
+* **Shape of the release.** The dictionary gains a field,
+  `applied_entra_id`: import it before the package. The 0.26.0 meets it as
+  `DIZIONARIO_CAMPO_IN_PIU` and goes on; the 0.27.0 on the old dictionary
+  stops on `DIZIONARIO_CAMPO_ASSENTE`. No module change, no change to the
+  jobs in `/opt`, no new column in the records: install the package alone.
+  Back, the package first, and the dictionary may stay. At the first round
+  the sealed rows whose name carried out is held by an account born before
+  their first seal get their `id` through the fill, with no message, and the
+  second round writes none. On a register where every row is sealed with its
+  seal unmoved, none is revoked and none waits for an account, no outcome
+  changes. The alarm rule on writes not registered
+  (`ubep-canale-scrittura-non-registrata`) is to carry
+  `TRASPORTO_ENTRA_ID_NON_REGISTRATO` in its query.
+
 # ubep.azure 0.26.0
 
 The pair a row carried out is rebuilt from the log and verified by the seal,

@@ -291,8 +291,9 @@
 #'   back into either. `credenziali` carries what the accounts created this
 #'   round were born with, and it is the only road those take. `errori`
 #'   carries the codes of every write and log that failed, and
-#'   `TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage the field already
-#'   showed could not be written into the log, and
+#'   `TRASPORTO_PASSAGGIO_NON_REGISTRATO` when a passage could not be written
+#'   into the log, whether it takes two writes (the field already showed the
+#'   new owner) or one that was refused or ran out of time, and
 #'   `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
 #'   held the seal the round writes and the channel's last seal in the log
 #'   is another, and `TRASPORTO_ENTRA_ID_NON_REGISTRATO` when an Entra
