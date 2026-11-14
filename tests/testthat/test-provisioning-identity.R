@@ -1664,7 +1664,9 @@ test_that("directory_named is the element-by-element rule, on hard names", {
   # Among the four accounts of surname Rossi: the one given "Zoë" folds to
   # the same name as "Zoe", the one with no given name stays in play, and the
   # two given another name are out.
-  expect_identical(which(directory_named(directory, "Zoe", "Rossi")), c(3L, 15L))
+  expect_identical(
+    which(directory_named(directory, "Zoe", "Rossi")), c(3L, 15L)
+  )
 })
 
 test_that("directory_named folds the directory whole, not once per row", {
