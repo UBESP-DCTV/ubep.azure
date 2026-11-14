@@ -22,8 +22,8 @@
 #' 8. batch by `(server, project_id)`, never across two projects;
 #' 9. read back what a real write did, before calling it applied;
 #' 10. **create the accounts the gate allowed and the tenant does not hold**;
-#' 11. write back the outcome, then the owner, then the seal, and only what
-#'    changed.
+#' 11. write back the outcome, then the owner, then the Entra account the row
+#'    was carried out for, then the seal, and only what changed.
 #'
 #' **The gate's subjects are read from the log, not from the row.**
 #' `requested_by` says who filed a request only because `@USERNAME` filled it
@@ -124,6 +124,24 @@
 #' out, revokes the username carried out whatever the resolution says now
 #' (`revocation_exits()`, decided on 2026-11-12): the way out of the register
 #' for an account renamed on Entra.
+#'
+#' **The account carried out is its identifier on Entra too**, decided on
+#' 2026-11-12 (item 11 of the 0.27.0). The round writes `applied_entra_id`
+#' at a row's first execution, the `id` of the account of the sweep that
+#' holds the name served, through a door of its own, after the owner and
+#' before the seal; it believes the value from the channel's writes in the
+#' owners' log only (`log_channel_entra_id()`). On every round, on a sealed
+#' row whose version carried out is certain and that does not leave by the
+#' item 12, the identifier is checked against the sweep
+#' (`entra_account_change()`): the name carried out held by another account,
+#' `TRASPORTO_NOME_RIASSEGNATO` (not on a revoked row); nobody holding it and
+#' the account under another name, `TRASPORTO_ACCOUNT_RINOMINATO`. Both come
+#' after `DATO_COPPIA_CAMBIATA` and before `TRASPORTO_IDENTITA_CAMBIATA`, and
+#' stop the row as the rule of the pair does. A sealed row with no
+#' identifier gets it from the sweep, if the account that holds the name was
+#' born before the first seal of the newest run of executions of that name
+#' (`entra_fill()`); born after, `TRASPORTO_NOME_RIASSEGNATO` on a row not
+#' revoked. The identifier only adds stops.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -277,7 +295,9 @@
 #'   showed could not be written into the log, and
 #'   `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
 #'   held the seal the round writes and the channel's last seal in the log
-#'   is another. A round that finds the register sealed and none of the
+#'   is another, and `TRASPORTO_ENTRA_ID_NON_REGISTRATO` when an Entra
+#'   account the field already showed could not be written into the log.
+#'   A round that finds the register sealed and none of the
 #'   accounts of `channel_account` in its log stops, `fermato`, with
 #'   `TRASPORTO_REGISTRO_CANALE_ASSENTE` (`log_channel_absent()`).
 #'
@@ -665,10 +685,19 @@ provisioning_reconcile <- function(register_url,
   # The owners' log, kept for the pair each row carried out: `NULL` when it
   # was not asked or could not be read.
   owners_log <- NULL
+  # The Entra account each row was carried out for, from the same log
+  # (`log_channel_entra_id()`, item 11 of the 0.27.0): `""` when the channel
+  # never wrote one, `NA` when the log cannot say, or the channel's account
+  # is not configured, or the log was not read. `NA` checks nothing and
+  # writes nothing.
+  entra_believed <- rep(NA_character_, nrow(register))
   # A candidate is read for too: its collision, or its stop on a silent
   # production, is a message whose reader is the owner, and without the log
-  # it would go to IT alone.
-  if (any(admitted | awaiting | tampered | candidates)) {
+  # it would go to IT alone. And a row whose field holds a seal (item 11 of
+  # the 0.27.0): the account it was carried out for is read from this log,
+  # and a register whose only sealed rows stop on their identity would not
+  # be read otherwise, and the check would say nothing on them.
+  if (any(admitted | awaiting | tampered | candidates | nzchar(carried))) {
     reading_creations <- register_log(
       register_url, register_token, logtype = "record_add"
     )
@@ -723,6 +752,9 @@ provisioning_reconcile <- function(register_url,
             log_channel_seal(reading_owners[["log"]], id, channel_account)
           }, character(1), USE.NAMES = FALSE)
           tampered <- nzchar(sealed) & sealed != request_seal(register)
+          entra_believed <- vapply(record_ids, function(id) {
+            log_channel_entra_id(reading_owners[["log"]], id, channel_account)
+          }, character(1), USE.NAMES = FALSE)
         }
       } else {
         log_errors <- c(log_errors, reading_owners[["errors"]])
@@ -953,6 +985,43 @@ provisioning_reconcile <- function(register_url,
   # nothing written on the instance, nobody created, no new seal and the
   # same owner. Rows never carried out are not concerned.
   #
+  # The account carried out is also its identifier on Entra (item 11 of the
+  # 0.27.0, decided on 2026-11-12), `applied_entra_id` believed from the
+  # owners' log. Only on a row whose version carried out is certain, as for
+  # the item 12, and that does not leave by it: a username carried out that
+  # the log reads wrong would stop the row on the code that sends IT to take
+  # rights away from an account. With an identifier believed, the check
+  # (`entra_account_change()`); without one, the fill from the sweep with
+  # its guard (`entra_fill()`), whose identifier the round writes.
+  revoked_rows <- trimws(as.character(register[["request_status"]])) %in%
+    "revoked"
+  entra <- lapply(seq_along(record_ids), function(i) {
+    none <- list(code = "", upn = "", id = "")
+    carried_name <- if (certain[[i]]) {
+      executed_pair[[i]][["username"]]
+    } else {
+      NA_character_
+    }
+    if (blind[[i]] || exiting[[i]] || is.na(entra_believed[[i]]) ||
+          is.na(carried_name) || !nzchar(carried_name)) {
+      return(none)
+    }
+    if (nzchar(entra_believed[[i]])) {
+      change <- entra_account_change(
+        carried_name, entra_believed[[i]], sweep[["users"]],
+        revoked = revoked_rows[[i]]
+      )
+      return(list(code = change[["code"]], upn = change[["upn"]], id = ""))
+    }
+    since <- report_person_since(
+      owners_log, record_ids[[i]], channel_account, username = carried_name
+    )
+    fill <- entra_fill(
+      carried_name, sweep[["users"]], since, revoked = revoked_rows[[i]]
+    )
+    list(code = fill[["code"]], upn = "", id = fill[["id"]])
+  })
+
   # RN2 of the review of the 0.26.0: a row the channel sealed whose field an
   # import emptied is a candidate of step 3b, and a composed name free on
   # Entra and known to REDCap makes it a collision, which creates nobody. Its
@@ -996,8 +1065,8 @@ provisioning_reconcile <- function(register_url,
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
       creating = (creating[[i]] && !unheard[[i]]) || reborn[[i]],
       rewritten = rewritten,
-      revoked = trimws(as.character(register[["request_status"]][[i]])) %in%
-        "revoked"
+      revoked = revoked_rows[[i]],
+      account = entra[[i]][["code"]]
     )
   })
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
@@ -2123,6 +2192,39 @@ provisioning_reconcile <- function(register_url,
   passed <- applied & checked & nzchar(owner_after) &
     owner_after != owners_now
 
+  # The Entra account each row was carried out for, the value the field and
+  # the log are to hold after this round (item 11 of the 0.27.0): at the
+  # first execution, a row with no seal believed before the round that this
+  # round applied, the account of the sweep that holds the name served; from
+  # the fill, on a sealed row with none believed; otherwise the value
+  # believed, written back where an import changed the field. Only at the
+  # first execution: a sealed row carried out again, for a change of role,
+  # may hold today a name given to somebody else since, and goes through the
+  # fill and its guard. A revocation closed on a person the tenant no longer
+  # holds has no account. `""` writes nothing.
+  sweep_upns <- identity_normalize(sweep[["users"]][["userPrincipalName"]])
+  entra_after <- vapply(seq_along(record_ids), function(i) {
+    if (is.na(entra_believed[[i]])) {
+      return("")
+    }
+    if (applied[[i]] && !nzchar(sealed[[i]])) {
+      holder <- which(
+        !is.na(sweep_upns) & nzchar(sweep_upns) &
+          sweep_upns == identity_normalize(resolved_names[[i]])
+      )
+      if (length(holder) == 1L) {
+        id <- trimws(as.character(sweep[["users"]][["id"]][[holder]]))
+        if (!is.na(id) && nzchar(id) && !grepl("'", id, fixed = TRUE)) {
+          return(id)
+        }
+      }
+    }
+    if (nzchar(entra[[i]][["id"]])) {
+      return(entra[[i]][["id"]])
+    }
+    entra_believed[[i]]
+  }, character(1))
+
   # The same minutes the identity door wrote, so the message names what the
   # round settled instead of what the referent left blank. And the owner, which
   # is where the outcome and the key go: the owner the log names once this
@@ -2187,6 +2289,11 @@ provisioning_reconcile <- function(register_url,
       seal_carried = as.character(sealed),
       pair_changed = vapply(seq_along(record_ids), function(i) {
         if (moved[[i]]) paste(shifts[[i]][["changed"]], collapse = ",") else ""
+      }, character(1)),
+      # The username the account carried out holds now on Entra, on a row
+      # stopped on `TRASPORTO_ACCOUNT_RINOMINATO` (item 11 of the 0.27.0).
+      entra_now = vapply(seq_along(record_ids), function(i) {
+        if (moved[[i]]) entra[[i]][["upn"]] else ""
       }, character(1)),
       stringsAsFactors = FALSE
     )
@@ -2279,6 +2386,66 @@ provisioning_reconcile <- function(register_url,
       if (lost) "TRASPORTO_PASSAGGIO_NON_REGISTRATO"
     )
     written
+  }
+
+  # The Entra accounts, through a door that takes nothing else (item 11 of
+  # the 0.27.0), after the owner and before the seals: an identifier written
+  # and a seal not written leave a row never carried out, which the next
+  # round finds conforming and seals; a seal written and an identifier not
+  # written leave a sealed row with none, which the fill takes. Not on a
+  # simulated round, which carried nothing out, nor without the channel's
+  # account or the owners' log, where no value is believed.
+  #
+  # A value the field shows already while the log holds no write of the
+  # channel's would not be logged at all, REDCap logging no write that
+  # leaves a field as it was: the door first empties the field and then
+  # writes the value, as for `owned_by`. A refused write leaves the value
+  # out of the log, `TRASPORTO_ENTRA_ID_NON_REGISTRATO`; the next round
+  # writes it again.
+  entra_written <- list(ok = TRUE, errors = character())
+  if (!dry_run && !is.null(channel_account) && !is.null(owners_log)) {
+    entra_shown <- trimws(as.character(
+      register[["applied_entra_id"]] %||% rep("", nrow(register))
+    ))
+    entra_shown[is.na(entra_shown)] <- ""
+    entra_relog <- nzchar(entra_after) &
+      vapply(seq_along(record_ids), function(i) {
+        !identical(entra_believed[[i]], entra_after[[i]])
+      }, logical(1)) &
+      entra_shown == entra_after
+    entra_before <- register
+    entra_before[["applied_entra_id"]] <- entra_shown
+    entra_first <- list(ok = TRUE, errors = character())
+    if (any(entra_relog)) {
+      entra_first <- register_entra_id_import(
+        register_url, register_token,
+        do.call(rbind, lapply(which(entra_relog), function(i) {
+          entra_id_payload(record_ids[[i]], "")
+        }))
+      )
+      if (isTRUE(entra_first[["ok"]])) {
+        entra_before[["applied_entra_id"]][entra_relog] <- ""
+      }
+    }
+    entra_written <- register_entra_id_import(
+      register_url, register_token,
+      round_changed(
+        entra_before,
+        do.call(rbind, c(
+          list(entra_id_payload("", "")[0, , drop = FALSE]),
+          lapply(which(nzchar(entra_after)), function(i) {
+            entra_id_payload(record_ids[[i]], entra_after[[i]])
+          })
+        )),
+        fields = "applied_entra_id"
+      )
+    )
+    entra_lost <- any(entra_relog) &&
+      !(isTRUE(entra_first[["ok"]]) && isTRUE(entra_written[["ok"]]))
+    entra_written[["errors"]] <- c(
+      entra_first[["errors"]], entra_written[["errors"]],
+      if (entra_lost) "TRASPORTO_ENTRA_ID_NON_REGISTRATO"
+    )
   }
 
   # The seals, written last and through a door that takes nothing else.
@@ -2382,7 +2549,8 @@ provisioning_reconcile <- function(register_url,
     errori = c(
       identity_written[["errors"]], unique(log_errors), name_errors,
       import[["errors"]],
-      posta[["errori"]], owner_written[["errors"]], seal_written[["errors"]],
+      posta[["errori"]], owner_written[["errors"]], entra_written[["errors"]],
+      seal_written[["errors"]],
       if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA",
       if (any(unlogged)) "TRASPORTO_SIGILLO_NON_REGISTRATO"
     )

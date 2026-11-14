@@ -96,7 +96,9 @@ carries the codes of every write and log that failed, and
 showed could not be written into the log, and
 \code{TRASPORTO_SIGILLO_NON_REGISTRATO} when an applied row's field already
 held the seal the round writes and the channel's last seal in the log
-is another. A round that finds the register sealed and none of the
+is another, and \code{TRASPORTO_ENTRA_ID_NON_REGISTRATO} when an Entra
+account the field already showed could not be written into the log.
+A round that finds the register sealed and none of the
 accounts of \code{channel_account} in its log stops, \code{fermato}, with
 \code{TRASPORTO_REGISTRO_CANALE_ASSENTE} (\code{log_channel_absent()}).
 }
@@ -125,8 +127,8 @@ and rehearse there the grant of a person still to be created;
 \item batch by \verb{(server, project_id)}, never across two projects;
 \item read back what a real write did, before calling it applied;
 \item \strong{create the accounts the gate allowed and the tenant does not hold};
-\item write back the outcome, then the owner, then the seal, and only what
-changed.
+\item write back the outcome, then the owner, then the Entra account the row
+was carried out for, then the seal, and only what changed.
 }
 
 \strong{The gate's subjects are read from the log, not from the row.}
@@ -228,6 +230,24 @@ version carried out is certain, on the instance and the project carried
 out, revokes the username carried out whatever the resolution says now
 (\code{revocation_exits()}, decided on 2026-11-12): the way out of the register
 for an account renamed on Entra.
+
+\strong{The account carried out is its identifier on Entra too}, decided on
+2026-11-12 (item 11 of the 0.27.0). The round writes \code{applied_entra_id}
+at a row's first execution, the \code{id} of the account of the sweep that
+holds the name served, through a door of its own, after the owner and
+before the seal; it believes the value from the channel's writes in the
+owners' log only (\code{log_channel_entra_id()}). On every round, on a sealed
+row whose version carried out is certain and that does not leave by the
+item 12, the identifier is checked against the sweep
+(\code{entra_account_change()}): the name carried out held by another account,
+\code{TRASPORTO_NOME_RIASSEGNATO} (not on a revoked row); nobody holding it and
+the account under another name, \code{TRASPORTO_ACCOUNT_RINOMINATO}. Both come
+after \code{DATO_COPPIA_CAMBIATA} and before \code{TRASPORTO_IDENTITA_CAMBIATA}, and
+stop the row as the rule of the pair does. A sealed row with no
+identifier gets it from the sweep, if the account that holds the name was
+born before the first seal of the newest run of executions of that name
+(\code{entra_fill()}); born after, \code{TRASPORTO_NOME_RIASSEGNATO} on a row not
+revoked. The identifier only adds stops.
 
 \strong{The oldest row of a pair keeps it whether the round serves it or not.}
 A row the round stops (held, blind, on its identity, on a pair that moved)
