@@ -1619,10 +1619,10 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #'
 #' The service answers as soon as it has queued the message. The sending
 #' was never measured on its own; the readings of the suppressions, on the
-#' same service, fit in the 14 seconds of the whole report. Every message
-#' costs its own wait, so a service that hangs costs a round a minute a
-#' message: with 36 rows changed together, 36 minutes, plus the keys, the
-#' welcomes and the access messages.
+#' same service, fit in a report that lasts seconds. Every message costs its
+#' own wait, so a service that hangs costs a round a minute a message: as
+#' many minutes as rows changed together, plus the keys, the welcomes and
+#' the access messages.
 #'
 #' A message that runs out of time may have been accepted. It is
 #' `TRASPORTO_POSTA_NON_RAGGIUNGIBILE`, like a service that cannot be

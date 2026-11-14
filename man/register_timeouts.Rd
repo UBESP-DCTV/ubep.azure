@@ -16,9 +16,9 @@ the module (\code{module_timeouts()}).
 \details{
 The register lives on a REDCap instance like the others, and an update of
 the fleet, a table change that holds the readings, is the typical case of
-a connection taken and no answer. Its calls are short: the event log of
-142 events read in 0.1 seconds (0.21.0), and the whole report, which
-reads the rows and the log, takes 14 seconds. A minute is six hundred
+a connection taken and no answer. Its calls are short: as measured, a
+read of the event log takes a fraction of a second, and the whole report,
+which reads the rows and the log, a few seconds. A minute is hundreds of
 times the read of the log.
 
 Not the five minutes of the module, because the register is asked many

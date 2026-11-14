@@ -62,11 +62,10 @@ module_call <- function(server,
         ),
         auto_unbox = TRUE
       ) |>
-      # A time limit, which the units that run the round, the observer and
-      # the report do not set: an instance that takes the connection and
-      # never answers held them until systemd stopped them, with no record.
-      # Connecting gets the short limit and the whole call the long one,
-      # `module_timeouts()`.
+      # A time limit: without it an instance that takes the connection and
+      # never answers would hold the round, the observer or the report until
+      # systemd stopped them, with no record. Connecting gets the short limit
+      # and the whole call the long one, `module_timeouts()`.
       req_limits(limits) |>
       httr2::req_error(is_error = function(resp) FALSE) |>
       httr2::req_perform(),
@@ -139,13 +138,12 @@ module_call <- function(server,
 #' Ten seconds holds for every instance, benches and productions alike. A
 #' bench that is switched off does not answer the connection, and the
 #' observer, which reads every instance one after the other, waits the whole
-#' limit for each: with seven benches off, the thirty seconds of 0.26.0 made
-#' it last 3 minutes 34 seconds, against the 75 seconds it took up to 0.25.0,
-#' when nobody set the limit and libcurl's R package put in ten seconds of
-#' its own. Ten seconds brings that back. A whole call to a production that
-#' is on, the connection and the handshake included, measured between 0.1
-#' and 0.4 seconds on 2026-11-13, so the connection is twenty-five times
-#' under the limit; a limit too short would read a production that is on as
+#' limit for each: the thirty seconds of 0.26.0 made it last about three
+#' times as long as up to 0.25.0, when nobody set the limit and libcurl's R
+#' package put in ten seconds of its own. Ten seconds brings that back. A
+#' whole call to a production that is on, the connection and the handshake
+#' included, takes a fraction of a second, well under the limit; a limit
+#' too short would read a production that is on as
 #' `TRASPORTO_NON_RAGGIUNGIBILE`, which is why it does not go lower. Only
 #' the connection is shorter: what PHP does keeps the five minutes, benches
 #' included.
