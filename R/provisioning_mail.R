@@ -315,9 +315,14 @@ mail_outcome_message <- function(row) {
   )[[1]])
   nomi_codici <- sub(":.*$", "", codici)
   disattivato <- "TRASPORTO_ACCOUNT_DISATTIVATO" %in% nomi_codici
-  # The other transport code that does not clear by itself, decided on
-  # 2026-11-09: a row carried out whose account changed on Entra.
-  cambiato <- "TRASPORTO_IDENTITA_CAMBIATA" %in% nomi_codici
+  # The other transport codes that do not clear by themselves, decided on
+  # 2026-11-09 and on 2026-11-12 (item 11 of the 0.27.0): a row carried out
+  # whose account changed on Entra, whose username names another account
+  # now, or whose account carries another username.
+  identita_cambiata <- "TRASPORTO_IDENTITA_CAMBIATA" %in% nomi_codici
+  riassegnato <- "TRASPORTO_NOME_RIASSEGNATO" %in% nomi_codici
+  rinominato <- "TRASPORTO_ACCOUNT_RINOMINATO" %in% nomi_codici
+  cambiato <- identita_cambiata || riassegnato || rinominato
 
   # What a row carried out on one pair and stopped on another was carried
   # out on (`pair_change()`): the referent sets the fields back to it, so
@@ -440,7 +445,7 @@ mail_outcome_message <- function(row) {
   # The account carried out changed on Entra and nobody wrote the person in
   # the row, decided on 2026-11-09: the referent has nothing to undo, and IT,
   # in copy, looks at the account.
-  account <- if (cambiato) {
+  account <- if (identita_cambiata) {
     trovato_it <- mail_said_or(row[["username"]], "nessuno")
     trovato_en <- mail_said_or(row[["username"]], "none")
     list(
@@ -481,6 +486,113 @@ mail_outcome_message <- function(row) {
         ),
         paste0("Account found now: ", trovato_en),
         "IT checks the account on Entra; the row needs no edit."
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
+  # The username carried out names another account now (item 11 of the
+  # 0.27.0): deleted and given again, or made again by hand. Whoever holds
+  # it now holds what the old login had, so IT looks at Entra and at the
+  # instances; the owner revokes the row if the access is no longer needed,
+  # and the revocation takes the access away from the name carried out.
+  nome_riassegnato <- if (riassegnato) {
+    list(
+      it = c(
+        "",
+        paste0(
+          "Il nome utente a cui il canale aveva dato l'accesso ora e' di un ",
+          "altro account su Entra: l'account di allora e' stato cancellato ",
+          "e il nome e' stato dato di nuovo, oppure l'account e' stato ",
+          "ricreato a mano con lo stesso nome. Il canale non cambia il nome ",
+          "utente di una richiesta eseguita: sull'istanza non e' cambiato ",
+          "niente, e la riga resta ferma."
+        ),
+        paste0(
+          "Eseguita per: ", eseguita[["username"]], ", su ",
+          eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
+        ),
+        paste0(
+          "IT verifica su Entra chi porta ora il nome, e i diritti di quel ",
+          "nome sulle istanze; non serve modificare la riga. Se l'accesso ",
+          "non serve piu', revoca la riga: la revoca toglie l'accesso al ",
+          "nome eseguito."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The username the channel had given the access to belongs now to ",
+          "another account on Entra: the account of then was deleted and ",
+          "the name given again, or the account was made again by hand ",
+          "under the same name. The channel does not change the username of ",
+          "an applied request: nothing has changed on the instance, and the ",
+          "row stays stopped."
+        ),
+        paste0(
+          "Applied for: ", executed[["username"]], ", on ",
+          executed[["server"]], ", project ", executed[["project_id"]], "."
+        ),
+        paste0(
+          "IT checks on Entra who holds the name now, and the rights of that ",
+          "name on the instances; the row needs no edit. If the access is no ",
+          "longer needed, revoke the row: the revocation takes the access ",
+          "away from the username applied."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+
+  # The account carried out carries another username on Entra (item 11 of
+  # the 0.27.0). The row is not edited: if the new name stays, the owner
+  # revokes it, the next round takes the old login off the project, and a
+  # new request finds the new name.
+  account_rinominato <- if (rinominato) {
+    nome_it <- mail_said_or(row[["entra_now"]], "non noto")
+    nome_en <- mail_said_or(row[["entra_now"]], "unknown")
+    list(
+      it = c(
+        "",
+        paste0(
+          "L'account a cui il canale aveva dato l'accesso e' stato ",
+          "rinominato su Entra, e nessun account porta piu' il nome utente ",
+          "di allora. Il canale non cambia il nome utente di una richiesta ",
+          "eseguita: sull'istanza non e' cambiato niente, e la riga resta ",
+          "ferma."
+        ),
+        paste0(
+          "Eseguita per: ", eseguita[["username"]], ", su ",
+          eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
+        ),
+        paste0("Nome utente dell'account ora: ", nome_it),
+        paste0(
+          "Non serve modificare la riga: IT verifica l'account su Entra. Se ",
+          "il nome nuovo resta, revoca la riga, che toglie l'accesso al nome ",
+          "di allora, e compila una richiesta nuova, che trova il nome nuovo."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The account the channel had given the access to was renamed on ",
+          "Entra, and no account carries the username of then any more. The ",
+          "channel does not change the username of an applied request: ",
+          "nothing has changed on the instance, and the row stays stopped."
+        ),
+        paste0(
+          "Applied for: ", executed[["username"]], ", on ",
+          executed[["server"]], ", project ", executed[["project_id"]], "."
+        ),
+        paste0("Username of the account now: ", nome_en),
+        paste0(
+          "The row needs no edit: IT checks the account on Entra. If the new ",
+          "name stays, revoke the row, which takes the access away from the ",
+          "username of then, and file a new request, which finds the new ",
+          "name."
+        )
       )
     )
   } else {
@@ -844,6 +956,8 @@ mail_outcome_message <- function(row) {
     collisione[["it"]],
     coppia[["it"]],
     account[["it"]],
+    nome_riassegnato[["it"]],
+    account_rinominato[["it"]],
     "",
     paste0(
       "Un dettaglio che comincia per DATO_ riguarda cio' che e' stato ",
@@ -898,6 +1012,8 @@ mail_outcome_message <- function(row) {
     collisione[["en"]],
     coppia[["en"]],
     account[["en"]],
+    nome_riassegnato[["en"]],
+    account_rinominato[["en"]],
     "",
     paste0(
       "A detail starting with DATO_ concerns what was filled in, and has to ",
