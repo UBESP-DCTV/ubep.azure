@@ -130,11 +130,32 @@ fixture_guids <- function(file) {
 fixture_guid_shape <- "^00000000-0000-0000-0000-[0-9A-Fa-f]{12}$"
 
 
+# The code, the vignettes and the NEWS of the package: the source tree when
+# the tests run from it, the installed NEWS otherwise.
+docs_sources <- function() {
+  root <- normalizePath(testthat::test_path("..", ".."), mustWork = FALSE)
+  found <- c(
+    list.files(file.path(root, "R"), pattern = "[.]R$", full.names = TRUE),
+    list.files(
+      file.path(root, "vignettes"),
+      pattern = "[.]Rmd$", recursive = TRUE, full.names = TRUE
+    ),
+    file.path(root, "NEWS.md"),
+    system.file("NEWS.md", package = "ubep.azure")
+  )
+  found <- found[nzchar(found) & file.exists(found)]
+  unique(normalizePath(found, winslash = "/"))
+}
+
+
 test_that("ogni GUID dei test e delle fixture ha la forma riservata", {
   # Same reasoning as the project identifiers above: a guard cannot list the
   # real identifiers without publishing them, so it asks for a shape no real
   # one has. A tenant, an account or an application id pasted into a test
-  # goes red here.
+  # goes red here. The same for the code, the vignettes and the NEWS: an
+  # example in a docstring or a sentence in a vignette is as public as a
+  # fixture. They are in the source tree and not in the tarball, so a run on
+  # the installed package reads the NEWS it carries and nothing else of them.
   module_tests <- system.file(
     "redcap-module", "tests",
     package = "ubep.azure"
@@ -155,7 +176,8 @@ test_that("ogni GUID dei test e delle fixture ha la forma riservata", {
     ),
     if (nzchar(module_tests) && dir.exists(module_tests)) {
       list.files(module_tests, pattern = "[.]php$", full.names = TRUE)
-    }
+    },
+    docs_sources()
   )
 
   guids <- lapply(sources, fixture_guids)
