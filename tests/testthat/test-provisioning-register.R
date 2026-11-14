@@ -4175,3 +4175,18 @@ test_that("i codici dell'account vengono dopo la coppia e prima dell'identita' c
     eseguiti, ora(), "", FALSE, FALSE, account = "ALTRO"
   ))
 })
+
+
+test_that("il riempimento non rende un id con un apice, che la porta rifiuterebbe", { # nolint: line_length_linter.
+  # eval
+  # RE4 of the review of the unit E: the same guard as the first execution.
+  # Graph gives GUIDs; an apostrophe would make `entra_id_payload()` stop
+  # the round after the outcome and before the seals.
+  storto <- spazzata(list(id = "o'brien"))
+
+  # test
+  expect_equal(
+    entra_fill(nome_eseguito, storto, "2026-08-12 05:00"),
+    list(id = "", code = "")
+  )
+})

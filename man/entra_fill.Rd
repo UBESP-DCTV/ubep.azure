@@ -38,7 +38,8 @@ an execution for a change of role would pass.
 \item Born after: on a row not revoked \code{TRASPORTO_NOME_RIASSEGNATO} and no
 identifier; on a revoked row neither.
 \item A date that does not read, no \code{since}, nobody or two accounts carrying
-the name: neither, and the next round tries again.
+the name, an identifier the door would refuse: neither, and the next
+round tries again.
 }
 
 An account born in the same minute as the first seal passes: the log has

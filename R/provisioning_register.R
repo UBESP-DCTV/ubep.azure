@@ -1920,7 +1920,8 @@ entra_account_change <- function(executed_username, believed_id, directory,
 #' - Born after: on a row not revoked `TRASPORTO_NOME_RIASSEGNATO` and no
 #'   identifier; on a revoked row neither.
 #' - A date that does not read, no `since`, nobody or two accounts carrying
-#'   the name: neither, and the next round tries again.
+#'   the name, an identifier the door would refuse: neither, and the next
+#'   round tries again.
 #'
 #' An account born in the same minute as the first seal passes: the log has
 #' minutes and Graph seconds, and a creation precedes the first execution by
@@ -1969,7 +1970,10 @@ entra_fill <- function(executed_username, directory, since,
   }
   id <- trimws(as.character(directory[["id"]][[holders]]))
   born <- report_graph_time(directory[["createdDateTime"]][[holders]])
-  if (is.na(id) || !nzchar(id) || is.na(born)) {
+  # An identifier the door would refuse (`entra_id_payload()`) is no
+  # identifier, as at the first execution: Graph gives GUIDs.
+  if (is.na(id) || !nzchar(id) || grepl("'", id, fixed = TRUE) ||
+        is.na(born)) {
     return(nothing)
   }
   # Compared as instants: the two clocks are Rome's and UTC.
