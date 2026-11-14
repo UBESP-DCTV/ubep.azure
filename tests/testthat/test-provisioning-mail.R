@@ -2861,3 +2861,88 @@ test_that("con redirect_to un rifiuto non si ritenta", {
   expect_identical(detto[["contatori"]][["accessi_persi"]], 1L)
   expect_equal(detto[["errori"]], "POSTA_ACCESSO_PERSA")
 })
+
+
+test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nelle due lingue", { # nolint: line_length_linter.
+  # eval
+  corpo <- disteso(mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_NOME_RIASSEGNATO",
+    executed_server = "edc10", executed_project_id = "9029",
+    executed_username = "sara.collaudozeta@ubep.unipd.it",
+    pair_changed = "account"
+  ))[["body"]])
+
+  # test
+  expect_match(
+    corpo,
+    paste0(
+      "Il nome utente a cui il canale aveva dato l'accesso ora e' di un ",
+      "altro account su Entra"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto 9029.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "IT verifica su Entra chi porta ora il nome", fixed = TRUE
+  )
+  expect_match(
+    corpo, "revoca la riga: la revoca toglie l'accesso", fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "The username the channel had given the access to belongs now to another",
+    fixed = TRUE
+  )
+  expect_match(corpo, "IT checks on Entra who holds the name now", fixed = TRUE)
+  expect_match(corpo, "revoke the row: the revocation takes", fixed = TRUE)
+  # It does not clear by itself, and the message does not say it does.
+  expect_match(corpo, "questo non si risolve da solo", fixed = TRUE)
+  expect_match(corpo, "this one does not clear by itself", fixed = TRUE)
+  expect_false(grepl("Account trovato ora:", corpo, fixed = TRUE))
+  expect_false(grepl("Nome utente dell'account ora:", corpo, fixed = TRUE))
+})
+
+
+test_that("il messaggio di un account rinominato su Entra nomina il nome nuovo", { # nolint: line_length_linter.
+  # eval
+  corpo <- disteso(mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_ACCOUNT_RINOMINATO",
+    executed_server = "edc10", executed_project_id = "9029",
+    executed_username = "sara.collaudozeta@ubep.unipd.it",
+    entra_now = "sara.nuova@ubep.unipd.it",
+    pair_changed = "account"
+  ))[["body"]])
+  senza <- disteso(mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_ACCOUNT_RINOMINATO",
+    executed_username = "sara.collaudozeta@ubep.unipd.it"
+  ))[["body"]])
+
+  # test
+  expect_match(
+    corpo,
+    "L'account a cui il canale aveva dato l'accesso e' stato rinominato",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "Nome utente dell'account ora: sara.nuova@ubep.unipd.it",
+    fixed = TRUE
+  )
+  expect_match(corpo, "Non serve modificare la riga", fixed = TRUE)
+  expect_match(corpo, "compila una richiesta nuova", fixed = TRUE)
+  expect_match(
+    corpo, "Username of the account now: sara.nuova@ubep.unipd.it",
+    fixed = TRUE
+  )
+  expect_match(corpo, "The row needs no edit", fixed = TRUE)
+  expect_match(corpo, "questo non si risolve da solo", fixed = TRUE)
+  expect_false(grepl("Account trovato ora:", corpo, fixed = TRUE))
+  expect_match(senza, "Nome utente dell'account ora: non noto", fixed = TRUE)
+  expect_match(senza, "Username of the account now: unknown", fixed = TRUE)
+})

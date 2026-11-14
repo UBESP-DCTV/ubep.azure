@@ -113,3 +113,79 @@ test_that("the guard goes red on a planted identifier", {
   expect_false(any(fixture_project_ids(clean) < fixture_project_floor))
   expect_true(any(fixture_project_ids(planted) < fixture_project_floor))
 })
+
+
+# Every GUID the tests and the fixtures write, in any case: the identifiers
+# of Entra (tenant, accounts, applications) have this shape, and since item
+# 11 of the 0.27.0 the register carries the account's own.
+fixture_guids <- function(file) {
+  text <- paste(readLines(file, warn = FALSE), collapse = " ")
+  hex <- function(n) paste0("[0-9A-Fa-f]{", n, "}")
+  shape <- paste(hex(8), hex(4), hex(4), hex(4), hex(12), sep = "-")
+  regmatches(text, gregexpr(shape, text))[[1]]
+}
+
+# The only shape a fixture GUID takes: eight, four, four and four zeros,
+# then twelve hexadecimal digits. No identifier Entra gives has it.
+fixture_guid_shape <- "^00000000-0000-0000-0000-[0-9A-Fa-f]{12}$"
+
+
+test_that("ogni GUID dei test e delle fixture ha la forma riservata", {
+  # Same reasoning as the project identifiers above: a guard cannot list the
+  # real identifiers without publishing them, so it asks for a shape no real
+  # one has. A tenant, an account or an application id pasted into a test
+  # goes red here.
+  module_tests <- system.file(
+    "redcap-module", "tests",
+    package = "ubep.azure"
+  )
+  r_tests <- list.files(
+    testthat::test_path("."),
+    pattern = "^test-.*[.]R$", full.names = TRUE
+  )
+  sources <- c(
+    r_tests[basename(r_tests) != "test-fixture-identificativi.R"],
+    list.files(
+      testthat::test_path("."),
+      pattern = "^helper.*[.]R$", full.names = TRUE
+    ),
+    list.files(
+      testthat::test_path("fixtures"),
+      pattern = "[.]json$", full.names = TRUE
+    ),
+    if (nzchar(module_tests) && dir.exists(module_tests)) {
+      list.files(module_tests, pattern = "[.]php$", full.names = TRUE)
+    }
+  )
+
+  guids <- lapply(sources, fixture_guids)
+
+  # A guard that read nothing does not pass: the test files carry dozens.
+  expect_gt(length(unlist(guids)), 20L)
+
+  # The failure names the file and not the value.
+  wrong <- vapply(guids, function(x) {
+    any(!grepl(fixture_guid_shape, x))
+  }, logical(1))
+  expect_equal(
+    basename(sources[wrong]), character(),
+    info = paste(
+      "A GUID outside the form 00000000-0000-0000-0000-<12 hex> could be a",
+      "real identifier of the tenant, and this repository is public."
+    )
+  )
+})
+
+
+test_that("la guardia dei GUID va in rosso su un identificativo piantato", {
+  clean <- withr::local_tempfile(lines = paste0(
+    '  id = "00000000-0000-0000-0000-00000000000a",'
+  ))
+  planted <- withr::local_tempfile(lines = paste0(
+    '  id = "1f2e3d4c-0000-0000-0000-00000000000a",'
+  ))
+
+  expect_true(all(grepl(fixture_guid_shape, fixture_guids(clean))))
+  expect_false(all(grepl(fixture_guid_shape, fixture_guids(planted))))
+  expect_length(fixture_guids(planted), 1L)
+})

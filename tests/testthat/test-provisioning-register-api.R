@@ -589,3 +589,64 @@ test_that("la porta del proprietario sovrascrive i soli due campi", {
   mandato <- jsonlite::fromJSON(form_field_value(dati[["data"]]))
   expect_equal(names(mandato), c("record_id", "owned_by"))
 })
+
+
+test_that("la porta dell'account su Entra rifiuta ogni altro campo", {
+  # eval
+  esito <- outcome_payload(record_id = "1", outcome = "applied")
+  proprietario <- owner_payload("1", "bruno.verdi@ubep.unipd.it")
+  piu_largo <- entra_id_payload("1", "00000000-0000-0000-0000-00000000000a")
+  piu_largo[["applied_seal"]] <- "abcdefabcdef"
+
+  # test
+  for (corpo in list(esito, proprietario, piu_largo)) {
+    expect_error(
+      register_entra_id_import("registro.example.org", "t0ken", corpo),
+      "record_id, applied_entra_id"
+    )
+  }
+})
+
+test_that("la porta dell'account su Entra sovrascrive i soli due campi, anche vuoti", { # nolint: line_length_linter.
+  catturate <- list()
+  httr2::with_mocked_responses(
+    function(req) {
+      catturate[[length(catturate) + 1L]] <<- req # nolint: assignment_linter.
+      httr2::response(status_code = 200L, body = charToRaw('{"count":1}'))
+    },
+    {
+      register_entra_id_import(
+        "registro.example.org", "t0ken",
+        entra_id_payload("1", "00000000-0000-0000-0000-00000000000a")
+      )
+      register_entra_id_import(
+        "registro.example.org", "t0ken", entra_id_payload("1", "")
+      )
+    }
+  )
+  expect_length(catturate, 2L)
+  dati <- catturate[[1L]][["body"]][["data"]]
+  expect_equal(form_field_value(dati[["overwriteBehavior"]]), "overwrite")
+  mandato <- jsonlite::fromJSON(form_field_value(dati[["data"]]))
+  expect_equal(names(mandato), c("record_id", "applied_entra_id"))
+  vuoto <- jsonlite::fromJSON(
+    form_field_value(catturate[[2L]][["body"]][["data"]][["data"]])
+  )
+  expect_equal(vuoto[["applied_entra_id"]], "")
+})
+
+test_that("un corpo dell'account su Entra vuoto non chiama nessuno", {
+  chiamato <- FALSE
+  detto <- httr2::with_mocked_responses(
+    function(req) {
+      chiamato <<- TRUE # nolint: assignment_linter.
+      httr2::response(status_code = 200L, body = charToRaw('{"count":0}'))
+    },
+    register_entra_id_import(
+      "registro.example.org", "t0ken",
+      entra_id_payload("1", "")[0L, , drop = FALSE]
+    )
+  )
+  expect_false(chiamato)
+  expect_equal(detto[["scritte"]], 0L)
+})

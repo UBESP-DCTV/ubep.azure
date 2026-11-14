@@ -589,6 +589,37 @@ register_owner_import <- function(url, token, payload) {
 }
 
 
+#' Write the Entra account a row was carried out for, and nothing else
+#'
+#' A fifth door, for `applied_entra_id` (item 11 of the 0.27.0), and for the
+#' reason of the owner's: no other field can travel with the identifier, so
+#' a defect in the round cannot rewrite the intent nor move the seal while
+#' saying which account the row was carried out for. The value is believed
+#' from the channel's writes in the log only (`log_channel_entra_id()`), and
+#' the door writes it alone so that its event in the log has the form that
+#' reader takes, `applied_entra_id = '<value>'`.
+#'
+#' @inheritParams register_call
+#' @param payload A frame of exactly `record_id`, `applied_entra_id`, as
+#'   `entra_id_payload()` returns. Zero rows calls nobody.
+#'
+#' @return The `register_call()` list plus `scritte`.
+#'
+#' @keywords internal
+register_entra_id_import <- function(url, token, payload) {
+  register_field_import(
+    url, token, payload,
+    expected = c("record_id", "applied_entra_id"),
+    caller = "register_entra_id_import",
+    reason = paste(
+      "The Entra account must not ride with an outcome, an identity, an",
+      "owner or a seal: this door cannot write another field, so a defect",
+      "cannot rewrite the intent nor move the seal."
+    )
+  )
+}
+
+
 #' Send a body REDCap will overwrite, and check it took all of it
 #'
 #' The transport both writers share, and one copy of it rather than two. What

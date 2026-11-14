@@ -314,7 +314,8 @@ record_default <- function(row) {
     requested_by = "anna.bianchi@ubep.unipd.it", owned_by = "",
     request_status = "active",
     outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
-    applied_seal = "", seal_state = "", approved_seal = ""
+    applied_seal = "", applied_entra_id = "", seal_state = "",
+    approved_seal = ""
   )
   defaults[names(row)] <- row
   defaults
@@ -10010,4 +10011,1115 @@ test_that("una scrittura dei proprietari senza passaggi che fallisce non dice un
   # test
   expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
   expect_false("TRASPORTO_PASSAGGIO_NON_REGISTRATO" %in% esito[["errori"]])
+})
+
+
+# ---- The identity door and a sealed row that names nobody (RR1, 0.27.0) ----
+
+# Mario's row 1, carried out and sealed by the channel, with a second row
+# beside it, as in production, where rows the gate admits make the round
+# read the owners' log on every round. Ported from the review of the 0.26.0
+# (`revisione-nome/test-zz-revisione-rn1.R`, RN1-q1).
+luca_rr1 <- "luca.neri@ubep.unipd.it"
+
+riga_luca_rr1 <- function() {
+  list(
+    record_id = "2", first_name = "Luca", last_name = "Neri",
+    contact_email = "luca.neri@example.org"
+  )
+}
+
+creata_luca_rr1 <- function() {
+  list(
+    username = anna, action = "Create record 2", record = "2",
+    details = "record_id = '2'"
+  )
+}
+
+carla_rr1 <- function() {
+  graph_user(
+    id = "00000000-0000-0000-0000-0000000000c3",
+    userPrincipalName = "carla.verdi@ubep.unipd.it",
+    givenName = "Carla", surname = "Verdi",
+    officeLocation = "carla.verdi@example.org"
+  )
+}
+
+riga_carla_rr1 <- function() {
+  list(
+    record_id = "2", first_name = "Carla", last_name = "Verdi",
+    contact_email = "carla.verdi@example.org"
+  )
+}
+
+# Two accounts for Mario's contact: the resolution is `ambiguous`.
+ambigua_rr1 <- function(...) {
+  directory_doppia(
+    graph_user(),
+    graph_user(
+      id = "00000000-0000-0000-0000-000000000009",
+      userPrincipalName = "mario.rossi.2@ubep.unipd.it"
+    ),
+    ...
+  )
+}
+
+giro_eseguita_rr1 <- function(seconda, directory,
+                              riga = eseguita_row(
+                                applied_seal = sigillo_eseguito()
+                              ),
+                              storia = carried_out(sigillo_eseguito()),
+                              creata = creata_da_anna(), ...) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga, seconda)),
+      storia = storia,
+      creazioni = creazioni_finte(creata, creata_luca_rr1())
+    ),
+    istanza_doppia(
+      list(),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = luca_rr1
+    ),
+    directory = directory, dry_run = FALSE, copy_to = "it@example.org", ...
+  )
+}
+
+identita_della_riga <- function(id) {
+  scritte <- identita_scritte()
+  if (is.null(scritte)) {
+    return(data.frame())
+  }
+  scritte[as.character(scritte[["record_id"]]) == id, , drop = FALSE]
+}
+
+
+test_that("RN1-q1: accanto a una collisione nuova la porta non scrive la proposta su una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  # `mario.rossi` on Entra is somebody else's now, and the resolution is a
+  # collision with the .2. `pair_change()` does not stop the row, and on
+  # the 0.26.0 the door wrote the proposal over the name carried out.
+  giro_eseguita_rr1(riga_luca_rr1(), occupata(), mailer = posta_accesa)
+
+  # test
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_null(sigilli_scritti())
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+})
+
+
+test_that("RN1-q1-ambigua: accanto a una collisione nuova la porta non svuota il nome di una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  giro_eseguita_rr1(riga_luca_rr1(), ambigua_rr1(), mailer = posta_accesa)
+
+  # test
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+})
+
+
+test_that("RN1-q1-controllo: accanto a una riga ammessa la porta non scrive la proposta su una riga eseguita", { # nolint: line_length_linter.
+  # eval
+  giro_eseguita_rr1(
+    riga_carla_rr1(), occupata(carla_rr1()), mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 0L)
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  # The row beside it is never sealed, and the door writes it as before.
+  expect_equal(identita_della_riga("2")[["identity"]], "existing")
+})
+
+
+test_that("su una riga eseguita col nome divergente la porta non svuota il nome (V11-2)", { # nolint: line_length_linter.
+  # eval
+  # The internal contact is Mario's UPN, and the account that holds it now
+  # carries another surname: no verdict, `DATO_NOME_DIVERGENTE`.
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(
+      graph_user(id = "00000000-0000-0000-0000-00000000000b", surname = "Neri"),
+      carla_rr1()
+    ),
+    riga = eseguita_row(
+      applied_seal = sigillo_interna(), contact_email = mario
+    ),
+    storia = carried_out(sigillo_interna()),
+    creata = creata_interna(),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  expect_false(
+    "applied" %in% as.character(esito_di(esito, "1")[["outcome"]])
+  )
+})
+
+
+test_that("su una rinomina col recapito interno la porta non svuota il nome (V11-3)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(graph_user(userPrincipalName = rinominato), carla_rr1()),
+    riga = eseguita_row(
+      applied_seal = sigillo_interna(), contact_email = mario
+    ),
+    storia = carried_out(sigillo_interna()),
+    creata = creata_interna(),
+    mailer = posta_accesa
+  )
+
+  # test
+  # On the 0.26.0 the door wrote an empty name and an empty verdict on the
+  # row carried out, and the channel moved its seal.
+  expect_equal(nrow(identita_della_riga("1")), 0L)
+  expect_length(
+    Filter(function(req) {
+      any(vapply(req[["body"]][["data"]][["requests"]], function(r) {
+        identical(as.character(r[["username"]]), mario)
+      }, logical(1)))
+    }, scritture()),
+    0L
+  )
+})
+
+
+test_that("la revoca chiusa su una persona assente si scrive ancora, col nome vuoto", { # nolint: line_length_linter.
+  # eval
+  # A revoked row whose person the tenant no longer holds is closed before
+  # any instance is asked, and the door writes the empty name, as before.
+  esito <- giro_eseguita_rr1(
+    riga_carla_rr1(),
+    directory_doppia(carla_rr1()),
+    riga = eseguita_row(
+      applied_seal = sigillo_eseguito(), request_status = "revoked"
+    ),
+    storia = c(
+      list(cambio(anna, "request_status = 'revoked'")),
+      carried_out(sigillo_eseguito())
+    ),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito_di(esito, "1")[["outcome"]]), "applied")
+  expect_equal(identita_della_riga("1")[["username"]], "")
+  expect_equal(identita_della_riga("1")[["identity"]], "absent")
+})
+
+
+# ---- A sealed row whose seal field was emptied (RN2, 0.27.0) ----
+
+# Ported from the review of the 0.26.0 (`revisione-nome/
+# test-zz-revisione-nome.R`, RN2). A row the channel carried out and sealed
+# (the seal in the log), whose `applied_seal` field an import emptied, with
+# the person gone from Entra and the old login still known to REDCap. Step
+# 3b picks its candidates by the field, so the row is asked, becomes a
+# collision with the .2 and creates nobody: on the 0.26.0 `pair_change()`
+# no longer stopped it on the identity changed, and the door wrote the
+# proposal on a row carried out.
+test_that("RN2: una riga sigillata dal canale col campo svuotato resta sull'identita' cambiata", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(applied_seal = ""),
+    directory = directory_vuota(),
+    istanza = istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta_accesa, copy_to = "it@example.org"
+  )
+  scritte <- identita_scritte()
+
+  # test
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    "TRASPORTO_IDENTITA_CAMBIATA"
+  )
+  expect_false(
+    !is.null(scritte) &&
+      any(scritte[["username"]] == "mario.rossi.2@ubep.unipd.it")
+  )
+  expect_length(creazioni(), 0L)
+  expect_length(scritture(), 0L)
+})
+
+
+
+# ---- The row tied to the id of its account on Entra (item 11, 0.27.0) ----
+
+id_a <- "00000000-0000-0000-0000-00000000000a"
+id_b <- "00000000-0000-0000-0000-00000000000b"
+
+# The channel's write of the Entra account, as its door makes it.
+id_del_canale <- function(id = id_a, record = "1", chi = "svc-canale-ubep",
+                          timestamp = "2026-08-12 05:00") {
+  list(
+    timestamp = timestamp, username = chi,
+    action = paste0("Update record (API) ", record), record = record,
+    details = paste0("applied_entra_id = '", id, "'")
+  )
+}
+
+# What the round wrote when it carried the row out with the 0.27.0, newest
+# first: the seal, the Entra account, the username.
+eseguita_con_id <- function(sigillo, id = id_a, record = "1",
+                            username = mario) {
+  fatto <- carried_out(sigillo, id = record, username = username)
+  c(fatto[1L], list(id_del_canale(id, record)), fatto[2L])
+}
+
+# What the register was told about the Entra accounts, as a frame, in the
+# order of the writes.
+entra_scritti <- function() {
+  corpi <- lapply(
+    importazioni(c("record_id", "applied_entra_id")), function(req) {
+      jsonlite::fromJSON(
+        form_field_value(req[["body"]][["data"]][["data"]]),
+        simplifyVector = TRUE
+      )
+    }
+  )
+  if (length(corpi) == 0L) NULL else do.call(rbind, corpi)
+}
+
+# Mario's account, the one carried out, born before the seal.
+mario_a <- function(...) graph_user(id = id_a, ...)
+
+# Another account under Mario's name, born after the seal.
+mario_b <- function(...) {
+  graph_user(id = id_b, createdDateTime = "2026-09-01T08:00:00Z", ...)
+}
+
+# Mario's row carried out with its Entra account, changed by `cambi`;
+# `storia` is what people wrote after the execution, newest first.
+giro_entra <- function(directory, cambi = list(), storia = list(),
+                       eseguito = eseguita_con_id(sigillo_eseguito()),
+                       istanza = istanza_che_scrive(), ...) {
+  riga <- utils::modifyList(
+    eseguita_row(applied_seal = sigillo_eseguito(), applied_entra_id = id_a),
+    cambi
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, eseguito),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza, directory = directory, dry_run = FALSE,
+    copy_to = "it@example.org", ...
+  )
+}
+
+# The same row with the internal contact, Mario's UPN.
+giro_entra_interna <- function(directory, ...) {
+  riga <- eseguita_row(
+    applied_seal = sigillo_interna(), contact_email = mario,
+    applied_entra_id = id_a
+  )
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = eseguita_con_id(sigillo_interna()),
+      creazioni = creazioni_finte(creata_interna())
+    ),
+    istanza_che_scrive(), directory = directory, dry_run = FALSE,
+    copy_to = "it@example.org", ...
+  )
+}
+
+dettaglio_uno <- function(esito) {
+  as.character(esito[["esiti"]][["outcome_detail"]])
+}
+
+# Every write the round asked of an instance for this username.
+scritture_per <- function(nome) {
+  Filter(function(req) {
+    any(vapply(req[["body"]][["data"]][["requests"]], function(r) {
+      identical(as.character(r[["username"]]), nome)
+    }, logical(1)))
+  }, scritture())
+}
+
+
+test_that("un nome ridato a un account con gli stessi nome e cognome ferma la riga (V11-1)", { # nolint: line_length_linter.
+  # eval
+  # The internal contact is the name carried out, and the new holder of the
+  # name has Mario's first and last name: the resolution sees nothing.
+  posta <- posta_raccolta()
+  esito <- giro_entra_interna(
+    directory_doppia(mario_b()), mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_length(scritture(), 0L)
+  expect_null(identita_scritte())
+  expect_null(sigilli_scritti())
+  expect_null(entra_scritti())
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+})
+
+
+test_that("un nome ridato a un account con un altro cognome ferma la riga per IT (V11-2)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra_interna(
+    directory_doppia(mario_b(surname = "Neri")), mailer = posta_accesa
+  )
+
+  # test
+  # The 0.26.0 stopped it on DATO_NOME_DIVERGENTE, a code for the referent
+  # that the referent cannot correct.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(identita_scritte())
+})
+
+
+test_that("un nome ridato col recapito esterno ferma la riga e non scrive la proposta (V11-4)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(
+    directory_doppia(mario_b(
+      givenName = "Anna", surname = "Bianchi",
+      officeLocation = "anna.bianchi@example.org"
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(identita_scritte())
+  expect_length(creazioni(), 0L)
+})
+
+
+test_that("un account rinominato col recapito esterno ferma la riga sulla rinomina", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_entra(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The 0.26.0 said TRASPORTO_IDENTITA_CAMBIATA; the identifier says what
+  # happened, and the message names the new username.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+  expect_length(scritture(), 0L)
+  expect_null(identita_scritte())
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(
+    corpo, paste0("Nome utente dell'account ora: ", rinominato), fixed = TRUE
+  )
+  expect_match(
+    corpo, paste0("Username of the account now: ", rinominato), fixed = TRUE
+  )
+})
+
+
+test_that("un account rinominato col recapito interno ferma la riga sulla rinomina (V11-3)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra_interna(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    mailer = posta_accesa
+  )
+
+  # test
+  # The 0.26.0 said DATO_RECAPITO_INTERNO_INESISTENTE, and the door emptied
+  # the name and the verdict of the row carried out.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+  expect_null(identita_scritte())
+})
+
+
+test_that("un account ripristinato con lo stesso id e lo stesso nome resta eseguito", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(directory_doppia(mario_a()), mailer = posta_accesa)
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_null(entra_scritti())
+})
+
+
+test_that("un account cancellato e non ridato resta sull'identita' cambiata", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(directory_vuota(), mailer = posta_accesa)
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(creazioni(), 0L)
+})
+
+
+test_that("la revoca di una riga col nome ridato revoca il nome eseguito (V11-5)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(
+    directory_doppia(mario_b()),
+    cambi = list(request_status = "revoked"),
+    storia = list(cambio(anna, "request_status = 'revoked'")),
+    istanza = istanza_che_revoca(), mailer = posta_accesa
+  )
+
+  # test
+  # Decided on 2026-11-12: the revocation of a name given again is carried
+  # out, on the name carried out, by the item 12.
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(revocati(), mario)
+})
+
+
+test_that("la revoca di un account rinominato con l'id creduto revoca il nome eseguito (V11-6)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    cambi = list(request_status = "revoked"),
+    storia = list(cambio(anna, "request_status = 'revoked'")),
+    istanza = istanza_che_revoca(), mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_equal(revocati(), mario)
+  expect_false(rinominato %in% chiesti_allo_stato())
+})
+
+
+test_that("un'istanza cambiata dal referente prevale sul nome ridato", {
+  # eval
+  esito <- giro_entra(
+    directory_doppia(mario_b()),
+    cambi = list(server = "edc12"),
+    storia = list(cambio(anna, "server = 'edc12'")),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "DATO_COPPIA_CAMBIATA")
+})
+
+
+test_that("alla prima esecuzione il giro scrive l'id dell'account servito, prima del sigillo", { # nolint: line_length_linter.
+  # eval
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+  campi <- vapply(importazioni(), function(req) {
+    sent <- jsonlite::fromJSON(
+      form_field_value(req[["body"]][["data"]][["data"]]),
+      simplifyVector = FALSE
+    )
+    paste(sort(names(sent[[1L]])), collapse = ",")
+  }, character(1))
+  dove <- function(colonne) match(paste(sort(colonne), collapse = ","), campi)
+
+  # test
+  scritti <- entra_scritti()
+  expect_equal(nrow(scritti), 1L)
+  expect_equal(names(scritti), c("record_id", "applied_entra_id"))
+  expect_equal(scritti[["applied_entra_id"]], graph_user()[["id"]])
+  esito_at <- dove(c("record_id", "outcome", "outcome_detail", "outcome_at",
+                     "applied_as"))
+  expect_true(dove(c("record_id", "owned_by")) > esito_at)
+  expect_true(
+    dove(c("record_id", "applied_entra_id")) > dove(c("record_id", "owned_by"))
+  )
+  expect_true(
+    dove(c("record_id", "applied_entra_id")) <
+      dove(c("record_id", "applied_seal", "seal_state"))
+  )
+})
+
+
+test_that("una riga che crea la persona non prende l'id nel giro della creazione", { # nolint: line_length_linter.
+  # eval
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_vuota(), dry_run = FALSE,
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_length(creazioni(), 1L)
+  expect_null(entra_scritti())
+})
+
+
+test_that("una riga creata prende l'id al giro dopo, quando la si esegue", {
+  # eval
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "1", identity = "absent")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(id = id_b)),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_b)
+})
+
+
+test_that("una riga sigillata senza id rieseguita su un nome ridato non prende l'id del nuovo titolare", { # nolint: line_length_linter.
+  # eval
+  # Anna changes the role of the row carried out, which the round carries
+  # out again; in between, Mario's name was given to somebody else.
+  esito <- giro_coppia(
+    list(role_name = "read only"),
+    list(cambio(anna)),
+    directory = directory_doppia(mario_b()),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(entra_scritti())
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("un id importato da un referente non e' creduto, e il giro riscrive quello del canale", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(
+    directory_doppia(mario_a()),
+    cambi = list(applied_entra_id = id_b),
+    storia = list(list(
+      username = anna, record = "1",
+      details = paste0("applied_entra_id = '", id_b, "'")
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
+})
+
+
+test_that("un id gia' nel campo ma non nel log del canale si scrive due volte", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    list(applied_entra_id = graph_user()[["id"]]),
+    directory = directory_doppia(graph_user()),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(
+    entra_scritti()[["applied_entra_id"]], c("", graph_user()[["id"]])
+  )
+  expect_false("TRASPORTO_ENTRA_ID_NON_REGISTRATO" %in% esito[["errori"]])
+})
+
+
+# A register that refuses the second write of the Entra account door, and
+# answers everything else as `registro` does.
+rifiuta_seconda_entra <- function(registro) {
+  volte <- 0L
+  function(data) {
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (length(sent) > 0L &&
+            setequal(names(sent[[1L]]), c("record_id", "applied_entra_id"))) {
+        volte <<- volte + 1L # nolint: assignment_linter.
+        if (volte == 2L) {
+          return('{"error":"The field applied_entra_id could not be saved"}')
+        }
+      }
+    }
+    registro(data)
+  }
+}
+
+
+test_that("la seconda scrittura dell'id rifiutata arriva al record del giro", {
+  # eval
+  riga <- eseguita_row(
+    applied_seal = sigillo_eseguito(), applied_entra_id = graph_user()[["id"]]
+  )
+  esito <- giro(
+    rifiuta_seconda_entra(registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    )),
+    istanza_che_scrive(), dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_true("TRASPORTO_ENTRA_ID_NON_REGISTRATO" %in% esito[["errori"]])
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+})
+
+
+test_that("il riempimento scrive l'id dell'account nato prima del sigillo, senza posta in piu'", { # nolint: line_length_linter.
+  # eval
+  # The same round on a row whose identifier is believed already sends the
+  # messages the fill must not add to.
+  gia <- posta_raccolta()
+  giro_entra(directory_doppia(mario_a()), mailer = gia[["mailer"]])
+  posta <- posta_raccolta()
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user()), mailer = posta[["mailer"]]
+  )
+  corpi <- vapply(posta[["mandate"]](), function(m) m[["body"]], "")
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(entra_scritti()[["applied_entra_id"]], graph_user()[["id"]])
+  expect_length(posta[["mandate"]](), length(gia[["mandate"]]()))
+  expect_false(any(grepl("TRASPORTO_NOME_RIASSEGNATO", corpi, fixed = TRUE)))
+  expect_null(identita_scritte())
+  expect_null(sigilli_scritti())
+})
+
+
+test_that("il riempimento su un account nato dopo il sigillo ferma la riga, senza id", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    directory = directory_doppia(mario_b()), mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(entra_scritti())
+})
+
+
+test_that("un account nato nello stesso minuto del primo sigillo passa", {
+  # eval
+  # The seal is stamped 2026-08-12 05:00 in Rome, 03:00 in UTC.
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user(
+      createdDateTime = "2026-08-12T03:00:59Z"
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "")
+  expect_equal(entra_scritti()[["applied_entra_id"]], graph_user()[["id"]])
+})
+
+
+test_that("un account nato il minuto dopo il primo sigillo ferma la riga", {
+  # eval
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user(
+      createdDateTime = "2026-08-12T03:01:00Z"
+    )),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+})
+
+
+# Mario's row carried out a second time for a change of role: two seals on
+# the same name, the newest the one in force.
+sigillo_ruolo <- function() {
+  request_seal(riga_come_registro(
+    record_id = "1", username = mario, role_name = "read only"
+  ))
+}
+storia_due_sigilli <- function() {
+  list(
+    list(
+      timestamp = "2026-08-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 1", record = "1",
+      details = paste0(
+        "applied_seal = '", sigillo_ruolo(), "', seal_state = 'intact'"
+      )
+    ),
+    cambio(anna, timestamp = "2026-08-19 10:00"),
+    carried_out(sigillo_eseguito())[[1L]],
+    carried_out(sigillo_eseguito())[[2L]]
+  )
+}
+
+
+test_that("il riempimento si misura sul primo sigillo del tratto, non sull'ultimo", { # nolint: line_length_linter.
+  # eval
+  # The name was given again between the two executions: born after the
+  # first seal and before the second.
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_ruolo(), role_name = "read only"
+      ))),
+      storia = storia_due_sigilli(),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(
+      id = id_b, createdDateTime = "2026-08-15T08:00:00Z"
+    )),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(entra_scritti())
+})
+
+
+test_that("una riga passata da una persona a un'altra prima della 0.24.0 non da' un falso allarme", { # nolint: line_length_linter.
+  # eval
+  # Carried out for Giulia in July, then for Mario: the run of Mario's
+  # name starts at the August seal, and his account is from July.
+  giulia_upn <- "giulia.verdi@ubep.unipd.it"
+  storia <- c(
+    carried_out(sigillo_eseguito()),
+    carried_out("aaaaaaaaaaaa", username = giulia_upn)
+  )
+  storia[[3L]][["timestamp"]] <- "2026-07-01 05:00"
+  storia[[4L]][["timestamp"]] <- "2026-07-01 05:00"
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(
+        eseguita_row(applied_seal = sigillo_eseguito())
+      )),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(
+      createdDateTime = "2026-07-15T08:00:00Z"
+    )),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "")
+  expect_equal(entra_scritti()[["applied_entra_id"]], graph_user()[["id"]])
+})
+
+
+test_that("una data di creazione illeggibile non scrive l'id e non ferma la riga", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_coppia(
+    directory = directory_doppia(graph_user(createdDateTime = "ieri")),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_null(entra_scritti())
+})
+
+
+test_that("con la versione non certa il giro non controlla l'id e non lo scrive", { # nolint: line_length_linter.
+  # eval
+  # A seal no state of the log gives: the version carried out is read as the
+  # 0.25.0 read it, and the name it gives may be wrong.
+  esito <- giro_entra(
+    directory_doppia(mario_b()),
+    cambi = list(applied_seal = "000000000000", role_name = "read only"),
+    storia = list(cambio(anna)),
+    eseguito = eseguita_con_id("000000000000"),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_false(grepl("TRASPORTO_NOME_RIASSEGNATO", dettaglio_uno(esito)))
+  expect_null(entra_scritti())
+})
+
+
+test_that("col log dei proprietari non letto il giro non scrive nessun id", {
+  # eval
+  giro(
+    log_illeggibile(registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    )),
+    istanza_che_scrive(), dry_run = FALSE
+  )
+
+  # test
+  expect_null(entra_scritti())
+})
+
+
+test_that("senza l'account del canale il giro non scrive nessun id", {
+  # eval
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), dry_run = FALSE, channel_account = NULL
+  )
+
+  # test
+  expect_null(entra_scritti())
+})
+
+
+test_that("il giro simulato non scrive nessun id, e il nome ridato esce come errore di trasporto", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), applied_entra_id = id_a
+      ))),
+      storia = eseguita_con_id(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(mario_b()),
+    dry_run = TRUE
+  )
+  primo <- entra_scritti()
+  giro(
+    registro_con_log(
+      record_json(list(record_id = "2")),
+      creazioni = creazioni_finte(creata_da_anna("2"))
+    ),
+    istanza_che_scrive(), dry_run = TRUE
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_null(primo)
+  expect_null(entra_scritti())
+})
+
+
+# The calls the round made for the owners' log, `logtype = "record"`.
+letture_proprietari <- function() {
+  Filter(function(req) {
+    data <- req[["body"]][["data"]]
+    identical(form_field_value(data[["content"]] %||% ""), "log") &&
+      identical(form_field_value(data[["logtype"]] %||% ""), "record")
+  }, inviate)
+}
+
+
+test_that("un registro con la sola riga sigillata ferma sulla sua identita' legge il log dei proprietari", { # nolint: line_length_linter.
+  # eval
+  # The rename with the internal contact, alone: no row admitted, none
+  # waiting, none changed, none asked in step 3b.
+  esito <- giro_entra_interna(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_length(letture_proprietari(), 1L)
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+})
+
+# ---- The message of a row stopped on its pair that names nobody (0.27.0) ----
+
+
+test_that("la mail di una riga ferma che non nomina nessuno non dice la proposta come account trovato (RN2)", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_coppia(
+    list(applied_seal = ""),
+    directory = directory_vuota(),
+    istanza = istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  corpi <- vapply(posta[["mandate"]](), function(m) m[["body"]], "")
+
+  # test
+  # A row stopped on its pair whose resolution names nobody has no account
+  # found: the proposal is a name for somebody to create.
+  expect_true(any(grepl("TRASPORTO_IDENTITA_CAMBIATA", corpi, fixed = TRUE)))
+  expect_false(any(grepl("mario.rossi.2@", corpi, fixed = TRUE)))
+  expect_true(any(grepl("Account trovato ora: nessuno", corpi, fixed = TRUE)))
+})
+
+
+# ---- A held row that names nobody asks for the seal left (RE1) ----
+
+# From the review of the unit E of the 0.27.0 (`revisione-entra/
+# test-zz-revisione-entra.R`, REx1). Mario's row 1 with the internal
+# contact, carried out and sealed; Bruno, who does not own it, changes the
+# role, so the row waits for Anna's approval. On Entra Mario's account
+# carries now another surname: the resolution gives no verdict. The door
+# does not write the name of such a row (RR1), so the seal the message asks
+# for has to be the one of the row with the name carried out, or the
+# approval never matches.
+riga_re1 <- function(...) {
+  eseguita_row(
+    applied_seal = sigillo_interna(), contact_email = mario,
+    role_name = "read only", ...
+  )
+}
+
+giro_re1 <- function(riga, storia) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, carried_out(sigillo_interna())),
+      creazioni = creazioni_finte(creata_interna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(surname = "Neri")),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa
+  )
+}
+
+
+test_that("una riga trattenuta che non nomina nessuno chiede il sigillo col nome eseguito (REx1)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_re1(riga_re1(), list(cambio(bruno)))
+  atteso <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, contact_email = mario,
+    role_name = "read only"
+  ))
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", atteso)
+  )
+  expect_null(identita_scritte())
+})
+
+
+test_that("l'approvazione del proprietario col sigillo chiesto passa al giro dopo (REx1-seguito)", { # nolint: line_length_linter.
+  # eval
+  primo <- giro_re1(riga_re1(), list(cambio(bruno)))
+  chiesto <- sub(
+    "^SIGILLO_DIVERSO:", "", as.character(primo[["esiti"]][["outcome_detail"]])
+  )
+  secondo <- giro_re1(
+    riga_re1(approved_seal = chiesto),
+    list(approvazione(anna, chiesto), cambio(bruno))
+  )
+
+  # test
+  # Approved, the row goes on to the code of its identity, which names what
+  # the referent can correct.
+  expect_false(identical(
+    as.character(secondo[["esiti"]][["outcome"]]), "held"
+  ))
+  expect_match(
+    as.character(secondo[["esiti"]][["outcome_detail"]]), "^DATO_"
+  )
+})
+
+
+# ---- A simulated round and the fill (RE2) ----
+
+# From the review of the unit E of the 0.27.0 (REx3): a sealed row, intact,
+# with no identifier, whose account was born before the seal. A real round
+# writes the identifier the fill finds; a simulated one writes nothing.
+giro_re2 <- function(dry_run) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(
+        eseguita_row(applied_seal = sigillo_eseguito())
+      )),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(graph_user(id = id_a)),
+    dry_run = dry_run, mailer = posta_accesa
+  )
+}
+
+
+test_that("il giro simulato non scrive l'id che il riempimento troverebbe (REx3)", { # nolint: line_length_linter.
+  # eval
+  giro_re2(dry_run = TRUE)
+
+  # test
+  expect_null(entra_scritti())
+})
+
+
+test_that("lo stesso giro vero scrive l'id che il riempimento trova (REx3-controllo)", { # nolint: line_length_linter.
+  # eval
+  giro_re2(dry_run = FALSE)
+
+  # test
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
+})
+
+
+# ---- A revoked row that leaves by the item 12 and names nobody (RE3) ----
+
+# From the review of the unit E of the 0.27.0 (REx4b, on G4 of the review of
+# the pair of the 0.26.0). The register holds the new name, written by the
+# door of the 0.25.0 above the seal, and the row is revoked; two accounts
+# carry Mario's contact and none his name, so the resolution is
+# `ambiguous`, which names nobody. The row leaves by the item 12 and revokes
+# the name carried out, and the door writes that name back: `nobody` must
+# not take the write away from it.
+test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il nome eseguito (REx4b)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), username = rinominato,
+        request_status = "revoked"
+      ))),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'")),
+        list(list(
+          username = "svc-canale-ubep", action = "Update record (API) 1",
+          record = "1",
+          details = paste0(
+            "username = '", rinominato, "', identity = 'existing'"
+          )
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(),
+    directory = directory_doppia(
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c1",
+        userPrincipalName = rinominato
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c2",
+        userPrincipalName = "mario.rossi.altro@ubep.unipd.it"
+      )
+    ),
+    dry_run = FALSE
+  )
+  scritte <- identita_scritte()
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_true(mario %in% revocati())
+  expect_false(is.null(scritte))
+  expect_true(mario %in% as.character(scritte[["username"]]))
 })
