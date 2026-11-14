@@ -85,6 +85,11 @@ dictionary_choices <- function(text) {
 #'
 #' `owned_by` is written by the channel alone, and its value is not believed
 #' as written: who owns a row is read from the event log (`log_owner()`).
+#' `applied_entra_id` likewise (decided on 2026-11-12, item 11 of the
+#' 0.27.0): the identifier of the Entra account the row was first carried
+#' out for, believed from the channel's own writes in the log only
+#' (`log_channel_entra_id()`). Read-only, it stays out of the seal, so no
+#' seal moves when it is written.
 #'
 #' @return A character vector of field names.
 #'
@@ -92,7 +97,8 @@ dictionary_choices <- function(text) {
 register_readonly_fields <- function() {
   c(
     "identity", "requested_by", "owned_by", "outcome", "outcome_detail",
-    "outcome_at", "applied_as", "applied_seal", "seal_state"
+    "outcome_at", "applied_as", "applied_seal", "applied_entra_id",
+    "seal_state"
   )
 }
 

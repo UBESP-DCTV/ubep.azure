@@ -314,7 +314,8 @@ record_default <- function(row) {
     requested_by = "anna.bianchi@ubep.unipd.it", owned_by = "",
     request_status = "active",
     outcome = "", outcome_detail = "", outcome_at = "", applied_as = "",
-    applied_seal = "", seal_state = "", approved_seal = ""
+    applied_seal = "", applied_entra_id = "", seal_state = "",
+    approved_seal = ""
   )
   defaults[names(row)] <- row
   defaults

@@ -173,7 +173,8 @@ test_that("il dizionario del pacchetto da lo stesso insieme di sola lettura di p
     marked,
     c(
       "identity", "requested_by", "owned_by", "outcome", "outcome_detail",
-      "outcome_at", "applied_as", "applied_seal", "seal_state"
+      "outcome_at", "applied_as", "applied_seal", "applied_entra_id",
+      "seal_state"
     )
   )
 })
@@ -446,7 +447,7 @@ test_that("the packaged dictionary is a template with no fleet in it", {
   # release of this package to every movement of the fleet, and published the
   # list in a public repository. The other coded fields are the contract's own
   # vocabulary and stay.
-  expect_equal(nrow(dictionary), 22L)
+  expect_equal(nrow(dictionary), 23L)
   expect_true(is.na(choices) || !nzchar(choices))
   for (name in c("identity", "request_status", "outcome")) {
     kept <- dictionary[["Choices, Calculations, OR Slider Labels"]][
@@ -471,7 +472,7 @@ test_that("an instance list fills the template's choices", {
   # shift that map in silence.
   expect_equal(parsed[["code"]], c("srvA", "srvB"))
   expect_equal(parsed[["label"]], c("srvA", "srvB"))
-  expect_equal(nrow(dictionary), 22L)
+  expect_equal(nrow(dictionary), 23L)
 })
 
 
@@ -856,4 +857,99 @@ test_that("senza il campo della risposta sul progetto il pacchetto nuovo ferma i
     "DIZIONARIO_CAMPO_ASSENTE:distinct_username" %in% detto[["differences"]]
   )
   expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
+})
+
+
+test_that("applied_entra_id e' un campo del canale, fuori dal sigillo, dopo applied_seal", { # nolint: line_length_linter.
+  # eval
+  dizionario <- register_dictionary()
+  campi <- dizionario[["Variable / Field Name"]]
+  riga <- dizionario[campi == "applied_entra_id", , drop = FALSE]
+
+  # test
+  # Item 11 of the 0.27.0: the identifier of the Entra account the row was
+  # first carried out for, written by the channel alone and believed from
+  # its log. Read-only, it is not an intent field, so writing it moves no
+  # seal.
+  expect_equal(nrow(riga), 1L)
+  expect_equal(
+    match("applied_entra_id", campi), match("applied_seal", campi) + 1L
+  )
+  expect_equal(match("seal_state", campi), match("applied_entra_id", campi) + 1L)
+  expect_equal(riga[["Form Name"]], "request_register")
+  expect_true(is.na(riga[["Section Header"]]))
+  expect_equal(riga[["Field Type"]], "text")
+  expect_equal(riga[["Field Label"]], "Entra account applied")
+  expect_equal(riga[["Field Note"]], paste(
+    "Written by the channel when it first applies the row: the identifier",
+    "of the Entra account the access was given to. It does not change. If",
+    "the username comes to name another account, or this account takes",
+    "another username, the row stops for IT."
+  ))
+  expect_equal(
+    riga[["Branching Logic (Show field only if...)"]],
+    '[applied_entra_id] <> ""'
+  )
+  expect_equal(riga[["Field Annotation"]], "@READONLY")
+  expect_true("applied_entra_id" %in% register_channel_fields())
+  expect_true("applied_entra_id" %in% register_unsealed_fields())
+  expect_false("applied_entra_id" %in% register_intent_fields())
+  expect_false("applied_entra_id" %in% register_late_seal_fields())
+})
+
+
+test_that("senza applied_entra_id sul progetto il pacchetto nuovo ferma il giro", {
+  # eval
+  vivo <- register_dictionary(c("edc10", "edc12"))
+  vivo <- vivo[
+    vivo[["Variable / Field Name"]] != "applied_entra_id", , drop = FALSE
+  ]
+  detto <- compare_dictionary(vivo, c("edc10", "edc12"))
+
+  # test
+  expect_true(
+    "DIZIONARIO_CAMPO_ASSENTE:applied_entra_id" %in% detto[["differences"]]
+  )
+  expect_true(round_schema_verdict(detto[["differences"]])[["blocks"]])
+})
+
+
+test_that("un campo in piu' sul progetto, come applied_entra_id per la 0.26.0, non ferma il giro", { # nolint: line_length_linter.
+  # eval
+  # The dictionary is imported before the package (D1-D5): the 0.26.0 meets
+  # the field it does not know. Here the packaged dictionary with one field
+  # more stands for the live one.
+  vivo <- register_dictionary(c("edc10", "edc12"))
+  extra <- vivo[vivo[["Variable / Field Name"]] == "applied_entra_id", ,
+                drop = FALSE]
+  extra[["Variable / Field Name"]] <- "campo_futuro"
+  vivo <- rbind(vivo, extra)
+  detto <- compare_dictionary(vivo, c("edc10", "edc12"))
+
+  # test
+  expect_equal(detto[["differences"]], "DIZIONARIO_CAMPO_IN_PIU:campo_futuro")
+  expect_false(round_schema_verdict(detto[["differences"]])[["blocks"]])
+})
+
+
+test_that("il sigillo non cambia con applied_entra_id pieno o assente", {
+  # eval
+  riga <- data.frame(
+    record_id = "1", server = "edc10", project_id = "9003",
+    username = "mario.rossi@ubep.unipd.it", identity = "existing",
+    first_name = "Mario", last_name = "Rossi",
+    contact_email = "mario.rossi@example.org", distinct_username = "",
+    role_name = "data entry", dag_name = "", expiration = "",
+    requested_by = "anna.bianchi@ubep.unipd.it", owned_by = "",
+    request_status = "active", outcome = "", outcome_detail = "",
+    outcome_at = "", applied_as = "", applied_seal = "", seal_state = "",
+    approved_seal = "", stringsAsFactors = FALSE
+  )
+  con <- riga
+  con[["applied_entra_id"]] <- "00000000-0000-0000-0000-00000000000a"
+
+  # test
+  # V11-9: the field is read-only, so it stays out of the seal; the seals
+  # the channel wrote before the field existed hold.
+  expect_identical(request_seal(con), request_seal(riga))
 })

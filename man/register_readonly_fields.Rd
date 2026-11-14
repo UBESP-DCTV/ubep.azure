@@ -18,5 +18,10 @@ a success nobody produced.
 \details{
 \code{owned_by} is written by the channel alone, and its value is not believed
 as written: who owns a row is read from the event log (\code{log_owner()}).
+\code{applied_entra_id} likewise (decided on 2026-11-12, item 11 of the
+0.27.0): the identifier of the Entra account the row was first carried
+out for, believed from the channel's own writes in the log only
+(\code{log_channel_entra_id()}). Read-only, it stays out of the seal, so no
+seal moves when it is written.
 }
 \keyword{internal}
