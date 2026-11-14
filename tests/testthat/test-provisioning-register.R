@@ -3875,3 +3875,300 @@ test_that("i nomi concessi sono quelli delle versioni attive sigillate dal canal
   expect_length(log_granted_names(ritirata, "1", canale), 0L)
   expect_error(log_granted_names(ritirata, "1", NULL))
 })
+
+
+# ---- The Entra account of a row (item 11, 0.27.0) ----
+
+id_a <- "00000000-0000-0000-0000-00000000000a"
+id_b <- "00000000-0000-0000-0000-00000000000b"
+nome_eseguito <- "mario.rossi@ubep.unipd.it"
+
+# The channel's write of the Entra account, as its door leaves it.
+id_scritto <- function(id = id_a, chi = canale, ...) {
+  list(
+    username = chi, action = "Update record (API) 1",
+    details = paste0("applied_entra_id = '", id, "'"), ...
+  )
+}
+
+# A sweep of the accounts given, in the shape `directory_users()` answers.
+spazzata <- function(...) {
+  directory_frame(lapply(list(...), function(account) {
+    utils::modifyList(
+      list(
+        id = id_a, userPrincipalName = nome_eseguito,
+        createdDateTime = "2026-01-01T00:00:00Z", accountEnabled = TRUE
+      ),
+      account
+    )
+  }))
+}
+
+
+test_that("l'id creduto e' l'ultima scrittura del canale nella forma della porta", { # nolint: line_length_linter.
+  # eval
+  eventi <- eventi_finti(
+    id_scritto(id_b, timestamp = "2026-09-02 05:00"),
+    id_scritto(id_a),
+    list(username = canale, action = "Create record 1", details = "")
+  )
+
+  # test
+  expect_equal(log_channel_entra_id(eventi, "1", canale), id_b)
+  expect_equal(log_channel_entra_id(eventi, "1", "SVC-Canale-Ubep"), id_b)
+  expect_equal(log_channel_entra_id(eventi_finti(), "1", canale), "")
+})
+
+
+test_that("un id scritto da un referente non e' creduto", {
+  # eval
+  eventi <- eventi_finti(
+    id_scritto(id_b, chi = creatrice),
+    id_scritto(id_a)
+  )
+
+  # test
+  expect_equal(log_channel_entra_id(eventi, "1", canale), id_a)
+  expect_equal(
+    log_channel_entra_id(eventi_finti(id_scritto(chi = creatrice)), "1", canale),
+    ""
+  )
+})
+
+
+test_that("una scrittura dell'id senza autore rende l'id ignoto", {
+  # eval
+  eventi <- eventi_finti(id_scritto(id_b, chi = ""), id_scritto(id_a))
+
+  # test
+  # It could be the channel's: the answer is unknown, and nothing is checked
+  # nor written for the row.
+  expect_true(is.na(log_channel_entra_id(eventi, "1", canale)))
+})
+
+
+test_that("una scrittura del canale fuori dalla forma della porta rende l'id ignoto", { # nolint: line_length_linter.
+  # eval
+  eventi <- eventi_finti(
+    list(
+      username = canale,
+      details = paste0("applied_entra_id = '", id_b, "', outcome = 'applied'")
+    ),
+    id_scritto(id_a)
+  )
+
+  # test
+  expect_true(is.na(log_channel_entra_id(eventi, "1", canale)))
+})
+
+
+test_that("una scrittura vuota del canale fa leggere quella sotto", {
+  # eval
+  eventi <- eventi_finti(id_scritto(""), id_scritto(id_a))
+
+  # test
+  expect_equal(log_channel_entra_id(eventi, "1", canale), id_a)
+})
+
+
+test_that("l'id di una vita precedente della riga non vale", {
+  # eval
+  eventi <- eventi_finti(
+    list(username = creatrice, action = "Create record 1", details = ""),
+    id_scritto(id_a),
+    list(username = creatrice, action = "Create record 1", details = "")
+  )
+
+  # test
+  expect_equal(log_channel_entra_id(eventi, "1", canale), "")
+})
+
+
+test_that("il corpo dell'id porta solo record_id e applied_entra_id", {
+  # test
+  corpo <- entra_id_payload("1", id_a)
+  expect_equal(names(corpo), c("record_id", "applied_entra_id"))
+  expect_equal(corpo[["applied_entra_id"]], id_a)
+  expect_equal(entra_id_payload("1", "")[["applied_entra_id"]], "")
+  expect_error(entra_id_payload("1", NA_character_))
+  expect_error(entra_id_payload("1", "a'b"))
+})
+
+
+test_that("il nome eseguito di un altro account e' il nome riassegnato", {
+  # test
+  expect_equal(
+    entra_account_change(nome_eseguito, id_a, spazzata(list(id = id_b))),
+    list(code = "TRASPORTO_NOME_RIASSEGNATO", upn = "")
+  )
+  # Not on a revoked row, which governs its pair.
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, id_a, spazzata(list(id = id_b)), revoked = TRUE
+    )[["code"]],
+    ""
+  )
+  # A guest holding the name counts: a username is unique in the tenant.
+  expect_equal(
+    entra_account_change(
+      " Mario.Rossi@ubep.unipd.it ", id_a,
+      spazzata(list(id = id_b, userType = "Guest"))
+    )[["code"]],
+    "TRASPORTO_NOME_RIASSEGNATO"
+  )
+})
+
+
+test_that("l'account dell'id sotto un altro nome e' la rinomina", {
+  # eval
+  nuovo <- "mario.rossi.nuovo@ubep.unipd.it"
+
+  # test
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, id_a, spazzata(list(userPrincipalName = nuovo))
+    ),
+    list(code = "TRASPORTO_ACCOUNT_RINOMINATO", upn = nuovo)
+  )
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, toupper(id_a),
+      spazzata(list(userPrincipalName = nuovo)), revoked = TRUE
+    )[["code"]],
+    "TRASPORTO_ACCOUNT_RINOMINATO"
+  )
+})
+
+
+test_that("lo stesso account, uno cancellato o una spazzata strana non danno codici", { # nolint: line_length_linter.
+  # test
+  nessuno <- list(code = "", upn = "")
+  expect_equal(entra_account_change(nome_eseguito, id_a, spazzata(list())),
+               nessuno)
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, id_a, spazzata(list(userPrincipalName = "altro@x.it", id = id_b))
+    ),
+    nessuno
+  )
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, id_a, spazzata(list(id = id_b), list(id = id_a))
+    ),
+    nessuno
+  )
+  expect_equal(
+    entra_account_change(
+      nome_eseguito, id_a,
+      spazzata(
+        list(userPrincipalName = "a@x.it"), list(userPrincipalName = "b@x.it")
+      )
+    ),
+    nessuno
+  )
+  expect_equal(entra_account_change("", id_a, spazzata(list())), nessuno)
+})
+
+
+test_that("il riempimento prende l'account nato prima della fine del minuto del sigillo", { # nolint: line_length_linter.
+  # eval
+  # 2026-08-12 05:00 in Rome is 03:00 in UTC, summer time.
+  prima <- spazzata(list(createdDateTime = "2026-08-12T03:00:59Z"))
+  dopo <- spazzata(list(createdDateTime = "2026-08-12T03:01:00Z"))
+  inverno <- spazzata(list(createdDateTime = "2026-01-12T04:00:30Z"))
+
+  # test
+  expect_equal(
+    entra_fill(nome_eseguito, prima, "2026-08-12 05:00"),
+    list(id = id_a, code = "")
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, dopo, "2026-08-12 05:00"),
+    list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO")
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, dopo, "2026-08-12 05:00", revoked = TRUE),
+    list(id = "", code = "")
+  )
+  # Winter time: 05:00 in Rome is 04:00 in UTC.
+  expect_equal(
+    entra_fill(nome_eseguito, inverno, "2026-01-12 05:00")[["id"]], id_a
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, inverno, "2026-01-12 04:59")[["code"]],
+    "TRASPORTO_NOME_RIASSEGNATO"
+  )
+})
+
+
+test_that("il riempimento senza data, senza sigillo o senza titolare non fa niente", { # nolint: line_length_linter.
+  # eval
+  nessuno <- list(id = "", code = "")
+
+  # test
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "")),
+               "2026-08-12 05:00"),
+    nessuno
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "ieri")),
+               "2026-08-12 05:00"),
+    nessuno
+  )
+  expect_equal(entra_fill(nome_eseguito, spazzata(list()), character()),
+               nessuno)
+  expect_equal(entra_fill(nome_eseguito, spazzata(list()), NA_character_),
+               nessuno)
+  expect_equal(entra_fill(nome_eseguito, spazzata(list()), "2026-08-12"),
+               nessuno)
+  expect_equal(
+    entra_fill(
+      nome_eseguito, spazzata(list(userPrincipalName = "altro@x.it")),
+      "2026-08-12 05:00"
+    ),
+    nessuno
+  )
+  expect_equal(
+    entra_fill(
+      nome_eseguito, spazzata(list(), list(id = id_b)), "2026-08-12 05:00"
+    ),
+    nessuno
+  )
+})
+
+
+test_that("i codici dell'account vengono dopo la coppia e prima dell'identita' cambiata", { # nolint: line_length_linter.
+  # test
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "mario.rossi@ubep.unipd.it", FALSE, FALSE,
+      account = "TRASPORTO_NOME_RIASSEGNATO"
+    ),
+    list(code = "TRASPORTO_NOME_RIASSEGNATO", changed = "account")
+  )
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "mario.rossi.nuovo@ubep.unipd.it", FALSE, FALSE,
+      account = "TRASPORTO_ACCOUNT_RINOMINATO"
+    ),
+    list(code = "TRASPORTO_ACCOUNT_RINOMINATO", changed = "account")
+  )
+  expect_equal(
+    pair_change(
+      eseguiti, ora(server = "edc12"), "mario.rossi@ubep.unipd.it", FALSE,
+      FALSE, account = "TRASPORTO_NOME_RIASSEGNATO"
+    )[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  expect_equal(
+    pair_change(
+      eseguiti, ora(), "giulia.verdi@ubep.unipd.it", FALSE, TRUE,
+      account = "TRASPORTO_ACCOUNT_RINOMINATO"
+    )[["code"]],
+    "DATO_COPPIA_CAMBIATA"
+  )
+  expect_error(pair_change(
+    eseguiti, ora(), "", FALSE, FALSE, account = "ALTRO"
+  ))
+})

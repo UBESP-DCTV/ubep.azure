@@ -430,6 +430,40 @@ owner_payload <- function(record_id, owner) {
 }
 
 
+#' Build the body that writes the Entra account of a row into the register
+#'
+#' A fifth door beside the outcome, the identity, the owner and the seal
+#' (item 11 of the 0.27.0), and for the same reason: the columns are fixed
+#' here so a bug cannot rewrite anything else. The value is the `id` of the
+#' Entra account the row was first carried out for, as the sweep reads it.
+#'
+#' An empty value is accepted, unlike the owner's: the round writes one only
+#' just before the value itself, when the field already shows the value and
+#' the log holds no write of the channel's (`log_channel_entra_id()`),
+#' since REDCap logs no write that leaves a field as it was.
+#'
+#' @param record_id The register record to write to.
+#' @param entra_id The account's identifier, or `""`.
+#'
+#' @return A one-row data frame with exactly `record_id` and
+#'   `applied_entra_id`.
+#'
+#' @keywords internal
+entra_id_payload <- function(record_id, entra_id) {
+  stopifnot(
+    is.character(record_id), length(record_id) == 1L,
+    is.character(entra_id), length(entra_id) == 1L, !is.na(entra_id),
+    !grepl("'", entra_id, fixed = TRUE)
+  )
+
+  data.frame(
+    record_id = record_id,
+    applied_entra_id = entra_id,
+    stringsAsFactors = FALSE
+  )
+}
+
+
 #' Who last wrote one of these fields on this row
 #'
 #' Reads `details`, which REDCap fills with the fields an edit touched and the
@@ -1041,6 +1075,69 @@ log_owner <- function(events, record, creator, channel_account = NULL,
 }
 
 
+#' The Entra account the channel last wrote on a row, from the log
+#'
+#' Item 11 of the 0.27.0 (decided on 2026-11-12): `applied_entra_id` is
+#' believed from the log only, as `owned_by` is (`log_owner()`). The value is
+#' the newest write of the field signed by an account of `channel_account`
+#' in the row's current life (`log_of_record()`), in the form of its door,
+#' `register_entra_id_import()`: `details` holding `applied_entra_id =
+#' '<value>'` and nothing else. The field is `@READONLY` on the form and
+#' written by an import as any other, so a value a referent imported is not
+#' the channel's and is passed over.
+#'
+#' Two writes make the answer unknown, the direction that neither checks nor
+#' writes anything for the row: a write of the field whose author is blank
+#' or missing, which could be the channel's, above the one believed; and a
+#' write of the channel's in another form, beside other fields, whose value
+#' cannot be told apart from theirs. A write of the channel's that leaves
+#' the field empty names nobody, and the one below it is read: it is the
+#' first half of a write the door makes twice, when the field already showed
+#' the value.
+#'
+#' @param events The owners' log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more. Not `NULL`: without them no value is believed.
+#'
+#' @return One identifier; `""` when the channel never wrote one in the
+#'   row's current life; `NA_character_` when the log cannot say.
+#'
+#' @keywords internal
+log_channel_entra_id <- function(events, record, channel_account) {
+  stopifnot(
+    is.data.frame(events), !is.null(channel_account),
+    channel_account_valid(channel_account)
+  )
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  authors <- trimws(as.character(mine[["username"]]))
+  details <- trimws(as.character(mine[["details"]]))
+  details[is.na(details)] <- ""
+  door <- regmatches(
+    details, regexec("^applied_entra_id\\s*=\\s*'([^']*)'$", details)
+  )
+  for (k in which(log_wrote(mine, "applied_entra_id"))) {
+    if (is.na(authors[[k]]) || !nzchar(authors[[k]])) {
+      return(NA_character_)
+    }
+    if (!authors[[k]] %in% channel) {
+      next
+    }
+    hit <- door[[k]]
+    if (length(hit) < 2L) {
+      return(NA_character_)
+    }
+    value <- trimws(hit[[2L]])
+    if (nzchar(value)) {
+      return(value)
+    }
+  }
+  ""
+}
+
+
 #' Who changed a row since the round last applied it
 #'
 #' The people whose writes to an intent field stand between the round's last
@@ -1617,6 +1714,22 @@ log_value_as_register <- function(value, field) {
 #' The pair comes first: it is a change the referent made and can undo, and
 #' the account is looked at once it is back.
 #'
+#' **The account carried out is the identifier on Entra too**, decided on
+#' 2026-11-12 (item 11 of the 0.27.0). Two codes more, for IT, read from
+#' `applied_entra_id` and handed in as `account` (`entra_account_change()`,
+#' `entra_fill()`), after `DATO_COPPIA_CAMBIATA` and before
+#' `TRASPORTO_IDENTITA_CAMBIATA`, with `changed = "account"`:
+#'
+#' - `TRASPORTO_NOME_RIASSEGNATO`: the username carried out names now
+#'   another account, deleted and given again, or made again by hand under
+#'   the same name. The resolution may see nothing, since the name and the
+#'   contact are the same;
+#' - `TRASPORTO_ACCOUNT_RINOMINATO`: nobody carries the username carried out,
+#'   and the account carried out is on Entra under another one.
+#'
+#' The identifier only adds stops: one that matches lets nothing through
+#' that the rest of this function stops.
+#'
 #' Who the round would serve is the resolution's to say. A verdict that
 #' names nobody, `ambiguous` or a collision nobody answered, is left to the
 #' code of the identity, which concedes nothing either; a person to create is
@@ -1649,21 +1762,27 @@ log_value_as_register <- function(value, field) {
 #'   than the channel stands in the row since its last execution; `NA` when
 #'   the log does not say who wrote it, which counts as a write.
 #' @param revoked Whether the row asks for `revoked`.
+#' @param account What the identifier on Entra says, `""` when it says
+#'   nothing: `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`.
 #'
-#' @return A list with `code`, one of the two codes or `""`, and `changed`,
+#' @return A list with `code`, one of the four codes or `""`, and `changed`,
 #'   which of `"server"`, `"project_id"` and `"person"` moved, or `"account"`
-#'   for the second code.
+#'   for the other three.
 #'
 #' @keywords internal
 pair_change <- function(executed, current, target, creating, rewritten,
-                        revoked = FALSE) {
+                        revoked = FALSE, account = "") {
   stopifnot(
     is.character(executed),
     all(c("server", "project_id", "username") %in% names(executed)),
     is.character(target), length(target) == 1L,
     is.logical(creating), length(creating) == 1L, !is.na(creating),
     is.logical(rewritten), length(rewritten) == 1L,
-    is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
+    is.logical(revoked), length(revoked) == 1L, !is.na(revoked),
+    is.character(account), length(account) == 1L,
+    account %in% c(
+      "", "TRASPORTO_NOME_RIASSEGNATO", "TRASPORTO_ACCOUNT_RINOMINATO"
+    )
   )
 
   now <- function(field) {
@@ -1694,10 +1813,173 @@ pair_change <- function(executed, current, target, creating, rewritten,
   if (length(changed) > 0L) {
     return(list(code = "DATO_COPPIA_CAMBIATA", changed = changed))
   }
+  if (nzchar(account)) {
+    return(list(code = account, changed = "account"))
+  }
   if (person) {
     return(list(code = "TRASPORTO_IDENTITA_CAMBIATA", changed = "account"))
   }
   list(code = "", changed = character())
+}
+
+
+#' Whether the Entra account a row was carried out for moved
+#'
+#' Item 11 of the 0.27.0 (decided on 2026-11-12). The username a row was
+#' carried out for is compared with the account whose identifier the
+#' channel wrote at the first execution, `applied_entra_id`, against the
+#' sweep whole, guests included: a username is unique in the tenant, not
+#' among its members.
+#'
+#' - The username carried out is another account's, one with another
+#'   identifier: `TRASPORTO_NOME_RIASSEGNATO`, unless the row is revoked. A
+#'   revoked row governs its pair, and taking away is the direction that
+#'   does not grant.
+#' - Nobody carries the username carried out, and the account of the
+#'   identifier is in the sweep under another username:
+#'   `TRASPORTO_ACCOUNT_RINOMINATO`, with that username.
+#' - Nobody carries it and the identifier is not in the sweep, the account
+#'   deleted and its name not given again: nothing, `pair_change()` decides
+#'   as before.
+#' - The username carried out is the account of the identifier: nothing.
+#' - Two accounts with the same username, or with the same identifier, a
+#'   sweep this package does not understand: nothing.
+#'
+#' Pure: the caller asks only on a row whose version carried out is certain,
+#' with an identifier believed, and that does not leave by `revocation_exits()`.
+#'
+#' @param executed_username The username the row was carried out for.
+#' @param believed_id The identifier believed, never empty.
+#' @param directory The sweep, as `directory_users()` returns it.
+#' @param revoked Whether the row asks for `revoked`.
+#'
+#' @return A list with `code`, one of the two codes or `""`, and `upn`, the
+#'   username the account of the identifier carries now when it was renamed,
+#'   `""` otherwise.
+#'
+#' @keywords internal
+entra_account_change <- function(executed_username, believed_id, directory,
+                                 revoked = FALSE) {
+  stopifnot(
+    is.character(executed_username), length(executed_username) == 1L,
+    is.character(believed_id), length(believed_id) == 1L,
+    !is.na(believed_id), nzchar(trimws(believed_id)),
+    is.data.frame(directory),
+    is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
+  )
+
+  nothing <- list(code = "", upn = "")
+  name <- identity_normalize(executed_username)
+  if (is.na(name) || !nzchar(name)) {
+    return(nothing)
+  }
+  upns <- identity_normalize(directory[["userPrincipalName"]])
+  ids <- identity_normalize(directory[["id"]])
+  id <- identity_normalize(believed_id)
+
+  holders <- which(!is.na(upns) & upns == name)
+  if (length(holders) > 1L) {
+    return(nothing)
+  }
+  if (length(holders) == 1L) {
+    if (!is.na(ids[[holders]]) && ids[[holders]] == id) {
+      return(nothing)
+    }
+    if (revoked) {
+      return(nothing)
+    }
+    return(list(code = "TRASPORTO_NOME_RIASSEGNATO", upn = ""))
+  }
+
+  same <- which(!is.na(ids) & ids == id)
+  if (length(same) != 1L) {
+    return(nothing)
+  }
+  now <- trimws(as.character(directory[["userPrincipalName"]][[same]]))
+  if (is.na(now) || !nzchar(now)) {
+    return(nothing)
+  }
+  list(code = "TRASPORTO_ACCOUNT_RINOMINATO", upn = now)
+}
+
+
+#' The Entra account of a row carried out before the identifier existed
+#'
+#' Item 11 of the 0.27.0 (decided on 2026-11-12): the rows the channel
+#' carried out before `applied_entra_id` existed have none, and get it from
+#' the sweep, with a guard. The account that carries the username carried
+#' out now is the one served only if it was born before the row was first
+#' carried out under that name: `since` is the first seal of the newest run
+#' of executions of that name, `report_person_since()`, in Rome's civil time
+#' and to the minute as the log stamps it. The reference is the first seal
+#' of the run and not the last: with the last, a name given again and then
+#' an execution for a change of role would pass.
+#'
+#' - Born before the end of that minute, `createdDateTime` read in UTC
+#'   (`report_graph_time()`): the identifier is written, with no message.
+#' - Born after: on a row not revoked `TRASPORTO_NOME_RIASSEGNATO` and no
+#'   identifier; on a revoked row neither.
+#' - A date that does not read, no `since`, nobody or two accounts carrying
+#'   the name: neither, and the next round tries again.
+#'
+#' An account born in the same minute as the first seal passes: the log has
+#' minutes and Graph seconds, and a creation precedes the first execution by
+#' a round. An older account renamed onto the name freed by a deleted one
+#' passes too, the one case the guard does not see.
+#'
+#' @param executed_username The username the row was carried out for.
+#' @param directory The sweep, as `directory_users()` returns it.
+#' @param since `"%Y-%m-%d %H:%M"` in Rome, as `report_person_since()`
+#'   answers; `character()` or `NA` when the log does not say.
+#' @param revoked Whether the row asks for `revoked`.
+#'
+#' @return A list with `id`, the identifier to write or `""`, and `code`,
+#'   `TRASPORTO_NOME_RIASSEGNATO` or `""`.
+#'
+#' @keywords internal
+entra_fill <- function(executed_username, directory, since,
+                       revoked = FALSE) {
+  stopifnot(
+    is.character(executed_username), length(executed_username) == 1L,
+    is.data.frame(directory),
+    is.character(since) || (length(since) == 1L && is.na(since)),
+    length(since) <= 1L,
+    is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
+  )
+
+  nothing <- list(id = "", code = "")
+  name <- identity_normalize(executed_username)
+  if (is.na(name) || !nzchar(name)) {
+    return(nothing)
+  }
+  if (length(since) != 1L || is.na(since) ||
+        !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$", since)) {
+    return(nothing)
+  }
+  limit <- as.POSIXct(since, format = "%Y-%m-%d %H:%M", tz = "Europe/Rome")
+  if (is.na(limit)) {
+    return(nothing)
+  }
+  limit <- limit + 60
+
+  upns <- identity_normalize(directory[["userPrincipalName"]])
+  holders <- which(!is.na(upns) & upns == name)
+  if (length(holders) != 1L) {
+    return(nothing)
+  }
+  id <- trimws(as.character(directory[["id"]][[holders]]))
+  born <- report_graph_time(directory[["createdDateTime"]][[holders]])
+  if (is.na(id) || !nzchar(id) || is.na(born)) {
+    return(nothing)
+  }
+  # Compared as instants: the two clocks are Rome's and UTC.
+  if (as.numeric(born) < as.numeric(limit)) {
+    return(list(id = id, code = ""))
+  }
+  if (revoked) {
+    return(nothing)
+  }
+  list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO")
 }
 
 

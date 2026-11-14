@@ -4,7 +4,15 @@
 \alias{pair_change}
 \title{Whether a row the round carried out now asks for another pair}
 \usage{
-pair_change(executed, current, target, creating, rewritten, revoked = FALSE)
+pair_change(
+  executed,
+  current,
+  target,
+  creating,
+  rewritten,
+  revoked = FALSE,
+  account = ""
+)
 }
 \arguments{
 \item{executed}{The \code{server}, \code{project_id} and \code{username} carried out:
@@ -24,11 +32,14 @@ than the channel stands in the row since its last execution; \code{NA} when
 the log does not say who wrote it, which counts as a write.}
 
 \item{revoked}{Whether the row asks for \code{revoked}.}
+
+\item{account}{What the identifier on Entra says, \code{""} when it says
+nothing: \code{TRASPORTO_NOME_RIASSEGNATO} or \code{TRASPORTO_ACCOUNT_RINOMINATO}.}
 }
 \value{
-A list with \code{code}, one of the two codes or \code{""}, and \code{changed},
+A list with \code{code}, one of the four codes or \code{""}, and \code{changed},
 which of \code{"server"}, \code{"project_id"} and \code{"person"} moved, or \code{"account"}
-for the second code.
+for the other three.
 }
 \description{
 Decided on 2026-11-09: \strong{a row the channel has sealed does not change its
@@ -60,6 +71,23 @@ nothing to undo.
 
 The pair comes first: it is a change the referent made and can undo, and
 the account is looked at once it is back.
+
+\strong{The account carried out is the identifier on Entra too}, decided on
+2026-11-12 (item 11 of the 0.27.0). Two codes more, for IT, read from
+\code{applied_entra_id} and handed in as \code{account} (\code{entra_account_change()},
+\code{entra_fill()}), after \code{DATO_COPPIA_CAMBIATA} and before
+\code{TRASPORTO_IDENTITA_CAMBIATA}, with \code{changed = "account"}:
+\itemize{
+\item \code{TRASPORTO_NOME_RIASSEGNATO}: the username carried out names now
+another account, deleted and given again, or made again by hand under
+the same name. The resolution may see nothing, since the name and the
+contact are the same;
+\item \code{TRASPORTO_ACCOUNT_RINOMINATO}: nobody carries the username carried out,
+and the account carried out is on Entra under another one.
+}
+
+The identifier only adds stops: one that matches lets nothing through
+that the rest of this function stops.
 
 Who the round would serve is the resolution's to say. A verdict that
 names nobody, \code{ambiguous} or a collision nobody answered, is left to the
