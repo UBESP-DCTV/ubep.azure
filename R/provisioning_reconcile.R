@@ -2255,7 +2255,10 @@ provisioning_reconcile <- function(register_url,
     granted = granted,
     identified = data.frame(
       record_id = as.character(record_ids),
-      username = resolved_names,
+      # A row stopped on its pair whose resolution names nobody carries no
+      # account found: its username is a proposal or a declaration, and the
+      # message would say "Account found now:" before it.
+      username = ifelse(moved & !resolvable, "", resolved_names),
       identity = verdicts,
       # The name the round composed, which the register does not hold: the
       # message of a collision names it, since it is the name taken.

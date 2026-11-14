@@ -10480,3 +10480,29 @@ test_that("un registro con la sola riga sigillata ferma sulla sua identita' legg
   expect_length(letture_proprietari(), 1L)
   expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
 })
+
+# ---- The message of a row stopped on its pair that names nobody (0.27.0) ----
+
+
+test_that("la mail di una riga ferma che non nomina nessuno non dice la proposta come account trovato (RN2)", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  giro_coppia(
+    list(applied_seal = ""),
+    directory = directory_vuota(),
+    istanza = istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta[["mailer"]], copy_to = "it@example.org"
+  )
+  corpi <- vapply(posta[["mandate"]](), function(m) m[["body"]], "")
+
+  # test
+  # A row stopped on its pair whose resolution names nobody has no account
+  # found: the proposal is a name for somebody to create.
+  expect_true(any(grepl("TRASPORTO_IDENTITA_CAMBIATA", corpi, fixed = TRUE)))
+  expect_false(any(grepl("mario.rossi.2@", corpi, fixed = TRUE)))
+  expect_true(any(grepl("Account trovato ora: nessuno", corpi, fixed = TRUE)))
+})
