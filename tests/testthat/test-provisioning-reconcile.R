@@ -10510,7 +10510,7 @@ test_that("la mail di una riga ferma che non nomina nessuno non dice la proposta
 })
 
 
-# ---- A held row that names nobody asks for the seal the round leaves (RE1) ----
+# ---- A held row that names nobody asks for the seal left (RE1) ----
 
 # From the review of the unit E of the 0.27.0 (`revisione-entra/
 # test-zz-revisione-entra.R`, REx1). Mario's row 1 with the internal
@@ -10642,7 +10642,9 @@ test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il no
         list(list(
           username = "svc-canale-ubep", action = "Update record (API) 1",
           record = "1",
-          details = paste0("username = '", rinominato, "', identity = 'existing'")
+          details = paste0(
+            "username = '", rinominato, "', identity = 'existing'"
+          )
         )),
         carried_out(sigillo_eseguito())
       ),
