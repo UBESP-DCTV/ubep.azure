@@ -72,7 +72,8 @@ hard_names <- c(
   "D\u2019Angelo", "O\u2018Hara", "Bianchi-Verdi", "Bianchi - Verdi",
   "Nu\u00f1ez", "Nu\u006e\u0303ez", "M\u00fcller", "Mu\u0308ller",
   "Cafe\u0301", "Caf\u00e9", "\u0160koda", "Garc\u00eda L\u00f3pez",
-  "\u00c9lodie", "Fran\u00e7ois", "\u00d8stergaard", "\u0141ukasz", "Stra\u00dfe",
+  "\u00c9lodie", "Fran\u00e7ois", "\u00d8stergaard", "\u0141ukasz",
+  "Stra\u00dfe",
   "\u0645\u062d\u0645\u062f", "\u0418\u0432\u0430\u043d\u043e\u0432",
   "\u5f20\u4f1f", "a.b.c", "a..b", "a b\tc", "123", "x_y", "",
   " ", "...", "'", NA_character_

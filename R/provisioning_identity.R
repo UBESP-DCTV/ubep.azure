@@ -762,7 +762,8 @@ resolve_against_directory <- function(request,
   # the name rule cannot judge. It is not a different person — it is a person
   # the directory says nothing about — and letting it fall through would create
   # a second account for somebody who already has one.
-  if (any(candidate & carries & !nzchar(clean_string(directory[["surname"]])))) {
+  unreadable <- !nzchar(clean_string(directory[["surname"]]))
+  if (any(candidate & carries & unreadable)) {
     return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
   }
 
