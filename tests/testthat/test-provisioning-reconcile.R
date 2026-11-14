@@ -10508,3 +10508,75 @@ test_that("la mail di una riga ferma che non nomina nessuno non dice la proposta
   expect_false(any(grepl("mario.rossi.2@", corpi, fixed = TRUE)))
   expect_true(any(grepl("Account trovato ora: nessuno", corpi, fixed = TRUE)))
 })
+
+
+# ---- A held row that names nobody asks for the seal the round leaves (RE1) ----
+
+# From the review of the unit E of the 0.27.0 (`revisione-entra/
+# test-zz-revisione-entra.R`, REx1). Mario's row 1 with the internal
+# contact, carried out and sealed; Bruno, who does not own it, changes the
+# role, so the row waits for Anna's approval. On Entra Mario's account
+# carries now another surname: the resolution gives no verdict. The door
+# does not write the name of such a row (RR1), so the seal the message asks
+# for has to be the one of the row with the name carried out, or the
+# approval never matches.
+riga_re1 <- function(...) {
+  eseguita_row(
+    applied_seal = sigillo_interna(), contact_email = mario,
+    role_name = "read only", ...
+  )
+}
+
+giro_re1 <- function(riga, storia) {
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(storia, carried_out(sigillo_interna())),
+      creazioni = creazioni_finte(creata_interna())
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(surname = "Neri")),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa
+  )
+}
+
+
+test_that("una riga trattenuta che non nomina nessuno chiede il sigillo col nome eseguito (REx1)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_re1(riga_re1(), list(cambio(bruno)))
+  atteso <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, contact_email = mario,
+    role_name = "read only"
+  ))
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_equal(
+    as.character(esito[["esiti"]][["outcome_detail"]]),
+    paste0("SIGILLO_DIVERSO:", atteso)
+  )
+  expect_null(identita_scritte())
+})
+
+
+test_that("l'approvazione del proprietario col sigillo chiesto passa al giro dopo (REx1-seguito)", { # nolint: line_length_linter.
+  # eval
+  primo <- giro_re1(riga_re1(), list(cambio(bruno)))
+  chiesto <- sub(
+    "^SIGILLO_DIVERSO:", "", as.character(primo[["esiti"]][["outcome_detail"]])
+  )
+  secondo <- giro_re1(
+    riga_re1(approved_seal = chiesto),
+    list(approvazione(anna, chiesto), cambio(bruno))
+  )
+
+  # test
+  # Approved, the row goes on to the code of its identity, which names what
+  # the referent can correct.
+  expect_false(identical(
+    as.character(secondo[["esiti"]][["outcome"]]), "held"
+  ))
+  expect_match(
+    as.character(secondo[["esiti"]][["outcome_detail"]]), "^DATO_"
+  )
+})

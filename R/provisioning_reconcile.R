@@ -939,6 +939,15 @@ provisioning_reconcile <- function(register_url,
   #
   # `resolved_names` is what the register ends up with either way: written when
   # it differs, already there when it does not.
+  #
+  # So a sealed row whose resolution names nobody keeps the name it holds
+  # (RE1 of the review of the unit E of the 0.27.0): the identity door does
+  # not write it (RR1), and a held row whose seal were computed on the
+  # proposal or the empty name would ask its owner for a seal no approval
+  # could ever match. The same condition as the door's, below.
+  kept_name <- (if (is.null(owners_log)) nzchar(carried) else nzchar(sealed)) &
+    !resolvable & !(creating & !unheard) & !exiting
+  resolved_names[kept_name] <- held_names[kept_name]
   register_after <- register
   register_after[["username"]] <- resolved_names
   seal_after <- request_seal(register_after)
