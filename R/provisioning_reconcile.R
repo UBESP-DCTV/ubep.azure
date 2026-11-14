@@ -297,7 +297,9 @@
 #'   `TRASPORTO_SIGILLO_NON_REGISTRATO` when an applied row's field already
 #'   held the seal the round writes and the channel's last seal in the log
 #'   is another, and `TRASPORTO_ENTRA_ID_NON_REGISTRATO` when an Entra
-#'   account the field already showed could not be written into the log.
+#'   account could not be written into the log, whether it takes two writes
+#'   (the field already showed it) or one that was refused or ran out of
+#'   time.
 #'   A round that finds the register sealed and none of the
 #'   accounts of `channel_account` in its log stops, `fermato`, with
 #'   `TRASPORTO_REGISTRO_CANALE_ASSENTE` (`log_channel_absent()`).
@@ -2419,9 +2421,10 @@ provisioning_reconcile <- function(register_url,
   # A value the field shows already while the log holds no write of the
   # channel's would not be logged at all, REDCap logging no write that
   # leaves a field as it was: the door first empties the field and then
-  # writes the value, as for `owned_by`. A refused write leaves the value
-  # out of the log, `TRASPORTO_ENTRA_ID_NON_REGISTRATO`; the next round
-  # writes it again.
+  # writes the value, as for `owned_by`. A write refused or timed out, one
+  # of the two or the only one (first execution, fill), leaves the value out
+  # of the log, `TRASPORTO_ENTRA_ID_NON_REGISTRATO`; the next round writes
+  # it again.
   entra_written <- list(ok = TRUE, errors = character())
   if (!dry_run && !is.null(channel_account) && !is.null(owners_log)) {
     entra_shown <- trimws(as.character(
@@ -2460,7 +2463,10 @@ provisioning_reconcile <- function(register_url,
         fields = "applied_entra_id"
       )
     )
-    entra_lost <- any(entra_relog) &&
+    # Every write of this door carries an identifier to log, so a write that
+    # fails is a loss whether it was one of two or the only one; a body with
+    # nothing in it calls nobody and comes back `ok`.
+    entra_lost <-
       !(isTRUE(entra_first[["ok"]]) && isTRUE(entra_written[["ok"]]))
     entra_written[["errors"]] <- c(
       entra_first[["errors"]], entra_written[["errors"]],

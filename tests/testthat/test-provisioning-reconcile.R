@@ -10675,6 +10675,75 @@ test_that("la seconda scrittura dell'id rifiutata arriva al record del giro", {
 })
 
 
+# A register that refuses every write of the Entra account door, and answers
+# everything else as `registro` does.
+rifiuta_ogni_entra <- function(registro) {
+  function(data) {
+    if (identical(form_field_value(data[["action"]]), "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (length(sent) > 0L &&
+            setequal(names(sent[[1L]]), c("record_id", "applied_entra_id"))) {
+        return('{"error":"The field applied_entra_id could not be saved"}')
+      }
+    }
+    registro(data)
+  }
+}
+
+
+test_that("la scrittura semplice dell'id rifiutata da' il codice dell'id non registrato", { # nolint: line_length_linter.
+  # eval
+  # First execution: the field is empty and the identifier goes in one write,
+  # as in the fill. Lost, it is the same loss as the one of the two writes.
+  esito <- giro(
+    rifiuta_ogni_entra(registro_con_log(
+      record_json(list(record_id = "1")),
+      creazioni = creazioni_finte(creata_da_anna())
+    )),
+    istanza_che_scrive(), dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_true("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+  expect_true("TRASPORTO_ENTRA_ID_NON_REGISTRATO" %in% esito[["errori"]])
+})
+
+
+test_that("la scrittura semplice dell'id scaduta e non arrivata da' il codice dell'id non registrato", { # nolint: line_length_linter.
+  # eval
+  g <- due_giri_sul_registro("applied_entra_id", applica = FALSE)
+
+  # test
+  expect_true("TRASPORTO_REGISTRO_NON_RAGGIUNGIBILE" %in% g$primo[["errori"]])
+  expect_true("TRASPORTO_ENTRA_ID_NON_REGISTRATO" %in% g$primo[["errori"]])
+})
+
+
+test_that("una porta dell'id che non ha nessun id da scrivere non dice un id perso", { # nolint: line_length_linter.
+  # eval
+  # The identifier is believed already: the door has nothing to write, so a
+  # register that would refuse it is never asked, and no loss is claimed.
+  esito <- giro(
+    rifiuta_ogni_entra(registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(),
+        applied_entra_id = id_a
+      ))),
+      storia = eseguita_con_id(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    )),
+    istanza_che_scrive(), directory = directory_doppia(mario_a()),
+    dry_run = FALSE, mailer = posta_accesa
+  )
+
+  # test
+  expect_false("TRASPORTO_ENTRA_ID_NON_REGISTRATO" %in% esito[["errori"]])
+  expect_false("TRASPORTO_REGISTRO_RIFIUTATO" %in% esito[["errori"]])
+})
+
+
 test_that("il riempimento scrive l'id dell'account nato prima del sigillo, senza posta in piu'", { # nolint: line_length_linter.
   # eval
   # The same round on a row whose identifier is believed already sends the

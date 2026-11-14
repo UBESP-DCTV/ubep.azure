@@ -98,7 +98,9 @@ new owner) or one that was refused or ran out of time, and
 \code{TRASPORTO_SIGILLO_NON_REGISTRATO} when an applied row's field already
 held the seal the round writes and the channel's last seal in the log
 is another, and \code{TRASPORTO_ENTRA_ID_NON_REGISTRATO} when an Entra
-account the field already showed could not be written into the log.
+account could not be written into the log, whether it takes two writes
+(the field already showed it) or one that was refused or ran out of
+time.
 A round that finds the register sealed and none of the
 accounts of \code{channel_account} in its log stops, \code{fermato}, with
 \code{TRASPORTO_REGISTRO_CANALE_ASSENTE} (\code{log_channel_absent()}).
