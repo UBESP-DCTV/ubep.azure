@@ -365,8 +365,11 @@ directory_named <- function(directory, first_name, last_name) {
   wanted_first <- clean_string(as.character(first_name))
   wanted_last <- clean_string(as.character(last_name))
 
-  surnames <- vapply(directory[["surname"]], clean_string, character(1))
-  givens <- vapply(directory[["givenName"]], clean_string, character(1))
+  # The directory is folded whole: `stri_trans_general()` builds its
+  # transliterator at every call, so one call per account cost more than the
+  # rest of the round (0.27.0).
+  surnames <- clean_string(directory[["surname"]])
+  givens <- clean_string(directory[["givenName"]])
 
   nzchar(surnames) &
     surnames == wanted_last &
@@ -741,9 +744,7 @@ resolve_against_directory <- function(request,
   # the name rule cannot judge. It is not a different person — it is a person
   # the directory says nothing about — and letting it fall through would create
   # a second account for somebody who already has one.
-  if (any(candidate & carries & !nzchar(
-    vapply(directory[["surname"]], clean_string, character(1))
-  ))) {
+  if (any(candidate & carries & !nzchar(clean_string(directory[["surname"]])))) {
     return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
   }
 

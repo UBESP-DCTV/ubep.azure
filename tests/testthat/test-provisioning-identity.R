@@ -1557,3 +1557,99 @@ test_that("la risposta di REDCap non tocca un verdetto che non crea", {
   expect_equal(answer[["identity"]], "existing")
   expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
 })
+
+
+# The reference the round used until the 0.27.0: one fold per element. The
+# vector form has to answer the same on every directory, and the tests below
+# say so on names that a fold has tripped on, not on a tidy one.
+reference_named <- function(directory, first_name, last_name) {
+  wanted_first <- clean_string(as.character(first_name))
+  wanted_last <- clean_string(as.character(last_name))
+  surnames <- vapply(directory[["surname"]], clean_string, character(1))
+  givens <- vapply(directory[["givenName"]], clean_string, character(1))
+  # `vapply()` named the result after the surnames. Nobody reads the names,
+  # which are a by-product, and the vector form does not carry them.
+  unname(
+    nzchar(surnames) &
+      surnames == wanted_last &
+      (!nzchar(givens) | givens == wanted_first)
+  )
+}
+
+hard_directory <- function() {
+  surnames <- c(
+    "Rossi", "ROSSI", " rossi ", "O'Brien", "O\u2019Brien", "de   Luca",
+    "Nu\u00f1ez", "Nu\u006e\u0303ez", "M\u00fcller", "Mu\u0308ller",
+    "\u0160koda", "Bianchi-Verdi", "\u0418\u0432\u0430\u043d\u043e\u0432",
+    "", "Rossi", "Garc\u00eda L\u00f3pez"
+  )
+  givens <- c(
+    "Anna Maria", "anna  maria", "Zo\u00eb", "Zoe\u0308", "", "Jean-Luc",
+    "Andr\u00e9", "Andre\u0301", "\u00c9lodie", "Li", "", "Paolo",
+    "Fran\u00e7ois", "Li", "", "Zo\u00eb"
+  )
+  directory_frame(Map(
+    function(surname, given, i) {
+      dir_user(
+        id = sprintf("id-%03d", i),
+        userPrincipalName = sprintf("persona.%03d@ubep.unipd.it", i),
+        givenName = given,
+        surname = surname,
+        otherMails = if (i %% 3L == 0L) {
+          list(sprintf("  Altra.%03d@Example.org ", i), "")
+        } else if (i %% 3L == 1L) {
+          list(sprintf("altra.%03d@example.org", i))
+        } else {
+          list()
+        },
+        officeLocation = if (i %% 4L == 0L) "" else sprintf("Old.%03d@x.org", i)
+      )
+    },
+    surnames, givens, seq_along(surnames)
+  ))
+}
+
+test_that("directory_named is the element-by-element rule, on hard names", {
+  directory <- hard_directory()
+  # The frame as the sweep hands it carries `NA` nowhere, but the rule is
+  # pinned on it too: it is what the per-element fold did with a hole.
+  with_holes <- directory
+  with_holes[["surname"]][2L] <- NA_character_
+  with_holes[["givenName"]][3L] <- NA_character_
+
+  asked <- list(
+    c("Anna Maria", "Rossi"), c("anna maria", "ROSSI"), c("Zo\u00eb", "Rossi"),
+    c("Zoe", "Rossi"), c("", "Rossi"), c("", ""), c("Li", "O\u2019Brien"),
+    c("Andr\u00e9", "Nu\u00f1ez"), c("Jean-Luc", "Bianchi-Verdi"),
+    c("Anna", "de Luca"), c("Zo\u00eb", "Mu\u0308ller")
+  )
+
+  for (frame in list(directory, with_holes)) {
+    for (who in asked) {
+      expect_identical(
+        unname(directory_named(frame, who[[1L]], who[[2L]])),
+        reference_named(frame, who[[1L]], who[[2L]]),
+        info = paste(who, collapse = " / ")
+      )
+    }
+  }
+  expect_true(any(directory_named(directory, "Anna Maria", "Rossi")))
+  expect_true(any(directory_named(directory, "Zoe", "Rossi") == FALSE))
+})
+
+test_that("directory_named folds the directory whole, not once per row", {
+  # Fixed by what is called, not by how long it takes: a count of calls does
+  # not flake on a slow runner. Per-element folding made it grow with the
+  # directory, and the round pays that for every register row.
+  calls <- 0L
+  counting <- function(string) {
+    calls <<- calls + 1L
+    stringr::str_to_lower(string)
+  }
+  directory <- hard_directory()
+  local_mocked_bindings(clean_string = counting)
+
+  directory_named(directory, "Anna Maria", "Rossi")
+
+  expect_lte(calls, 4L)
+})
