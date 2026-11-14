@@ -10,7 +10,7 @@ module_timeouts()
 A list with \code{total} and \code{connect}, in seconds.
 }
 \description{
-Five minutes for the whole call and thirty seconds to connect, the
+Five minutes for the whole call and ten seconds to connect, the
 connection taking in name resolution and the TLS handshake as libcurl
 counts it.
 }
@@ -29,7 +29,18 @@ waits per round. One that answers reads and hangs on writes costs a wait
 for every batch it is sent, one per project.
 
 Connecting does nothing on the instance, so a short limit costs no write.
-Thirty seconds is far above a connection inside the network and well
-below libcurl's default of 300 seconds.
+Ten seconds holds for every instance, benches and productions alike. A
+bench that is switched off does not answer the connection, and the
+observer, which reads every instance one after the other, waits the whole
+limit for each: with seven benches off, the thirty seconds of 0.26.0 made
+it last 3 minutes 34 seconds, against the 75 seconds it took up to 0.25.0,
+when nobody set the limit and libcurl's R package put in ten seconds of
+its own. Ten seconds brings that back. A whole call to a production that
+is on, the connection and the handshake included, measured between 0.1
+and 0.4 seconds on 2026-11-13, so the connection is twenty-five times
+under the limit; a limit too short would read a production that is on as
+\code{TRASPORTO_NON_RAGGIUNGIBILE}, which is why it does not go lower. Only
+the connection is shorter: what PHP does keeps the five minutes, benches
+included.
 }
 \keyword{internal}

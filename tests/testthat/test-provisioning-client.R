@@ -821,12 +821,13 @@ test_that("ogni chiamata al modulo ha un tempo massimo e uno di connessione", {
   )
 
   # test
-  # Cinque minuti in tutto e trenta secondi per connettersi: le misure e il
-  # perche' stanno accanto a `module_timeouts()`.
+  # Cinque minuti in tutto e dieci secondi per connettersi (0.27.0: erano
+  # trenta, e un banco spento li costava interi all'osservatore): le misure e
+  # il perche' stanno accanto a `module_timeouts()`.
   expect_length(viste, 6L)
   for (req in viste) {
     expect_equal(req[["options"]][["timeout_ms"]], 300000)
-    expect_equal(req[["options"]][["connecttimeout"]], 30)
+    expect_equal(req[["options"]][["connecttimeout"]], 10)
   }
 })
 
