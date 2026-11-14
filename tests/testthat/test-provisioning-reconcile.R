@@ -10618,3 +10618,54 @@ test_that("lo stesso giro vero scrive l'id che il riempimento trova (REx3-contro
   # test
   expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
 })
+
+
+# ---- A revoked row that leaves by the item 12 and names nobody (RE3) ----
+
+# From the review of the unit E of the 0.27.0 (REx4b, on G4 of the review of
+# the pair of the 0.26.0). The register holds the new name, written by the
+# door of the 0.25.0 above the seal, and the row is revoked; two accounts
+# carry Mario's contact and none his name, so the resolution is
+# `ambiguous`, which names nobody. The row leaves by the item 12 and revokes
+# the name carried out, and the door writes that name back: `nobody` must
+# not take the write away from it.
+test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il nome eseguito (REx4b)", { # nolint: line_length_linter.
+  # eval
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), username = rinominato,
+        request_status = "revoked"
+      ))),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'")),
+        list(list(
+          username = "svc-canale-ubep", action = "Update record (API) 1",
+          record = "1",
+          details = paste0("username = '", rinominato, "', identity = 'existing'")
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(),
+    directory = directory_doppia(
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c1",
+        userPrincipalName = rinominato
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c2",
+        userPrincipalName = "mario.rossi.altro@ubep.unipd.it"
+      )
+    ),
+    dry_run = FALSE
+  )
+  scritte <- identita_scritte()
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_true(mario %in% revocati())
+  expect_false(is.null(scritte))
+  expect_true(mario %in% as.character(scritte[["username"]]))
+})
