@@ -161,20 +161,48 @@ identity_stop_codes <- function(identity, errors = character(),
 #'
 #' @keywords internal
 directory_contacts <- function(directory) {
-  lapply(seq_len(nrow(directory)), function(i) {
-    addresses <- identity_normalize(c(
-      directory[["otherMails"]][[i]],
-      directory[["officeLocation"]][[i]],
-      # The UPN is read as a contact carrier too, and decision 12 is why: an
-      # address in the tenant's domain **is** a UPN, so an internal contact
-      # resolves by being found as one. Without this the second branch of that
-      # rule — fill the blank username from an internal contact and go on to
-      # confirm it — would have nothing to confirm against. It widens nothing
-      # for an external contact, which cannot equal an address in the domain.
-      directory[["userPrincipalName"]][[i]]
-    ))
-    addresses[nzchar(addresses)]
-  })
+  n <- nrow(directory)
+  other <- directory[["otherMails"]]
+
+  # One normalization for the whole directory, and the rows put back by index:
+  # a call per account is a call of the round per register row, and 7.700
+  # accounts made it the largest cost left once the names were folded whole.
+  # Inside a row the order is the one it always had, `otherMails` first, then
+  # `officeLocation`, then the UPN.
+  #
+  # The UPN is read as a contact carrier too, and decision 12 is why: an
+  # address in the tenant's domain **is** a UPN, so an internal contact
+  # resolves by being found as one. Without this the second branch of that
+  # rule -- fill the blank username from an internal contact and go on to
+  # confirm it -- would have nothing to confirm against. It widens nothing
+  # for an external contact, which cannot equal an address in the domain.
+  addresses <- identity_normalize(c(
+    unlist(other, use.names = FALSE),
+    directory[["officeLocation"]],
+    directory[["userPrincipalName"]]
+  ))
+  rows <- c(
+    rep(seq_len(n), lengths(other)),
+    seq_len(n),
+    seq_len(n)
+  )
+
+  # The addresses and the rows they belong to are two vectors built apart, and
+  # only their lengths hold them together. A column that is not there, or a
+  # cell that is not a flat vector, would make them differ and put an address
+  # on a row that is not its own: a contact found on the wrong account is the
+  # failure this resolution fears most, so it stops instead.
+  stopifnot(
+    "directory_contacts(): addresses and rows are out of step" =
+      length(addresses) == length(rows)
+  )
+
+  kept <- nzchar(addresses)
+  keep_order <- order(rows[kept])
+  unname(split(
+    addresses[kept][keep_order],
+    factor(rows[kept][keep_order], levels = seq_len(n))
+  ))
 }
 
 
@@ -365,8 +393,11 @@ directory_named <- function(directory, first_name, last_name) {
   wanted_first <- clean_string(as.character(first_name))
   wanted_last <- clean_string(as.character(last_name))
 
-  surnames <- vapply(directory[["surname"]], clean_string, character(1))
-  givens <- vapply(directory[["givenName"]], clean_string, character(1))
+  # The directory is folded whole: `stri_trans_general()` builds its
+  # transliterator at every call, so one call per account cost more than the
+  # rest of the round (0.27.0).
+  surnames <- clean_string(directory[["surname"]])
+  givens <- clean_string(directory[["givenName"]])
 
   nzchar(surnames) &
     surnames == wanted_last &
@@ -741,9 +772,8 @@ resolve_against_directory <- function(request,
   # the name rule cannot judge. It is not a different person — it is a person
   # the directory says nothing about — and letting it fall through would create
   # a second account for somebody who already has one.
-  if (any(candidate & carries & !nzchar(
-    vapply(directory[["surname"]], clean_string, character(1))
-  ))) {
+  unreadable <- !nzchar(clean_string(directory[["surname"]]))
+  if (any(candidate & carries & unreadable)) {
     return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
   }
 

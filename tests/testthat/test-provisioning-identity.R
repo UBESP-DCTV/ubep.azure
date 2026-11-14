@@ -1557,3 +1557,172 @@ test_that("la risposta di REDCap non tocca un verdetto che non crea", {
   expect_equal(answer[["identity"]], "existing")
   expect_equal(answer[["username"]], "mario.rossi@ubep.unipd.it")
 })
+
+
+# The references the round used until the 0.27.0: one fold per element, and one
+# `identity_normalize()` per row for the contacts. The vector forms have to
+# answer the same on every directory, and the tests below say so on names that
+# a fold has tripped on, not on a tidy one.
+reference_named <- function(directory, first_name, last_name) {
+  wanted_first <- clean_string(as.character(first_name))
+  wanted_last <- clean_string(as.character(last_name))
+  surnames <- vapply(directory[["surname"]], clean_string, character(1))
+  givens <- vapply(directory[["givenName"]], clean_string, character(1))
+  # `vapply()` named the result after the surnames. Nobody reads the names,
+  # which are a by-product, and the vector form does not carry them.
+  unname(
+    nzchar(surnames) &
+      surnames == wanted_last &
+      (!nzchar(givens) | givens == wanted_first)
+  )
+}
+
+reference_contacts <- function(directory) {
+  lapply(seq_len(nrow(directory)), function(i) {
+    addresses <- identity_normalize(c(
+      directory[["otherMails"]][[i]],
+      directory[["officeLocation"]][[i]],
+      directory[["userPrincipalName"]][[i]]
+    ))
+    addresses[nzchar(addresses)]
+  })
+}
+
+hard_directory <- function() {
+  surnames <- c(
+    "Rossi", "ROSSI", " rossi ", "O'Brien", "O\u2019Brien", "de   Luca",
+    "Nu\u00f1ez", "Nu\u006e\u0303ez", "M\u00fcller", "Mu\u0308ller",
+    "\u0160koda", "Bianchi-Verdi", "\u0418\u0432\u0430\u043d\u043e\u0432",
+    "", "Rossi", "Garc\u00eda L\u00f3pez"
+  )
+  givens <- c(
+    "Anna Maria", "anna  maria", "Zo\u00eb", "Zoe\u0308", "", "Jean-Luc",
+    "Andr\u00e9", "Andre\u0301", "\u00c9lodie", "Li", "", "Paolo",
+    "Fran\u00e7ois", "Li", "", "Zo\u00eb"
+  )
+  # `otherMails` goes in as `I()`, as the rest of this file writes it: a plain
+  # list handed to `dir_user()` is emptied by `modifyList()`, and the frame
+  # would carry no `otherMails` at all. Rows 7 and 16 carry no address anywhere
+  # (the last one is the case a row-index that loses its tail would miss).
+  bare <- c(7L, 16L)
+  directory_frame(Map(
+    function(surname, given, i) {
+      dir_user(
+        id = sprintf("id-%03d", i),
+        userPrincipalName = if (i %in% bare) {
+          ""
+        } else {
+          sprintf("persona.%03d@ubep.unipd.it", i)
+        },
+        givenName = given,
+        surname = surname,
+        otherMails = if (i %in% bare) {
+          I(character())
+        } else if (i %% 3L == 0L) {
+          I(c(sprintf("  Altra.%03d@Example.org ", i), ""))
+        } else if (i %% 3L == 1L) {
+          I(sprintf("altra.%03d@example.org", i))
+        } else {
+          I(character())
+        },
+        officeLocation = if (i %% 4L == 0L || i %in% bare) {
+          ""
+        } else {
+          sprintf("Old.%03d@x.org", i)
+        }
+      )
+    },
+    surnames, givens, seq_along(surnames)
+  ))
+}
+
+test_that("directory_named is the element-by-element rule, on hard names", {
+  directory <- hard_directory()
+  # The frame as the sweep hands it carries `NA` nowhere, but the rule is
+  # pinned on it too: it is what the per-element fold did with a hole.
+  with_holes <- directory
+  with_holes[["surname"]][2L] <- NA_character_
+  with_holes[["givenName"]][3L] <- NA_character_
+
+  asked <- list(
+    c("Anna Maria", "Rossi"), c("anna maria", "ROSSI"), c("Zo\u00eb", "Rossi"),
+    c("Zoe", "Rossi"), c("", "Rossi"), c("", ""), c("Li", "O\u2019Brien"),
+    c("Andr\u00e9", "Nu\u00f1ez"), c("Jean-Luc", "Bianchi-Verdi"),
+    c("Anna", "de Luca"), c("Zo\u00eb", "Mu\u0308ller")
+  )
+
+  for (frame in list(directory, with_holes)) {
+    for (who in asked) {
+      expect_identical(
+        unname(directory_named(frame, who[[1L]], who[[2L]])),
+        reference_named(frame, who[[1L]], who[[2L]]),
+        info = paste(who, collapse = " / ")
+      )
+    }
+  }
+  expect_true(any(directory_named(directory, "Anna Maria", "Rossi")))
+  # Among the four accounts of surname Rossi: the one given "Zoë" folds to
+  # the same name as "Zoe", the one with no given name stays in play, and the
+  # two given another name are out.
+  expect_identical(
+    which(directory_named(directory, "Zoe", "Rossi")), c(3L, 15L)
+  )
+})
+
+test_that("directory_named folds the directory whole, not once per row", {
+  # Fixed by what is called, not by how long it takes: a count of calls does
+  # not flake on a slow runner. Per-element folding made it grow with the
+  # directory, and the round pays that for every register row.
+  calls <- 0L
+  counting <- function(string) {
+    calls <<- calls + 1L
+    stringr::str_to_lower(string)
+  }
+  directory <- hard_directory()
+  local_mocked_bindings(clean_string = counting)
+
+  directory_named(directory, "Anna Maria", "Rossi")
+
+  expect_lte(calls, 4L)
+})
+
+test_that("directory_contacts is the per-row rule, on hard frames", {
+  directory <- hard_directory()
+  # The fixture has to carry what the test says it tests: `otherMails` on
+  # some rows, and rows with no address at all.
+  expect_gt(sum(lengths(directory[["otherMails"]])), 0L)
+  expect_true(any(lengths(directory_contacts(directory)) == 0L))
+
+  expect_identical(directory_contacts(directory), reference_contacts(directory))
+  expect_identical(
+    directory_contacts(directory[0L, , drop = FALSE]),
+    reference_contacts(directory[0L, , drop = FALSE])
+  )
+
+  with_holes <- directory
+  with_holes[["officeLocation"]][2L] <- NA_character_
+  with_holes[["otherMails"]][5L] <- list(NULL)
+  expect_identical(
+    directory_contacts(with_holes), reference_contacts(with_holes)
+  )
+})
+
+test_that("directory_contacts stops on a frame it cannot line up", {
+  # Shapes `directory_frame()` does not produce. The row index is built apart
+  # from the addresses, and what the per-row rule did here was to leave every
+  # address on its own row; the vector form must stop, not hand an address to
+  # the next account.
+  directory <- hard_directory()
+
+  no_office <- directory
+  no_office[["officeLocation"]] <- NULL
+  expect_error(directory_contacts(no_office))
+
+  no_other <- directory
+  no_other[["otherMails"]] <- NULL
+  expect_error(directory_contacts(no_other))
+
+  nested <- directory
+  nested[["otherMails"]][[2L]] <- list("a@x.org", NULL)
+  expect_error(directory_contacts(nested), "out of step")
+})
