@@ -4,7 +4,13 @@
 \alias{resolve_identity}
 \title{Resolve who a register row is talking about}
 \usage{
-resolve_identity(request, directory, domain = "ubep.unipd.it", redcap = NULL)
+resolve_identity(
+  request,
+  directory,
+  domain = "ubep.unipd.it",
+  redcap = NULL,
+  folds = directory_folds(directory)
+)
 }
 \arguments{
 \item{request}{One register row as a named list, carrying \code{first_name},
@@ -36,6 +42,10 @@ skips the names REDCap knows. The proposal is taken from
 \code{upn_window()}; a window not asked whole, or known whole, is no verdict
 at all, \code{TRASPORTO_NOME_NON_VERIFICATO}: the round creates no name it
 has not found unknown in this pass.}
+
+\item{folds}{The directory folded, \code{directory_folds()}, made from
+\code{directory}. By default folded here; the round folds it once and passes
+it for every row.}
 }
 \value{
 A list with \code{identity}, \code{username}, \code{errors}, \code{composed} and

@@ -8,7 +8,8 @@ entra_account_change(
   executed_username,
   believed_id,
   directory,
-  revoked = FALSE
+  revoked = FALSE,
+  folds = directory_folds(directory)
 )
 }
 \arguments{
@@ -19,6 +20,9 @@ entra_account_change(
 \item{directory}{The sweep, as \code{directory_users()} returns it.}
 
 \item{revoked}{Whether the row asks for \code{revoked}.}
+
+\item{folds}{The sweep folded, \code{directory_folds()}, made from
+\code{directory}; by default folded here.}
 }
 \value{
 A list with \code{code}, one of the two codes or \code{""}, and \code{upn}, the

@@ -4,7 +4,13 @@
 \alias{entra_fill}
 \title{The Entra account of a row carried out before the identifier existed}
 \usage{
-entra_fill(executed_username, directory, since, revoked = FALSE)
+entra_fill(
+  executed_username,
+  directory,
+  since,
+  revoked = FALSE,
+  folds = directory_folds(directory)
+)
 }
 \arguments{
 \item{executed_username}{The username the row was carried out for.}
@@ -15,6 +21,9 @@ entra_fill(executed_username, directory, since, revoked = FALSE)
 answers; \code{character()} or \code{NA} when the log does not say.}
 
 \item{revoked}{Whether the row asks for \code{revoked}.}
+
+\item{folds}{The sweep folded, \code{directory_folds()}, made from
+\code{directory}; by default folded here.}
 }
 \value{
 A list with \code{id}, the identifier to write or \code{""}, and \code{code},
