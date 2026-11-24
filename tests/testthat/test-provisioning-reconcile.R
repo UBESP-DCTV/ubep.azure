@@ -11197,7 +11197,8 @@ test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il no
 # Un registro di quattro righe che passano per rami diversi della
 # risoluzione: una persona che c'e', una da creare, un omonimo senza il
 # recapito, un recapito interno. Fatto di nuovo a ogni chiamata, perche' i
-# doppi tengono lo stato delle scritture.
+# doppi tengono lo stato delle scritture. La creazione risponde con la sua
+# data di nascita, cosi' la posta del benvenuto non dipende dall'orologio.
 giro_misto <- function() {
   posta <- posta_raccolta()
   esito <- giro(
@@ -11236,6 +11237,16 @@ giro_misto <- function() {
         givenName = "Paolo", surname = "Bianchi", officeLocation = NULL
       )
     ),
+    creazione = function(req) {
+      httr2::response(
+        status_code = 201L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw(paste0(
+          '{"id":"00000000-0000-0000-0000-00000000000a",',
+          '"createdDateTime":"2026-08-14T03:00:30Z"}'
+        ))
+      )
+    },
     mailer = posta[["mailer"]],
     dry_run = FALSE
   )
@@ -11244,7 +11255,9 @@ giro_misto <- function() {
     filo = lapply(inviate, function(req) {
       list(req[["url"]], req[["method"]], req[["body"]][["data"]])
     }),
-    posta = posta[["mandate"]]()
+    posta = posta[["mandate"]](),
+    # Read here, right after this round: `inviate` is the last round's.
+    creazioni = length(creazioni())
   )
 }
 
@@ -11275,47 +11288,37 @@ test_that("il giro piega la directory una volta, non una per riga", {
 })
 
 
-test_that("il giro con la directory piegata una volta fa quel che faceva piegandola per riga", { # nolint: line_length_linter.
+test_that("il giro con la directory piegata una volta fa quel che faceva main piegandola per riga", { # nolint: line_length_linter.
   # eval
-  # Le due forme nello stesso mondo. La seconda toglie le pieghe del giro a
-  # ogni funzione che le riceve, e ciascuna piega di nuovo la directory a
-  # ogni chiamata, come prima della 0.28.0: esiti, scritture al registro,
-  # domande alle istanze, creazioni e posta devono essere gli stessi.
+  # `giro-misto-main.json` is what `giro_misto()` gave on `main` at
+  # `3ec6ae5`, the last commit before the folds, with the same key: the
+  # whole return of the round, every request that left (register,
+  # instances, Graph) with its body, every message, and the creations of
+  # the round. Written with `jsonlite::serializeJSON()`, which brings the
+  # same object back, attributes included. To be made again only by a
+  # change that means to change what the round does.
   local_mocked_bindings(
     directory_credential = function(length = 24L) "Fissa-0000-aA1!"
   )
-  una_volta <- giro_misto()
+  main <- jsonlite::unserializeJSON(paste(
+    readLines(test_path("fixtures", "giro-misto-main.json"), warn = FALSE),
+    collapse = "\n"
+  ))
 
-  risolvi <- resolve_identity
-  cambio_entra <- entra_account_change
-  riempi_entra <- entra_fill
-  local_mocked_bindings(
-    resolve_identity = function(request, directory, domain = "ubep.unipd.it",
-                                redcap = NULL, folds = NULL) {
-      risolvi(request, directory, domain, redcap)
-    },
-    entra_account_change = function(executed_username, believed_id,
-                                    directory, revoked = FALSE,
-                                    folds = NULL) {
-      cambio_entra(executed_username, believed_id, directory, revoked)
-    },
-    entra_fill = function(executed_username, directory, since,
-                          revoked = FALSE, folds = NULL) {
-      riempi_entra(executed_username, directory, since, revoked)
-    }
-  )
-  per_riga <- giro_misto()
+  ramo <- giro_misto()
 
   # test
-  # The world goes through the branches the test is about.
-  esiti <- una_volta[["esito"]][["esiti"]]
+  # The world goes through the branches the test is about: an ambiguous
+  # row, one account created by this round, mail.
+  esiti <- ramo[["esito"]][["esiti"]]
   expect_true(
     any(grepl("DATO_RECAPITO_NON_IDENTIFICA", esiti[["outcome_detail"]]))
   )
-  expect_gt(length(creazioni()), 0L)
-  expect_gt(length(una_volta[["posta"]]), 0L)
+  expect_identical(ramo[["creazioni"]], 1L)
+  expect_gt(length(ramo[["posta"]]), 0L)
 
-  expect_identical(una_volta[["esito"]], per_riga[["esito"]])
-  expect_identical(una_volta[["filo"]], per_riga[["filo"]])
-  expect_identical(una_volta[["posta"]], per_riga[["posta"]])
+  expect_identical(ramo[["esito"]], main[["esito"]])
+  expect_identical(ramo[["filo"]], main[["filo"]])
+  expect_identical(ramo[["posta"]], main[["posta"]])
+  expect_identical(ramo[["creazioni"]], main[["creazioni"]])
 })

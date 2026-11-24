@@ -1,0 +1,2717 @@
+{
+  "type": "list",
+  "attributes": {
+    "names": {
+      "type": "character",
+      "attributes": {},
+      "value": ["esito", "filo", "posta", "creazioni"]
+    }
+  },
+  "value": [
+    {
+      "type": "list",
+      "attributes": {
+        "names": {
+          "type": "character",
+          "attributes": {},
+          "value": ["at", "fermato", "schema", "istanze", "esiti", "credenziali", "scritte", "posta", "errori"]
+        }
+      },
+      "value": [
+        {
+          "type": "character",
+          "attributes": {},
+          "value": ["2026-08-14 03:00"]
+        },
+        {
+          "type": "logical",
+          "attributes": {},
+          "value": [false]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["blocks", "blocking", "tolerated"]
+            }
+          },
+          "value": [
+            {
+              "type": "logical",
+              "attributes": {},
+              "value": [false]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": []
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": []
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["server", "raggiunta", "ambito_leggibile", "errori"]
+            },
+            "row.names": {
+              "type": "integer",
+              "attributes": {},
+              "value": [1]
+            },
+            "class": {
+              "type": "character",
+              "attributes": {},
+              "value": ["data.frame"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["edc10"]
+            },
+            {
+              "type": "logical",
+              "attributes": {},
+              "value": [true]
+            },
+            {
+              "type": "logical",
+              "attributes": {},
+              "value": [true]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": [null]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["record_id", "outcome", "outcome_detail", "outcome_at", "applied_as"]
+            },
+            "row.names": {
+              "type": "integer",
+              "attributes": {},
+              "value": [1, 2, 3, 4]
+            },
+            "class": {
+              "type": "character",
+              "attributes": {},
+              "value": ["data.frame"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["3", "1", "4", "2"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["data_error", "applied", "transport_error", "pending"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["DATO_RECAPITO_NON_IDENTIFICA", "", "TRASPORTO_SCRITTURA_NON_CONFERMATA", ""]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["2026-08-14 03:00", "2026-08-14 03:00", "2026-08-14 03:00", "2026-08-14 03:00"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["", "role_name=data entry; dag_name=; expiration=2027-01-01", "absent", ""]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["record_id", "username", "credential"]
+            },
+            "class": {
+              "type": "character",
+              "attributes": {},
+              "value": ["data.frame"]
+            },
+            "row.names": {
+              "type": "integer",
+              "attributes": {},
+              "value": [1]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["2"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["luigi.neri@ubep.unipd.it"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Fissa-0000-aA1!"]
+            }
+          ]
+        },
+        {
+          "type": "integer",
+          "attributes": {},
+          "value": [4]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["posta_partite", "posta_fallite", "credenziali_recapitate", "credenziali_perse", "benvenuti_recapitati", "benvenuti_persi", "accessi_recapitati", "accessi_persi", "posta_dirottata"]
+            }
+          },
+          "value": [
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [4]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [0]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [1]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [0]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [1]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [0]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [1]
+            },
+            {
+              "type": "integer",
+              "attributes": {},
+              "value": [0]
+            },
+            {
+              "type": "logical",
+              "attributes": {},
+              "value": [false]
+            }
+          ]
+        },
+        {
+          "type": "character",
+          "attributes": {},
+          "value": []
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "attributes": {},
+      "value": [
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["metadata"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "rawOrLabel", "exportCheckboxLabel"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["export"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["raw"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://graph.example.org/v1.0/users?$select=id,userPrincipalName,givenName,surname,mail,otherMails,officeLocation,jobTitle,createdDateTime,lastPasswordChangeDateTime,accountEnabled,userType&$top=999"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["GET"]
+            },
+            {
+              "type": "NULL"
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["accounts"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.2@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.3@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.4@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.5@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.6@ubep.unipd.it"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc12.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["accounts"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.2@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.3@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.4@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.5@ubep.unipd.it"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri.6@ubep.unipd.it"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["state"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc12.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["state"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "logtype"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["log"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record_add"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "logtype"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["log"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "record"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["log"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["1"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "record"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["log"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["2"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "record"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["log"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["4"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "overwriteBehavior", "forceAutoNumber", "returnContent", "data"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["import"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["overwrite"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["count"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["%5B%7B%22record_id%22%3A%221%22%2C%22username%22%3A%22mario.rossi%40ubep.unipd.it%22%2C%22identity%22%3A%22existing%22%7D%2C%7B%22record_id%22%3A%222%22%2C%22username%22%3A%22%22%2C%22identity%22%3A%22absent%22%7D%2C%7B%22record_id%22%3A%223%22%2C%22username%22%3A%22%22%2C%22identity%22%3A%22ambiguous%22%7D%2C%7B%22record_id%22%3A%224%22%2C%22username%22%3A%22paolo.bianchi%40ubep.unipd.it%22%2C%22identity%22%3A%22existing%22%7D%5D"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["state"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["mario.rossi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["paolo.bianchi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["anna.bianchi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["apply"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id", "role_name"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["luigi.neri@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        },
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["data entry"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["apply"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [false]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id", "role_name"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["mario.rossi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        },
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["data entry"]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id", "role_name"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["paolo.bianchi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        },
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["data entry"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://edc10.example.org/api/?type=module&prefix=ubep_provisioning&page=api&NOAUTH"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["operation", "dry_run", "tested_fingerprints", "requests"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["state"]
+                },
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["16faf46d5ab1"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["mario.rossi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attributes": {
+                        "names": {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["username", "project_id"]
+                        }
+                      },
+                      "value": [
+                        {
+                          "type": "character",
+                          "attributes": {},
+                          "value": ["paolo.bianchi@ubep.unipd.it"]
+                        },
+                        {
+                          "type": "integer",
+                          "attributes": {},
+                          "value": [9003]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://graph.example.org/v1.0/users"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["accountEnabled", "displayName", "givenName", "surname", "mailNickname", "userPrincipalName", "otherMails", "passwordProfile"]
+                }
+              },
+              "value": [
+                {
+                  "type": "logical",
+                  "attributes": {},
+                  "value": [true]
+                },
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["Luigi Neri"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["Luigi"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["Neri"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["luigi.neri"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["luigi.neri@ubep.unipd.it"]
+                },
+                {
+                  "type": "list",
+                  "attributes": {},
+                  "value": [
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["luigi.neri@example.org"]
+                    }
+                  ]
+                },
+                {
+                  "type": "list",
+                  "attributes": {
+                    "names": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["forceChangePasswordNextSignIn", "password"]
+                    }
+                  },
+                  "value": [
+                    {
+                      "type": "logical",
+                      "attributes": {},
+                      "value": [true]
+                    },
+                    {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["Fissa-0000-aA1!"]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "overwriteBehavior", "forceAutoNumber", "returnContent", "data"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["import"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["overwrite"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["count"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["%5B%7B%22record_id%22%3A%223%22%2C%22outcome%22%3A%22data_error%22%2C%22outcome_detail%22%3A%22DATO_RECAPITO_NON_IDENTIFICA%22%2C%22outcome_at%22%3A%222026-08-14%2003%3A00%22%2C%22applied_as%22%3A%22%22%7D%2C%7B%22record_id%22%3A%221%22%2C%22outcome%22%3A%22applied%22%2C%22outcome_detail%22%3A%22%22%2C%22outcome_at%22%3A%222026-08-14%2003%3A00%22%2C%22applied_as%22%3A%22role_name%3Ddata%20entry%3B%20dag_name%3D%3B%20expiration%3D2027-01-01%22%7D%2C%7B%22record_id%22%3A%224%22%2C%22outcome%22%3A%22transport_error%22%2C%22outcome_detail%22%3A%22TRASPORTO_SCRITTURA_NON_CONFERMATA%22%2C%22outcome_at%22%3A%222026-08-14%2003%3A00%22%2C%22applied_as%22%3A%22absent%22%7D%2C%7B%22record_id%22%3A%222%22%2C%22outcome%22%3A%22pending%22%2C%22outcome_detail%22%3A%22%22%2C%22outcome_at%22%3A%222026-08-14%2003%3A00%22%2C%22applied_as%22%3A%22%22%7D%5D"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "overwriteBehavior", "forceAutoNumber", "returnContent", "data"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["import"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["overwrite"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["count"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["%5B%7B%22record_id%22%3A%221%22%2C%22owned_by%22%3A%22anna.bianchi%40ubep.unipd.it%22%7D%2C%7B%22record_id%22%3A%222%22%2C%22owned_by%22%3A%22anna.bianchi%40ubep.unipd.it%22%7D%2C%7B%22record_id%22%3A%223%22%2C%22owned_by%22%3A%22anna.bianchi%40ubep.unipd.it%22%7D%2C%7B%22record_id%22%3A%224%22%2C%22owned_by%22%3A%22anna.bianchi%40ubep.unipd.it%22%7D%5D"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "overwriteBehavior", "forceAutoNumber", "returnContent", "data"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["import"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["overwrite"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["count"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["%5B%7B%22record_id%22%3A%221%22%2C%22applied_entra_id%22%3A%2200000000-0000-0000-0000-000000000001%22%7D%5D"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {},
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["https://registro.example.org/api/"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["POST"]
+            },
+            {
+              "type": "list",
+              "attributes": {
+                "names": {
+                  "type": "character",
+                  "attributes": {},
+                  "value": ["token", "format", "returnFormat", "content", "action", "type", "overwriteBehavior", "forceAutoNumber", "returnContent", "data"]
+                }
+              },
+              "value": [
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["t0ken"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["json"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["record"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["import"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["flat"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["overwrite"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["false"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["count"]
+                },
+                {
+                  "type": "character",
+                  "attributes": {
+                    "class": {
+                      "type": "character",
+                      "attributes": {},
+                      "value": ["AsIs"]
+                    }
+                  },
+                  "value": ["%5B%7B%22record_id%22%3A%221%22%2C%22applied_seal%22%3A%22ae079ddd2c78%22%2C%22seal_state%22%3A%22intact%22%7D%5D"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "attributes": {},
+      "value": [
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["anna.bianchi@ubep.unipd.it"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Richiesta 3: errore di dato / Request 3: data error"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["La richiesta 3 del registro di provisioning ha un esito.\n\nEsito: errore di dato (data_error)\nDettaglio: DATO_RECAPITO_NON_IDENTIFICA\nQuando: 2026-08-14 05:00, ora italiana.\n\nRiguarda: Giulia Verdi - giulia.altra@example.org\nSu: edc10, progetto 9003, ruolo data entry\nStato richiesto: active\nNome utente risolto: non ancora stabilito dalla lavorazione\nLetto sull'istanza: l'istanza non ha risposto\n\nUn dettaglio che comincia per DATO_ riguarda cio' che e' stato compilato, e va corretto nel registro. Uno che comincia per TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve rifarla, ma se dura piu' di un giorno segnalalo a IT.\n\n---\n\nRequest 3 in the provisioning register has an outcome.\n\nOutcome: data error (data_error)\nDetail: DATO_RECAPITO_NON_IDENTIFICA\nWhen: 2026-08-14 05:00, Italian local time.\n\nConcerns: Giulia Verdi - giulia.altra@example.org\nOn: edc10, project 9003, role data entry\nRequested status: active\nResolved user name: not established yet\nRead back on the instance: the instance did not answer\n\nA detail starting with DATO_ concerns what was filled in, and has to be corrected in the register. One starting with TRASPORTO_ is ours: the row returns to the queue by itself and does not need refiling, but if it lasts more than a day, report it to IT."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["anna.bianchi@ubep.unipd.it"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Richiesta 1: eseguita / Request 1: applied"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["La richiesta 1 del registro di provisioning ha un esito.\n\nEsito: eseguita (applied)\nChe cosa e' successo: l'accesso e' stato concesso.\nDettaglio: nessuno\nQuando: 2026-08-14 05:00, ora italiana.\n\nRiguarda: Mario Rossi - mario.rossi@example.org\nSu: edc10, progetto 9003, ruolo data entry\nStato richiesto: active\nNome utente risolto: mario.rossi@ubep.unipd.it\nLetto sull'istanza: role_name=data entry; dag_name=; expiration=2027-01-01\n\nUn dettaglio che comincia per DATO_ riguarda cio' che e' stato compilato, e va corretto nel registro. Uno che comincia per TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve rifarla, ma se dura piu' di un giorno segnalalo a IT.\n\n---\n\nRequest 1 in the provisioning register has an outcome.\n\nOutcome: applied (applied)\nWhat happened: the access has been granted.\nDetail: none\nWhen: 2026-08-14 05:00, Italian local time.\n\nConcerns: Mario Rossi - mario.rossi@example.org\nOn: edc10, project 9003, role data entry\nRequested status: active\nResolved user name: mario.rossi@ubep.unipd.it\nRead back on the instance: role_name=data entry; dag_name=; expiration=2027-01-01\n\nA detail starting with DATO_ concerns what was filled in, and has to be corrected in the register. One starting with TRASPORTO_ is ours: the row returns to the queue by itself and does not need refiling, but if it lasts more than a day, report it to IT."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["anna.bianchi@ubep.unipd.it"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Richiesta 4: errore di trasporto / Request 4: transport error"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["La richiesta 4 del registro di provisioning ha un esito.\n\nEsito: errore di trasporto (transport_error)\nDettaglio: TRASPORTO_SCRITTURA_NON_CONFERMATA\nQuando: 2026-08-14 05:00, ora italiana.\n\nRiguarda: Paolo Bianchi - Paolo.Bianchi@ubep.unipd.it\nSu: edc10, progetto 9003, ruolo data entry\nStato richiesto: active\nNome utente risolto: paolo.bianchi@ubep.unipd.it\nLetto sull'istanza: absent\n\nUn dettaglio che comincia per DATO_ riguarda cio' che e' stato compilato, e va corretto nel registro. Uno che comincia per TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve rifarla, ma se dura piu' di un giorno segnalalo a IT.\n\n---\n\nRequest 4 in the provisioning register has an outcome.\n\nOutcome: transport error (transport_error)\nDetail: TRASPORTO_SCRITTURA_NON_CONFERMATA\nWhen: 2026-08-14 05:00, Italian local time.\n\nConcerns: Paolo Bianchi - Paolo.Bianchi@ubep.unipd.it\nOn: edc10, project 9003, role data entry\nRequested status: active\nResolved user name: paolo.bianchi@ubep.unipd.it\nRead back on the instance: absent\n\nA detail starting with DATO_ concerns what was filled in, and has to be corrected in the register. One starting with TRASPORTO_ is ours: the row returns to the queue by itself and does not need refiling, but if it lasts more than a day, report it to IT."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["anna.bianchi@ubep.unipd.it"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Richiesta 2: in lavorazione / Request 2: in progress"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["La richiesta 2 del registro di provisioning ha un esito.\n\nEsito: in lavorazione (pending)\nDettaglio: nessuno\nQuando: 2026-08-14 05:00, ora italiana.\n\nRiguarda: Luigi Neri - luigi.neri@example.org\nSu: edc10, progetto 9003, ruolo data entry\nStato richiesto: active\nNome utente risolto: non ancora stabilito dalla lavorazione\nLetto sull'istanza: l'istanza non ha risposto\n\nUn dettaglio che comincia per DATO_ riguarda cio' che e' stato compilato, e va corretto nel registro. Uno che comincia per TRASPORTO_ e' nostro: la riga torna in coda da sola e non serve rifarla, ma se dura piu' di un giorno segnalalo a IT.\n\n---\n\nRequest 2 in the provisioning register has an outcome.\n\nOutcome: in progress (pending)\nDetail: none\nWhen: 2026-08-14 05:00, Italian local time.\n\nConcerns: Luigi Neri - luigi.neri@example.org\nOn: edc10, project 9003, role data entry\nRequested status: active\nResolved user name: not established yet\nRead back on the instance: the instance did not answer\n\nA detail starting with DATO_ concerns what was filled in, and has to be corrected in the register. One starting with TRASPORTO_ is ours: the row returns to the queue by itself and does not need refiling, but if it lasts more than a day, report it to IT."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["luigi.neri@example.org"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Il tuo account UBEP / Your UBEP account: luigi.neri@ubep.unipd.it"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Ciao Luigi,\n\ne' stato creato per te un account UBEP. Il nome con cui ti autentichi e': luigi.neri@ubep.unipd.it\n\nREDCap si apre da: https://edc10.example.org/\nQuando l'accesso al progetto sara' pronto riceverai un'altra mail, di norma entro quattro ore.\n\nLa chiave d'ingresso non e' in questo messaggio: te la consegna anna.bianchi@ubep.unipd.it, che e' la persona che ha chiesto l'account per te.\n\nPrimo accesso entro il 2026-10-12.\n\n- Dopo quella data la chiave d'ingresso non vale piu': chiedine una\n  nuova al tuo referente.\n- Senza primo accesso l'account viene disattivato, non cancellato.\n  Per riattivarlo scrivi al tuo referente; se non lo raggiungi,\n  rispondi a questo messaggio (arriva a IT).\n\nAl primo accesso ti verranno chieste tre cose, in quest'ordine:\n\n- registrare un secondo fattore di autenticazione, con un tuo\n  dispositivo. Si fa una volta sola.\n- compilare il modulo con i tuoi dati di base.\n- confermare il tuo indirizzo di posta seguendo un link.\n\nPer qualunque problema scrivi prima a anna.bianchi@ubep.unipd.it, che ha chiesto il tuo account e risponde del tuo primo accesso. Se non riesci a raggiungerlo, rispondi a questo messaggio: arriva a IT.\n\n---\n\nHello Luigi,\n\na UBEP account has been created for you. The name you sign in with is: luigi.neri@ubep.unipd.it\n\nREDCap opens at: https://edc10.example.org/\nWhen access to the project is ready you will receive another e-mail, normally within four hours.\n\nThe way in is not in this message: anna.bianchi@ubep.unipd.it will hand it to you, as the person who requested the account.\n\nFirst sign-in by 2026-10-12.\n\n- After that date your sign-in key no longer works: ask your referent\n  for a new one.\n- If you never sign in, your account is deactivated, not deleted. To\n  reactivate it, write to your referent; if you cannot reach them,\n  reply to this message (it goes to IT).\n\nAt first sign-in you will be asked three things, in this order:\n\n- register a second factor of authentication, with a device of your\n  own. This is done once.\n- fill in the basic user information form.\n- confirm your e-mail address by following a link.\n\nFor any problem write first to anna.bianchi@ubep.unipd.it, who requested your account and is responsible for your first sign-in. If you cannot reach them, reply to this message: it goes to IT."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["anna.bianchi@ubep.unipd.it"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Accesso al nuovo account / New account access"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Hai chiesto un account, ed e' stato creato. Ecco come entrarci.\n\nNome utente: luigi.neri@ubep.unipd.it\nChiave d'ingresso: Fissa-0000-aA1!\n\nConsegna la chiave alla persona, e non inoltrare questo messaggio. Se hai un canale diverso dalla posta, usa quello; altrimenti scrivile una mail nuova con la sola chiave: il nome utente le e' gia' arrivato in un messaggio a parte. Usa l'indirizzo che conosci dalla tua corrispondenza con lei, non quello copiato dalla richiesta. Se i due non coincidono, fermati e rispondi a questo messaggio senza la chiave (togli il testo citato): quel messaggio a parte e' andato all'indirizzo della richiesta.\n\nConsegnala subito: il primo accesso va fatto entro il 2026-10-12. Dopo quella data la chiave non vale piu': per una nuova rispondi a questo messaggio senza la chiave (togli il testo citato).\n\nVa cambiata al primo accesso, e chi la usa per prima si prende l'account.\n\n---\n\nYou requested an account, and it now exists. Here is how to get in.\n\nUser name: luigi.neri@ubep.unipd.it\nWay in: Fissa-0000-aA1!\n\nHand the key to the person, and do not forward this message. If you have a channel other than e-mail, use it; otherwise write them a new e-mail with the key alone: the user name has already reached them in a separate message. Use the address you know from your own correspondence with them, not the one copied from the request. If the two differ, stop and reply to this message without the key (delete the quoted text): that separate message went to the address in the request.\n\nHand it over now: the first sign-in must happen by 2026-10-12. After that date the key no longer works: reply to this message for a new one, without the key (delete the quoted text).\n\nIt must be changed at first sign-in, and whoever uses it first takes the account."]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "attributes": {
+            "names": {
+              "type": "character",
+              "attributes": {},
+              "value": ["to", "cc", "subject", "body"]
+            }
+          },
+          "value": [
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["mario.rossi@example.org"]
+            },
+            {
+              "type": "NULL"
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Accesso a REDCap / REDCap access: edc10, progetto 9003"]
+            },
+            {
+              "type": "character",
+              "attributes": {},
+              "value": ["Ciao Mario,\n\nora hai accesso in REDCap al progetto 9003 su edc10.\nREDCap si apre da: https://edc10.example.org/\nRuolo: data entry\nUltimo giorno di accesso: nessuno, l'accesso non scade.\n\nDel progetto risponde anna.bianchi@ubep.unipd.it, il referente della richiesta.\n\nPer qualunque problema scrivi prima a anna.bianchi@ubep.unipd.it, che ha chiesto il tuo accesso e risponde del tuo primo accesso. Se non riesci a raggiungerlo, rispondi a questo messaggio: arriva a IT.\n\n---\n\nHello Mario,\n\nyou now have access in REDCap to project 9003 on edc10.\nREDCap opens at: https://edc10.example.org/\nRole: data entry\nLast day of access: none, the access does not expire.\n\nanna.bianchi@ubep.unipd.it, who owns the request, answers for the project.\n\nFor any problem write first to anna.bianchi@ubep.unipd.it, who requested your access and is responsible for your first sign-in. If you cannot reach them, reply to this message: it goes to IT."]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "integer",
+      "attributes": {},
+      "value": [1]
+    }
+  ]
+}
