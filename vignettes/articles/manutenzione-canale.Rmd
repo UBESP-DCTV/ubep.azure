@@ -223,6 +223,24 @@ quello di Graph, un caso accettato. Un
 stesso ripiego. Se la risposta di Graph lo porti si vedrà alla prima creazione
 vera.
 
+**Dalla 0.28.0 la mail della chiave porta un testo pronto per la persona**
+(`mail_credential_ready_text()`), proposto dalla coordinatrice dei referenti il
+2026-11-19: con i passi scritti entra al primo colpo chi con il solo benvenuto
+non ci riesce. Ogni metà della mail si chiude con il testo nella sua lingua,
+fra due righe di trattini («INIZIO DEL TESTO DA COPIARE», «FINE DEL TESTO DA
+COPIARE»; in inglese «START OF THE TEXT TO COPY», «END OF THE TEXT TO COPY»),
+perché sopra, nella stessa mail, c'è la riga col nome utente. Il testo porta il
+nome di battesimo della persona, la chiave, la data del primo accesso se c'è, e
+sette passi presi dalla WI del primo accesso: finestra privata sempre, secondo
+fattore solo con Microsoft Authenticator per *Verified IDs* e *Scan QR code*,
+*Yes* a *Stay signed in?*, e in *My Projects* il progetto, o la mail di accesso
+da aspettare se non c'è ancora. Non porta l'indirizzo dell'istanza, il progetto
+né il nome utente: chiave e contesto non viaggiano insieme, deciso il
+2026-11-19. Il testo dice che nome utente e indirizzo stanno nel benvenuto, e
+la frase che lo introduce chiede al referente di non aggiungerli. La frase
+sulla consegna non dice più «una mail nuova con la sola chiave» ma «con il
+testo pronto qui sotto, che porta la chiave senza il nome utente».
+
 **La posta è spenta di default**, e la ragione non è intuitiva: con «manda
 prima, scrivi dopo» una posta semplicemente spenta bloccherebbe *ogni* scrittura
 nel registro. Quindi senza la variabile che la accende il giro fa esattamente
@@ -2005,9 +2023,10 @@ annuncia alla persona non è partito: `benvenuti_persi` è maggiore di zero, e
 fra gli errori del giro c'è `POSTA_BENVENUTO_PERSO`. Non si ripara da sé: il
 giro non crea due volte la stessa utenza, quindi non ha un'altra occasione di
 mandarlo. E il messaggio con la chiave dice al referente che il nome utente è
-già arrivato in un messaggio a parte, quindi la persona riceverebbe la sola
-chiave: il nome utente, l'indirizzo dell'istanza e i passi del primo accesso
-glieli manda IT, a mano, e dalla 0.22.0 anche la data limite del primo
+già arrivato in un messaggio a parte, quindi la persona riceverebbe la chiave
+senza nome utente, e dalla 0.28.0 un testo pronto che la rimanda a un benvenuto
+mai arrivato: il nome utente e l'indirizzo dell'istanza glieli manda IT, a
+mano, con i passi del primo accesso, e dalla 0.22.0 anche la data limite del primo
 accesso, la stessa che la chiave ha dato al referente: il giorno in cui
 l'account è nato più 59 giorni (§1). Per sapere perché non è partito,
 guardare la riga nel registro: un `contact_email` vuoto spiega il caso da solo;

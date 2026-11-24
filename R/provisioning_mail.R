@@ -1611,15 +1611,17 @@ mail_access_message <- function(row, url = NULL, relay = NULL) {
 
 #' Hand the way in to the person who asked for the account
 #'
-#' It carries the UPN, the key, the date of the first sign-in, and nothing
-#' else. No project, no role, no instance, nobody in copy: a message with a
-#' way in must not also carry the context that makes it spendable. The date
-#' is not that context: it says until when the key is any use, which is what
-#' the referent needs to hand it over in time.
+#' It carries the UPN, the key, the date of the first sign-in, a ready text
+#' for the person in each language (`mail_credential_ready_text()`), and
+#' nothing else. No project, no role, no instance, nobody in copy: a message
+#' with a way in must not also carry the context that makes it spendable. The
+#' date is not that context: it says until when the key is any use, which is
+#' what the referent needs to hand it over in time.
 #'
 #' What it asks of the referent is the rule decided for handing the key over:
-#' another channel if there is one, otherwise a new message with the key
-#' alone, never a forward of this one, and to the address the referent knows
+#' another channel if there is one, otherwise a new message with the ready
+#' text, which carries the key without the user name, never a forward of
+#' this one, and to the address the referent knows
 #' from their own correspondence rather than the one copied from the request.
 #' The welcome went to the address in the request, so a referent who finds the
 #' two different is asked to stop and reply instead of sending. The same
@@ -1640,12 +1642,17 @@ mail_access_message <- function(row, url = NULL, relay = NULL) {
 #' to ask for a new key after it: a reply to this message, which reaches IT,
 #' again with the key left out of it.
 #'
+#' Each half closes with the ready text of its language, between two
+#' delimiter lines and under a sentence that tells the referent to copy only
+#' that and add neither the user name, nor the address of REDCap, nor the
+#' project. The text itself says where the person finds them.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name.
 #' @param credential What the account was born with.
 #' @param deadline The date of the first sign-in, from
-#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the line
-#'   out.
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the lines
+#'   on the date out, here and in the ready text.
 #'
 #' @return A list with `subject` and `body`.
 #'
@@ -1681,6 +1688,10 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
     list(it = NULL, en = NULL)
   }
 
+  pronto <- mail_credential_ready_text(
+    row[["first_name"]], credential, deadline
+  )
+
   it <- c(
     "Hai chiesto un account, ed e' stato creato. Ecco come entrarci.",
     "",
@@ -1690,8 +1701,9 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
     paste0(
       "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
       "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
-      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
-      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "mail nuova con il testo pronto qui sotto, che porta la chiave senza il ",
+      "nome utente: il nome utente le e' gia' arrivato in un messaggio a ",
+      "parte. Usa l'indirizzo che conosci dalla tua ",
       "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
       "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
       "(togli il testo citato): quel messaggio a parte e' andato ",
@@ -1699,7 +1711,16 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
     ),
     limite[["it"]],
     "",
-    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account."
+    "Va cambiata al primo accesso, e chi la usa per prima si prende l'account.",
+    "",
+    paste0(
+      "Il testo pronto e' fra le due righe qui sotto: copia solo quello, e ",
+      "non aggiungere nome utente, indirizzo di REDCap o progetto, che la ",
+      "persona riceve in altre mail. La versione inglese e' nella seconda ",
+      "parte di questo messaggio."
+    ),
+    "",
+    pronto[["it"]]
   )
 
   en <- c(
@@ -1711,8 +1732,9 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
     paste0(
       "Hand the key to the person, and do not forward this message. If you ",
       "have a channel other than e-mail, use it; otherwise write them a new ",
-      "e-mail with the key alone: the user name has already reached them in a ",
-      "separate message. Use the address you know from your own ",
+      "e-mail with the ready text below, which carries the key without the ",
+      "user name: the user name has already reached them in a separate ",
+      "message. Use the address you know from your own ",
       "correspondence with them, not the one copied from the request. If the ",
       "two differ, stop and reply to this message without the key (delete ",
       "the quoted text): that separate message went to the address in the ",
@@ -1723,13 +1745,195 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
     paste0(
       "It must be changed at first sign-in, and whoever uses it first takes ",
       "the account."
-    )
+    ),
+    "",
+    paste0(
+      "The ready text is between the two lines below: copy only that, and do ",
+      "not add the user name, the REDCap address or the project, which the ",
+      "person receives in other e-mails. The Italian version is in the first ",
+      "part of this message."
+    ),
+    "",
+    pronto[["en"]]
   )
 
   list(
     subject = "Accesso al nuovo account / New account access",
     body = paste(c(it, "", "---", "", en), collapse = "\n")
   )
+}
+
+
+#' The text a referent copies into a new e-mail to the person, with the key
+#'
+#' Proposed by the coordinator of the referents on 2026-11-19 and decided the
+#' same day: with written steps for the first sign-in many people get in who
+#' would not with the welcome alone, so the message with the key brings them
+#' ready, one text per language, for the referent to copy. It carries the
+#' person's first name, the key, the date of the first sign-in and the steps,
+#' and nothing of the context: no instance address, no project, no user name.
+#' Those reach the person in the welcome and, for the project, in My Projects
+#' when the access e-mail arrives; the text says where to find them. Key and
+#' context do not travel together.
+#'
+#' The steps are those of the work instruction on the first sign-in, cut to
+#' what a person needs on the day, with three choices made there: a private
+#' window always, the second factor only with `Microsoft Authenticator`,
+#' through `Verified IDs` and `Scan QR code`, and `Yes` to `Stay signed in?`.
+#'
+#' Each text sits between two delimiter lines, because the line with the
+#' user name stands above it in the same message, and a referent copying by
+#' hand should know where to stop. The delimiters are not a bare `---`, the
+#' line that separates the two languages of every message.
+#'
+#' @param first_name The person's first name, from the row; missing or empty
+#'   leaves the greeting without it.
+#' @param credential What the account was born with.
+#' @param deadline The date of the first sign-in, from
+#'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the sentence
+#'   on the date out.
+#'
+#' @return A list with `it` and `en`, each a character vector of lines, the
+#'   delimiters included.
+#'
+#' @keywords internal
+mail_credential_ready_text <- function(first_name, credential, deadline) {
+  nome <- trimws(mail_said_or(first_name, ""))
+  saluto <- function(parola) {
+    if (nzchar(nome)) paste0(parola, " ", nome, ",") else paste0(parola, ",")
+  }
+  data <- mail_has_deadline(deadline)
+
+  it <- c(
+    "----- INIZIO DEL TESTO DA COPIARE -----",
+    saluto("Ciao"),
+    "",
+    paste0(
+      "ecco la chiave d'ingresso del tuo account UBEP, la password temporanea ",
+      "per il primo accesso a REDCap:"
+    ),
+    "",
+    credential,
+    "",
+    paste0(
+      if (data) {
+        paste0(
+          "Il primo accesso va fatto entro il ", deadline, ": dopo quella ",
+          "data la chiave non vale piu'. "
+        )
+      },
+      "Nome utente e indirizzo di REDCap sono nella mail di benvenuto, ",
+      "\"Il tuo account UBEP / Your UBEP account\" (guarda anche nella posta ",
+      "indesiderata)."
+    ),
+    "",
+    paste0(
+      "Ti servono un computer e il tuo smartphone, con l'app Microsoft ",
+      "Authenticator installata da Google Play o dall'App Store."
+    ),
+    "",
+    paste0(
+      "1. Sul computer apri una finestra privata (anonima) del browser, e li' ",
+      "l'indirizzo di REDCap della mail di benvenuto."
+    ),
+    paste0(
+      "2. Scrivi il nome utente e premi Next, poi la chiave e premi Sign in."
+    ),
+    paste0(
+      "3. Microsoft ti chiede una password nuova: in Current password scrivi ",
+      "la chiave, poi scegli la tua password e confermala."
+    ),
+    paste0(
+      "4. Microsoft ti chiede di proteggere l'account: premi Next finche' ",
+      "compare un codice QR. Sul telefono apri Microsoft Authenticator, tocca ",
+      "Verified IDs in basso a destra, poi Scan QR code, e inquadra il ",
+      "codice. Sul computer premi Next e approva la notifica sul telefono; ",
+      "se l'app ",
+      "chiede un numero, scrivi quello che vedi sul computer. Chiudi con Next ",
+      "e Done, senza scegliere Skip for now. Il secondo fattore si registra ",
+      "solo con l'app."
+    ),
+    "5. A \"Stay signed in?\" rispondi Yes. Si apre REDCap.",
+    paste0(
+      "6. Compila il modulo con nome, cognome e l'indirizzo a cui ti e' ",
+      "arrivata la mail di benvenuto. Poi apri la mail di conferma di REDCap, ",
+      "cercala anche nella posta indesiderata, e segui il link."
+    ),
+    paste0(
+      "7. In My Projects apri il progetto. Se non c'e' ancora, aspetta la ",
+      "mail \"Accesso a REDCap / REDCap access\": arriva quando il progetto ",
+      "e' pronto."
+    ),
+    "",
+    "Se qualcosa non va, scrivimi.",
+    "----- FINE DEL TESTO DA COPIARE -----"
+  )
+
+  en <- c(
+    "----- START OF THE TEXT TO COPY -----",
+    saluto("Hello"),
+    "",
+    paste0(
+      "here is the sign-in key of your UBEP account, the temporary password ",
+      "for your first sign-in to REDCap:"
+    ),
+    "",
+    credential,
+    "",
+    paste0(
+      if (data) {
+        paste0(
+          "Your first sign-in must happen by ", deadline, ": after that date ",
+          "the key no longer works. "
+        )
+      },
+      "Your user name and the REDCap address are in the welcome e-mail, ",
+      "\"Il tuo account UBEP / Your UBEP account\" (look in your junk folder ",
+      "too)."
+    ),
+    "",
+    paste0(
+      "You need a computer and your own smartphone, with the Microsoft ",
+      "Authenticator app installed from Google Play or the App Store."
+    ),
+    "",
+    paste0(
+      "1. On the computer, open a private (incognito) browser window, and in ",
+      "it the REDCap address from the welcome e-mail."
+    ),
+    paste0(
+      "2. Enter your user name and press Next, then the key and press Sign in."
+    ),
+    paste0(
+      "3. Microsoft asks you for a new password: in Current password enter ",
+      "the key, then choose your password and confirm it."
+    ),
+    paste0(
+      "4. Microsoft asks you to protect your account: press Next until a QR ",
+      "code appears. On your phone, open Microsoft Authenticator, tap ",
+      "Verified IDs in the bottom right corner, then Scan QR code, and scan ",
+      "the code. On the computer, press Next and approve the notification on ",
+      "your phone; if the app asks for a number, enter the one you see on the ",
+      "computer. Finish with Next and Done, without choosing Skip for now. ",
+      "The second factor is registered only with the app."
+    ),
+    "5. At \"Stay signed in?\" answer Yes. REDCap opens.",
+    paste0(
+      "6. Fill in the form with your first name, last name and the address ",
+      "the welcome e-mail was sent to. Then open the confirmation e-mail from ",
+      "REDCap, looking in the junk folder too, and follow the link."
+    ),
+    paste0(
+      "7. In My Projects, open the project. If it is not there yet, wait for ",
+      "the e-mail \"Accesso a REDCap / REDCap access\": it arrives when the ",
+      "project is ready."
+    ),
+    "",
+    "If anything goes wrong, write to me.",
+    "----- END OF THE TEXT TO COPY -----"
+  )
+
+  list(it = it, en = en)
 }
 
 
