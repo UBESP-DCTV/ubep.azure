@@ -10633,6 +10633,95 @@ test_that("una riga chiusa su una persona assente e rimasta revocata non si ferm
 })
 
 
+# Mario's row carried out, rewritten by Anna on a person Entra does not
+# hold, to create (C1 of the review of the limits).
+nadia <- list(
+  first_name = "Nadia", last_name = "Nuova", contact_email = "nadia@example.org"
+)
+nadia_scritta <- paste0(
+  "first_name = 'Nadia', last_name = 'Nuova', ",
+  "contact_email = 'nadia@example.org'"
+)
+
+
+test_that("una riga riscritta su una persona da creare dice che la revoca senza i campi resta ferma, e resta ferma", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  primo <- giro_entra(
+    directory_doppia(mario_a()), cambi = nadia,
+    storia = list(cambio(anna, nadia_scritta)),
+    mailer = posta[["mailer"]]
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  secondo <- giro_entra(
+    directory_doppia(mario_a()),
+    cambi = c(nadia, list(request_status = "revoked")),
+    storia = list(
+      cambio(anna, "request_status = 'revoked'",
+             timestamp = "2026-08-14 02:50"),
+      cambio(anna, nadia_scritta, timestamp = "2026-08-14 02:40")
+    ),
+    istanza = istanza_che_revoca(), mailer = posta_accesa
+  )
+
+  # test
+  # The revocation does not leave on the name carried out, since the row
+  # would create: the sentence the item 39 took away is true here.
+  expect_equal(dettaglio_uno(primo), "DATO_COPPIA_CAMBIATA")
+  expect_match(
+    corpo, "Revocata senza riportare i campi, la riga resta ferma qui.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    "Revoked without setting the fields back, the row stays stopped here.",
+    fixed = TRUE
+  )
+  expect_equal(dettaglio_uno(secondo), "DATO_COPPIA_CAMBIATA")
+  expect_length(revocati(), 0L)
+})
+
+
+test_that("una riga riscritta su una persona che esiste non dice che la revoca resta ferma, e la revoca esce", { # nolint: line_length_linter.
+  # eval
+  giulia_scritta <- paste0(
+    "first_name = 'Giulia', last_name = 'Verdi', ",
+    "contact_email = 'giulia.verdi@example.org'"
+  )
+  posta <- posta_raccolta()
+  giro_entra(
+    directory_doppia(mario_a(), giulia),
+    cambi = list(
+      first_name = "Giulia", last_name = "Verdi",
+      contact_email = "giulia.verdi@example.org"
+    ),
+    storia = list(cambio(anna, giulia_scritta)),
+    mailer = posta[["mailer"]]
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  secondo <- giro_entra(
+    directory_doppia(mario_a(), giulia),
+    cambi = list(
+      first_name = "Giulia", last_name = "Verdi",
+      contact_email = "giulia.verdi@example.org", request_status = "revoked"
+    ),
+    storia = list(
+      cambio(anna, "request_status = 'revoked'",
+             timestamp = "2026-08-14 02:50"),
+      cambio(anna, giulia_scritta, timestamp = "2026-08-14 02:40")
+    ),
+    istanza = istanza_che_revoca(), mailer = posta_accesa
+  )
+
+  # test
+  # C2 of the review: the case where the sentence is false.
+  expect_false(grepl("la riga resta ferma qui", corpo, fixed = TRUE))
+  expect_false(grepl("the row stays stopped here", corpo, fixed = TRUE))
+  expect_equal(as.character(secondo[["esiti"]][["outcome"]]), "applied")
+  expect_equal(revocati(), mario)
+})
+
+
 # The account carried out renamed on Entra because its person changed
 # surname, and the referent writes the new surname in the row (item 10 of the
 # review of the limits, 0.28.0).

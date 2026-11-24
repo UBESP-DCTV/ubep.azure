@@ -2415,6 +2415,30 @@ test_that("il messaggio di una coppia cambiata nella sola persona non dice che l
 })
 
 
+test_that("il messaggio di una coppia cambiata segue il giro su quando la revoca resta ferma", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(resta) {
+    mail_outcome_message(do.call(
+      riga_di_prova,
+      utils::modifyList(
+        coppia_di_prova,
+        list(pair_changed = "person", revocation_stays = resta)
+      )
+    ))[["body"]]
+  }
+
+  # test
+  # The round knows whether the revocation would leave on the name carried
+  # out; the message says what the round says, and without it falls back on
+  # the instance and the project.
+  expect_match(corpo("yes"), "la riga resta ferma qui", fixed = TRUE)
+  expect_match(corpo("yes"), "the row stays stopped here", fixed = TRUE)
+  expect_false(grepl("la riga resta ferma qui", corpo("no"), fixed = TRUE))
+  expect_false(grepl("the row stays stopped here", corpo("no"), fixed = TRUE))
+  expect_false(grepl("la riga resta ferma qui", corpo(""), fixed = TRUE))
+})
+
+
 test_that("il messaggio nomina tutto cio' che e' cambiato", {
   # eval
   corpo <- mail_outcome_message(do.call(

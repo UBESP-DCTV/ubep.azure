@@ -360,10 +360,17 @@ mail_outcome_message <- function(row) {
     if (length(parti) == 0L) {
       parti <- names(nomi)
     }
-    # A revocation with the fields not set back stays stopped only when the
-    # instance or the project moved: on the person alone the round revokes
-    # the name carried out (`revocation_exits()`, item 39 of the limits).
-    ferma <- any(c("server", "project_id") %in% parti)
+    # A revocation with the fields not set back stays stopped when the
+    # instance or the project moved, and on the person alone only when the
+    # round could not revoke the name carried out (`revocation_exits()`,
+    # item 39 of the limits and C1 of its review): the round says which in
+    # `revocation_stays`. Without it, the instance and the project decide.
+    resta <- mail_said_or(row[["revocation_stays"]], "")
+    ferma <- if (resta %in% c("yes", "no")) {
+      identical(resta, "yes")
+    } else {
+      any(c("server", "project_id") %in% parti)
+    }
     ferma_it <- if (ferma) {
       " Revocata senza riportare i campi, la riga resta ferma qui."
     } else {
