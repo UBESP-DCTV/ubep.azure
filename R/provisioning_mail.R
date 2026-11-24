@@ -360,6 +360,20 @@ mail_outcome_message <- function(row) {
     if (length(parti) == 0L) {
       parti <- names(nomi)
     }
+    # A revocation with the fields not set back stays stopped only when the
+    # instance or the project moved: on the person alone the round revokes
+    # the name carried out (`revocation_exits()`, item 39 of the limits).
+    ferma <- any(c("server", "project_id") %in% parti)
+    ferma_it <- if (ferma) {
+      " Revocata senza riportare i campi, la riga resta ferma qui."
+    } else {
+      ""
+    }
+    ferma_en <- if (ferma) {
+      " Revoked without setting the fields back, the row stays stopped here."
+    } else {
+      ""
+    }
     chiede <- function(lingua, congiunzione) {
       parole <- vapply(nomi[parti], function(n) n[[lingua]], character(1))
       if (length(parole) == 1L) {
@@ -397,8 +411,7 @@ mail_outcome_message <- function(row) {
         paste0(
           "- Se serve un'altra persona o un altro progetto, riporta i campi ",
           "ai valori eseguiti e porta Requested state a revoked, se l'accesso ",
-          "eseguito non serve piu'; poi crea una richiesta nuova. Revocata ",
-          "senza riportare i campi, la riga resta ferma qui."
+          "eseguito non serve piu'; poi crea una richiesta nuova.", ferma_it
         ),
         "",
         paste0(
@@ -432,9 +445,8 @@ mail_outcome_message <- function(row) {
         paste0(
           "- If another person or another project is needed, set the fields ",
           "back to the applied values and set Requested state to revoked, if ",
-          "the applied access is no longer needed; then file a new request. ",
-          "Revoked without setting the fields back, the row stays stopped ",
-          "here."
+          "the applied access is no longer needed; then file a new request.",
+          ferma_en
         ),
         "",
         paste0(

@@ -2377,6 +2377,44 @@ test_that("il messaggio di una coppia cambiata dice le due uscite", {
 })
 
 
+test_that("il messaggio di una coppia cambiata nella sola persona non dice che la revoca resta ferma", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(cambiato) {
+    mail_outcome_message(do.call(
+      riga_di_prova,
+      utils::modifyList(coppia_di_prova, list(pair_changed = cambiato))
+    ))[["body"]]
+  }
+  persona <- corpo("person")
+  progetto <- corpo("project_id,person")
+  ignoto <- corpo("")
+
+  # test
+  # On the person alone, a revocation with the fields not set back revokes
+  # the name carried out (`revocation_exits()`): the row does not stay
+  # stopped. With the instance or the project moved it does.
+  expect_false(grepl("la riga resta ferma qui", persona, fixed = TRUE))
+  expect_false(grepl("the row stays stopped here", persona, fixed = TRUE))
+  expect_match(
+    persona, "poi crea una richiesta nuova.
+", fixed = FALSE
+  )
+  expect_match(persona, "then file a new request.
+", fixed = FALSE)
+  expect_match(
+    progetto, "Revocata senza riportare i campi, la riga resta ferma qui.",
+    fixed = TRUE
+  )
+  expect_match(
+    progetto,
+    "Revoked without setting the fields back, the row stays stopped here.",
+    fixed = TRUE
+  )
+  # What moved unknown, the message names everything and keeps the sentence.
+  expect_match(ignoto, "la riga resta ferma qui", fixed = TRUE)
+})
+
+
 test_that("il messaggio nomina tutto cio' che e' cambiato", {
   # eval
   corpo <- mail_outcome_message(do.call(
