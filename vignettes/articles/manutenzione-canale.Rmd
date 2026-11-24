@@ -1099,9 +1099,12 @@ La regola è `pair_change()`, con quattro codici:
   (cancellato e ridato, o ricreato a mano). La risoluzione può non vederlo:
   con il recapito interno e gli stessi nome e cognome la riga restava
   `applied`. Mai su una riga revocata, che governa la sua coppia. L'esito va
-  al proprietario con IT in copia, e dice che la riga non va modificata. Se
-  l'accesso non serve più, il proprietario revoca la riga e la revoca toglie
-  il nome eseguito (la regola della revoca, sotto). IT verifica su Entra chi
+  al proprietario con IT in copia, e dice che la riga non va modificata. Il
+  proprietario la revoca in ogni caso, perché il nome eseguito, con l'accesso,
+  è ora di un altro account, e la revoca toglie il nome eseguito (la regola
+  della revoca, sotto); se alla persona l'accesso serve ancora, compila poi
+  una richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima chiedeva
+  la revoca solo se l'accesso non serviva più. IT verifica su Entra chi
   porta il nome e da quando (*Audit logs*), e sulle istanze i diritti del
   login con quel nome, che il nuovo titolare può avere ereditato anche su
   altri progetti.

@@ -495,8 +495,10 @@ mail_outcome_message <- function(row) {
   # The username carried out names another account now (item 11 of the
   # 0.27.0): deleted and given again, or made again by hand. Whoever holds
   # it now holds what the old login had, so IT looks at Entra and at the
-  # instances; the owner revokes the row if the access is no longer needed,
-  # and the revocation takes the access away from the name carried out.
+  # instances. The owner revokes the row in any case, decided on 2026-11-15
+  # with the documents 00.05: the name carried out, with the access, belongs
+  # now to another account, and the revocation takes the access away from it.
+  # A person who still needs the access gets a new request.
   nome_riassegnato <- if (riassegnato) {
     list(
       it = c(
@@ -515,9 +517,10 @@ mail_outcome_message <- function(row) {
         ),
         paste0(
           "IT verifica su Entra chi porta ora il nome, e i diritti di quel ",
-          "nome sulle istanze; non serve modificare la riga. Se l'accesso ",
-          "non serve piu', revoca la riga: la revoca toglie l'accesso al ",
-          "nome eseguito."
+          "nome sulle istanze. Non modificare la riga: revocala in ogni caso, ",
+          "perche' il nome eseguito, con l'accesso, ora e' di un altro ",
+          "account, e la revoca toglie l'accesso a quel nome. Se alla persona ",
+          "l'accesso serve ancora, compila poi una richiesta nuova."
         )
       ),
       en = c(
@@ -536,9 +539,11 @@ mail_outcome_message <- function(row) {
         ),
         paste0(
           "IT checks on Entra who holds the name now, and the rights of that ",
-          "name on the instances; the row needs no edit. If the access is no ",
-          "longer needed, revoke the row: the revocation takes the access ",
-          "away from the username applied."
+          "name on the instances. Do not edit the row: revoke it in any case, ",
+          "because the username applied, with the access, belongs now to ",
+          "another account, and the revocation takes the access away from ",
+          "that name. If the person still needs the access, then fill in a ",
+          "new request."
         )
       )
     )

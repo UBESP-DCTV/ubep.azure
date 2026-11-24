@@ -2890,8 +2890,18 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
   expect_match(
     corpo, "IT verifica su Entra chi porta ora il nome", fixed = TRUE
   )
+  # The owner revokes the row in any case, decided on 2026-11-15 with the
+  # documents 00.05: the name carried out, with the access, belongs now to
+  # another account. A person who still needs the access gets a new request.
   expect_match(
-    corpo, "revoca la riga: la revoca toglie l'accesso", fixed = TRUE
+    corpo,
+    paste0(
+      "Non modificare la riga: revocala in ogni caso, perche' il nome ",
+      "eseguito, con l'accesso, ora e' di un altro account, e la revoca ",
+      "toglie l'accesso a quel nome. Se alla persona l'accesso serve ancora, ",
+      "compila poi una richiesta nuova."
+    ),
+    fixed = TRUE
   )
   expect_match(
     corpo,
@@ -2899,7 +2909,18 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
     fixed = TRUE
   )
   expect_match(corpo, "IT checks on Entra who holds the name now", fixed = TRUE)
-  expect_match(corpo, "revoke the row: the revocation takes", fixed = TRUE)
+  expect_match(
+    corpo,
+    paste0(
+      "Do not edit the row: revoke it in any case, because the username ",
+      "applied, with the access, belongs now to another account, and the ",
+      "revocation takes the access away from that name. If the person still ",
+      "needs the access, then fill in a new request."
+    ),
+    fixed = TRUE
+  )
+  expect_false(grepl("non serve piu'", corpo, fixed = TRUE))
+  expect_false(grepl("no longer needed", corpo, fixed = TRUE))
   # It does not clear by itself, and the message does not say it does.
   expect_match(corpo, "questo non si risolve da solo", fixed = TRUE)
   expect_match(corpo, "this one does not clear by itself", fixed = TRUE)
