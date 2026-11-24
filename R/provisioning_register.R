@@ -1876,6 +1876,10 @@ entra_account_change <- function(executed_username, believed_id, directory,
   if (is.na(name) || !nzchar(name)) {
     return(nothing)
   }
+  stopifnot(
+    "entra_account_change(): folds made from another directory" =
+      identical(folds[["directory"]], directory)
+  )
   upns <- folds[["upns"]]
   ids <- folds[["ids"]]
   id <- identity_normalize(believed_id)
@@ -1969,6 +1973,10 @@ entra_fill <- function(executed_username, directory, since,
   }
   limit <- limit + 60
 
+  stopifnot(
+    "entra_fill(): folds made from another directory" =
+      identical(folds[["directory"]], directory)
+  )
   upns <- folds[["upns"]]
   holders <- which(!is.na(upns) & upns == name)
   if (length(holders) != 1L) {

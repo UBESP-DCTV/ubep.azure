@@ -1854,3 +1854,39 @@ test_that("the folds are of the directory they were made from, not of the variab
     c("mario.rossi@ubep.unipd.it", "anna.verdi@ubep.unipd.it")
   )
 })
+
+test_that("folds of the same accounts in another order are refused by the resolution", { # nolint: line_length_linter.
+  # L2 of the review of the 0.28.0: the folds hand out positions, and the
+  # positions are read on the directory passed. A count of rows let these
+  # through, and the answer named the account the folds believed.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  swapped <- directory[2:1, , drop = FALSE]
+  expect_error(
+    resolve_identity(a_request(), swapped, folds = folds),
+    "another directory"
+  )
+})
+
+test_that("folds of another directory are refused by the checks of the Entra account", { # nolint: line_length_linter.
+  # L3 of the review of the 0.28.0: without a guard `entra_fill()` gave
+  # Anna's id for Mario's name, and `entra_account_change()` saw Mario's
+  # account renamed to Anna's.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  swapped <- directory[2:1, , drop = FALSE]
+  expect_error(
+    entra_fill(
+      "mario.rossi@ubep.unipd.it", swapped, "2026-06-01 10:00",
+      folds = folds
+    ),
+    "another directory"
+  )
+  expect_error(
+    entra_account_change(
+      "nessuno@ubep.unipd.it", "00000000-0000-0000-0000-000000000001",
+      swapped, folds = folds
+    ),
+    "another directory"
+  )
+})

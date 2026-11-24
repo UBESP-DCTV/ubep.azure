@@ -170,12 +170,16 @@ identity_stop_codes <- function(identity, errors = character(),
 #' argument that defaults to folding the directory it is given: a caller that
 #' does not pass it gets what it always got. Valid only for the directory it
 #' was made from, which is why only `provisioning_reconcile()` passes one,
-#' made from the sweep it hands to the same calls.
+#' made from the sweep it hands to the same calls. The directory is kept in
+#' the folds, and `resolve_against_directory()`, `entra_account_change()`
+#' and `entra_fill()` stop when the one they are handed is not `identical()`
+#' to it: on the same object the comparison ends at the pointers.
 #'
 #' @param directory A directory frame as `directory_users()` returns.
 #'
-#' @return An environment with `rows`, `candidate`, `surnames`, `givens`,
-#'   `contacts`, `contact_values`, `contact_rows`, `upns` and `ids`.
+#' @return An environment with `directory`, the directory itself, and
+#'   `rows`, `candidate`, `surnames`, `givens`, `contacts`,
+#'   `contact_values`, `contact_rows`, `upns` and `ids`.
 #'
 #' @keywords internal
 directory_folds <- function(directory) {
@@ -185,6 +189,10 @@ directory_folds <- function(directory) {
   # here; the fields stay lazy.
   force(directory)
   folds <- new.env(parent = emptyenv())
+  # Kept, so that every reader can check it was handed the same directory
+  # (L2 and L3 of the review): the folds give positions, and a position read
+  # on another directory names another account.
+  folds[["directory"]] <- directory
   here <- environment()
   delayedAssign("rows", nrow(directory), here, folds)
   delayedAssign("candidate", directory_is_candidate(directory), here, folds)
@@ -832,7 +840,7 @@ resolve_against_directory <- function(request,
 
   stopifnot(
     "resolve_against_directory(): folds made from another directory" =
-      identical(folds[["rows"]], nrow(directory))
+      identical(folds[["directory"]], directory)
   )
   candidate <- folds[["candidate"]]
   named <- candidate & directory_named(
