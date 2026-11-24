@@ -231,9 +231,12 @@ fra due righe di trattini («INIZIO DEL TESTO DA COPIARE», «FINE DEL TESTO DA
 COPIARE»; in inglese «START OF THE TEXT TO COPY», «END OF THE TEXT TO COPY»),
 perché sopra, nella stessa mail, c'è la riga col nome utente. Il testo porta il
 nome di battesimo della persona, la chiave, la data del primo accesso se c'è, e
-sette passi presi dalla WI del primo accesso: finestra privata sempre, secondo
+otto passi presi dalla WI del primo accesso: finestra privata sempre, secondo
 fattore solo con Microsoft Authenticator per *Verified IDs* e *Scan QR code*,
-*Yes* a *Stay signed in?*, e in *My Projects* il progetto, o la mail di accesso
+poi un indirizzo mail della persona confermato con un codice, che il reset
+self-service chiede accanto ad Authenticator al posto del telefono (deciso il
+2026-11-24 con la configurazione di Entra), *Yes* a *Stay signed in?*, e in
+*My Projects* il progetto, o la mail di accesso
 da aspettare se non c'è ancora. Non porta l'indirizzo dell'istanza, il progetto
 né il nome utente: chiave e contesto non viaggiano insieme, deciso il
 2026-11-19. Il testo dice che nome utente e indirizzo stanno nel benvenuto, e

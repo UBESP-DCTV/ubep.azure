@@ -1224,6 +1224,44 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
 })
 
 
+test_that("il testo pronto chiede l'indirizzo per recuperare la password", {
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  passo <- list(
+    it = paste0(
+      "5. Per recuperare la password Microsoft ti chiede anche un indirizzo ",
+      "mail: scrivi un indirizzo tuo che leggi, e poi il codice che ti ",
+      "arriva li'. Chiudi con Next e Done."
+    ),
+    en = paste0(
+      "5. To recover your password, Microsoft also asks for an e-mail ",
+      "address: enter an address of yours that you read, then the code that ",
+      "arrives there. Finish with Next and Done."
+    )
+  )
+
+  # test
+  # Decided on 2026-11-24 with the configuration of Entra: the self-service
+  # password reset asks for two methods, Authenticator and an e-mail
+  # address, and no longer accepts a phone. The step comes after the one of
+  # Authenticator and before Stay signed in?, and names no phone.
+  for (lingua in names(passo)) {
+    d <- delimitatori[[lingua]]
+    testo <- testo_pronto(righe, d[[1]], d[[2]])[["righe"]]
+    dove <- function(inizio) grep(paste0("^", inizio), testo)
+    expect_true(passo[[lingua]] %in% testo, info = lingua)
+    expect_equal(dove("4\\. "), which(testo == passo[[lingua]]) - 1L)
+    expect_equal(dove("6\\. "), which(testo == passo[[lingua]]) + 1L)
+    expect_false(grepl("telefono|phone|SMS", passo[[lingua]]))
+  }
+  # Done closes the registration once, at the end of it.
+  expect_equal(sum(grepl("Done", righe, fixed = TRUE)), 2L)
+})
+
+
 test_that("il testo pronto non porta istanza, progetto, ruolo o nome utente", {
   # eval
   riga <- riga_di_prova(

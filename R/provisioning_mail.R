@@ -1780,6 +1780,10 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' what a person needs on the day, with three choices made there: a private
 #' window always, the second factor only with `Microsoft Authenticator`,
 #' through `Verified IDs` and `Scan QR code`, and `Yes` to `Stay signed in?`.
+#' A step more, decided on 2026-11-24 with the configuration of Entra: the
+#' self-service reset asks for two methods, Authenticator and an e-mail
+#' address confirmed with a code, and no longer accepts a phone, so after
+#' Authenticator the person gives an address of their own.
 #'
 #' Each text sits between two delimiter lines, because the line with the
 #' user name stands above it in the same message, and a referent copying by
@@ -1848,19 +1852,22 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "compare un codice QR. Sul telefono apri Microsoft Authenticator, tocca ",
       "Verified IDs in basso a destra, poi Scan QR code, e inquadra il ",
       "codice. Sul computer premi Next e approva la notifica sul telefono; ",
-      "se l'app ",
-      "chiede un numero, scrivi quello che vedi sul computer. Chiudi con Next ",
-      "e Done, senza scegliere Skip for now. Il secondo fattore si registra ",
-      "solo con l'app."
+      "se l'app chiede un numero, scrivi quello che vedi sul computer. Non ",
+      "scegliere Skip for now. Il secondo fattore si registra solo con l'app."
     ),
-    "5. A \"Stay signed in?\" rispondi Yes. Si apre REDCap.",
     paste0(
-      "6. Compila il modulo con nome, cognome e l'indirizzo a cui ti e' ",
+      "5. Per recuperare la password Microsoft ti chiede anche un indirizzo ",
+      "mail: scrivi un indirizzo tuo che leggi, e poi il codice che ti ",
+      "arriva li'. Chiudi con Next e Done."
+    ),
+    "6. A \"Stay signed in?\" rispondi Yes. Si apre REDCap.",
+    paste0(
+      "7. Compila il modulo con nome, cognome e l'indirizzo a cui ti e' ",
       "arrivata la mail di benvenuto. Poi apri la mail di conferma di REDCap, ",
       "cercala anche nella posta indesiderata, e segui il link."
     ),
     paste0(
-      "7. In My Projects apri il progetto. Se non c'e' ancora, aspetta la ",
+      "8. In My Projects apri il progetto. Se non c'e' ancora, aspetta la ",
       "mail \"Accesso a REDCap / REDCap access\": arriva quando il progetto ",
       "e' pronto."
     ),
@@ -1914,17 +1921,22 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "Verified IDs in the bottom right corner, then Scan QR code, and scan ",
       "the code. On the computer, press Next and approve the notification on ",
       "your phone; if the app asks for a number, enter the one you see on the ",
-      "computer. Finish with Next and Done, without choosing Skip for now. ",
-      "The second factor is registered only with the app."
+      "computer. Do not choose Skip for now. The second factor is registered ",
+      "only with the app."
     ),
-    "5. At \"Stay signed in?\" answer Yes. REDCap opens.",
     paste0(
-      "6. Fill in the form with your first name, last name and the address ",
+      "5. To recover your password, Microsoft also asks for an e-mail ",
+      "address: enter an address of yours that you read, then the code that ",
+      "arrives there. Finish with Next and Done."
+    ),
+    "6. At \"Stay signed in?\" answer Yes. REDCap opens.",
+    paste0(
+      "7. Fill in the form with your first name, last name and the address ",
       "the welcome e-mail was sent to. Then open the confirmation e-mail from ",
       "REDCap, looking in the junk folder too, and follow the link."
     ),
     paste0(
-      "7. In My Projects, open the project. If it is not there yet, wait for ",
+      "8. In My Projects, open the project. If it is not there yet, wait for ",
       "the e-mail \"Accesso a REDCap / REDCap access\": it arrives when the ",
       "project is ready."
     ),
