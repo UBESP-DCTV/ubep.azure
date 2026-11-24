@@ -14,23 +14,25 @@ mail_credential_message(row, upn, credential, deadline = NULL)
 \item{credential}{What the account was born with.}
 
 \item{deadline}{The date of the first sign-in, from
-\code{mail_first_signin_deadline()}; \code{NULL}, \code{NA} or empty leaves the line
-out.}
+\code{mail_first_signin_deadline()}; \code{NULL}, \code{NA} or empty leaves the lines
+on the date out, here and in the ready text.}
 }
 \value{
 A list with \code{subject} and \code{body}.
 }
 \description{
-It carries the UPN, the key, the date of the first sign-in, and nothing
-else. No project, no role, no instance, nobody in copy: a message with a
-way in must not also carry the context that makes it spendable. The date
-is not that context: it says until when the key is any use, which is what
-the referent needs to hand it over in time.
+It carries the UPN, the key, the date of the first sign-in, a ready text
+for the person in each language (\code{mail_credential_ready_text()}), and
+nothing else. No project, no role, no instance, nobody in copy: a message
+with a way in must not also carry the context that makes it spendable. The
+date is not that context: it says until when the key is any use, which is
+what the referent needs to hand it over in time.
 }
 \details{
 What it asks of the referent is the rule decided for handing the key over:
-another channel if there is one, otherwise a new message with the key
-alone, never a forward of this one, and to the address the referent knows
+another channel if there is one, otherwise a new message with the ready
+text, which carries the key without the user name, never a forward of
+this one, and to the address the referent knows
 from their own correspondence rather than the one copied from the request.
 The welcome went to the address in the request, so a referent who finds the
 two different is asked to stop and reply instead of sending. The same
@@ -50,5 +52,10 @@ Under the sentence on how to hand the key over it gives the date the first
 sign-in has to happen by, the one the welcome gives the person, and where
 to ask for a new key after it: a reply to this message, which reaches IT,
 again with the key left out of it.
+
+Each half closes with the ready text of its language, between two
+delimiter lines and under a sentence that tells the referent to copy only
+that and add neither the user name, nor the address of REDCap, nor the
+project. The text itself says where the person finds them.
 }
 \keyword{internal}
