@@ -891,8 +891,9 @@ test_that("il messaggio con la chiave dice come consegnarla", {
     paste0(
       "Consegna la chiave alla persona, e non inoltrare questo messaggio. Se ",
       "hai un canale diverso dalla posta, usa quello; altrimenti scrivile una ",
-      "mail nuova con la sola chiave: il nome utente le e' gia' arrivato in ",
-      "un messaggio a parte. Usa l'indirizzo che conosci dalla tua ",
+      "mail nuova con il testo pronto qui sotto, che porta la chiave senza il ",
+      "nome utente: il nome utente le e' gia' arrivato in un messaggio a ",
+      "parte. Usa l'indirizzo che conosci dalla tua ",
       "corrispondenza con lei, non quello copiato dalla richiesta. Se i due ",
       "non coincidono, fermati e rispondi a questo messaggio senza la chiave ",
       "(togli il testo citato): quel messaggio a parte e' andato ",
@@ -904,8 +905,9 @@ test_that("il messaggio con la chiave dice come consegnarla", {
     paste0(
       "Hand the key to the person, and do not forward this message. If you ",
       "have a channel other than e-mail, use it; otherwise write them a new ",
-      "e-mail with the key alone: the user name has already reached them in a ",
-      "separate message. Use the address you know from your own ",
+      "e-mail with the ready text below, which carries the key without the ",
+      "user name: the user name has already reached them in a separate ",
+      "message. Use the address you know from your own ",
       "correspondence with them, not the one copied from the request. If the ",
       "two differ, stop and reply to this message without the key (delete ",
       "the quoted text): that separate message went to the address in the ",
@@ -1089,10 +1091,11 @@ test_that("il messaggio con la chiave dice al referente entro quando", {
   expect_true(dove("Hand the key to the person") < dove(en))
   expect_true(dove(en) < dove("It must be changed at first sign-in"))
   expect_false(any(grepl("[^\\x01-\\x7F]", righe, perl = TRUE)))
-  # One date: the deadline, once in each language, and no other beside it.
+  # One date: the deadline, once in each language for the referent and once
+  # in each ready text for the person, and no other beside it.
   expect_equal(
     unlist(regmatches(righe, gregexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", righe))),
-    rep("2026-12-21", 2L)
+    rep("2026-12-21", 4L)
   )
 })
 
@@ -1114,6 +1117,247 @@ test_that("senza data limite il messaggio con la chiave parte com'era", {
       com_era
     )
   }
+})
+
+
+# The ready text of one language, the lines between its two delimiters, and
+# where the delimiters sit in the body. Decided on 2026-11-19 with the
+# proposal of the first sign-in: a text the referent copies into a new
+# e-mail to the person, delimited, because the line with the user name sits
+# above it in the same message.
+testo_pronto <- function(righe, inizio, fine) {
+  da <- which(righe == inizio)
+  a <- which(righe == fine)
+  list(da = da, a = a, righe = righe[seq.int(da[[1L]] + 1L, a[[1L]] - 1L)])
+}
+delimitatori <- list(
+  it = c(
+    "----- INIZIO DEL TESTO DA COPIARE -----",
+    "----- FINE DEL TESTO DA COPIARE -----"
+  ),
+  en = c(
+    "----- START OF THE TEXT TO COPY -----",
+    "----- END OF THE TEXT TO COPY -----"
+  )
+)
+
+
+test_that("il messaggio con la chiave porta un testo pronto per lingua, delimitato", { # nolint: line_length_linter.
+  # eval
+  upn <- "sara.collaudozeta@ubep.unipd.it"
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = upn, credential = finti[["parola"]],
+    deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  parti <- lapply(delimitatori, function(d) testo_pronto(righe, d[[1]], d[[2]]))
+  dove <- function(testo) grep(testo, righe, fixed = TRUE)[[1]]
+
+  # test
+  for (lingua in names(parti)) {
+    parte <- parti[[lingua]]
+    # Once each, the start before the end, and the line with the user name
+    # outside: what the referent copies cannot carry it along.
+    expect_length(parte[["da"]], 1L)
+    expect_length(parte[["a"]], 1L)
+    expect_true(parte[["da"]] < parte[["a"]], info = lingua)
+    expect_false(any(grepl(upn, parte[["righe"]], fixed = TRUE)), info = lingua)
+    expect_true(finti[["parola"]] %in% parte[["righe"]], info = lingua)
+  }
+  # Each text in the half of its own language, after what the referent reads.
+  expect_true(dove("Va cambiata al primo accesso") < parti[["it"]][["da"]])
+  expect_true(parti[["it"]][["a"]] < which(righe == "---"))
+  expect_true(which(righe == "---") < dove("Hand the key to the person"))
+  expect_true(
+    dove("It must be changed at first sign-in") < parti[["en"]][["da"]]
+  )
+  expect_false(any(grepl("[^\\x01-\\x7F]", righe, perl = TRUE)))
+  # The one sentence that tells the referent to add no context to the text,
+  # whole, in each half, just before the text it is about.
+  istruzione <- list(
+    it = paste0(
+      "Il testo pronto e' fra le due righe qui sotto: copia solo quello, e ",
+      "non aggiungere nome utente, indirizzo di REDCap o progetto, che la ",
+      "persona riceve in altre mail. La versione inglese e' nella seconda ",
+      "parte di questo messaggio."
+    ),
+    en = paste0(
+      "The ready text is between the two lines below: copy only that, and do ",
+      "not add the user name, the REDCap address or the project, which the ",
+      "person receives in other e-mails. The Italian version is in the first ",
+      "part of this message."
+    )
+  )
+  for (lingua in names(istruzione)) {
+    riga_istruzione <- which(righe == istruzione[[lingua]])
+    expect_length(riga_istruzione, 1L)
+    expect_equal(riga_istruzione, parti[[lingua]][["da"]] - 2L, info = lingua)
+  }
+})
+
+
+test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso", { # nolint: line_length_linter.
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  unito <- function(d) {
+    paste(testo_pronto(righe, d[[1]], d[[2]])[["righe"]], collapse = "\n")
+  }
+  it <- unito(delimitatori[["it"]])
+  en <- unito(delimitatori[["en"]])
+
+  # test
+  expect_match(it, "^Ciao Sara,\n")
+  expect_match(en, "^Hello Sara,\n")
+  for (frase in c(
+    "Il primo accesso va fatto entro il 2026-12-21",
+    "finestra privata",
+    "Microsoft Authenticator",
+    "tocca Verified IDs in basso a destra, poi Scan QR code",
+    "Il secondo fattore si registra solo con l'app.",
+    "Non scegliere Skip for now.",
+    "A \"Stay signed in?\" rispondi Yes.",
+    "In My Projects apri il progetto. Se non c'e' ancora, aspetta la mail",
+    "\"Il tuo account UBEP / Your UBEP account\""
+  )) {
+    expect_match(it, frase, fixed = TRUE, info = frase)
+  }
+  for (frase in c(
+    "Your first sign-in must happen by 2026-12-21",
+    "private (incognito) browser window",
+    "Microsoft Authenticator",
+    "tap Verified IDs in the bottom right corner, then Scan QR code",
+    "The second factor is registered only with the app.",
+    "Do not choose Skip for now.",
+    "At \"Stay signed in?\" answer Yes.",
+    "In My Projects, open the project. If it is not there yet, wait for",
+    "\"Il tuo account UBEP / Your UBEP account\""
+  )) {
+    expect_match(en, frase, fixed = TRUE, info = frase)
+  }
+  # Authenticator only, by the path checked on a current app on 2026-11-20:
+  # no SMS, no call, and not the old path through + and Work or school
+  # account.
+  for (testo in list(it, en)) {
+    expect_false(grepl("SMS", testo, fixed = TRUE))
+    expect_false(grepl("Work or school", testo, fixed = TRUE))
+    expect_false(grepl("**+**", testo, fixed = TRUE))
+  }
+})
+
+
+test_that("il testo pronto chiede l'indirizzo per recuperare la password", {
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  passo <- list(
+    it = paste0(
+      "5. Per recuperare la password Microsoft ti chiede anche un indirizzo ",
+      "mail: scrivi un indirizzo tuo che leggi, e poi il codice che ti ",
+      "arriva li'. Chiudi con Next e Done."
+    ),
+    en = paste0(
+      "5. To recover your password, Microsoft also asks for an e-mail ",
+      "address: enter an address of yours that you read, then the code that ",
+      "arrives there. Finish with Next and Done."
+    )
+  )
+
+  # test
+  # Decided on 2026-11-24 with the configuration of Entra: the self-service
+  # password reset asks for two methods, Authenticator and an e-mail
+  # address, and no longer accepts a phone. The step comes after the one of
+  # Authenticator and before Stay signed in?, and names no phone.
+  for (lingua in names(passo)) {
+    d <- delimitatori[[lingua]]
+    testo <- testo_pronto(righe, d[[1]], d[[2]])[["righe"]]
+    dove <- function(inizio) grep(paste0("^", inizio), testo)
+    expect_true(passo[[lingua]] %in% testo, info = lingua)
+    expect_equal(dove("4\\. "), which(testo == passo[[lingua]]) - 1L)
+    expect_equal(dove("6\\. "), which(testo == passo[[lingua]]) + 1L)
+    expect_false(grepl("telefono|phone|SMS", passo[[lingua]]))
+  }
+  # Done closes the registration once, at the end of it.
+  expect_equal(sum(grepl("Done", righe, fixed = TRUE)), 2L)
+})
+
+
+test_that("il testo pronto non porta istanza, progetto, ruolo o nome utente", {
+  # eval
+  riga <- riga_di_prova(
+    server = "edc10", project_id = "9047", role_name = "collaudo-canale",
+    dag_name = "gruppo-collaudo"
+  )
+  upn <- "sara.collaudozeta@ubep.unipd.it"
+  corpo <- mail_credential_message(
+    riga, upn = upn, credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]]
+  righe <- strsplit(corpo, "\n", fixed = TRUE)[[1]]
+
+  # test
+  # Key and context do not travel together, decided by [cl] on 2026-11-19:
+  # the link and the user name reach the person in the welcome, the project
+  # in My Projects when the access e-mail arrives.
+  for (d in delimitatori) {
+    testo <- paste(
+      testo_pronto(righe, d[[1]], d[[2]])[["righe"]], collapse = "\n"
+    )
+    for (contesto in c(
+      upn, "https://", "http://", "edc10", "9047", "collaudo-canale",
+      "gruppo-collaudo", riga[["last_name"]], riga[["contact_email"]]
+    )) {
+      expect_false(grepl(contesto, testo, fixed = TRUE), info = contesto)
+    }
+  }
+  # Nor anywhere else in the message, so nothing sits next to the key.
+  for (contesto in c(
+    "https://", "edc10", "9047", "collaudo-canale", "gruppo-collaudo"
+  )) {
+    expect_false(grepl(contesto, corpo, fixed = TRUE), info = contesto)
+  }
+})
+
+
+test_that("senza nome il testo pronto saluta senza lasciare uno spazio", {
+  # eval
+  primi <- function(nome) {
+    righe <- strsplit(mail_credential_message(
+      riga_di_prova(first_name = nome), upn = "sara.collaudozeta@ubep.unipd.it",
+      credential = finti[["parola"]]
+    )[["body"]], "\n", fixed = TRUE)[[1]]
+    vapply(delimitatori, function(d) {
+      testo_pronto(righe, d[[1]], d[[2]])[["righe"]][[1L]]
+    }, character(1))
+  }
+
+  # test
+  for (nome in list(NA_character_, "", "  ")) {
+    expect_identical(
+      primi(nome), c(it = "Ciao,", en = "Hello,"), info = format(nome)
+    )
+  }
+})
+
+
+test_that("senza data limite il testo pronto resta, senza la data", {
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]]
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+
+  # test
+  for (d in delimitatori) {
+    testo <- testo_pronto(righe, d[[1]], d[[2]])[["righe"]]
+    expect_true(finti[["parola"]] %in% testo)
+    expect_false(any(grepl("[0-9]{4}-[0-9]{2}-[0-9]{2}", testo)))
+    expect_true(any(grepl("Verified IDs", testo, fixed = TRUE)))
+  }
+  expect_false(any(grepl("entro il", righe, fixed = TRUE)))
+  expect_false(any(grepl("must happen by", righe, fixed = TRUE)))
 })
 
 
@@ -2890,8 +3134,18 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
   expect_match(
     corpo, "IT verifica su Entra chi porta ora il nome", fixed = TRUE
   )
+  # The owner revokes the row in any case, decided on 2026-11-15 with the
+  # documents 00.05: the name carried out, with the access, belongs now to
+  # another account. A person who still needs the access gets a new request.
   expect_match(
-    corpo, "revoca la riga: la revoca toglie l'accesso", fixed = TRUE
+    corpo,
+    paste0(
+      "Non modificare la riga: revocala in ogni caso, perche' il nome ",
+      "eseguito, con l'accesso, ora e' di un altro account, e la revoca ",
+      "toglie l'accesso a quel nome. Se alla persona l'accesso serve ancora, ",
+      "compila poi una richiesta nuova."
+    ),
+    fixed = TRUE
   )
   expect_match(
     corpo,
@@ -2899,7 +3153,18 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
     fixed = TRUE
   )
   expect_match(corpo, "IT checks on Entra who holds the name now", fixed = TRUE)
-  expect_match(corpo, "revoke the row: the revocation takes", fixed = TRUE)
+  expect_match(
+    corpo,
+    paste0(
+      "Do not edit the row: revoke it in any case, because the username ",
+      "applied, with the access, belongs now to another account, and the ",
+      "revocation takes the access away from that name. If the person still ",
+      "needs the access, then fill in a new request."
+    ),
+    fixed = TRUE
+  )
+  expect_false(grepl("non serve piu'", corpo, fixed = TRUE))
+  expect_false(grepl("no longer needed", corpo, fixed = TRUE))
   # It does not clear by itself, and the message does not say it does.
   expect_match(corpo, "questo non si risolve da solo", fixed = TRUE)
   expect_match(corpo, "this one does not clear by itself", fixed = TRUE)
