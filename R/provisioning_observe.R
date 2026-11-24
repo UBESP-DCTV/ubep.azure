@@ -22,12 +22,15 @@
 #'   `payload` and `gate`.
 #' @param today The date expirations are compared against. Injected rather than
 #'   read from the clock so a fixture cannot turn red on a calendar date for a
-#'   reason unrelated to the code.
+#'   reason unrelated to the code. By default REDCap's date, the one in Rome
+#'   (`redcap_today()`): the observer runs on a machine in UTC, and between
+#'   22:00 and 24:00 UTC (23:00 in winter) its date would leave out of
+#'   `scadute` a pair expiring on Rome's date, which REDCap already refuses.
 #'
 #' @return A one-row data frame.
 #'
 #' @keywords internal
-observe_instance <- function(server, state, today = Sys.Date()) {
+observe_instance <- function(server, state, today = redcap_today()) {
   stopifnot(is.character(server), length(server) == 1L, is.list(state))
 
   reached <- isTRUE(state[["ok"]])
