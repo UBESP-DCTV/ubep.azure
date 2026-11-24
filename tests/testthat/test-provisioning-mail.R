@@ -1171,6 +1171,27 @@ test_that("il messaggio con la chiave porta un testo pronto per lingua, delimita
     dove("It must be changed at first sign-in") < parti[["en"]][["da"]]
   )
   expect_false(any(grepl("[^\\x01-\\x7F]", righe, perl = TRUE)))
+  # The one sentence that tells the referent to add no context to the text,
+  # whole, in each half, just before the text it is about.
+  istruzione <- list(
+    it = paste0(
+      "Il testo pronto e' fra le due righe qui sotto: copia solo quello, e ",
+      "non aggiungere nome utente, indirizzo di REDCap o progetto, che la ",
+      "persona riceve in altre mail. La versione inglese e' nella seconda ",
+      "parte di questo messaggio."
+    ),
+    en = paste0(
+      "The ready text is between the two lines below: copy only that, and do ",
+      "not add the user name, the REDCap address or the project, which the ",
+      "person receives in other e-mails. The Italian version is in the first ",
+      "part of this message."
+    )
+  )
+  for (lingua in names(istruzione)) {
+    riga_istruzione <- which(righe == istruzione[[lingua]])
+    expect_length(riga_istruzione, 1L)
+    expect_equal(riga_istruzione, parti[[lingua]][["da"]] - 2L, info = lingua)
+  }
 })
 
 
@@ -1195,6 +1216,7 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
     "Microsoft Authenticator",
     "tocca Verified IDs in basso a destra, poi Scan QR code",
     "Il secondo fattore si registra solo con l'app.",
+    "Non scegliere Skip for now.",
     "A \"Stay signed in?\" rispondi Yes.",
     "In My Projects apri il progetto. Se non c'e' ancora, aspetta la mail",
     "\"Il tuo account UBEP / Your UBEP account\""
@@ -1207,6 +1229,7 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
     "Microsoft Authenticator",
     "tap Verified IDs in the bottom right corner, then Scan QR code",
     "The second factor is registered only with the app.",
+    "Do not choose Skip for now.",
     "At \"Stay signed in?\" answer Yes.",
     "In My Projects, open the project. If it is not there yet, wait for",
     "\"Il tuo account UBEP / Your UBEP account\""
@@ -1294,6 +1317,27 @@ test_that("il testo pronto non porta istanza, progetto, ruolo o nome utente", {
     "https://", "edc10", "9047", "collaudo-canale", "gruppo-collaudo"
   )) {
     expect_false(grepl(contesto, corpo, fixed = TRUE), info = contesto)
+  }
+})
+
+
+test_that("senza nome il testo pronto saluta senza lasciare uno spazio", {
+  # eval
+  primi <- function(nome) {
+    righe <- strsplit(mail_credential_message(
+      riga_di_prova(first_name = nome), upn = "sara.collaudozeta@ubep.unipd.it",
+      credential = finti[["parola"]]
+    )[["body"]], "\n", fixed = TRUE)[[1]]
+    vapply(delimitatori, function(d) {
+      testo_pronto(righe, d[[1]], d[[2]])[["righe"]][[1L]]
+    }, character(1))
+  }
+
+  # test
+  for (nome in list(NA_character_, "", "  ")) {
+    expect_identical(
+      primi(nome), c(it = "Ciao,", en = "Hello,"), info = format(nome)
+    )
   }
 })
 
