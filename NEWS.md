@@ -1,3 +1,74 @@
+# ubep.azure 0.28.0
+
+The e-mail that brings the key to the referent closes with a text to copy
+for the person. The message on a username given again asks for the
+revocation in any case. Expirations are judged on the date in Rome, the one
+REDCap uses. A row set back to active after a closure on a person gone from
+Entra no longer grants a name given again to another account, when its
+account `id` is known. Two messages of the pair rule say what the round
+does.
+
+* **The key e-mail brings a ready text for the person.** Proposed by the
+  coordinator of the referents on 2026-11-19 and decided the same day. Each
+  half of the e-mail to the referent closes with a text in its language,
+  between two delimiter lines, to copy into a new e-mail to the person: the
+  first name, the key, the date of the first sign-in when there is one, and
+  eight steps from the work instruction on the first sign-in (a private
+  window always; the second factor only with Microsoft Authenticator,
+  through `Verified IDs` and `Scan QR code`; an e-mail address of the
+  person's own, confirmed with a code, which the self-service password reset
+  asks for next to Authenticator since 2026-11-24; `Yes` to
+  `Stay signed in?`; the access e-mail to wait for if the project is not yet
+  in My Projects). It carries no instance address, no project and no user
+  name: the text says that the welcome has them. The sentence on handing the
+  key over asks for a new e-mail with that text rather than with the key
+  alone (`mail_credential_ready_text()`).
+
+* **The message on a username given again asks for the revocation in any
+  case.** Decided on 2026-11-15 with the documents 00.05. On
+  `TRASPORTO_NOME_RIASSEGNATO` the owner revokes the row whatever the person
+  needs, because the username carried out, with the access, belongs now to
+  another account; a person who still needs the access gets a new request.
+  The message asked for the revocation only if the access was no longer
+  needed.
+
+* **A row closed on a person gone from Entra and set back to active stops on
+  a name given again.** Item 14 of the limits. The last seal of such a row is
+  the revocation's, under the empty name, and the round skipped the check of
+  the account: the name, given again to another account, was granted. On a
+  row that is not revoked and has `applied_entra_id` believed, the check now
+  uses the last name the channel granted on the row, and a name given again
+  stops it on `TRASPORTO_NOME_RIASSEGNATO`. A row without a believed `id`
+  behaves as before; it is left to the next version.
+
+* **Expirations are judged on REDCap's date, the one in Rome.** Item 8 of
+  the limits. The machine of the round runs UTC and the instances judge
+  `expiration <= TODAY` in `Europe/Rome`: between 22:00 and 24:00 UTC (23:00
+  in winter) the gate on the referent's permission accepted a permission
+  REDCap had already closed, and a request whose last day had passed in Rome
+  was accepted. `scope_errors()`, `validate_request()` and
+  `mail_expiration_reached()` read the date of `redcap_today()`. On edc03,
+  which runs UTC, the gate refuses a few hours before REDCap in that
+  stretch. The rounds of the timer do not fall in it.
+
+* **A surname written on the new name of the account carried out stops the
+  row on the renaming.** Item 10 of the limits. When the account carried out
+  is renamed on Entra and the referent writes the new surname in the row,
+  the resolution names the account of `applied_entra_id` under its new
+  username: the row stopped on `DATO_COPPIA_CAMBIATA`, whose message asked to
+  set the surname back to a value Entra no longer holds. It now stops on
+  `TRASPORTO_ACCOUNT_RINOMINATO`, with IT in copy and the way out of the
+  renaming.
+
+* **The message of `DATO_COPPIA_CAMBIATA` says that a revocation stays
+  stopped only when it does.** Item 39 of the limits. "Revoked without
+  setting the fields back, the row stays stopped here" is written only when
+  the revocation would stay stopped, which the round asks of
+  `revocation_exits()` and hands to the message as `revocation_stays`: the
+  instance or the project moved, or the person written would be created. On
+  a person who has an account the revocation takes the access away from the
+  username carried out.
+
 # ubep.azure 0.27.0
 
 A row the channel carried out is tied to the id of its account on Entra, and
