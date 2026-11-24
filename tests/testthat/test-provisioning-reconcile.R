@@ -10510,6 +10510,129 @@ test_that("un'istanza cambiata dal referente prevale sul nome ridato", {
 })
 
 
+# A row carried out with its Entra account, then revoked while its person was
+# gone from Entra: the round closed it `applied`/`absent` without asking the
+# instance, wrote the name empty and sealed the revoked version under the
+# empty name. Then Anna set it back to `active` (item 14 of the review of the
+# limits, 0.28.0).
+sigillo_chiusa_assente <- request_seal(riga_come_registro(
+  record_id = "1", username = "", identity = "absent",
+  request_status = "revoked"
+))
+
+# What that round wrote, above Anna's revocation and the execution.
+storia_chiusa_assente <- function() {
+  c(
+    list(
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = paste0(
+             "applied_seal = '", sigillo_chiusa_assente,
+             "', seal_state = 'intact'"
+           )),
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = "applied_as = 'absent'"),
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = "username = '', identity = 'absent'"),
+      cambio(anna, "request_status = 'revoked'", timestamp = "2026-08-14 02:45")
+    ),
+    eseguita_con_id(sigillo_eseguito())
+  )
+}
+
+giro_chiusa_assente <- function(directory, istanza, stato = "active", ...) {
+  riga <- eseguita_row(
+    applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+    username = "", identity = "absent", applied_as = "absent",
+    request_status = stato
+  )
+  storia <- storia_chiusa_assente()
+  if (identical(stato, "active")) {
+    storia <- c(
+      list(cambio(anna, "request_status = 'active'",
+                  timestamp = "2026-08-15 10:00")),
+      storia
+    )
+  }
+  giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza, directory = directory, dry_run = FALSE,
+    copy_to = "it@example.org", ...
+  )
+}
+
+
+test_that("una riga chiusa su una persona assente e riattivata non concede al nome ridato", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_chiusa_assente(
+    directory_doppia(mario_b()), istanza_che_scrive(), mailer = posta_accesa
+  )
+
+  # test
+  # The last seal names nobody, and the 0.27.0 skipped the check of the id
+  # and granted the name now held by id_b. The name to check is the last one
+  # the channel granted on the row.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_length(scritture_per(mario), 0L)
+  expect_null(identita_scritte())
+  expect_null(entra_scritti())
+})
+
+
+test_that("una riga chiusa su una persona assente e riattivata con la persona ancora assente non crea", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_chiusa_assente(
+    directory_vuota(),
+    istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(creazioni(), 0L)
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una riga chiusa su una persona assente e riattivata con l'account ripristinato concede", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_chiusa_assente(
+    directory_doppia(mario_a()), istanza_che_scrive(), mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_length(scritture_per(mario), 1L)
+})
+
+
+test_that("una riga chiusa su una persona assente e rimasta revocata non si ferma sul nome ridato", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_chiusa_assente(
+    directory_doppia(mario_b()), istanza_che_revoca(), stato = "revoked",
+    mailer = posta_accesa
+  )
+
+  # test
+  # The check of the name granted is for a row that would grant: on a row
+  # closed long ago a stop would bring an outcome and a copy to IT on every
+  # row closed that way. What the round does with it is the 0.27.0's.
+  expect_equal(dettaglio_uno(esito), "")
+})
+
+
 test_that("alla prima esecuzione il giro scrive l'id dell'account servito, prima del sigillo", { # nolint: line_length_linter.
   # eval
   giro(

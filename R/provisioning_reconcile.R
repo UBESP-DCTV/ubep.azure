@@ -1014,6 +1014,22 @@ provisioning_reconcile <- function(register_url,
     } else {
       NA_character_
     }
+    # A row closed on a person gone from Entra was sealed revoked under the
+    # empty name, and set back to active its last seal names nobody (item 14
+    # of the limits, 0.28.0). Its account is still the one the identifier
+    # says, under the last name the channel granted on the row: without it
+    # the check is skipped and the name, given again to another account,
+    # would be granted. Only on a row that asks for an access, and with an
+    # identifier believed: a row left revoked asks nothing.
+    if (!is.na(carried_name) && !nzchar(carried_name) &&
+          !revoked_rows[[i]] && !is.na(entra_believed[[i]]) &&
+          nzchar(entra_believed[[i]]) && !is.null(owners_log) &&
+          !is.null(channel_account)) {
+      granted <- log_granted_names(owners_log, record_ids[[i]], channel_account)
+      if (length(granted) > 0L) {
+        carried_name <- granted[[1L]]
+      }
+    }
     if (blind[[i]] || exiting[[i]] || is.na(entra_believed[[i]]) ||
           is.na(carried_name) || !nzchar(carried_name)) {
       return(none)
