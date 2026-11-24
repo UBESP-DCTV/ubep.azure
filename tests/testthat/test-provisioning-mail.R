@@ -526,6 +526,32 @@ test_that("la scadenza uguale al giorno del giro e' raggiunta, quella del giorno
 })
 
 
+test_that("la scadenza si legge sul giorno di Roma del giro, non su quello UTC", { # nolint: line_length_linter.
+  # The round is at 23:30 UTC on the 24th, already the 25th in Rome, where
+  # REDCap judges: an expiration stored on the 25th no longer lets the
+  # person in. At 22:30 UTC Rome is still on the 24th.
+  ogni <- function(at) {
+    mail_status_words(
+      "active", "role_name=x; dag_name=; expiration=2026-11-25", at = at
+    )
+  }
+  expect_match(ogni("2026-11-24 23:30")[["it"]], "e' passato", fixed = TRUE)
+  expect_match(
+    ogni("2026-11-24 23:30")[["en"]], "REDCap does not let them in",
+    fixed = TRUE
+  )
+  expect_match(
+    ogni("2026-11-24 22:30")[["it"]], "l'accesso e' stato concesso",
+    fixed = TRUE
+  )
+  # A bare date is the day itself.
+  expect_match(ogni("2026-11-25")[["it"]], "e' passato", fixed = TRUE)
+  expect_match(
+    ogni("2026-11-24")[["it"]], "l'accesso e' stato concesso", fixed = TRUE
+  )
+})
+
+
 test_that("senza una scadenza leggibile o senza data del giro una riga attiva dice concesso", { # nolint: line_length_linter.
   concesso <- c(
     it = "l'accesso e' stato concesso", en = "the access has been granted"

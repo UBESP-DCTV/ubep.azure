@@ -31,6 +31,28 @@ compose_upn <- function(first_name, last_name, domain = "ubep.unipd.it") {
 }
 
 
+#' The date on which REDCap judges an expiration
+#'
+#' REDCap denies access when `expiration <= TODAY`, and its TODAY is the
+#' date of the PHP of the instance, which runs in `Europe/Rome` (measured on
+#' 2026-10-22; edc03 does not set it and runs UTC). The machine of the round
+#' runs UTC, so between 22:00 and 24:00 UTC (23:00 and 24:00 in winter) its
+#' date is the day before Rome's. The gate on the referent's permission and
+#' the last day of a request are compared with this date, not with
+#' `Sys.Date()`. On edc03 the date in Rome is the later of the two, and in
+#' that stretch the gate refuses a few hours before REDCap would: the
+#' direction that does not grant.
+#'
+#' @param now The instant, `Sys.time()` by default.
+#'
+#' @return A `Date`, the day of `now` in Rome.
+#'
+#' @keywords internal
+redcap_today <- function(now = Sys.time()) {
+  as.Date(format(now, "%Y-%m-%d", tz = "Europe/Rome"))
+}
+
+
 #' Validate a provisioning request
 #'
 #' Returns the data-error codes of the spec's taxonomy. These are errors that
@@ -81,12 +103,13 @@ validate_request <- function(request, executed = FALSE) {
     parsed <- suppressWarnings(as.Date(expiration, format = "%Y-%m-%d"))
     # A last day of access in the past is refused; today is a valid last day
     # (the intake conversion below stores it as tomorrow, which is what
-    # REDCap needs to keep access open through today). The comparison uses
-    # the client's date while REDCap uses the server's, which runs UTC: at
-    # most a one-day boundary, and it errs towards refusing rather than
-    # granting. A request already carried out keeps its last day once it has
-    # passed: the date is the one the round wrote, not a new one.
-    if (is.na(parsed) || (!executed && parsed < Sys.Date())) {
+    # REDCap needs to keep access open through today). Today is REDCap's,
+    # the date in Rome (`redcap_today()`): the machine of the round runs
+    # UTC, and between 22:00 and 24:00 UTC its date is the day before, which
+    # would accept a last day REDCap has already closed. A request already
+    # carried out keeps its last day once it has passed: the date is the one
+    # the round wrote, not a new one.
+    if (is.na(parsed) || (!executed && parsed < redcap_today())) {
       errors <- c(errors, "DATO_SCADENZA_NON_VALIDA")
     }
   }

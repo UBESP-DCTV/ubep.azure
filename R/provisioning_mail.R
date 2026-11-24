@@ -208,19 +208,19 @@ mail_status_words <- function(request_status, applied_as = "", at = "") {
 #' Whether the expiration a read-back carries is reached on the day of a round
 #'
 #' The stored expiration is the day after the last day of access, so it is
-#' reached when it is not later than the day of the round: REDCap, whose
-#' server runs UTC, denies access when `expiration <= TODAY`. The day is the
-#' UTC one of `at`, not the clock of whoever composes the message, so the same
-#' row says the same thing whenever it is read and the tests do not depend on
-#' the machine. `validate_request()` and the choice of `lapsed` read the date
-#' of the machine (`Sys.Date()`), which is the same day on a machine in UTC;
-#' on one in another zone the two differ between the midnights, and the
-#' message then says "granted" for that stretch, as the limit of the gate on
-#' the last day already does.
+#' reached when it is not later than the day of the round: REDCap denies
+#' access when `expiration <= TODAY`, and its TODAY is the date in Rome,
+#' `redcap_today()`. The day is the one in Rome of the instant `at`, not the
+#' clock of whoever composes the message, so the same row says the same
+#' thing whenever it is read and the tests do not depend on the machine.
+#' `validate_request()` and the choice of `lapsed` read the same date of
+#' the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
+#' already the next day, the message and the gate agree with REDCap.
 #'
 #' @param applied_as The row's read-back, `role_name=...; dag_name=...;
 #'   expiration=...`.
-#' @param at The time of the round, `"%Y-%m-%d %H:%M"` in UTC.
+#' @param at The time of the round, `"%Y-%m-%d %H:%M"` in UTC. A bare date
+#'   is read as the day itself.
 #'
 #' @return `TRUE` when both carry a date and the expiration is not later than
 #'   the day of `at`; `FALSE` otherwise, which is the answer for every row
@@ -244,7 +244,12 @@ mail_expiration_reached <- function(applied_as, at) {
     return(FALSE)
   }
   expiration <- as.Date(expiration[[2L]], format = "%Y-%m-%d")
-  today <- as.Date(today[[2L]], format = "%Y-%m-%d")
+  instant <- as.POSIXct(at, format = "%Y-%m-%d %H:%M", tz = "UTC")
+  today <- if (is.na(instant)) {
+    as.Date(today[[2L]], format = "%Y-%m-%d")
+  } else {
+    redcap_today(instant)
+  }
   !is.na(expiration) && !is.na(today) && expiration <= today
 }
 

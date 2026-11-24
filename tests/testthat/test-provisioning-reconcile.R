@@ -12,7 +12,7 @@ form_field_value <- function(value) {
 # A last day of access still ahead whenever the tests run: the rounds that
 # carry out a change refuse a date that has passed, and a fixed one would
 # turn the tests red the day it does.
-scadenza_futura <- as.character(Sys.Date() + 90L)
+scadenza_futura <- as.character(redcap_today() + 90L)
 
 
 # One mock stands in for all three adapters and dispatches on the URL: the
@@ -1314,7 +1314,7 @@ test_that("a revoked row is revoked even when its last day has passed", {
   esito <- giro(
     registro_doppio(record_json(list(
       request_status = "revoked",
-      expiration = as.character(Sys.Date() - 1L)
+      expiration = as.character(redcap_today() - 1L)
     ))),
     istanza_che_revoca(),
     dry_run = FALSE
@@ -1337,7 +1337,7 @@ test_that("a requester whose access to the project has expired is refused", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list())),
-    istanza_doppia(list(expiration = as.character(Sys.Date() - 1L))),
+    istanza_doppia(list(expiration = as.character(redcap_today() - 1L))),
     dry_run = FALSE
   )
 
@@ -1357,7 +1357,7 @@ test_that("an active row whose last day has passed is still refused", {
   # eval
   esito <- giro(
     registro_doppio(record_json(list(
-      expiration = as.character(Sys.Date() - 1L)
+      expiration = as.character(redcap_today() - 1L)
     ))),
     istanza_che_revoca(),
     dry_run = FALSE
@@ -6708,7 +6708,7 @@ test_that("riattivare una riga eseguita su un account cancellato non lo ricrea",
 
 # ---- The natural expiration of a row carried out (0.25.0) ----
 
-ieri <- as.character(Sys.Date() - 1L)
+ieri <- as.character(redcap_today() - 1L)
 
 # Mario's row, carried out with a last day that has passed since: REDCap
 # holds the day after it, today, and no longer lets him in. Nobody touched
@@ -6717,7 +6717,7 @@ scaduta_row <- function(...) {
   eseguita_row(
     expiration = ieri,
     applied_as = paste0(
-      "role_name=data entry; dag_name=; expiration=", Sys.Date()
+      "role_name=data entry; dag_name=; expiration=", redcap_today()
     ),
     ...
   )
@@ -6727,7 +6727,7 @@ sigillo_scaduta <- function() {
     record_id = "1", username = mario, expiration = ieri
   ))
 }
-istanza_scaduta <- function(expiration = as.character(Sys.Date())) {
+istanza_scaduta <- function(expiration = as.character(redcap_today())) {
   istanza_doppia(
     list(),
     list(
@@ -6771,7 +6771,7 @@ test_that("una riga eseguita e intatta resta applied dopo il suo ultimo giorno",
   expect_equal(esito_di(esito, "1")[["detail"]], "")
   expect_equal(
     as.character(esito[["esiti"]][["applied_as"]]),
-    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+    paste0("role_name=data entry; dag_name=; expiration=", redcap_today())
   )
   expect_length(scritture(), 0L)
   expect_length(posta[["mandate"]](), 0L)
@@ -6836,7 +6836,7 @@ test_that("una riga eseguita e intatta riporta la sua scadenza su un'istanza cam
   # eval
   # Somebody extended Mario's access on the project by hand.
   esito <- giro_scaduta(
-    istanza = istanza_scaduta(as.character(Sys.Date() + 30L))
+    istanza = istanza_scaduta(as.character(redcap_today() + 30L))
   )
 
   # test
@@ -6845,7 +6845,7 @@ test_that("una riga eseguita e intatta riporta la sua scadenza su un'istanza cam
   # stores, today, and the access closes.
   expect_length(scritture(), 1L)
   richiesta <- scritture()[[1]][["body"]][["data"]][["requests"]][[1]]
-  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+  expect_equal(richiesta[["expiration"]], as.character(redcap_today()))
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
 })
 
@@ -6952,7 +6952,7 @@ test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la per
   # ...and with another one.
   altra <- giro_scaduta(
     list(applied_as = "absent"),
-    istanza = istanza_scaduta(as.character(Sys.Date() + 30L))
+    istanza = istanza_scaduta(as.character(redcap_today() + 30L))
   )
 
   # test
@@ -6962,13 +6962,13 @@ test_that("la riga scaduta chiusa sulla persona tolta torna a lavorare se la per
   expect_equal(esito_di(stessa, "1")[["outcome"]], "applied")
   expect_equal(
     as.character(stessa[["esiti"]][["applied_as"]]),
-    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+    paste0("role_name=data entry; dag_name=; expiration=", redcap_today())
   )
   expect_length(scritte_stessa, 0L)
   expect_equal(esito_di(altra, "1")[["outcome"]], "applied")
   expect_length(scritture(), 1L)
   richiesta <- scritture()[[1]][["body"]][["data"]][["requests"]][[1]]
-  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+  expect_equal(richiesta[["expiration"]], as.character(redcap_today()))
 })
 
 
@@ -6999,7 +6999,7 @@ test_that("la riga scaduta chiusa sulla persona tolta e rimessa con la stessa sc
   posta <- posta_raccolta()
   giro_scaduta(
     list(applied_as = "absent"), mailer = posta[["mailer"]],
-    at = paste(Sys.Date(), "03:00")
+    at = paste(redcap_today(), "03:00")
   )
 
   # test
@@ -7097,7 +7097,7 @@ test_that("la riga scaduta con la persona ancora sul progetto sotto altre maiusc
   # Not closed as a person removed: the read-back is the access as it stands.
   expect_equal(
     as.character(esito[["esiti"]][["applied_as"]]),
-    paste0("role_name=data entry; dag_name=; expiration=", Sys.Date())
+    paste0("role_name=data entry; dag_name=; expiration=", redcap_today())
   )
   expect_length(scritture(), 0L)
   expect_length(posta[["mandate"]](), 0L)
@@ -7856,7 +7856,7 @@ test_that("la riga scaduta con la scadenza cambiata a mano sotto altre maiuscole
   # other capitals than the row.
   esito <- giro_scaduta(
     istanza = istanza_che_concede_esatta(
-      ruolo = "data entry", scadenza = as.character(Sys.Date() + 30L)
+      ruolo = "data entry", scadenza = as.character(redcap_today() + 30L)
     ),
     directory = directory_doppia(graph_user(userPrincipalName = maiuscolo))
   )
@@ -7866,7 +7866,7 @@ test_that("la riga scaduta con la scadenza cambiata a mano sotto altre maiuscole
   # the row says, written once under the name the instance holds.
   expect_equal(nomi_concessi(), mario)
   richiesta <- scritture()[[1L]][["body"]][["data"]][["requests"]][[1L]]
-  expect_equal(richiesta[["expiration"]], as.character(Sys.Date()))
+  expect_equal(richiesta[["expiration"]], as.character(redcap_today()))
   expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
 })
 
@@ -7880,9 +7880,9 @@ test_that("la riga scaduta chiusa sulla persona tolta e rimessa con un'altra sca
   giro_scaduta(
     list(applied_as = "absent"),
     istanza = istanza_che_concede_esatta(
-      ruolo = "data entry", scadenza = as.character(Sys.Date() + 30L)
+      ruolo = "data entry", scadenza = as.character(redcap_today() + 30L)
     ),
-    mailer = posta[["mailer"]], at = paste(Sys.Date(), "03:00")
+    mailer = posta[["mailer"]], at = paste(redcap_today(), "03:00")
   )
 
   # test

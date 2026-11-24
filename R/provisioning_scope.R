@@ -182,7 +182,8 @@ scope_errors <- function(register, rights) {
     # A permission past its expiration does not grant: the referent could not
     # open the project's User Rights page by hand either. REDCap's expiration
     # is the first day without access, hence `<=`; empty is no expiration.
-    # Today is the client's date, as in `validate_request()`. An expiration
+    # Today is REDCap's, the date in Rome (`redcap_today()`), as in
+    # `validate_request()`: the machine of the round runs UTC. An expiration
     # that does not read as a date is a reply nobody can read, and on a
     # permission that would grant it refuses as an unreadable one does.
     expiration <- if ("expiration" %in% names(rights)) {
@@ -193,7 +194,7 @@ scope_errors <- function(register, rights) {
     dated <- !is.na(expiration) & nzchar(expiration)
     day <- suppressWarnings(as.Date(expiration, format = "%Y-%m-%d"))
     garbled <- dated & is.na(day)
-    expired <- dated & !is.na(day) & day <= Sys.Date()
+    expired <- dated & !is.na(day) & day <= redcap_today()
 
     grants <- !is.na(permission) & permission == scope_granting_value()
     granted <- held[grants & !expired & !garbled]

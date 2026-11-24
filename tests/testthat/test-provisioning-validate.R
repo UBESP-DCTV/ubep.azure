@@ -23,7 +23,7 @@ test_that("validate_request accepts a complete request", {
     project_id = 9003L,
     role_name = "data entry",
     dag_name = "centro-01",
-    expiration = as.character(Sys.Date() + 30L)
+    expiration = as.character(redcap_today() + 30L)
   )
 
   # test
@@ -76,8 +76,8 @@ test_that("validate_request only ever returns data codes", {
 test_that("intake_request converts the expiration to the REDCap value", {
   # eval
   # A plain future date, away from the today/yesterday boundary covered
-  # below: relative to Sys.Date() so the fixture never expires.
-  last_day <- Sys.Date() + 30L
+  # below: relative to redcap_today() so the fixture never expires.
+  last_day <- redcap_today() + 30L
   taken <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 9003L,
@@ -125,12 +125,12 @@ test_that("today is a valid last day of access", {
   today <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 9003L,
-    expiration = as.character(Sys.Date())
+    expiration = as.character(redcap_today())
   ))
   yesterday <- intake_request(list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 9003L,
-    expiration = as.character(Sys.Date() - 1)
+    expiration = as.character(redcap_today() - 1)
   ))
 
   # test
@@ -138,8 +138,50 @@ test_that("today is a valid last day of access", {
   # loosening: a last day of access of today becomes a REDCap value of tomorrow,
   # so today's access exists. Yesterday is still past.
   expect_equal(today[["errors"]], character())
-  expect_equal(today[["request"]][["expiration"]], as.character(Sys.Date() + 1))
+  expect_equal(today[["request"]][["expiration"]], as.character(redcap_today() + 1))
   expect_true("DATO_SCADENZA_NON_VALIDA" %in% yesterday[["errors"]])
+})
+
+
+test_that("the last day of a request is judged on REDCap's date, the one in Rome", { # nolint: line_length_linter.
+  # eval
+  # Accepted while the machine is still on the day before, the request would
+  # be written with an expiration REDCap has already reached, and the mail
+  # would say the access was granted. Dates far from any real today.
+  local_mocked_bindings(redcap_today = function(now = Sys.time()) {
+    as.Date("2099-01-02")
+  })
+  ask <- function(last_day) {
+    validate_request(list(
+      username = "mario.rossi@ubep.unipd.it",
+      project_id = 9003L,
+      expiration = last_day
+    ))
+  }
+
+  # test
+  expect_true("DATO_SCADENZA_NON_VALIDA" %in% ask("2099-01-01"))
+  expect_equal(ask("2099-01-02"), character())
+})
+
+
+test_that("REDCap's date is the one in Rome, a day ahead of UTC late in the evening", { # nolint: line_length_linter.
+  # eval
+  utc <- function(at) as.POSIXct(at, tz = "UTC")
+
+  # test
+  # Winter: Rome is UTC+1, so the date moves at 23:00 UTC.
+  expect_equal(redcap_today(utc("2026-11-24 12:00")), as.Date("2026-11-24"))
+  expect_equal(redcap_today(utc("2026-11-24 22:30")), as.Date("2026-11-24"))
+  expect_equal(redcap_today(utc("2026-11-24 23:30")), as.Date("2026-11-25"))
+  # Summer: UTC+2, at 22:00 UTC.
+  expect_equal(redcap_today(utc("2026-06-30 21:30")), as.Date("2026-06-30"))
+  expect_equal(redcap_today(utc("2026-06-30 22:30")), as.Date("2026-07-01"))
+  # The same instant read from another zone is the same date.
+  expect_equal(
+    redcap_today(as.POSIXct("2026-11-24 18:30", tz = "America/New_York")),
+    as.Date("2026-11-25")
+  )
 })
 
 
@@ -148,7 +190,7 @@ test_that("a request already carried out keeps a last day that has passed", {
   request <- list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 9003L,
-    expiration = as.character(Sys.Date() - 1L)
+    expiration = as.character(redcap_today() - 1L)
   )
   carried <- intake_request(request, executed = TRUE)
 
@@ -159,7 +201,7 @@ test_that("a request already carried out keeps a last day that has passed", {
   # round compares the instance with the value REDCap stores.
   expect_equal(validate_request(request, executed = TRUE), character())
   expect_equal(carried[["errors"]], character())
-  expect_equal(carried[["request"]][["expiration"]], as.character(Sys.Date()))
+  expect_equal(carried[["request"]][["expiration"]], as.character(redcap_today()))
 })
 
 
@@ -184,7 +226,7 @@ test_that("without the flag a last day that has passed is refused as before", {
   request <- list(
     username = "mario.rossi@ubep.unipd.it",
     project_id = 9003L,
-    expiration = as.character(Sys.Date() - 1L)
+    expiration = as.character(redcap_today() - 1L)
   )
 
   # test
