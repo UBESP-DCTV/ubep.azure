@@ -147,6 +147,86 @@ identity_stop_codes <- function(identity, errors = character(),
 }
 
 
+#' The directory folded once, for every row of a round
+#'
+#' What the resolution and the check of the Entra account compute from the
+#' swept directory alone, whatever the row: the candidates, surnames and
+#' given names folded with `clean_string()`, the contact addresses of every
+#' account, the UPNs and the identifiers normalized. A round asked them once
+#' per register row, and on a directory of thousands of accounts that was
+#' most of the round (measured for the 0.28.0: a quarter of a second for
+#' each row, linear in the rows).
+#' Computed here they are the same values, from the same functions, once.
+#'
+#' Each value is computed the first time it is read, and kept: a promise per
+#' field, `delayedAssign()`. So nothing is computed that the old order did not
+#' compute, and in the same order: a row that stops before the directory is
+#' looked at reads none of it, and a directory one of these functions refuses
+#' (`directory_contacts()` on columns it cannot line up) stops the round where
+#' it stopped it before.
+#'
+#' Read only by `directory_named()`, `resolve_against_directory()`,
+#' `entra_account_change()` and `entra_fill()`, each of which takes it as an
+#' argument that defaults to folding the directory it is given: a caller that
+#' does not pass it gets what it always got. Valid only for the directory it
+#' was made from, which is why only `provisioning_reconcile()` passes one,
+#' made from the sweep it hands to the same calls.
+#'
+#' @param directory A directory frame as `directory_users()` returns.
+#'
+#' @return An environment with `rows`, `candidate`, `surnames`, `givens`,
+#'   `contacts`, `contact_values`, `contact_rows`, `upns` and `ids`.
+#'
+#' @keywords internal
+directory_folds <- function(directory) {
+  folds <- new.env(parent = emptyenv())
+  here <- environment()
+  delayedAssign("rows", nrow(directory), here, folds)
+  delayedAssign("candidate", directory_is_candidate(directory), here, folds)
+  delayedAssign("surnames", clean_string(directory[["surname"]]), here, folds)
+  delayedAssign("givens", clean_string(directory[["givenName"]]), here, folds)
+  delayedAssign("contacts", directory_contacts(directory), here, folds)
+  # The addresses flat, with the account each belongs to: what lets one
+  # `%in%` say which accounts carry a contact, in place of a closure per
+  # account.
+  delayedAssign(
+    "contact_values", unlist(folds[["contacts"]], use.names = FALSE),
+    here, folds
+  )
+  delayedAssign(
+    "contact_rows",
+    rep(seq_along(folds[["contacts"]]), lengths(folds[["contacts"]])),
+    here, folds
+  )
+  delayedAssign(
+    "upns", identity_normalize(directory[["userPrincipalName"]]), here, folds
+  )
+  delayedAssign("ids", identity_normalize(directory[["id"]]), here, folds)
+  folds
+}
+
+
+#' The accounts whose addresses hold a contact
+#'
+#' One `%in%` on the addresses of the whole directory, flat
+#' (`directory_folds()`), in place of `contact %in% addresses` asked of every
+#' account with a closure of its own. The same answer: for one value, `%in%`
+#' matches the same pairs in both directions, a missing value with a missing
+#' one included.
+#'
+#' @param folds The directory folded, `directory_folds()`.
+#' @param contact One normalized contact address.
+#'
+#' @return A logical vector, one per account of the directory.
+#'
+#' @keywords internal
+directory_carrying <- function(folds, contact) {
+  stopifnot(is.character(contact), length(contact) == 1L)
+  seq_len(folds[["rows"]]) %in%
+    folds[["contact_rows"]][folds[["contact_values"]] %in% contact]
+}
+
+
 #' The addresses a directory row can be found by
 #'
 #' Both carriers are read: `officeLocation`, where the historical flow put the
@@ -388,19 +468,23 @@ directory_mailboxes <- function(directory, upns, domain = "ubep.unipd.it") {
 #'
 #' @param directory A directory frame as `directory_users()` returns.
 #' @param first_name,last_name The names the register row declares.
+#' @param folds The directory folded, `directory_folds()`, made from
+#'   `directory`; by default folded here.
 #'
 #' @return A logical vector, one per row.
 #'
 #' @keywords internal
-directory_named <- function(directory, first_name, last_name) {
+directory_named <- function(directory, first_name, last_name,
+                            folds = directory_folds(directory)) {
   wanted_first <- clean_string(as.character(first_name))
   wanted_last <- clean_string(as.character(last_name))
 
   # The directory is folded whole: `stri_trans_general()` builds its
   # transliterator at every call, so one call per account cost more than the
-  # rest of the round (0.27.0).
-  surnames <- clean_string(directory[["surname"]])
-  givens <- clean_string(directory[["givenName"]])
+  # rest of the round (0.27.0). And once a round, `directory_folds()`: once a
+  # row, it was still most of the round (0.28.0).
+  surnames <- folds[["surnames"]]
+  givens <- folds[["givens"]]
 
   nzchar(surnames) &
     surnames == wanted_last &
@@ -584,8 +668,11 @@ identity_verdict <- function(identity,
 #'
 #' @keywords internal
 resolve_identity <- function(request, directory, domain = "ubep.unipd.it",
-                             redcap = NULL) {
-  answer <- resolve_against_directory(request, directory, domain, redcap)
+                             redcap = NULL,
+                             folds = directory_folds(directory)) {
+  answer <- resolve_against_directory(
+    request, directory, domain, redcap, folds = folds
+  )
 
   if (nzchar(answer[["identity"]])) {
     return(answer)
@@ -652,6 +739,9 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it",
 #'   `upn_window()`; a window not asked whole, or known whole, is no verdict
 #'   at all, `TRASPORTO_NOME_NON_VERIFICATO`: the round creates no name it
 #'   has not found unknown in this pass.
+#' @param folds The directory folded, `directory_folds()`, made from
+#'   `directory`. By default folded here; the round folds it once and passes
+#'   it for every row.
 #'
 #' @return A list with `identity`, `username`, `errors`, `composed` and
 #'   `known_to_redcap`. The username is what the **directory** says, so it is
@@ -663,7 +753,8 @@ resolve_identity <- function(request, directory, domain = "ubep.unipd.it",
 resolve_against_directory <- function(request,
                                       directory,
                                       domain = "ubep.unipd.it",
-                                      redcap = NULL) {
+                                      redcap = NULL,
+                                      folds = directory_folds(directory)) {
   stopifnot(
     is.list(request),
     is.data.frame(directory),
@@ -734,23 +825,23 @@ resolve_against_directory <- function(request,
     declared <- contact
   }
 
-  candidate <- directory_is_candidate(directory)
+  stopifnot(
+    "resolve_against_directory(): folds made from another directory" =
+      identical(folds[["rows"]], nrow(directory))
+  )
+  candidate <- folds[["candidate"]]
   named <- candidate & directory_named(
-    directory, request[["first_name"]] %||% "", request[["last_name"]] %||% ""
+    directory, request[["first_name"]] %||% "", request[["last_name"]] %||% "",
+    folds = folds
   )
-  carries <- vapply(
-    directory_contacts(directory),
-    function(addresses) contact %in% addresses,
-    logical(1)
-  )
+  carries <- directory_carrying(folds, contact)
 
   # Decision 12: an address in the domain **is** a UPN, so it names one account
   # outright instead of being searched for. The name rule below would not find
   # that account when the row's surname is somebody else's, and the row would
   # fall through to a creation.
   if (internal(contact)) {
-    held <- candidate &
-      identity_normalize(directory[["userPrincipalName"]]) == contact
+    held <- candidate & folds[["upns"]] == contact
 
     if (any(held)) {
       if (!any(held & named)) {
@@ -775,7 +866,7 @@ resolve_against_directory <- function(request,
   # the name rule cannot judge. It is not a different person — it is a person
   # the directory says nothing about — and letting it fall through would create
   # a second account for somebody who already has one.
-  unreadable <- !nzchar(clean_string(directory[["surname"]]))
+  unreadable <- !nzchar(folds[["surnames"]])
   if (any(candidate & carries & unreadable)) {
     return(identity_verdict("", errors = "TRASPORTO_NOME_NON_LEGGIBILE"))
   }
@@ -806,7 +897,7 @@ resolve_against_directory <- function(request,
 
   # Uniqueness is tenant-wide, so the second query looks at every row and not
   # only at the candidates: a UPN held by a guest is held.
-  taken <- identity_normalize(directory[["userPrincipalName"]])
+  taken <- folds[["upns"]]
   composed <- compose_upn(
     as.character(request[["first_name"]] %||% ""),
     as.character(request[["last_name"]] %||% ""),

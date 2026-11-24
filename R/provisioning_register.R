@@ -1852,6 +1852,8 @@ pair_change <- function(executed, current, target, creating, rewritten,
 #' @param believed_id The identifier believed, never empty.
 #' @param directory The sweep, as `directory_users()` returns it.
 #' @param revoked Whether the row asks for `revoked`.
+#' @param folds The sweep folded, `directory_folds()`, made from
+#'   `directory`; by default folded here.
 #'
 #' @return A list with `code`, one of the two codes or `""`, and `upn`, the
 #'   username the account of the identifier carries now when it was renamed,
@@ -1859,7 +1861,8 @@ pair_change <- function(executed, current, target, creating, rewritten,
 #'
 #' @keywords internal
 entra_account_change <- function(executed_username, believed_id, directory,
-                                 revoked = FALSE) {
+                                 revoked = FALSE,
+                                 folds = directory_folds(directory)) {
   stopifnot(
     is.character(executed_username), length(executed_username) == 1L,
     is.character(believed_id), length(believed_id) == 1L,
@@ -1873,8 +1876,8 @@ entra_account_change <- function(executed_username, believed_id, directory,
   if (is.na(name) || !nzchar(name)) {
     return(nothing)
   }
-  upns <- identity_normalize(directory[["userPrincipalName"]])
-  ids <- identity_normalize(directory[["id"]])
+  upns <- folds[["upns"]]
+  ids <- folds[["ids"]]
   id <- identity_normalize(believed_id)
 
   holders <- which(!is.na(upns) & upns == name)
@@ -1933,13 +1936,16 @@ entra_account_change <- function(executed_username, believed_id, directory,
 #' @param since `"%Y-%m-%d %H:%M"` in Rome, as `report_person_since()`
 #'   answers; `character()` or `NA` when the log does not say.
 #' @param revoked Whether the row asks for `revoked`.
+#' @param folds The sweep folded, `directory_folds()`, made from
+#'   `directory`; by default folded here.
 #'
 #' @return A list with `id`, the identifier to write or `""`, and `code`,
 #'   `TRASPORTO_NOME_RIASSEGNATO` or `""`.
 #'
 #' @keywords internal
 entra_fill <- function(executed_username, directory, since,
-                       revoked = FALSE) {
+                       revoked = FALSE,
+                       folds = directory_folds(directory)) {
   stopifnot(
     is.character(executed_username), length(executed_username) == 1L,
     is.data.frame(directory),
@@ -1963,7 +1969,7 @@ entra_fill <- function(executed_username, directory, since,
   }
   limit <- limit + 60
 
-  upns <- identity_normalize(directory[["userPrincipalName"]])
+  upns <- folds[["upns"]]
   holders <- which(!is.na(upns) & upns == name)
   if (length(holders) != 1L) {
     return(nothing)
