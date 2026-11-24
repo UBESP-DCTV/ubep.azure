@@ -10633,6 +10633,50 @@ test_that("una riga chiusa su una persona assente e rimasta revocata non si ferm
 })
 
 
+test_that("una riga chiusa su una persona assente e rimasta revocata non si ferma sull'account dell'id rinominato", { # nolint: line_length_linter.
+  # eval
+  # V1 of the review: the account of the identifier back on Entra under
+  # another name. Read as reopened, the row would stop on
+  # TRASPORTO_ACCOUNT_RINOMINATO, with an outcome and a copy to IT for every
+  # row closed that way.
+  esito <- giro_chiusa_assente(
+    directory_doppia(mario_a(
+      userPrincipalName = "mario.neri@ubep.unipd.it", surname = "Neri"
+    )),
+    istanza_che_revoca(), stato = "revoked", mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "")
+})
+
+
+test_that("una riga eseguita e sigillata che nessuno ha cambiato resta applied, con l'id e senza", { # nolint: line_length_linter.
+  # eval
+  con_id <- giro_entra(directory_doppia(mario_a()), mailer = posta_accesa)
+  senza_id <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), applied_entra_id = ""
+      ))),
+      storia = carried_out(sigillo_eseguito()),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(mario_a()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa
+  )
+
+  # test
+  # The rows the check of item 14 must not touch: a last seal that names
+  # the person.
+  expect_equal(as.character(con_id[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(con_id), "")
+  expect_equal(as.character(senza_id[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(senza_id), "")
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
+})
+
+
 # Mario's row carried out, rewritten by Anna on a person Entra does not
 # hold, to create (C1 of the review of the limits).
 nadia <- list(
