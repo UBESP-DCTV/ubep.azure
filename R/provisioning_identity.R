@@ -179,6 +179,11 @@ identity_stop_codes <- function(identity, errors = character(),
 #'
 #' @keywords internal
 directory_folds <- function(directory) {
+  # The directory now, not whatever the caller's variable holds when a
+  # field is first read: left a promise, the folds would be of that other
+  # directory (L1 of the review of the 0.28.0). Only the argument is read
+  # here; the fields stay lazy.
+  force(directory)
   folds <- new.env(parent = emptyenv())
   here <- environment()
   delayedAssign("rows", nrow(directory), here, folds)

@@ -1826,3 +1826,31 @@ test_that("folds made from another directory are refused", {
     "another directory"
   )
 })
+
+# Two accounts, for the tests of folds and directory coming apart: a
+# directory with the same rows in another order is the case a count of rows
+# cannot tell from the one the folds were made from.
+two_accounts <- function() {
+  dir_frame(
+    dir_user(),
+    dir_user(
+      id = "00000000-0000-0000-0000-000000000002",
+      userPrincipalName = "anna.verdi@ubep.unipd.it",
+      givenName = "Anna", surname = "Verdi",
+      officeLocation = "anna.verdi@example.org"
+    )
+  )
+}
+
+test_that("the folds are of the directory they were made from, not of the variable later", { # nolint: line_length_linter.
+  # L1 of the review of the 0.28.0: an argument left a promise until the
+  # first field is read would fold whatever the caller's variable holds by
+  # then.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  directory <- directory[2:1, , drop = FALSE]
+  expect_identical(
+    folds[["upns"]],
+    c("mario.rossi@ubep.unipd.it", "anna.verdi@ubep.unipd.it")
+  )
+})
