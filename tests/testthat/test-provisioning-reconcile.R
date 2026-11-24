@@ -10633,6 +10633,73 @@ test_that("una riga chiusa su una persona assente e rimasta revocata non si ferm
 })
 
 
+# The account carried out renamed on Entra because its person changed
+# surname, and the referent writes the new surname in the row (item 10 of the
+# review of the limits, 0.28.0).
+neri <- "mario.neri@ubep.unipd.it"
+rinominato_neri <- function(...) {
+  directory_doppia(mario_a(userPrincipalName = neri, surname = "Neri"), ...)
+}
+
+
+test_that("un cognome riscritto sul nome nuovo dell'account eseguito ferma la riga sulla rinomina", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_entra(
+    rinominato_neri(),
+    cambi = list(last_name = "Neri"),
+    storia = list(cambio(anna, "last_name = 'Neri'")),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # The resolution names the account of the identifier believed: the same
+  # person. The 0.27.0 said DATO_COPPIA_CAMBIATA and asked to set the surname
+  # back to a value Entra no longer holds.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_null(identita_scritte())
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_false(grepl("un'altra persona", corpo, fixed = TRUE))
+  expect_match(
+    corpo, paste0("Nome utente dell'account ora: ", neri), fixed = TRUE
+  )
+})
+
+
+test_that("senza scritture della persona l'account rinominato ferma la riga sulla rinomina", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(rinominato_neri(), mailer = posta_accesa)
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+  expect_length(scritture(), 0L)
+})
+
+
+test_that("una persona riscritta su un altro account resta un cambio della coppia anche con l'account eseguito rinominato", { # nolint: line_length_linter.
+  # eval
+  esito <- giro_entra(
+    rinominato_neri(giulia),
+    cambi = list(
+      first_name = "Giulia", last_name = "Verdi",
+      contact_email = "giulia.verdi@example.org"
+    ),
+    storia = list(cambio(anna, paste0(
+      "first_name = 'Giulia', last_name = 'Verdi', ",
+      "contact_email = 'giulia.verdi@example.org'"
+    ))),
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "DATO_COPPIA_CAMBIATA")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+})
+
+
 test_that("alla prima esecuzione il giro scrive l'id dell'account servito, prima del sigillo", { # nolint: line_length_linter.
   # eval
   giro(

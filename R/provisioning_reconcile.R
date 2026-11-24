@@ -1088,6 +1088,19 @@ provisioning_reconcile <- function(register_url,
       )
       rewritten <- if (anyNA(who)) NA else length(who) > 0L
     }
+    # The account carried out renamed on Entra, and the resolution names it
+    # under its new username: the person written is the same person, its
+    # new surname say, and the row stops on the renaming, for IT, instead of
+    # asking the referent to set the person back to a name Entra no longer
+    # holds (item 10 of the limits, 0.28.0).
+    if (identical(entra[[i]][["code"]], "TRASPORTO_ACCOUNT_RINOMINATO") &&
+          resolvable[[i]] && nzchar(entra[[i]][["upn"]]) &&
+          identical(
+            identity_normalize(resolved_names[[i]]),
+            identity_normalize(entra[[i]][["upn"]])
+          )) {
+      rewritten <- FALSE
+    }
     pair_change(
       executed_pair[[i]], register[i, , drop = FALSE],
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
