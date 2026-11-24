@@ -138,7 +138,9 @@ test_that("today is a valid last day of access", {
   # loosening: a last day of access of today becomes a REDCap value of tomorrow,
   # so today's access exists. Yesterday is still past.
   expect_equal(today[["errors"]], character())
-  expect_equal(today[["request"]][["expiration"]], as.character(redcap_today() + 1))
+  expect_equal(
+    today[["request"]][["expiration"]], as.character(redcap_today() + 1)
+  )
   expect_true("DATO_SCADENZA_NON_VALIDA" %in% yesterday[["errors"]])
 })
 
@@ -201,7 +203,9 @@ test_that("a request already carried out keeps a last day that has passed", {
   # round compares the instance with the value REDCap stores.
   expect_equal(validate_request(request, executed = TRUE), character())
   expect_equal(carried[["errors"]], character())
-  expect_equal(carried[["request"]][["expiration"]], as.character(redcap_today()))
+  expect_equal(
+    carried[["request"]][["expiration"]], as.character(redcap_today())
+  )
 })
 
 
