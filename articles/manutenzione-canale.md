@@ -236,6 +236,30 @@ quello di Graph, un caso accettato. Un `createdDateTime` che non si
 legge, o che non finisce con `Z`, prende lo stesso ripiego. Se la
 risposta di Graph lo porti si vedrà alla prima creazione vera.
 
+**Dalla 0.28.0 la mail della chiave porta un testo pronto per la
+persona**
+([`mail_credential_ready_text()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_ready_text.md)),
+proposto dalla coordinatrice dei referenti il 2026-11-19: con i passi
+scritti entra al primo colpo chi con il solo benvenuto non ci riesce.
+Ogni metà della mail si chiude con il testo nella sua lingua, fra due
+righe di trattini («INIZIO DEL TESTO DA COPIARE», «FINE DEL TESTO DA
+COPIARE»; in inglese «START OF THE TEXT TO COPY», «END OF THE TEXT TO
+COPY»), perché sopra, nella stessa mail, c’è la riga col nome utente. Il
+testo porta il nome di battesimo della persona, la chiave, la data del
+primo accesso se c’è, e otto passi presi dalla WI del primo accesso:
+finestra privata sempre, secondo fattore solo con Microsoft
+Authenticator per *Verified IDs* e *Scan QR code*, poi un indirizzo mail
+della persona confermato con un codice, che il reset self-service chiede
+accanto ad Authenticator al posto del telefono (deciso il 2026-11-24 con
+la configurazione di Entra), *Yes* a *Stay signed in?*, e in *My
+Projects* il progetto, o la mail di accesso da aspettare se non c’è
+ancora. Non porta l’indirizzo dell’istanza, il progetto né il nome
+utente: chiave e contesto non viaggiano insieme, deciso il 2026-11-19.
+Il testo dice che nome utente e indirizzo stanno nel benvenuto, e la
+frase che lo introduce chiede al referente di non aggiungerli. La frase
+sulla consegna non dice più «una mail nuova con la sola chiave» ma «con
+il testo pronto qui sotto, che porta la chiave senza il nome utente».
+
 **La posta è spenta di default**, e la ragione non è intuitiva: con
 «manda prima, scrivi dopo» una posta semplicemente spenta bloccherebbe
 *ogni* scrittura nel registro. Quindi senza la variabile che la accende
@@ -1208,26 +1232,39 @@ con quattro codici:
   campi ai valori eseguiti, e la riga torna com’era (un campo riportato
   al valore eseguito non è una modifica); oppure, per un’altra persona o
   un altro progetto, riportare i campi, revocare questa richiesta e
-  crearne una nuova. Una revoca senza i campi riportati resta ferma,
-  perché colpirebbe la coppia nuova.
+  crearne una nuova. Una revoca senza i campi riportati resta ferma
+  quando si sono mossi istanza o progetto, perché colpirebbe la coppia
+  nuova, e quando la persona nuova andrebbe creata; con la sola persona
+  riscritta su un account che esiste toglie il nome eseguito (la regola
+  della revoca, sotto). Dalla 0.28.0 il messaggio dice che la revoca
+  resta ferma solo quando resta ferma.
 - **`TRASPORTO_NOME_RIASSEGNATO`**, `transport_error`, dalla 0.27.0: il
   nome utente eseguito è ora di un altro account su Entra, con un altro
   `id` (cancellato e ridato, o ricreato a mano). La risoluzione può non
   vederlo: con il recapito interno e gli stessi nome e cognome la riga
   restava `applied`. Mai su una riga revocata, che governa la sua
-  coppia. L’esito va al proprietario con IT in copia, e dice che la riga
-  non va modificata. Se l’accesso non serve più, il proprietario revoca
-  la riga e la revoca toglie il nome eseguito (la regola della revoca,
-  sotto). IT verifica su Entra chi porta il nome e da quando (*Audit
-  logs*), e sulle istanze i diritti del login con quel nome, che il
-  nuovo titolare può avere ereditato anche su altri progetti.
+  coppia. Dalla 0.28.0 anche su una riga con l’`id` chiusa su una
+  persona assente e riattivata, il cui ultimo sigillo, quello della
+  chiusura, non nomina nessuno. L’esito va al proprietario con IT in
+  copia, e dice che la riga non va modificata. Il proprietario la revoca
+  in ogni caso, perché il nome eseguito, con l’accesso, è ora di un
+  altro account, e la revoca toglie il nome eseguito (la regola della
+  revoca, sotto); se alla persona l’accesso serve ancora, compila poi
+  una richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima
+  chiedeva la revoca solo se l’accesso non serviva più. IT verifica su
+  Entra chi porta il nome e da quando (*Audit logs*), e sulle istanze i
+  diritti del login con quel nome, che il nuovo titolare può avere
+  ereditato anche su altri progetti.
 - **`TRASPORTO_ACCOUNT_RINOMINATO`**, `transport_error`, dalla 0.27.0:
   nessuno porta il nome eseguito, e l’account dell’`id` è su Entra sotto
   un altro nome, che il messaggio dice. Prima era
   `TRASPORTO_IDENTITA_CAMBIATA` con il recapito esterno e
   `DATO_RECAPITO_INTERNO_INESISTENTE` con quello interno. L’esito va al
   proprietario con IT in copia, e dice che la riga non va modificata.
-  L’uscita è la revoca della riga e una richiesta nuova.
+  L’uscita è la revoca della riga e una richiesta nuova. Dalla 0.28.0
+  vale anche quando il referente ha scritto nella riga la persona come
+  la porta ora l’account (un cognome cambiato): la risoluzione trova
+  l’account dell’`id` sotto il nome nuovo, e non è un’altra persona.
 - **`TRASPORTO_IDENTITA_CAMBIATA`**, `transport_error`: il giro
   servirebbe un altro account, o ne creerebbe uno, e nella riga nessuno
   ha scritto la persona. È l’account che è cambiato su Entra:
@@ -1412,19 +1449,20 @@ della richiesta è passato e che REDCap non la fa entrare, non che
 l’accesso è concesso
 ([`mail_status_words()`](https://ubesp-dctv.github.io/ubep.azure/reference/mail_status_words.md),
 quando la scadenza memorizzata in *Read back as* non viene dopo il
-giorno UTC di `outcome_at`). Per riaprire l’accesso il referente sposta
-la data: la riga è allora cambiata dopo il sigillo, e la persona viene
-creata di nuovo e riceve la mail d’accesso. Una riga cambiata dopo il
-sigillo o mai eseguita resta rifiutata su una data passata, con la
-persona sul progetto o senza. Una persona ancora sul progetto con un
-nome utente che differisce solo nelle maiuscole, perché su Entra è
-cambiato, non è una persona tolta: il giro la cerca sotto il nome che
-l’istanza tiene (`held_as()`) e la tratta come con le stesse maiuscole,
-`noop` o la scadenza riportata a quella della riga (dalla 0.26.0; fino
-alla 0.25.0 la riga prendeva `DATO_SCADENZA_NON_VALIDA`). Una data che
-non è una data è rifiutata su ogni riga. Il rapporto mensile continua a
-contare la riga, come ogni riga scaduta e non revocata, finché nessuno
-la revoca (`keep` di
+giorno di Roma di `outcome_at`, quello con cui REDCap giudica le
+scadenze, dalla 0.28.0; prima era il giorno UTC). Per riaprire l’accesso
+il referente sposta la data: la riga è allora cambiata dopo il sigillo,
+e la persona viene creata di nuovo e riceve la mail d’accesso. Una riga
+cambiata dopo il sigillo o mai eseguita resta rifiutata su una data
+passata, con la persona sul progetto o senza. Una persona ancora sul
+progetto con un nome utente che differisce solo nelle maiuscole, perché
+su Entra è cambiato, non è una persona tolta: il giro la cerca sotto il
+nome che l’istanza tiene (`held_as()`) e la tratta come con le stesse
+maiuscole, `noop` o la scadenza riportata a quella della riga (dalla
+0.26.0; fino alla 0.25.0 la riga prendeva `DATO_SCADENZA_NON_VALIDA`).
+Una data che non è una data è rifiutata su ogni riga. Il rapporto
+mensile continua a contare la riga, come ogni riga scaduta e non
+revocata, finché nessuno la revoca (`keep` di
 [`report_rows()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_rows.md)
 e `conta` di
 [`report_scope()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_scope.md)).
@@ -2223,14 +2261,15 @@ zero, e fra gli errori del giro c’è `POSTA_BENVENUTO_PERSO`. Non si
 ripara da sé: il giro non crea due volte la stessa utenza, quindi non ha
 un’altra occasione di mandarlo. E il messaggio con la chiave dice al
 referente che il nome utente è già arrivato in un messaggio a parte,
-quindi la persona riceverebbe la sola chiave: il nome utente,
-l’indirizzo dell’istanza e i passi del primo accesso glieli manda IT, a
-mano, e dalla 0.22.0 anche la data limite del primo accesso, la stessa
-che la chiave ha dato al referente: il giorno in cui l’account è nato
-più 59 giorni (§1). Per sapere perché non è partito, guardare la riga
-nel registro: un `contact_email` vuoto spiega il caso da solo;
-altrimenti il journal della lavorazione riporta la risposta del servizio
-di posta.
+quindi la persona riceverebbe la chiave senza nome utente, e dalla
+0.28.0 un testo pronto che la rimanda a un benvenuto mai arrivato: il
+nome utente e l’indirizzo dell’istanza glieli manda IT, a mano, con i
+passi del primo accesso, e dalla 0.22.0 anche la data limite del primo
+accesso, la stessa che la chiave ha dato al referente: il giorno in cui
+l’account è nato più 59 giorni (§1). Per sapere perché non è partito,
+guardare la riga nel registro: un `contact_email` vuoto spiega il caso
+da solo; altrimenti il journal della lavorazione riporta la risposta del
+servizio di posta.
 
 **Accesso perso (gravità proposta 2, da fissare nel foglio dei
 parametri).** Una persona ha ricevuto il diritto su un progetto e la

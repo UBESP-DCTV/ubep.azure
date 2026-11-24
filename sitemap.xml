@@ -92,6 +92,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_message.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_access_recipients.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_message.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_credential_ready_text.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_expiration_reached.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_contact.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/mail_first_signin_deadline.html</loc></url>
@@ -128,6 +129,7 @@
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/provisioning_report.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/record_conformance.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/records_frame.html</loc></url>
+<url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_call.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_channel_fields.html</loc></url>
 <url><loc>https://ubesp-dctv.github.io/ubep.azure/reference/register_dictionary.html</loc></url>

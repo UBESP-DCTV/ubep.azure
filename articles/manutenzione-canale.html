@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.27.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -288,6 +288,29 @@ anticipo su quello di Graph, un caso accettato. Un
 <code>createdDateTime</code> che non si legge, o che non finisce con
 <code>Z</code>, prende lo stesso ripiego. Se la risposta di Graph lo
 porti si vedrà alla prima creazione vera.</data></p>
+<p><strong>Dalla 0.28.0 la mail della chiave porta un testo pronto per
+la persona</strong> (<code><a href="../reference/mail_credential_ready_text.html">mail_credential_ready_text()</a></code>),
+proposto dalla coordinatrice dei referenti il 2026-11-19: con i passi
+scritti entra al primo colpo chi con il solo benvenuto non ci riesce.
+Ogni metà della mail si chiude con il testo nella sua lingua, fra due
+righe di trattini («INIZIO DEL TESTO DA COPIARE», «FINE DEL TESTO DA
+COPIARE»; in inglese «START OF THE TEXT TO COPY», «END OF THE TEXT TO
+COPY»), perché sopra, nella stessa mail, c’è la riga col nome utente. Il
+testo porta il nome di battesimo della persona, la chiave, la data del
+primo accesso se c’è, e otto passi presi dalla WI del primo accesso:
+finestra privata sempre, secondo fattore solo con Microsoft
+Authenticator per <em>Verified IDs</em> e <em>Scan QR code</em>, poi un
+indirizzo mail della persona confermato con un codice, che il reset
+self-service chiede accanto ad Authenticator al posto del telefono
+(deciso il 2026-11-24 con la configurazione di Entra), <em>Yes</em> a
+<em>Stay signed in?</em>, e in <em>My Projects</em> il progetto, o la
+mail di accesso da aspettare se non c’è ancora. Non porta l’indirizzo
+dell’istanza, il progetto né il nome utente: chiave e contesto non
+viaggiano insieme, deciso il 2026-11-19. Il testo dice che nome utente e
+indirizzo stanno nel benvenuto, e la frase che lo introduce chiede al
+referente di non aggiungerli. La frase sulla consegna non dice più «una
+mail nuova con la sola chiave» ma «con il testo pronto qui sotto, che
+porta la chiave senza il nome utente».</p>
 <p><strong>La posta è spenta di default</strong>, e la ragione non è
 intuitiva: con «manda prima, scrivi dopo» una posta semplicemente spenta
 bloccherebbe <em>ogni</em> scrittura nel registro. Quindi senza la
@@ -1305,8 +1328,12 @@ cosa era eseguita e chi l’ha cambiata. Le uscite sono due: riportare i
 campi ai valori eseguiti, e la riga torna com’era (un campo riportato al
 valore eseguito non è una modifica); oppure, per un’altra persona o un
 altro progetto, riportare i campi, revocare questa richiesta e crearne
-una nuova. Una revoca senza i campi riportati resta ferma, perché
-colpirebbe la coppia nuova.</li>
+una nuova. Una revoca senza i campi riportati resta ferma quando si sono
+mossi istanza o progetto, perché colpirebbe la coppia nuova, e quando la
+persona nuova andrebbe creata; con la sola persona riscritta su un
+account che esiste toglie il nome eseguito (la regola della revoca,
+sotto). Dalla 0.28.0 il messaggio dice che la revoca resta ferma solo
+quando resta ferma.</li>
 <li>
 <strong><code>TRASPORTO_NOME_RIASSEGNATO</code></strong>,
 <code>transport_error</code>, dalla 0.27.0: il nome utente eseguito è
@@ -1314,13 +1341,18 @@ ora di un altro account su Entra, con un altro <code>id</code>
 (cancellato e ridato, o ricreato a mano). La risoluzione può non
 vederlo: con il recapito interno e gli stessi nome e cognome la riga
 restava <code>applied</code>. Mai su una riga revocata, che governa la
-sua coppia. L’esito va al proprietario con IT in copia, e dice che la
-riga non va modificata. Se l’accesso non serve più, il proprietario
-revoca la riga e la revoca toglie il nome eseguito (la regola della
-revoca, sotto). IT verifica su Entra chi porta il nome e da quando
-(<em>Audit logs</em>), e sulle istanze i diritti del login con quel
-nome, che il nuovo titolare può avere ereditato anche su altri
-progetti.</li>
+sua coppia. Dalla 0.28.0 anche su una riga con l’<code>id</code> chiusa
+su una persona assente e riattivata, il cui ultimo sigillo, quello della
+chiusura, non nomina nessuno. L’esito va al proprietario con IT in
+copia, e dice che la riga non va modificata. Il proprietario la revoca
+in ogni caso, perché il nome eseguito, con l’accesso, è ora di un altro
+account, e la revoca toglie il nome eseguito (la regola della revoca,
+sotto); se alla persona l’accesso serve ancora, compila poi una
+richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima chiedeva
+la revoca solo se l’accesso non serviva più. IT verifica su Entra chi
+porta il nome e da quando (<em>Audit logs</em>), e sulle istanze i
+diritti del login con quel nome, che il nuovo titolare può avere
+ereditato anche su altri progetti.</li>
 <li>
 <strong><code>TRASPORTO_ACCOUNT_RINOMINATO</code></strong>,
 <code>transport_error</code>, dalla 0.27.0: nessuno porta il nome
@@ -1329,7 +1361,11 @@ nome, che il messaggio dice. Prima era
 <code>TRASPORTO_IDENTITA_CAMBIATA</code> con il recapito esterno e
 <code>DATO_RECAPITO_INTERNO_INESISTENTE</code> con quello interno.
 L’esito va al proprietario con IT in copia, e dice che la riga non va
-modificata. L’uscita è la revoca della riga e una richiesta nuova.</li>
+modificata. L’uscita è la revoca della riga e una richiesta nuova. Dalla
+0.28.0 vale anche quando il referente ha scritto nella riga la persona
+come la porta ora l’account (un cognome cambiato): la risoluzione trova
+l’account dell’<code>id</code> sotto il nome nuovo, e non è un’altra
+persona.</li>
 <li>
 <strong><code>TRASPORTO_IDENTITA_CAMBIATA</code></strong>,
 <code>transport_error</code>: il giro servirebbe un altro account, o ne
@@ -1512,17 +1548,18 @@ casi la persona è sul progetto e non può entrare: dalla 0.26.0 la mail
 d’esito al proprietario dice che l’ultimo giorno di accesso della
 richiesta è passato e che REDCap non la fa entrare, non che l’accesso è
 concesso (<code><a href="../reference/mail_status_words.html">mail_status_words()</a></code>, quando la scadenza
-memorizzata in <em>Read back as</em> non viene dopo il giorno UTC di
-<code>outcome_at</code>). Per riaprire l’accesso il referente sposta la
-data: la riga è allora cambiata dopo il sigillo, e la persona viene
-creata di nuovo e riceve la mail d’accesso. Una riga cambiata dopo il
-sigillo o mai eseguita resta rifiutata su una data passata, con la
-persona sul progetto o senza. Una persona ancora sul progetto con un
-nome utente che differisce solo nelle maiuscole, perché su Entra è
-cambiato, non è una persona tolta: il giro la cerca sotto il nome che
-l’istanza tiene (<code>held_as()</code>) e la tratta come con le stesse
-maiuscole, <code>noop</code> o la scadenza riportata a quella della riga
-(dalla 0.26.0; fino alla 0.25.0 la riga prendeva
+memorizzata in <em>Read back as</em> non viene dopo il giorno di Roma di
+<code>outcome_at</code>, quello con cui REDCap giudica le scadenze,
+dalla 0.28.0; prima era il giorno UTC). Per riaprire l’accesso il
+referente sposta la data: la riga è allora cambiata dopo il sigillo, e
+la persona viene creata di nuovo e riceve la mail d’accesso. Una riga
+cambiata dopo il sigillo o mai eseguita resta rifiutata su una data
+passata, con la persona sul progetto o senza. Una persona ancora sul
+progetto con un nome utente che differisce solo nelle maiuscole, perché
+su Entra è cambiato, non è una persona tolta: il giro la cerca sotto il
+nome che l’istanza tiene (<code>held_as()</code>) e la tratta come con
+le stesse maiuscole, <code>noop</code> o la scadenza riportata a quella
+della riga (dalla 0.26.0; fino alla 0.25.0 la riga prendeva
 <code>DATO_SCADENZA_NON_VALIDA</code>). Una data che non è una data è
 rifiutata su ogni riga. Il rapporto mensile continua a contare la riga,
 come ogni riga scaduta e non revocata, finché nessuno la revoca
@@ -2424,14 +2461,15 @@ giro c’è <code>POSTA_BENVENUTO_PERSO</code>. Non si ripara da sé: il
 giro non crea due volte la stessa utenza, quindi non ha un’altra
 occasione di mandarlo. E il messaggio con la chiave dice al referente
 che il nome utente è già arrivato in un messaggio a parte, quindi la
-persona riceverebbe la sola chiave: il nome utente, l’indirizzo
-dell’istanza e i passi del primo accesso glieli manda IT, a mano, e
-dalla 0.22.0 anche la data limite del primo accesso, la stessa che la
-chiave ha dato al referente: il giorno in cui l’account è nato più 59
-giorni (§1). Per sapere perché non è partito, guardare la riga nel
-registro: un <code>contact_email</code> vuoto spiega il caso da solo;
-altrimenti il journal della lavorazione riporta la risposta del servizio
-di posta.</p>
+persona riceverebbe la chiave senza nome utente, e dalla 0.28.0 un testo
+pronto che la rimanda a un benvenuto mai arrivato: il nome utente e
+l’indirizzo dell’istanza glieli manda IT, a mano, con i passi del primo
+accesso, e dalla 0.22.0 anche la data limite del primo accesso, la
+stessa che la chiave ha dato al referente: il giorno in cui l’account è
+nato più 59 giorni (§1). Per sapere perché non è partito, guardare la
+riga nel registro: un <code>contact_email</code> vuoto spiega il caso da
+solo; altrimenti il journal della lavorazione riporta la risposta del
+servizio di posta.</p>
 <p><strong>Accesso perso (gravità proposta 2, da fissare nel foglio dei
 parametri).</strong> Una persona ha ricevuto il diritto su un progetto e
 la mail che glielo dice non è partita: <code>accessi_persi</code> è
