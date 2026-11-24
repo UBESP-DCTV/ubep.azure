@@ -14,7 +14,7 @@ register_row <- function(...) {
     # so a hard-coded one turns the whole file red on a calendar day, for a
     # reason that has nothing to do with the code. A test must go red when the
     # thing it watches breaks, and at no other time.
-    expiration = as.character(Sys.Date() + 30L),
+    expiration = as.character(redcap_today() + 30L),
     requested_by = "anna.bianchi@ubep.unipd.it",
     request_status = "active"
   )
@@ -279,7 +279,7 @@ test_that("register_to_desired reports the data errors of validation", {
 
 test_that("a revoked row is not refused for a last day that has passed", {
   # eval
-  yesterday <- as.character(Sys.Date() - 1L)
+  yesterday <- as.character(redcap_today() - 1L)
   register <- rbind(
     register_row(
       record_id = "1", request_status = "revoked", expiration = yesterday
@@ -305,7 +305,7 @@ test_that("a revoked row is not refused for a last day that has passed", {
 
 test_that("a row carried out and unchanged keeps a last day that has passed", {
   # eval
-  yesterday <- as.character(Sys.Date() - 1L)
+  yesterday <- as.character(redcap_today() - 1L)
   register <- rbind(
     register_row(record_id = "1", expiration = yesterday),
     register_row(record_id = "2", project_id = "9004", expiration = yesterday),
@@ -324,7 +324,7 @@ test_that("a row carried out and unchanged keeps a last day that has passed", {
   expect_length(split[["desired"]], 1L)
   expect_equal(split[["desired"]][[1]][["record_id"]], "1")
   expect_equal(
-    split[["desired"]][[1]][["expiration"]], as.character(Sys.Date())
+    split[["desired"]][[1]][["expiration"]], as.character(redcap_today())
   )
   expect_null(split[["errors"]][["1"]])
   expect_equal(split[["errors"]][["2"]], "DATO_SCADENZA_NON_VALIDA")
@@ -346,7 +346,7 @@ test_that("register_to_desired with no executed rows names no lapsed one", {
 
 test_that("the last day of access is converted once, at the border", {
   # eval
-  last_day <- Sys.Date() + 30L
+  last_day <- redcap_today() + 30L
   split <- register_to_desired(
     register_row(expiration = as.character(last_day))
   )

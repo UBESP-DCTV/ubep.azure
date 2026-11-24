@@ -9,7 +9,8 @@ mail_expiration_reached(applied_as, at)
 \arguments{
 \item{applied_as}{The row's read-back, \verb{role_name=...; dag_name=...; expiration=...}.}
 
-\item{at}{The time of the round, \code{"\%Y-\%m-\%d \%H:\%M"} in UTC.}
+\item{at}{The time of the round, \code{"\%Y-\%m-\%d \%H:\%M"} in UTC. A bare date
+is read as the day itself.}
 }
 \value{
 \code{TRUE} when both carry a date and the expiration is not later than
@@ -18,14 +19,13 @@ that says nothing readable.
 }
 \description{
 The stored expiration is the day after the last day of access, so it is
-reached when it is not later than the day of the round: REDCap, whose
-server runs UTC, denies access when \code{expiration <= TODAY}. The day is the
-UTC one of \code{at}, not the clock of whoever composes the message, so the same
-row says the same thing whenever it is read and the tests do not depend on
-the machine. \code{validate_request()} and the choice of \code{lapsed} read the date
-of the machine (\code{Sys.Date()}), which is the same day on a machine in UTC;
-on one in another zone the two differ between the midnights, and the
-message then says "granted" for that stretch, as the limit of the gate on
-the last day already does.
+reached when it is not later than the day of the round: REDCap denies
+access when \code{expiration <= TODAY}, and its TODAY is the date in Rome,
+\code{redcap_today()}. The day is the one in Rome of the instant \code{at}, not the
+clock of whoever composes the message, so the same row says the same
+thing whenever it is read and the tests do not depend on the machine.
+\code{validate_request()} and the choice of \code{lapsed} read the same date of
+the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
+already the next day, the message and the gate agree with REDCap.
 }
 \keyword{internal}

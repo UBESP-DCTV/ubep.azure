@@ -1014,6 +1014,22 @@ provisioning_reconcile <- function(register_url,
     } else {
       NA_character_
     }
+    # A row closed on a person gone from Entra was sealed revoked under the
+    # empty name, and set back to active its last seal names nobody (item 14
+    # of the limits, 0.28.0). Its account is still the one the identifier
+    # says, under the last name the channel granted on the row: without it
+    # the check is skipped and the name, given again to another account,
+    # would be granted. Only on a row that asks for an access, and with an
+    # identifier believed: a row left revoked asks nothing.
+    if (!is.na(carried_name) && !nzchar(carried_name) &&
+          !revoked_rows[[i]] && !is.na(entra_believed[[i]]) &&
+          nzchar(entra_believed[[i]]) && !is.null(owners_log) &&
+          !is.null(channel_account)) {
+      granted <- log_granted_names(owners_log, record_ids[[i]], channel_account)
+      if (length(granted) > 0L) {
+        carried_name <- granted[[1L]]
+      }
+    }
     if (blind[[i]] || exiting[[i]] || is.na(entra_believed[[i]]) ||
           is.na(carried_name) || !nzchar(carried_name)) {
       return(none)
@@ -1071,6 +1087,17 @@ provisioning_reconcile <- function(register_url,
         creator = creators[[i]], approvers = approvers
       )
       rewritten <- if (anyNA(who)) NA else length(who) > 0L
+    }
+    # The account carried out renamed on Entra, and the resolution names it
+    # under its new username: the person written is the same person, its
+    # new surname say, and the row stops on the renaming, for IT, instead of
+    # asking the referent to set the person back to a name Entra no longer
+    # holds (item 10 of the limits, 0.28.0).
+    renamed_to <- identity_normalize(entra[[i]][["upn"]])
+    if (identical(entra[[i]][["code"]], "TRASPORTO_ACCOUNT_RINOMINATO") &&
+          resolvable[[i]] && nzchar(renamed_to) &&
+          identical(identity_normalize(resolved_names[[i]]), renamed_to)) {
+      rewritten <- FALSE
     }
     pair_change(
       executed_pair[[i]], register[i, , drop = FALSE],
@@ -2304,6 +2331,28 @@ provisioning_reconcile <- function(register_url,
       seal_carried = as.character(sealed),
       pair_changed = vapply(seq_along(record_ids), function(i) {
         if (moved[[i]]) paste(shifts[[i]][["changed"]], collapse = ",") else ""
+      }, character(1)),
+      # On a row stopped on its pair, whether its revocation written now with
+      # the fields not set back would stay stopped: `revocation_exits()`
+      # asked with the state at `revoked`. The message says it only then (C1
+      # of the review of the limits, 0.28.0): with the person alone the
+      # revocation leaves on the name carried out, but not when the person
+      # written would be created, nor with the version carried out not
+      # certain or the channel's account not configured.
+      revocation_stays = vapply(seq_along(record_ids), function(i) {
+        if (!identical(shift_code[[i]], "DATO_COPPIA_CAMBIATA")) {
+          return("")
+        }
+        as_revoked <- register[i, , drop = FALSE]
+        as_revoked[["request_status"]] <- "revoked"
+        leaves <- !is.null(channel_account) && revocation_exits(
+          executed_pair[[i]], as_revoked, certain = certain[[i]],
+          creating = creating[[i]] && !unheard[[i]],
+          granted = log_granted_names(
+            owners_log, record_ids[[i]], channel_account
+          )
+        )
+        if (leaves) "no" else "yes"
       }, character(1)),
       # The username the account carried out holds now on Entra, on a row
       # stopped on `TRASPORTO_ACCOUNT_RINOMINATO` (item 11 of the 0.27.0).

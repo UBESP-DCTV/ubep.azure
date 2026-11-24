@@ -83,9 +83,9 @@ test_that("a management permission past its expiration refuses", {
       rights_rows(list(expiration = expiration))
     )
   }
-  ieri <- judged(as.character(Sys.Date() - 1L))
-  oggi <- judged(as.character(Sys.Date()))
-  domani <- judged(as.character(Sys.Date() + 1L))
+  ieri <- judged(as.character(redcap_today() - 1L))
+  oggi <- judged(as.character(redcap_today()))
+  domani <- judged(as.character(redcap_today() + 1L))
   vuota <- judged("")
   assente <- judged(NA_character_)
 
@@ -98,6 +98,28 @@ test_that("a management permission past its expiration refuses", {
   expect_length(domani, 0L)
   expect_length(vuota, 0L)
   expect_length(assente, 0L)
+})
+
+
+test_that("a management permission is judged on REDCap's date, the one in Rome", { # nolint: line_length_linter.
+  # eval
+  # Between 22:00 and 24:00 UTC the machine of the round is still on the day
+  # before, and REDCap, which judges in Rome, has already closed a permission
+  # that expires on Rome's date. The dates are far from any real today, so
+  # the machine's own date cannot decide the test.
+  local_mocked_bindings(redcap_today = function(now = Sys.time()) {
+    as.Date("2099-01-02")
+  })
+  judged <- function(expiration) {
+    scope_errors(
+      register_rows(list()),
+      rights_rows(list(expiration = expiration))
+    )
+  }
+
+  # test
+  expect_equal(judged("2099-01-02")[["1"]], "DATO_AMBITO_NON_AUTORIZZATO")
+  expect_length(judged("2099-01-03"), 0L)
 })
 
 

@@ -526,6 +526,32 @@ test_that("la scadenza uguale al giorno del giro e' raggiunta, quella del giorno
 })
 
 
+test_that("la scadenza si legge sul giorno di Roma del giro, non su quello UTC", { # nolint: line_length_linter.
+  # The round is at 23:30 UTC on the 24th, already the 25th in Rome, where
+  # REDCap judges: an expiration stored on the 25th no longer lets the
+  # person in. At 22:30 UTC Rome is still on the 24th.
+  ogni <- function(at) {
+    mail_status_words(
+      "active", "role_name=x; dag_name=; expiration=2026-11-25", at = at
+    )
+  }
+  expect_match(ogni("2026-11-24 23:30")[["it"]], "e' passato", fixed = TRUE)
+  expect_match(
+    ogni("2026-11-24 23:30")[["en"]], "REDCap does not let them in",
+    fixed = TRUE
+  )
+  expect_match(
+    ogni("2026-11-24 22:30")[["it"]], "l'accesso e' stato concesso",
+    fixed = TRUE
+  )
+  # A bare date is the day itself.
+  expect_match(ogni("2026-11-25")[["it"]], "e' passato", fixed = TRUE)
+  expect_match(
+    ogni("2026-11-24")[["it"]], "l'accesso e' stato concesso", fixed = TRUE
+  )
+})
+
+
 test_that("senza una scadenza leggibile o senza data del giro una riga attiva dice concesso", { # nolint: line_length_linter.
   concesso <- c(
     it = "l'accesso e' stato concesso", en = "the access has been granted"
@@ -2592,6 +2618,68 @@ test_that("il messaggio di una coppia cambiata dice le due uscite", {
   expect_match(corpo, "file a new request", fixed = TRUE)
   expect_match(corpo, "No approval is needed", fixed = TRUE)
   expect_false(grepl("approved_seal", corpo, fixed = TRUE))
+})
+
+
+test_that("il messaggio di una coppia cambiata nella sola persona non dice che la revoca resta ferma", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(cambiato) {
+    mail_outcome_message(do.call(
+      riga_di_prova,
+      utils::modifyList(coppia_di_prova, list(pair_changed = cambiato))
+    ))[["body"]]
+  }
+  persona <- corpo("person")
+  progetto <- corpo("project_id,person")
+  ignoto <- corpo("")
+
+  # test
+  # On the person alone, a revocation with the fields not set back revokes
+  # the name carried out (`revocation_exits()`): the row does not stay
+  # stopped. With the instance or the project moved it does.
+  expect_false(grepl("la riga resta ferma qui", persona, fixed = TRUE))
+  expect_false(grepl("the row stays stopped here", persona, fixed = TRUE))
+  expect_match(
+    persona, "poi crea una richiesta nuova.
+", fixed = FALSE
+  )
+  expect_match(persona, "then file a new request.
+", fixed = FALSE)
+  expect_match(
+    progetto, "Revocata senza riportare i campi, la riga resta ferma qui.",
+    fixed = TRUE
+  )
+  expect_match(
+    progetto,
+    "Revoked without setting the fields back, the row stays stopped here.",
+    fixed = TRUE
+  )
+  # What moved unknown, the message names everything and keeps the sentence.
+  expect_match(ignoto, "la riga resta ferma qui", fixed = TRUE)
+})
+
+
+test_that("il messaggio di una coppia cambiata segue il giro su quando la revoca resta ferma", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(resta) {
+    mail_outcome_message(do.call(
+      riga_di_prova,
+      utils::modifyList(
+        coppia_di_prova,
+        list(pair_changed = "person", revocation_stays = resta)
+      )
+    ))[["body"]]
+  }
+
+  # test
+  # The round knows whether the revocation would leave on the name carried
+  # out; the message says what the round says, and without it falls back on
+  # the instance and the project.
+  expect_match(corpo("yes"), "la riga resta ferma qui", fixed = TRUE)
+  expect_match(corpo("yes"), "the row stays stopped here", fixed = TRUE)
+  expect_false(grepl("la riga resta ferma qui", corpo("no"), fixed = TRUE))
+  expect_false(grepl("the row stays stopped here", corpo("no"), fixed = TRUE))
+  expect_false(grepl("la riga resta ferma qui", corpo(""), fixed = TRUE))
 })
 
 
