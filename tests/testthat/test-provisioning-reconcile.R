@@ -11192,3 +11192,130 @@ test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il no
   expect_false(is.null(scritte))
   expect_true(mario %in% as.character(scritte[["username"]]))
 })
+
+
+# Un registro di quattro righe che passano per rami diversi della
+# risoluzione: una persona che c'e', una da creare, un omonimo senza il
+# recapito, un recapito interno. Fatto di nuovo a ogni chiamata, perche' i
+# doppi tengono lo stato delle scritture.
+giro_misto <- function() {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(record_json(
+      list(record_id = "1"),
+      list(
+        record_id = "2", first_name = "Luigi", last_name = "Neri",
+        contact_email = "luigi.neri@example.org"
+      ),
+      list(
+        record_id = "3", first_name = "Giulia", last_name = "Verdi",
+        contact_email = "giulia.altra@example.org"
+      ),
+      list(
+        record_id = "4", first_name = "Paolo", last_name = "Bianchi",
+        contact_email = "Paolo.Bianchi@ubep.unipd.it"
+      )
+    )),
+    istanza_che_scrive(),
+    directory = directory_doppia(
+      graph_user(),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000002",
+        userPrincipalName = "giulia.verdi@ubep.unipd.it",
+        givenName = "Giulia", surname = "Verdi",
+        officeLocation = "giulia.verdi@example.org"
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000003",
+        userPrincipalName = "giulia.verdi.2@ubep.unipd.it",
+        givenName = "Giulia", surname = "Verdi", officeLocation = NULL
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000004",
+        userPrincipalName = "paolo.bianchi@ubep.unipd.it",
+        givenName = "Paolo", surname = "Bianchi", officeLocation = NULL
+      )
+    ),
+    mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+  list(
+    esito = esito,
+    filo = lapply(inviate, function(req) {
+      list(req[["url"]], req[["method"]], req[["body"]][["data"]])
+    }),
+    posta = posta[["mandate"]]()
+  )
+}
+
+
+test_that("il giro piega la directory una volta, non una per riga", {
+  # eval
+  # Fissato da quante volte si chiama, non da quanto dura: un conteggio non
+  # dipende dalla macchina. Prima della 0.28.0 i recapiti della directory
+  # si normalizzavano per ogni riga del registro, e per ogni riga di nuovo
+  # al secondo passo dei nomi.
+  chiamate <- 0L
+  originale <- directory_contacts
+  local_mocked_bindings(
+    directory_contacts = function(directory) {
+      chiamate <<- chiamate + 1L # nolint: assignment_linter.
+      originale(directory)
+    },
+    directory_credential = function(length = 24L) "Fissa-0000-aA1!"
+  )
+
+  esito <- giro_misto()[["esito"]]
+
+  # test
+  expect_setequal(
+    as.character(esito[["esiti"]][["record_id"]]), c("1", "2", "3", "4")
+  )
+  expect_identical(chiamate, 1L)
+})
+
+
+test_that("il giro con la directory piegata una volta fa quel che faceva piegandola per riga", { # nolint: line_length_linter.
+  # eval
+  # Le due forme nello stesso mondo. La seconda toglie le pieghe del giro a
+  # ogni funzione che le riceve, e ciascuna piega di nuovo la directory a
+  # ogni chiamata, come prima della 0.28.0: esiti, scritture al registro,
+  # domande alle istanze, creazioni e posta devono essere gli stessi.
+  local_mocked_bindings(
+    directory_credential = function(length = 24L) "Fissa-0000-aA1!"
+  )
+  una_volta <- giro_misto()
+
+  risolvi <- resolve_identity
+  cambio_entra <- entra_account_change
+  riempi_entra <- entra_fill
+  local_mocked_bindings(
+    resolve_identity = function(request, directory, domain = "ubep.unipd.it",
+                                redcap = NULL, folds = NULL) {
+      risolvi(request, directory, domain, redcap)
+    },
+    entra_account_change = function(executed_username, believed_id,
+                                    directory, revoked = FALSE,
+                                    folds = NULL) {
+      cambio_entra(executed_username, believed_id, directory, revoked)
+    },
+    entra_fill = function(executed_username, directory, since,
+                          revoked = FALSE, folds = NULL) {
+      riempi_entra(executed_username, directory, since, revoked)
+    }
+  )
+  per_riga <- giro_misto()
+
+  # test
+  # The world goes through the branches the test is about.
+  esiti <- una_volta[["esito"]][["esiti"]]
+  expect_true(
+    any(grepl("DATO_RECAPITO_NON_IDENTIFICA", esiti[["outcome_detail"]]))
+  )
+  expect_gt(length(creazioni()), 0L)
+  expect_gt(length(una_volta[["posta"]]), 0L)
+
+  expect_identical(una_volta[["esito"]], per_riga[["esito"]])
+  expect_identical(una_volta[["filo"]], per_riga[["filo"]])
+  expect_identical(una_volta[["posta"]], per_riga[["posta"]])
+})
