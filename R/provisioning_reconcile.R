@@ -1093,12 +1093,10 @@ provisioning_reconcile <- function(register_url,
     # new surname say, and the row stops on the renaming, for IT, instead of
     # asking the referent to set the person back to a name Entra no longer
     # holds (item 10 of the limits, 0.28.0).
+    renamed_to <- identity_normalize(entra[[i]][["upn"]])
     if (identical(entra[[i]][["code"]], "TRASPORTO_ACCOUNT_RINOMINATO") &&
-          resolvable[[i]] && nzchar(entra[[i]][["upn"]]) &&
-          identical(
-            identity_normalize(resolved_names[[i]]),
-            identity_normalize(entra[[i]][["upn"]])
-          )) {
+          resolvable[[i]] && nzchar(renamed_to) &&
+          identical(identity_normalize(resolved_names[[i]]), renamed_to)) {
       rewritten <- FALSE
     }
     pair_change(
