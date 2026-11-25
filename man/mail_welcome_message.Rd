@@ -49,5 +49,11 @@ the creation of the account, and the date is
 to whom to write, in the order the closing sentence already gives: the key
 stops working, and an account nobody signed in to is deactivated, never
 deleted. No other date and no other way: one date, one thing to do.
+
+It lists the three things the first sign-in asks. The e-mail address of
+the person's own that Entra asks for after Authenticator, to recover the
+password, is said in the first item, with the second factor (decided on
+2026-11-25): the items stay three, as in the work instruction on the
+first sign-in.
 }
 \keyword{internal}

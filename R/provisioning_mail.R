@@ -1524,6 +1524,12 @@ mail_has_deadline <- function(deadline) {
 #' stops working, and an account nobody signed in to is deactivated, never
 #' deleted. No other date and no other way: one date, one thing to do.
 #'
+#' It lists the three things the first sign-in asks. The e-mail address of
+#' the person's own that Entra asks for after Authenticator, to recover the
+#' password, is said in the first item, with the second factor (decided on
+#' 2026-11-25): the items stay three, as in the work instruction on the
+#' first sign-in.
+#'
 #' @param row One register row as a list.
 #' @param upn The account's user principal name, as created.
 #' @param url The address the row's instance opens at, from
@@ -1639,7 +1645,8 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
     "Al primo accesso ti verranno chieste tre cose, in quest'ordine:",
     "",
     "- registrare un secondo fattore di autenticazione, con un tuo",
-    "  dispositivo. Si fa una volta sola.",
+    "  dispositivo, e un tuo indirizzo di posta per recuperare la",
+    "  password. Si fa una volta sola.",
     "- compilare il modulo con i tuoi dati di base.",
     "- confermare il tuo indirizzo di posta seguendo un link.",
     "",
@@ -1663,7 +1670,8 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
     "At first sign-in you will be asked three things, in this order:",
     "",
     "- register a second factor of authentication, with a device of your",
-    "  own. This is done once.",
+    "  own, and an e-mail address of your own to recover your password.",
+    "  This is done once.",
     "- fill in the basic user information form.",
     "- confirm your e-mail address by following a link.",
     "",

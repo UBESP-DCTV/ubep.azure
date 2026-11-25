@@ -670,6 +670,41 @@ test_that("le istruzioni di primo accesso non portano nessun segreto", {
 })
 
 
+test_that("la prima voce del benvenuto dice anche l'indirizzo di recupero, e le voci restano tre", { # nolint: line_length_linter.
+  # eval
+  detto <- mail_welcome_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it"
+  )[["body"]]
+  # The wrapped lines of an item read as one.
+  unito <- gsub("\n  ", " ", detto, fixed = TRUE)
+  voci <- grep("^- ", strsplit(unito, "\n", fixed = TRUE)[[1L]], value = TRUE)
+
+  # test
+  # Decided on 2026-11-25: the recovery address Entra asks for after
+  # Authenticator is named before the person starts, in the first item, so
+  # the three steps of the work instruction on the first sign-in stay three.
+  expect_length(voci, 6L)
+  expect_identical(
+    voci[[1L]],
+    paste0(
+      "- registrare un secondo fattore di autenticazione, con un tuo ",
+      "dispositivo, e un tuo indirizzo di posta per recuperare la password. ",
+      "Si fa una volta sola."
+    )
+  )
+  expect_identical(
+    voci[[4L]],
+    paste0(
+      "- register a second factor of authentication, with a device of your ",
+      "own, and an e-mail address of your own to recover your password. This ",
+      "is done once."
+    )
+  )
+  expect_match(detto, "ti verranno chieste tre cose", fixed = TRUE)
+  expect_match(detto, "you will be asked three things", fixed = TRUE)
+})
+
+
 test_that("il benvenuto nomina il proprietario, non chi la riga nomina", {
   # eval
   importata <- mail_welcome_message(
