@@ -1913,15 +1913,26 @@ entra_account_change <- function(executed_username, believed_id, directory,
 #' of executions of that name, `report_person_since()`, in Rome's civil time
 #' and to the minute as the log stamps it. The reference is the first seal
 #' of the run and not the last: with the last, a name given again and then
-#' an execution for a change of role would pass.
+#' an execution for a change of role would pass. The run goes across a
+#' closure on a person gone from Entra (`across_closures`, item 14 of the
+#' limits, 0.29.0): a row set back to active after it, or granted again
+#' after it by an earlier version, is dated from the first execution of the
+#' name, not from the reopening.
 #'
 #' - Born before the end of that minute, `createdDateTime` read in UTC
 #'   (`report_graph_time()`): the identifier is written, with no message.
 #' - Born after: on a row not revoked `TRASPORTO_NOME_RIASSEGNATO` and no
 #'   identifier; on a revoked row neither.
-#' - A date that does not read, no `since`, nobody or two accounts carrying
-#'   the name, an identifier the door would refuse: neither, and the next
-#'   round tries again.
+#' - Nobody carrying the name, or no name: nothing to say.
+#' - Two accounts carrying the name, no `since` or one that does not read, a
+#'   date of creation that does not read, an identifier the door would
+#'   refuse: the guard cannot decide, `undecided`.
+#'
+#' The last two write nothing and stop nothing, and the next round tries
+#' again. The caller tells them apart on a row closed on a person gone from
+#' Entra and set back to active, which stops for IT when the guard cannot
+#' decide (item 14 of the limits, 0.29.0); on every other row both are
+#' nothing.
 #'
 #' An account born in the same minute as the first seal passes: the log has
 #' minutes and Graph seconds, and a creation precedes the first execution by
@@ -1934,8 +1945,9 @@ entra_account_change <- function(executed_username, believed_id, directory,
 #'   answers; `character()` or `NA` when the log does not say.
 #' @param revoked Whether the row asks for `revoked`.
 #'
-#' @return A list with `id`, the identifier to write or `""`, and `code`,
-#'   `TRASPORTO_NOME_RIASSEGNATO` or `""`.
+#' @return A list with `id`, the identifier to write or `""`, `code`,
+#'   `TRASPORTO_NOME_RIASSEGNATO` or `""`, and `undecided`, `TRUE` when the
+#'   guard cannot decide.
 #'
 #' @keywords internal
 entra_fill <- function(executed_username, directory, since,
@@ -1948,42 +1960,47 @@ entra_fill <- function(executed_username, directory, since,
     is.logical(revoked), length(revoked) == 1L, !is.na(revoked)
   )
 
-  nothing <- list(id = "", code = "")
+  nothing <- list(id = "", code = "", undecided = FALSE)
+  undecided <- list(id = "", code = "", undecided = TRUE)
   name <- identity_normalize(executed_username)
   if (is.na(name) || !nzchar(name)) {
     return(nothing)
   }
+  upns <- identity_normalize(directory[["userPrincipalName"]])
+  holders <- which(!is.na(upns) & upns == name)
+  if (length(holders) == 0L) {
+    return(nothing)
+  }
+  if (length(holders) > 1L) {
+    return(undecided)
+  }
+
   if (length(since) != 1L || is.na(since) ||
         !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$", since)) {
-    return(nothing)
+    return(undecided)
   }
   limit <- as.POSIXct(since, format = "%Y-%m-%d %H:%M", tz = "Europe/Rome")
   if (is.na(limit)) {
-    return(nothing)
+    return(undecided)
   }
   limit <- limit + 60
 
-  upns <- identity_normalize(directory[["userPrincipalName"]])
-  holders <- which(!is.na(upns) & upns == name)
-  if (length(holders) != 1L) {
-    return(nothing)
-  }
   id <- trimws(as.character(directory[["id"]][[holders]]))
   born <- report_graph_time(directory[["createdDateTime"]][[holders]])
   # An identifier the door would refuse (`entra_id_payload()`) is no
   # identifier, as at the first execution: Graph gives GUIDs.
   if (is.na(id) || !nzchar(id) || grepl("'", id, fixed = TRUE) ||
         is.na(born)) {
-    return(nothing)
+    return(undecided)
   }
   # Compared as instants: the two clocks are Rome's and UTC.
   if (as.numeric(born) < as.numeric(limit)) {
-    return(list(id = id, code = ""))
+    return(list(id = id, code = "", undecided = FALSE))
   }
   if (revoked) {
     return(nothing)
   }
-  list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO")
+  list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO", undecided = FALSE)
 }
 
 
