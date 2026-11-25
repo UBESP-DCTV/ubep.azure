@@ -7204,6 +7204,35 @@ test_that("un giro che passa la mezzanotte di Roma prima di agire si ferma, anch
 })
 
 
+test_that("il permesso del referente che scade il giorno del giro non concede, senza mezzanotte", { # nolint: line_length_linter.
+  # eval
+  # Anna's permission to manage users expires on 30 June, the day of the
+  # round, and REDCap has closed it; the clock does not move. The round
+  # above stops on the day before it reaches the gate, so it does not say
+  # which day the gate judges on: this one does. The day before, the same
+  # permission still holds, and the round goes ahead.
+  il_giorno_prima <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list(expiration = "2026-06-30")),
+    at = "2026-06-29 03:00"
+  )
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list(expiration = "2026-06-30")),
+    dry_run = FALSE,
+    at = "2026-06-30 03:00"
+  )
+
+  # test
+  # Judged on the day before the round, the permission held and the row was
+  # written to the instance.
+  expect_equal(esito_di(il_giorno_prima, "1")[["outcome"]], "simulated")
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(esito_di(esito, "1")[["detail"]], "DATO_AMBITO_NON_AUTORIZZATO")
+  expect_length(scritture(), 0L)
+})
+
+
 test_that("un giro che passa la mezzanotte di Roma non crea la persona di una richiesta il cui ultimo giorno e' passato", { # nolint: line_length_linter.
   # eval
   # Mario does not exist yet; his row asks access through 30 June. A real
