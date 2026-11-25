@@ -123,6 +123,32 @@ test_that("a management permission is judged on REDCap's date, the one in Rome",
 })
 
 
+test_that("a withdrawal by a manager is judged on the day it is handed", {
+  # eval
+  # Bruno manages the project until 2 January 2099, the first day without
+  # the permission, and removes somebody from Anna's row. The clock read
+  # without a day says 2 January: a gate that read it instead of the day of
+  # the round would judge the withdrawal on another day than the round's.
+  local_mocked_bindings(redcap_today = function(now = Sys.time()) {
+    as.Date("2099-01-02")
+  })
+  bruno <- "bruno.verdi@ubep.unipd.it"
+  rights <- rights_rows(list(username = bruno, expiration = "2099-01-02"))
+  judged <- function(day) {
+    scope_withdrawal(
+      register_rows(list()), bruno, "anna.bianchi@ubep.unipd.it",
+      sealed = TRUE, rights, today = as.Date(day)
+    )
+  }
+
+  # test
+  # On 1 January Bruno manages the project and the withdrawal stands; on
+  # 2 January he no longer does, and it waits for its owner.
+  expect_identical(judged("2099-01-01"), "")
+  expect_identical(judged("2099-01-02"), "held")
+})
+
+
 test_that("an expiration that does not read as a date is ours to fix", {
   # eval
   errors <- scope_errors(
