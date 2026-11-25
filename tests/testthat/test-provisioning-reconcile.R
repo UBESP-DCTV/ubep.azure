@@ -12890,3 +12890,136 @@ test_that("una revoca che esce dalla 12 con la risoluzione ambigua riporta il no
   expect_false(is.null(scritte))
   expect_true(mario %in% as.character(scritte[["username"]]))
 })
+
+
+# Un registro di quattro righe che passano per rami diversi della
+# risoluzione: una persona che c'e', una da creare, un omonimo senza il
+# recapito, un recapito interno. Fatto di nuovo a ogni chiamata, perche' i
+# doppi tengono lo stato delle scritture. La creazione risponde con la sua
+# data di nascita, cosi' la posta del benvenuto non dipende dall'orologio.
+giro_misto <- function() {
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(record_json(
+      list(record_id = "1"),
+      list(
+        record_id = "2", first_name = "Luigi", last_name = "Neri",
+        contact_email = "luigi.neri@example.org"
+      ),
+      list(
+        record_id = "3", first_name = "Giulia", last_name = "Verdi",
+        contact_email = "giulia.altra@example.org"
+      ),
+      list(
+        record_id = "4", first_name = "Paolo", last_name = "Bianchi",
+        contact_email = "Paolo.Bianchi@ubep.unipd.it"
+      )
+    )),
+    istanza_che_scrive(),
+    directory = directory_doppia(
+      graph_user(),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000002",
+        userPrincipalName = "giulia.verdi@ubep.unipd.it",
+        givenName = "Giulia", surname = "Verdi",
+        officeLocation = "giulia.verdi@example.org"
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000003",
+        userPrincipalName = "giulia.verdi.2@ubep.unipd.it",
+        givenName = "Giulia", surname = "Verdi", officeLocation = NULL
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-000000000004",
+        userPrincipalName = "paolo.bianchi@ubep.unipd.it",
+        givenName = "Paolo", surname = "Bianchi", officeLocation = NULL
+      )
+    ),
+    creazione = function(req) {
+      httr2::response(
+        status_code = 201L,
+        headers = list(`Content-Type` = "application/json"),
+        body = charToRaw(paste0(
+          '{"id":"00000000-0000-0000-0000-00000000000a",',
+          '"createdDateTime":"2026-08-14T03:00:30Z"}'
+        ))
+      )
+    },
+    mailer = posta[["mailer"]],
+    dry_run = FALSE
+  )
+  list(
+    esito = esito,
+    filo = lapply(inviate, function(req) {
+      list(req[["url"]], req[["method"]], req[["body"]][["data"]])
+    }),
+    posta = posta[["mandate"]](),
+    # Read here, right after this round: `inviate` is the last round's.
+    creazioni = length(creazioni())
+  )
+}
+
+
+test_that("il giro piega la directory una volta, non una per riga", {
+  # eval
+  # Fissato da quante volte si chiama, non da quanto dura: un conteggio non
+  # dipende dalla macchina. Prima della 0.28.0 i recapiti della directory
+  # si normalizzavano per ogni riga del registro, e per ogni riga di nuovo
+  # al secondo passo dei nomi.
+  chiamate <- 0L
+  originale <- directory_contacts
+  local_mocked_bindings(
+    directory_contacts = function(directory) {
+      chiamate <<- chiamate + 1L # nolint: assignment_linter.
+      originale(directory)
+    },
+    directory_credential = function(length = 24L) "Fissa-0000-aA1!"
+  )
+
+  esito <- giro_misto()[["esito"]]
+
+  # test
+  expect_setequal(
+    as.character(esito[["esiti"]][["record_id"]]), c("1", "2", "3", "4")
+  )
+  expect_identical(chiamate, 1L)
+})
+
+
+test_that("il giro con la directory piegata una volta fa quel che faceva main piegandola per riga", { # nolint: line_length_linter.
+  # eval
+  # `giro-misto-main.json` is what `giro_misto()` gave on the code just
+  # before the folds, with the same key: the whole return of the round,
+  # every request that left (register, instances, Graph) with its body,
+  # every message, and the creations of the round. Written with
+  # `jsonlite::serializeJSON()`, which brings the same object back,
+  # attributes included. First made on `main` at `3ec6ae5`; made again when
+  # the folds joined the 0.29.0, on the 0.29.0 without them, because the
+  # 0.28.0 and the 0.29.0 had changed the messages (the outcome, the
+  # requests and the creations were the same). To be made again only by a
+  # change that means to change what the round does.
+  local_mocked_bindings(
+    directory_credential = function(length = 24L) "Fissa-0000-aA1!"
+  )
+  main <- jsonlite::unserializeJSON(paste(
+    readLines(test_path("fixtures", "giro-misto-main.json"), warn = FALSE),
+    collapse = "\n"
+  ))
+
+  ramo <- giro_misto()
+
+  # test
+  # The world goes through the branches the test is about: an ambiguous
+  # row, one account created by this round, mail.
+  esiti <- ramo[["esito"]][["esiti"]]
+  expect_true(
+    any(grepl("DATO_RECAPITO_NON_IDENTIFICA", esiti[["outcome_detail"]]))
+  )
+  expect_identical(ramo[["creazioni"]], 1L)
+  expect_gt(length(ramo[["posta"]]), 0L)
+
+  expect_identical(ramo[["esito"]], main[["esito"]])
+  expect_identical(ramo[["filo"]], main[["filo"]])
+  expect_identical(ramo[["posta"]], main[["posta"]])
+  expect_identical(ramo[["creazioni"]], main[["creazioni"]])
+})

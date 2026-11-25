@@ -527,8 +527,14 @@ provisioning_reconcile <- function(register_url,
     ))
   }
 
+  # The sweep folded once for every row (`directory_folds()`, 0.28.0): what
+  # the resolution and the check of the Entra account compute from the
+  # directory alone, which once a row was most of the round.
+  folds <- directory_folds(sweep[["users"]])
   resolutions <- lapply(seq_len(nrow(register)), function(i) {
-    resolve_identity(as.list(register[i, , drop = FALSE]), sweep[["users"]])
+    resolve_identity(
+      as.list(register[i, , drop = FALSE]), sweep[["users"]], folds = folds
+    )
   })
 
   # `carried` is the seal the field holds. Read here, before the owners' log
@@ -570,7 +576,7 @@ provisioning_reconcile <- function(register_url,
     for (i in which(candidates)) {
       resolutions[[i]] <- resolve_identity(
         as.list(register[i, , drop = FALSE]), sweep[["users"]],
-        redcap = known[c("asked", "known")]
+        redcap = known[c("asked", "known")], folds = folds
       )
     }
     unverified <- candidates & vapply(resolutions, function(answer) {
@@ -1141,7 +1147,7 @@ provisioning_reconcile <- function(register_url,
     if (nzchar(entra_believed[[i]])) {
       change <- entra_account_change(
         carried_name, entra_believed[[i]], sweep[["users"]],
-        revoked = revoked_rows[[i]]
+        revoked = revoked_rows[[i]], folds = folds
       )
       return(list(
         code = change[["code"]], upn = change[["upn"]], id = "",
@@ -1153,7 +1159,8 @@ provisioning_reconcile <- function(register_url,
       across_closures = TRUE
     )
     fill <- entra_fill(
-      carried_name, sweep[["users"]], since, revoked = revoked_rows[[i]]
+      carried_name, sweep[["users"]], since, revoked = revoked_rows[[i]],
+      folds = folds
     )
     if (reopened[[i]] && fill[["undecided"]]) {
       return(undecided)

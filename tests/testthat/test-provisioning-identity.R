@@ -1726,3 +1726,167 @@ test_that("directory_contacts stops on a frame it cannot line up", {
   nested[["otherMails"]][[2L]] <- list("a@x.org", NULL)
   expect_error(directory_contacts(nested), "out of step")
 })
+
+test_that("directory_folds holds what the directory gives, field by field", {
+  directory <- hard_directory()
+  folds <- directory_folds(directory)
+
+  expect_identical(folds[["rows"]], nrow(directory))
+  expect_identical(folds[["candidate"]], directory_is_candidate(directory))
+  expect_identical(folds[["surnames"]], clean_string(directory[["surname"]]))
+  expect_identical(folds[["givens"]], clean_string(directory[["givenName"]]))
+  expect_identical(folds[["contacts"]], directory_contacts(directory))
+  expect_identical(
+    folds[["upns"]], identity_normalize(directory[["userPrincipalName"]])
+  )
+  expect_identical(folds[["ids"]], identity_normalize(directory[["id"]]))
+})
+
+test_that("directory_carrying is the per-account rule, on hard frames", {
+  directory <- hard_directory()
+  with_holes <- directory
+  with_holes[["officeLocation"]][2L] <- NA_character_
+  with_holes[["otherMails"]][5L] <- list(NULL)
+
+  for (frame in list(directory, with_holes, directory[0L, , drop = FALSE])) {
+    contacts <- directory_contacts(frame)
+    folds <- directory_folds(frame)
+    asked <- c(
+      unique(unlist(contacts)), "", NA_character_, "nessuno@example.org",
+      "altra.003@example.org", "persona.001@ubep.unipd.it"
+    )
+    for (contact in asked) {
+      expect_identical(
+        directory_carrying(folds, contact),
+        vapply(contacts, function(a) contact %in% a, logical(1)),
+        info = contact
+      )
+    }
+  }
+})
+
+test_that("one fold for many rows answers as a fold for each row", {
+  directory <- hard_directory()
+  shared <- directory_folds(directory)
+  names_of <- list(
+    c("Anna Maria", "Rossi"), c("Zoe", "Rossi"), c("", "Rossi"),
+    c("Li", "O’Brien"), c("André", "Nuñez"),
+    c("Paolo", "Bianchi-Verdi"), c("Mario", "Nessuno"), c("Mario", "")
+  )
+  contacts <- c(
+    unique(unlist(directory_contacts(directory))), "nessuno@example.org",
+    "", "nuovo.utente@ubep.unipd.it"
+  )
+  asked <- 0L
+  for (who in names_of) {
+    for (contact in contacts) {
+      for (previous in c("", "existing")) {
+        request <- a_request(
+          first_name = who[[1L]], last_name = who[[2L]],
+          contact_email = contact, identity = previous
+        )
+        expect_identical(
+          resolve_identity(request, directory, folds = shared),
+          resolve_identity(request, directory),
+          info = paste(c(who, contact, previous), collapse = " / ")
+        )
+        asked <- asked + 1L
+      }
+    }
+  }
+  expect_gt(asked, 100L)
+})
+
+test_that("the folds are computed when first read, and once", {
+  # A row that stops before the directory is looked at reads none of it, as
+  # before the folds; and the rows after the first read what the first did.
+  calls <- 0L
+  counting <- function(directory) {
+    calls <<- calls + 1L
+    reference_contacts(directory)
+  }
+  local_mocked_bindings(directory_contacts = counting)
+  directory <- hard_directory()
+  folds <- directory_folds(directory)
+
+  resolve_identity(a_request(contact_email = ""), directory, folds = folds)
+  expect_identical(calls, 0L)
+
+  for (k in 1:5) {
+    resolve_identity(a_request(), directory, folds = folds)
+  }
+  expect_identical(calls, 1L)
+})
+
+test_that("folds made from another directory are refused", {
+  directory <- hard_directory()
+  other <- directory_folds(directory[1:3, , drop = FALSE])
+  expect_error(
+    resolve_identity(a_request(), directory, folds = other),
+    "another directory"
+  )
+})
+
+# Two accounts, for the tests of folds and directory coming apart: a
+# directory with the same rows in another order is the case a count of rows
+# cannot tell from the one the folds were made from.
+two_accounts <- function() {
+  dir_frame(
+    dir_user(),
+    dir_user(
+      id = "00000000-0000-0000-0000-000000000002",
+      userPrincipalName = "anna.verdi@ubep.unipd.it",
+      givenName = "Anna", surname = "Verdi",
+      officeLocation = "anna.verdi@example.org"
+    )
+  )
+}
+
+test_that("the folds are of the directory they were made from, not of the variable later", { # nolint: line_length_linter.
+  # L1 of the review of the 0.28.0: an argument left a promise until the
+  # first field is read would fold whatever the caller's variable holds by
+  # then.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  directory <- directory[2:1, , drop = FALSE]
+  expect_identical(
+    folds[["upns"]],
+    c("mario.rossi@ubep.unipd.it", "anna.verdi@ubep.unipd.it")
+  )
+})
+
+test_that("folds of the same accounts in another order are refused by the resolution", { # nolint: line_length_linter.
+  # L2 of the review of the 0.28.0: the folds hand out positions, and the
+  # positions are read on the directory passed. A count of rows let these
+  # through, and the answer named the account the folds believed.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  swapped <- directory[2:1, , drop = FALSE]
+  expect_error(
+    resolve_identity(a_request(), swapped, folds = folds),
+    "another directory"
+  )
+})
+
+test_that("folds of another directory are refused by the checks of the Entra account", { # nolint: line_length_linter.
+  # L3 of the review of the 0.28.0: without a guard `entra_fill()` gave
+  # Anna's id for Mario's name, and `entra_account_change()` saw Mario's
+  # account renamed to Anna's.
+  directory <- two_accounts()
+  folds <- directory_folds(directory)
+  swapped <- directory[2:1, , drop = FALSE]
+  expect_error(
+    entra_fill(
+      "mario.rossi@ubep.unipd.it", swapped, "2026-06-01 10:00",
+      folds = folds
+    ),
+    "another directory"
+  )
+  expect_error(
+    entra_account_change(
+      "nessuno@ubep.unipd.it", "00000000-0000-0000-0000-000000000001",
+      swapped, folds = folds
+    ),
+    "another directory"
+  )
+})

@@ -4,12 +4,20 @@
 \alias{directory_named}
 \title{The rows that carry this person's name}
 \usage{
-directory_named(directory, first_name, last_name)
+directory_named(
+  directory,
+  first_name,
+  last_name,
+  folds = directory_folds(directory)
+)
 }
 \arguments{
 \item{directory}{A directory frame as \code{directory_users()} returns.}
 
 \item{first_name, last_name}{The names the register row declares.}
+
+\item{folds}{The directory folded, \code{directory_folds()}, made from
+\code{directory}; by default folded here.}
 }
 \value{
 A logical vector, one per row.
