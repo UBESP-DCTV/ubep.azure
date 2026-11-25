@@ -1428,6 +1428,30 @@ test_that("senza nome il testo pronto saluta senza lasciare uno spazio", {
 })
 
 
+test_that("il saluto del testo pronto tiene il nome su una riga", {
+  # eval
+  primi <- function(nome) {
+    righe <- strsplit(mail_credential_message(
+      riga_di_prova(first_name = nome), upn = "sara.collaudozeta@ubep.unipd.it",
+      credential = finti[["parola"]]
+    )[["body"]], "\n", fixed = TRUE)[[1]]
+    vapply(delimitatori, function(d) {
+      testo_pronto(righe, d[[1]], d[[2]])[["righe"]][[1L]]
+    }, character(1))
+  }
+
+  # test
+  # The referent fills the field: a line break, a tab or two spaces inside
+  # the name become one space, and the greeting stays one line.
+  for (nome in c("Anna\nMaria", "Anna\r\nMaria", " Anna \t Maria\n")) {
+    expect_identical(
+      primi(nome), c(it = "Ciao Anna Maria,", en = "Hello Anna Maria,"),
+      info = encodeString(nome)
+    )
+  }
+})
+
+
 test_that("senza data limite il testo pronto resta, senza la data", {
   # eval
   righe <- strsplit(mail_credential_message(

@@ -8,7 +8,9 @@ mail_credential_ready_text(first_name, credential, deadline)
 }
 \arguments{
 \item{first_name}{The person's first name, from the row; missing or empty
-leaves the greeting without it.}
+leaves the greeting without it. The referent fills the field, so white
+space inside it, a line break included, becomes one space: the greeting
+stays one line.}
 
 \item{credential}{What the account was born with.}
 

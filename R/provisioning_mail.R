@@ -1822,7 +1822,9 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' line that separates the two languages of every message.
 #'
 #' @param first_name The person's first name, from the row; missing or empty
-#'   leaves the greeting without it.
+#'   leaves the greeting without it. The referent fills the field, so white
+#'   space inside it, a line break included, becomes one space: the greeting
+#'   stays one line.
 #' @param credential What the account was born with.
 #' @param deadline The date of the first sign-in, from
 #'   `mail_first_signin_deadline()`; `NULL`, `NA` or empty leaves the sentence
@@ -1833,7 +1835,7 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #'
 #' @keywords internal
 mail_credential_ready_text <- function(first_name, credential, deadline) {
-  nome <- trimws(mail_said_or(first_name, ""))
+  nome <- trimws(gsub("[[:space:]]+", " ", mail_said_or(first_name, "")))
   saluto <- function(parola) {
     if (nzchar(nome)) paste0(parola, " ", nome, ",") else paste0(parola, ",")
   }
