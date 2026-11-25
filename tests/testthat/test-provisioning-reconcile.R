@@ -14029,3 +14029,224 @@ test_that("la riga chiusa e revocata il cui nome non e' quello che il canale ha 
   expect_match(dettaglio_uno(g[["esito"]]), "^SIGILLO_DIVERSO:")
   expect_length(g[["revocati"]], 0L)
 })
+
+
+# ---- The closed row revoked whose name alone the channel wrote (RF1) ----
+
+# RF1 and RF4 of the review of the correction of F1, way (b) restricted,
+# beside the way (a) (decided on 2026-11-25). A closed row (the channel's
+# last seal is the closure's, under the empty name) whose owner asks for its
+# revocation, where the name is the only intent field away from the
+# closure's version, and the log says the channel wrote it: a round on the
+# reopened row that wrote the name and did not seal it, then the owner set
+# the row back to revoked (P1, P8 of the review); a round of the 0.28.0 that
+# wrote the name and did not act (RF4, P2); a name that arrived with its
+# answer lost, and could not be read back (RF3 without the reading). The
+# change is the channel's own: the row is not held, and its revocation goes
+# on. Any other difference from the closure, a human author, a name written
+# by somebody else, a row that asks for an access: as before.
+
+# What the round after the stop must show: `nome` revoked, `applied`, no
+# held outcome, no message asking for an approval; and the round after it
+# finds the row intact.
+attesa_revoca_del_nome <- function(secondo, terzo, nome) {
+  testthat::expect_equal(esiti_del_giro(secondo), "applied")
+  testthat::expect_equal(dettaglio_uno(secondo[["esito"]]), "")
+  testthat::expect_equal(secondo[["revocati"]], nome)
+  testthat::expect_false(chiede_approvazione(secondo))
+  testthat::expect_false(any(esiti_del_giro(terzo) %in% "held"))
+  testthat::expect_length(terzo[["revocati"]], 0L)
+}
+
+# A round on that row on the 17th, the name given to B (G3), and the round
+# after it.
+due_giri_sul_nome <- function(reg, istanza = istanza_che_revoca()) {
+  directory <- directory_doppia(mario_b())
+  list(
+    secondo = giro_che_ricorda(
+      reg, istanza, directory, "2026-08-17 05:00", "2026-08-17 03:00"
+    ),
+    terzo = giro_che_ricorda(
+      reg, istanza, directory, "2026-08-17 09:00", "2026-08-17 07:00"
+    )
+  )
+}
+
+# An instance that revokes, where Bruno manages the project 9003 too.
+istanza_che_revoca_con_bruno <- function() {
+  revocato <- FALSE
+  function(data) {
+    if (identical(data[["operation"]], "revoke") &&
+          isFALSE(data[["dry_run"]])) {
+      revocato <<- TRUE # nolint: assignment_linter.
+    }
+    rows <- list(list(), list(username = bruno, user_rights = 1L))
+    if (!revocato) {
+      rows <- c(rows, list(list(
+        username = mario, project_id = 9003L, role_name = "data entry"
+      )))
+    }
+    do.call(istanza_doppia, rows)(data)
+  }
+}
+
+
+test_that("la riga chiusa riattivata il cui nome scrive un giro fermo, poi rimessa revocata dalla proprietaria, revoca il nome al giro dopo (RF1, P1)", { # nolint: line_length_linter.
+  for (fermo in names(codice_fermo)) {
+    # eval
+    reg <- chiusa_riattivata_senza_id("request_status = 'active'")
+    revoca <- istanza_che_revoca()
+    ist <- if (identical(fermo, "muta")) istanza_muta_poi(revoca) else revoca
+    directory <- directory_doppia(mario_a())
+    primo <- giro_che_ricorda(
+      reg, ist, directory, "2026-08-16 23:59", "2026-08-16 21:59",
+      oggi = if (identical(fermo, "giorno")) as.Date("2026-08-17")
+    )
+    if (identical(fermo, "muta")) {
+      attr(ist, "stato")$accesa <- TRUE
+    }
+    scrive_nel_registro(
+      reg, anna, list(request_status = "revoked"), "2026-08-17 01:00"
+    )
+    secondo <- giro_che_ricorda(
+      reg, ist, directory, "2026-08-17 05:00", "2026-08-17 03:00"
+    )
+    terzo <- giro_che_ricorda(
+      reg, ist, directory, "2026-08-17 09:00", "2026-08-17 07:00"
+    )
+
+    # test
+    # The first round wrote the name on the reopened row, and did not act.
+    expect_equal(dettaglio_uno(primo[["esito"]]), codice_fermo[[fermo]])
+    expect_equal(primo[["riga"]][["username"]], mario)
+    attesa_revoca_del_nome(secondo, terzo, mario)
+    # Nothing the revocation would not write: no identifier, no pair.
+    expect_equal(
+      secondo[["riga"]][["applied_entra_id"]],
+      primo[["riga"]][["applied_entra_id"]]
+    )
+    expect_equal(secondo[["riga"]][["server"]], "edc10")
+    expect_equal(secondo[["riga"]][["project_id"]], "9003")
+  }
+})
+
+
+test_that("la riga chiusa riattivata da un altro, trattenuta, poi rimessa revocata dalla proprietaria, revoca il nome al giro dopo (RF1, P8)", { # nolint: line_length_linter.
+  # eval
+  # Bruno set Anna's closed row back to active: held, and the door wrote
+  # the name on the active row. Anna does what the message says, puts the
+  # fields back as they were: the row is revoked again.
+  reg <- registro_che_ricorda(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+      username = "", identity = "absent", applied_as = "absent",
+      request_status = "active"
+    ))),
+    storia = c(
+      list(cambio(bruno, "request_status = 'active'",
+                  timestamp = "2026-08-15 10:00")),
+      storia_chiusa_assente()
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+  ist <- istanza_che_revoca_con_bruno()
+  directory <- directory_doppia(mario_a())
+  primo <- giro_che_ricorda(
+    reg, ist, directory, "2026-08-16 05:00", "2026-08-16 03:00"
+  )
+  scrive_nel_registro(
+    reg, anna, list(request_status = "revoked"), "2026-08-16 08:00"
+  )
+  secondo <- giro_che_ricorda(
+    reg, ist, directory, "2026-08-16 09:00", "2026-08-16 07:00"
+  )
+  terzo <- giro_che_ricorda(
+    reg, ist, directory, "2026-08-16 13:00", "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(esiti_del_giro(primo), "held")
+  expect_equal(primo[["riga"]][["username"]], mario)
+  attesa_revoca_del_nome(secondo, terzo, mario)
+})
+
+
+test_that("la riga chiusa e revocata col nome scritto dal canale prima dell'aggiornamento revoca il nome (RF4, P2)", { # nolint: line_length_linter.
+  # eval
+  giri <- due_giri_sul_nome(chiusa_col_nome_del_canale())
+
+  # test
+  attesa_revoca_del_nome(giri[["secondo"]], giri[["terzo"]], mario)
+  expect_equal(giri[["secondo"]][["riga"]][["applied_entra_id"]], id_a)
+})
+
+
+# In front of `dentro`: the first import that carries `username` arrives
+# and its answer is lost, and in the same round, at Rome's hour `quando`,
+# the reading after it fails too, so the round cannot read the name back.
+registro_che_non_rilegge <- function(dentro, quando) {
+  scaduta <- FALSE
+  riletto <- FALSE
+  function(data) {
+    azione <- form_field_value(data[["action"]] %||% "")
+    contenuto <- form_field_value(data[["content"]] %||% "")
+    if (identical(azione, "import") && !scaduta) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      if (any(vapply(sent, function(r) "username" %in% names(r), NA))) {
+        scaduta <<- TRUE # nolint: assignment_linter.
+        dentro(data)
+        scade_ora()
+      }
+    }
+    if (scaduta && !riletto && identical(attr(dentro, "stato")$ora, quando) &&
+          identical(contenuto, "record") && identical(azione, "export")) {
+      riletto <<- TRUE # nolint: assignment_linter.
+      scade_ora()
+    }
+    dentro(data)
+  }
+}
+
+
+test_that("la riga chiusa e revocata il cui nome arriva senza risposta e non si rilegge non e' trattenuta al giro dopo (RF3 senza la rilettura)", { # nolint: line_length_linter.
+  # eval
+  dentro <- chiusa_revocata_con_id()
+  reg <- registro_che_non_rilegge(dentro, "2026-08-17 05:00")
+  ist <- istanza_che_revoca()
+  directory <- directory_doppia(mario_b())
+  giro_ora <- function(ora, at) {
+    attr(dentro, "stato")$ora <- ora
+    posta <- posta_raccolta()
+    esito <- giro(
+      reg, ist, directory = directory, dry_run = FALSE,
+      copy_to = "it@example.org", mailer = posta[["mailer"]], at = at
+    )
+    list(
+      esito = esito, revocati = revocati(), posta = posta[["mandate"]](),
+      riga = attr(dentro, "stato")$righe[["1"]]
+    )
+  }
+  primo <- giro_ora("2026-08-17 05:00", "2026-08-17 03:00")
+  secondo <- giro_ora("2026-08-17 09:00", "2026-08-17 07:00")
+  terzo <- giro_ora("2026-08-17 13:00", "2026-08-17 11:00")
+
+  # test
+  # The first round revoked, the name arrived, the seal did not.
+  expect_equal(primo[["revocati"]], mario)
+  expect_true(any(grepl("^TRASPORTO_", primo[["esito"]][["errori"]])))
+  expect_equal(primo[["riga"]][["username"]], mario)
+  expect_equal(primo[["riga"]][["applied_seal"]], sigillo_chiusa_assente)
+  # The next one seals the revocation carried out.
+  expect_equal(as.character(secondo[["esito"]][["esiti"]][["outcome"]]),
+               "applied")
+  expect_false(chiede_approvazione(secondo))
+  expect_false(identical(
+    secondo[["riga"]][["applied_seal"]], sigillo_chiusa_assente
+  ))
+  expect_false(any(
+    as.character(terzo[["esito"]][["esiti"]][["outcome"]]) %in% "held"
+  ))
+  expect_length(terzo[["revocati"]], 0L)
+})

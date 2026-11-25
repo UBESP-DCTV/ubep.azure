@@ -2705,6 +2705,84 @@ seal_needs_approval <- function(register, events, creators,
 }
 
 
+#' Whether a closed row revoked differs from its closure by the channel's name
+#'
+#' RF1 and RF4 of the review of the correction of F1 of the 0.29.0, way (b)
+#' restricted, decided on 2026-11-25, beside the way (a) of the identity
+#' door. A closed row is sealed by its closure under the empty name. A round
+#' that writes the name on it and does not seal the row (on the row set back
+#' to active, a round stopped or held; under the 0.28.0, a round that did not
+#' act), followed by the owner putting the row back to revoked, leaves the
+#' row differing from the closure by that name alone, written by the
+#' channel: the round would hold it with no author, and ask its owner to
+#' approve the channel's own write while the revocation waits.
+#'
+#' `TRUE` only when all of these hold, and the caller asks it only of a
+#' closed row whose change has no author, `log_pending_authors()`:
+#'
+#' - the channel's account is configured and the row asks for `revoked`;
+#' - the row as read, with its name emptied, gives the seal the round
+#'   believes, the closure's: every other intent field is the closure's;
+#' - in the row's log, above the newest execution, every write of `username`
+#'   is the channel's, and the newest one wrote the name the row holds.
+#'
+#' It only lets a revocation go on: a row that asks for an access, or with
+#' any other difference from the closure, or a name written by anybody else,
+#' is judged as before.
+#'
+#' @param events The row's log, as `register_log()` returns it.
+#' @param record The record id to look at.
+#' @param row The row as read, a data frame of one row.
+#' @param seal The seal the round believes for the row.
+#' @param channel_account The REDCap usernames that hold the round's token,
+#'   one or more, or `NULL` when they are not configured.
+#'
+#' @return `TRUE` or `FALSE`.
+#'
+#' @keywords internal
+log_closure_named_by_channel <- function(events, record, row, seal,
+                                         channel_account = NULL) {
+  stopifnot(
+    is.data.frame(events), is.data.frame(row), nrow(row) == 1L,
+    is.character(seal), length(seal) == 1L
+  )
+
+  if (is.null(channel_account) || is.na(seal) || !nzchar(seal)) {
+    return(FALSE)
+  }
+  value_of <- function(field) {
+    value <- trimws(as.character(row[[field]] %||% ""))
+    if (length(value) != 1L || is.na(value)) "" else value
+  }
+  name <- value_of("username")
+  if (!identical(value_of("request_status"), "revoked") || !nzchar(name)) {
+    return(FALSE)
+  }
+  closure <- row
+  closure[["username"]] <- ""
+  if (!identical(request_seal(closure), seal)) {
+    return(FALSE)
+  }
+
+  mine <- log_of_record(events, record)
+  channel <- log_channel_accounts(events, record, channel_account)
+  executed <- log_executions(mine, channel, channel_account)
+  if (length(executed) == 0L) {
+    return(FALSE)
+  }
+  wrote <- which(
+    log_wrote(mine, "username") & seq_len(nrow(mine)) < executed[[1L]]
+  )
+  if (length(wrote) == 0L) {
+    return(FALSE)
+  }
+  authors <- trimws(as.character(mine[["username"]][wrote]))
+  all(authors %in% channel) && identical(
+    log_written_value(mine[wrote[[1L]], , drop = FALSE], "username"), name
+  )
+}
+
+
 #' Whether a change to an applied row has been approved
 #'
 #' Three conditions, and none is enough on its own.

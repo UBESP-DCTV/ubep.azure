@@ -1076,6 +1076,29 @@ provisioning_reconcile <- function(register_url,
     believed[checked, , drop = FALSE], events, creators[checked],
     approvers, channel_account = channel_account
   )
+  # Save a closed row revoked whose only change is the name the channel
+  # wrote over the closure (RF1 and RF4 of the review of the correction of
+  # F1 of the 0.29.0, way (b) restricted, decided on 2026-11-25): a round
+  # that wrote it and did not seal the row, on the reopened row or under the
+  # 0.28.0, and then the row back to revoked. The change is the channel's
+  # own, with nobody to ask, and the row goes on as a revocation: no other
+  # field, no author, the name written by the channel alone,
+  # `log_closure_named_by_channel()`. A row that asks for an access is
+  # never one.
+  channel_named <- awaits & closed & !reopened & !unread & nzchar(owners_now)
+  channel_named[channel_named] <- vapply(which(channel_named), function(i) {
+    authors <- log_pending_authors(
+      events, record_ids[[i]], creators[[i]], register_intent_fields(),
+      approvers, channel_account = channel_account,
+      current = register_after[i, , drop = FALSE]
+    )
+    !anyNA(authors) && length(authors) == 0L &&
+      log_closure_named_by_channel(
+        events, record_ids[[i]], register[i, , drop = FALSE], sealed[[i]],
+        channel_account
+      )
+  }, logical(1))
+  awaits <- awaits & !channel_named
   cleared <- awaits & seal_approved(
     register, events, creators, approvers, channel_account = channel_account
   )
