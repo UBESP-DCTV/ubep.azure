@@ -1281,14 +1281,15 @@ test_that("il testo pronto chiede l'indirizzo per recuperare la password", {
   )[["body"]], "\n", fixed = TRUE)[[1]]
   passo <- list(
     it = paste0(
-      "5. Per recuperare la password Microsoft ti chiede anche un indirizzo ",
-      "mail: scrivi un indirizzo tuo che leggi, e poi il codice che ti ",
-      "arriva li'. Chiudi con Next e Done."
+      "5. Poi Microsoft passa a \"Metodo 2 di 2\" (\"Method 2 of 2\") e, per ",
+      "recuperare la password, ti chiede un indirizzo mail: scrivi un ",
+      "indirizzo tuo che leggi, poi il codice che ti arriva li', e premi ",
+      "Avanti (Next)."
     ),
     en = paste0(
-      "5. To recover your password, Microsoft also asks for an e-mail ",
-      "address: enter an address of yours that you read, then the code that ",
-      "arrives there. Finish with Next and Done."
+      "5. Then Microsoft moves on to \"Method 2 of 2\" and, to recover your ",
+      "password, asks for an e-mail address: enter an address of yours that ",
+      "you read, then the code that arrives there, and press Next."
     )
   )
 
@@ -1308,6 +1309,65 @@ test_that("il testo pronto chiede l'indirizzo per recuperare la password", {
   }
   # Done closes the registration once, at the end of it.
   expect_equal(sum(grepl("Done", righe, fixed = TRUE)), 2L)
+})
+
+
+test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { # nolint: line_length_linter.
+  # eval
+  righe <- strsplit(mail_credential_message(
+    riga_di_prova(), upn = "sara.collaudozeta@ubep.unipd.it",
+    credential = finti[["parola"]], deadline = "2026-12-21"
+  )[["body"]], "\n", fixed = TRUE)[[1]]
+  passi <- lapply(delimitatori, function(d) {
+    testo <- testo_pronto(righe, d[[1]], d[[2]])[["righe"]]
+    list(
+      due = grep("^2\\. ", testo, value = TRUE),
+      quattro = grep("^4\\. ", testo, value = TRUE),
+      cinque = grep("^5\\. ", testo, value = TRUE)
+    )
+  })
+  # Italian labels seen by [cl] on the test account on 2026-11-24, with the
+  # English one in brackets; the others stay in English alone.
+  attese <- list(
+    it = list(
+      quattro = c(
+        "premi Avanti (Next) finche' compare un codice QR",
+        "Sul computer premi Avanti (Next) e approva la notifica",
+        "Chiudi questa parte con Fine (Done). Non scegliere Skip for now."
+      ),
+      cinque = c(
+        "\"Metodo 2 di 2\" (\"Method 2 of 2\")", "premi Avanti (Next)."
+      )
+    ),
+    en = list(
+      quattro = c(
+        "press Next until a QR code appears",
+        "On the computer, press Next and approve the notification",
+        "Finish this part with Done. Do not choose Skip for now."
+      ),
+      cinque = c("\"Method 2 of 2\"", "and press Next.")
+    )
+  )
+
+  # test
+  # As in Entra: Authenticator, method 1 of 2, closes with Done; the
+  # recovery address, method 2 of 2, with Next, and no Done after it.
+  for (lingua in names(attese)) {
+    for (passo in names(attese[[lingua]])) {
+      for (frase in attese[[lingua]][[passo]]) {
+        expect_match(
+          passi[[lingua]][[passo]], frase, fixed = TRUE,
+          info = paste(lingua, passo, frase)
+        )
+      }
+    }
+    expect_false(grepl("Done", passi[[lingua]][["cinque"]], fixed = TRUE))
+  }
+  # Avanti on the sign-in page was not in the test of [cl]: Next alone.
+  expect_identical(
+    passi[["it"]][["due"]],
+    "2. Scrivi il nome utente e premi Next, poi la chiave e premi Sign in."
+  )
 })
 
 

@@ -1809,6 +1809,13 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' address confirmed with a code, and no longer accepts a phone, so after
 #' Authenticator the person gives an address of their own.
 #'
+#' The two methods close as Entra closes them, seen on a test account on
+#' 2026-11-24: Authenticator, method 1 of 2, with `Done`, then method 2 of 2,
+#' the recovery address, with `Next`. The Italian text gives the Italian
+#' label with the English one in brackets where that test showed it
+#' (`Avanti`, `Fine`, `Metodo 2 di 2`), and the English label alone
+#' elsewhere, the labels the test did not show.
+#'
 #' Each text sits between two delimiter lines, because the line with the
 #' user name stands above it in the same message, and a referent copying by
 #' hand should know where to stop. The delimiters are not a bare `---`, the
@@ -1872,17 +1879,19 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "la chiave, poi scegli la tua password e confermala."
     ),
     paste0(
-      "4. Microsoft ti chiede di proteggere l'account: premi Next finche' ",
-      "compare un codice QR. Sul telefono apri Microsoft Authenticator, tocca ",
-      "Verified IDs in basso a destra, poi Scan QR code, e inquadra il ",
-      "codice. Sul computer premi Next e approva la notifica sul telefono; ",
-      "se l'app chiede un numero, scrivi quello che vedi sul computer. Non ",
-      "scegliere Skip for now. Il secondo fattore si registra solo con l'app."
+      "4. Microsoft ti chiede di proteggere l'account: premi Avanti (Next) ",
+      "finche' compare un codice QR. Sul telefono apri Microsoft ",
+      "Authenticator, tocca Verified IDs in basso a destra, poi Scan QR code, ",
+      "e inquadra il codice. Sul computer premi Avanti (Next) e approva la ",
+      "notifica sul telefono; se l'app chiede un numero, scrivi quello che ",
+      "vedi sul computer. Chiudi questa parte con Fine (Done). Non scegliere ",
+      "Skip for now. Il secondo fattore si registra solo con l'app."
     ),
     paste0(
-      "5. Per recuperare la password Microsoft ti chiede anche un indirizzo ",
-      "mail: scrivi un indirizzo tuo che leggi, e poi il codice che ti ",
-      "arriva li'. Chiudi con Next e Done."
+      "5. Poi Microsoft passa a \"Metodo 2 di 2\" (\"Method 2 of 2\") e, per ",
+      "recuperare la password, ti chiede un indirizzo mail: scrivi un ",
+      "indirizzo tuo che leggi, poi il codice che ti arriva li', e premi ",
+      "Avanti (Next)."
     ),
     "6. A \"Stay signed in?\" rispondi Yes. Si apre REDCap.",
     paste0(
@@ -1945,13 +1954,13 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "Verified IDs in the bottom right corner, then Scan QR code, and scan ",
       "the code. On the computer, press Next and approve the notification on ",
       "your phone; if the app asks for a number, enter the one you see on the ",
-      "computer. Do not choose Skip for now. The second factor is registered ",
-      "only with the app."
+      "computer. Finish this part with Done. Do not choose Skip for now. The ",
+      "second factor is registered only with the app."
     ),
     paste0(
-      "5. To recover your password, Microsoft also asks for an e-mail ",
-      "address: enter an address of yours that you read, then the code that ",
-      "arrives there. Finish with Next and Done."
+      "5. Then Microsoft moves on to \"Method 2 of 2\" and, to recover your ",
+      "password, asks for an e-mail address: enter an address of yours that ",
+      "you read, then the code that arrives there, and press Next."
     ),
     "6. At \"Stay signed in?\" answer Yes. REDCap opens.",
     paste0(

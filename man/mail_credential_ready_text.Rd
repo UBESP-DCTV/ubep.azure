@@ -41,6 +41,13 @@ self-service reset asks for two methods, Authenticator and an e-mail
 address confirmed with a code, and no longer accepts a phone, so after
 Authenticator the person gives an address of their own.
 
+The two methods close as Entra closes them, seen on a test account on
+2026-11-24: Authenticator, method 1 of 2, with \code{Done}, then method 2 of 2,
+the recovery address, with \code{Next}. The Italian text gives the Italian
+label with the English one in brackets where that test showed it
+(\code{Avanti}, \code{Fine}, \verb{Metodo 2 di 2}), and the English label alone
+elsewhere, the labels the test did not show.
+
 Each text sits between two delimiter lines, because the line with the
 user name stands above it in the same message, and a referent copying by
 hand should know where to stop. The delimiters are not a bare \verb{---}, the
