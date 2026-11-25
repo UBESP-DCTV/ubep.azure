@@ -1256,9 +1256,9 @@ di ogni fermata della riga chiusa, anche rimasta revocata, nomina il nome
 concesso, dove la coppia del log ha il nome vuoto. Dove serve la
 coppia senza la sostituzione, la si usa: `revocation_stays` si calcola sulla
 coppia del log, e su una riga chiusa vale `"yes"`, il che è vero. Un limite
-resta, nel verso che non concede: revocata con un account trovato, la riga chiusa
-si chiude di nuovo sul nome che il giro trova ora, non sul vecchio login, e
-tiene la coppia contro la richiesta nuova (senza account trovato si chiude e
+resta, nel verso che non concede: revocata con un account trovato, la riga
+chiusa si chiude di nuovo sul nome che il giro trova ora, non sul vecchio login,
+e tiene la coppia contro la richiesta nuova (senza account trovato si chiude e
 non la tiene); i messaggi delle sue fermate sull'account (colonna
 `closed_reopened`) dicono che il vecchio login lo toglie IT e che IT cancella la
 riga vecchia quando la revoca è `applied`.
