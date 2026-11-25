@@ -7327,6 +7327,24 @@ test_that("un giro che non passa la mezzanotte agisce sul suo giorno", {
 })
 
 
+test_that("il giorno del giro e' quello di Roma dell'istante at, letto in UTC", { # nolint: line_length_linter.
+  # eval
+  # 22:30 UTC on 30 June is 00:30 on 1 July in Rome, where REDCap has closed
+  # a last day of 30 June. The other rounds of these tests run at 03:00 or
+  # 21:59 UTC, hours at which the day in UTC and in Rome are the same, so
+  # none of them sees `at` read in another zone, or as a date alone.
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list()),
+    at = "2026-06-30 22:30"
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
+  expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
+})
+
+
 test_that("il giro passa il suo giorno a ogni cancello che giudica una data", { # nolint: line_length_linter.
   # The tests above reach the last day, the lapsed rows and the referent's
   # permission. The rows whose person is to be created and the revocations
