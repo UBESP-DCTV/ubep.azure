@@ -14279,3 +14279,102 @@ test_that("la riga chiusa e revocata il cui nome arriva senza risposta e non si 
   ))
   expect_length(terzo[["revocati"]], 0L)
 })
+
+
+# ---- Which writes of the name the channel's must be (RF1) ----
+
+# The window and the writes `log_closure_named_by_channel()` reads: the
+# writes of `username` above the newest execution, all the channel's, the
+# newest one with the name the row holds. Each case below holds or lets go
+# on only through one of those conditions.
+
+# The name event the channel's identity door writes, at `ora`.
+nome_del_canale <- function(nome = mario, ora = "2026-08-16 23:59") {
+  list(
+    timestamp = ora, username = "svc-canale-ubep",
+    action = "Update record (API) 1", record = "1",
+    details = paste0("username = '", nome, "', identity = 'existing'")
+  )
+}
+
+
+test_that("la riga chiusa e revocata col nome scritto due volte dal canale legge la scrittura piu' recente", { # nolint: line_length_linter.
+  # eval
+  # Two rounds that stopped wrote the name, the account renamed between
+  # them: the register holds the newer one.
+  reg <- registro_che_ricorda(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+      username = mario, identity = "existing", applied_as = "absent",
+      request_status = "revoked", outcome = "transport_error",
+      outcome_detail = "TRASPORTO_NON_RAGGIUNGIBILE"
+    ))),
+    storia = c(
+      list(
+        nome_del_canale(ora = "2026-08-17 00:30"),
+        nome_del_canale("mario.rossi.vecchio@ubep.unipd.it")
+      ),
+      storia_chiusa_assente()
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+  g <- un_giro_sul_nome(reg)
+
+  # test
+  expect_equal(esito_e_dettaglio(g), "applied ")
+  expect_equal(g[["revocati"]], mario)
+})
+
+
+test_that("la riga chiusa e revocata col nome del canale e un nome digitato sotto la chiusura revoca il nome", { # nolint: line_length_linter.
+  casi <- list(
+    # The referent typed the name in the creation, which the WI asks to
+    # leave empty and the form takes.
+    creazione = c(
+      storia_chiusa_assente(),
+      list(creata_da_anna(
+        timestamp = "2026-08-10 09:00",
+        details = paste0(
+          creata_da_anna()[["details"]], ", username = '", mario, "'"
+        )
+      ))
+    ),
+    # The referent wrote a name between the execution before and the
+    # closure: below the newest execution, out of the window.
+    fra_due_esecuzioni = c(
+      storia_chiusa_assente()[1:4],
+      list(cambio(anna, "username = 'm.rossi@ubep.unipd.it'",
+                  timestamp = "2026-08-13 10:00")),
+      storia_chiusa_assente()[-(1:4)]
+    )
+  )
+  for (caso in names(casi)) {
+    # eval
+    g <- un_giro_sul_nome(chiusa_col_nome_del_canale(chiusura = casi[[caso]]))
+
+    # test
+    expect_equal(esito_e_dettaglio(g), "applied ", label = caso)
+    expect_equal(g[["revocati"]], mario, label = caso)
+  }
+})
+
+
+test_that("la riga chiusa e revocata col nome del canale sopra un nome scritto da un altro, la persona assente, resta trattenuta", { # nolint: line_length_linter.
+  # eval
+  # Today's resolution names nobody, so the name is no change for the
+  # authors: only "every write of the name is the channel's" holds it.
+  reg <- chiusa_col_nome_del_canale(chiusura = c(
+    list(cambio(bruno, "username = 'luigi.verdi@ubep.unipd.it'",
+                timestamp = "2026-08-16 20:00")),
+    storia_chiusa_assente(),
+    list(creata_da_anna(timestamp = "2026-08-10 09:00"))
+  ))
+  g <- giro_che_ricorda(
+    reg, istanza_che_revoca(), directory_vuota(),
+    "2026-08-17 05:00", "2026-08-17 03:00"
+  )
+
+  # test
+  expect_equal(esito_e_dettaglio(g), "held SIGILLO_DIVERSO")
+  expect_length(g[["revocati"]], 0L)
+})
