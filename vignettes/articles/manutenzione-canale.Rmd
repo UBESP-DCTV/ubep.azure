@@ -1060,6 +1060,15 @@ della regola dedicata: è voluto, e non è un errore della sottoscrizione.
 `TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il giro, e lo si vede anche dal giro
 fermato prima di agire.
 
+Dalla 0.29.0 sta negli `errori`, con il giro non fermato, anche
+`TRASPORTO_GIORNO_CAMBIATO`: la data di Roma è cambiata dopo l'inizio del giro,
+prima che scrivesse su un'istanza o creasse una persona, e su quell'istanza non
+si è scritto niente, o nessuno è nato. La regola sugli esiti non scritti suona
+anche su questo codice, benché gli esiti siano scritti, e quella sulle
+irraggiungibili no, perché l'istanza ha risposto; il runner esce con 1, come per
+ogni errore. Lo incontra un giro che passa la mezzanotte di Roma prima di agire,
+o uno lanciato con un `at` che non è oggi: i giri del timer, alle 03:00 UTC, no.
+
 Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla colonna
 `accessi_persi > 0`, a gravità 2.
 
@@ -2993,8 +3002,9 @@ guadagna `TRASPORTO_ENTRA_ID_NON_REGISTRATO` nella query.
   il canale non deve permettere a nessuno ciò che non potrebbe già fare a mano.
   Dalla 0.24.0 un permesso con la scadenza dell'utente sul progetto già
   raggiunta vale come nessun permesso: la scadenza di REDCap è il primo giorno
-  senza accesso, quindi chi scade oggi è già fuori, e la data è quella del
-  client, come nella validazione della scadenza di una richiesta. Fa
+  senza accesso, quindi chi scade oggi è già fuori, e la data è quella di Roma
+  del giro, presa una volta da `at`, come nella validazione della scadenza di
+  una richiesta. Fa
   eccezione, dalla 0.25.0, la revoca di una riga eseguita su una coppia che
   l'istanza non ha più: si chiude senza il cancello (§4, «La scadenza naturale
   e la revoca di una coppia già tolta»).
@@ -3006,7 +3016,9 @@ guadagna `TRASPORTO_ENTRA_ID_NON_REGISTRATO` nella query.
   riporta `module_state()`, oppure `TRASPORTO_ISTANZA_SENZA_MODULO` o
   `TRASPORTO_SEGRETO_NON_LEGGIBILE` se non è nemmeno stata interrogata; una
   che risponde ma il cui modulo è troppo vecchio per riportare il permesso su
-  qualunque riga torna invece `TRASPORTO_AMBITO_NON_LEGGIBILE`. In entrambi i
+  qualunque riga torna invece `TRASPORTO_AMBITO_NON_LEGGIBILE`; dalla 0.29.0
+  una che ha risposto, ma sulla quale il giro non scrive perché la data di Roma
+  è cambiata dopo l'inizio, torna `TRASPORTO_GIORNO_CAMBIATO`. In tutti e tre i
   casi rimettono in coda le sole righe già risolte in una coppia, mai una
   dichiarazione di fuori ambito — dire «non sei autorizzato» quando la verità
   è «non ho potuto chiedere» manda a correggere la persona sbagliata. **La
