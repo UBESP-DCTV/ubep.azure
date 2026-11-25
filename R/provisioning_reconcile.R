@@ -282,13 +282,17 @@
 #'   never asks. Empty by default, so every instance counts as a production:
 #'   in doubt an instance is asked, as the observer watches it. The runner
 #'   reads them from the inventory, `"banco": true`.
-#' @param at When the round ran, as `YYYY-MM-DD HH:MM` in UTC. It is the
-#'   round's one reading of the clock: the date REDCap judges expirations on,
+#' @param at When the round ran, as `YYYY-MM-DD HH:MM` in UTC. It gives the
+#'   round its one day: the date REDCap judges expirations on,
 #'   the one in Rome, is taken from it once (`redcap_today()`) and passed to
 #'   the last day of each row, the choice of the rows lapsed and the gate on
-#'   the referent's permission, as the messages read it from the outcome. A
-#'   round that passes Rome's midnight judges every row on the day it
-#'   started. A value that does not read as an instant stops the round.
+#'   the referent's permission, as the messages read it from the outcome. It
+#'   has to be the instant the round starts: before it writes to an instance
+#'   and before it creates a person the round reads the clock again, and a
+#'   day in Rome other than the one of `at` (a round that passes Rome's
+#'   midnight, or an `at` that is not now) keeps it from acting, with
+#'   `TRASPORTO_GIORNO_CAMBIATO` on the rows it would have acted on and in
+#'   `errori`. A value that does not read as an instant stops the round.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
 #'   `credenziali`, `scritte` and `errori`. `scritte` counts the outcomes
@@ -346,6 +350,19 @@ provisioning_reconcile <- function(register_url,
   today <- redcap_today(as.POSIXct(at, format = "%Y-%m-%d %H:%M", tz = "UTC"))
   if (is.na(today)) {
     stop("`at` is not an instant `YYYY-MM-DD HH:MM`: ", at, call. = FALSE)
+  }
+  # And the clock is read again before the round acts on what it judged. A
+  # round that starts before Rome's midnight and acts after it would act on
+  # the day before, when REDCap judges on the next: a referent's permission
+  # closed at midnight would still grant, a person would be created for a
+  # last day already passed. The day only moves forward, so a reading just
+  # before an act that still gives `today` covers every gate before it; one
+  # that gives another day keeps the act from happening, under
+  # `TRASPORTO_GIORNO_CAMBIATO`, and the next round judges again on its own
+  # day. The direction that does not grant, decided on 2026-11-24. The same
+  # reading stops a round whose `at` is not now.
+  day_turned <- function() {
+    !isTRUE(redcap_today() == today)
   }
 
   # Send first, write after. A row whose message did not leave stays as the
@@ -1880,6 +1897,18 @@ provisioning_reconcile <- function(register_url,
       })
     ))
 
+    # The last reading before this instance is written to, simulated or not:
+    # a simulation that could not stop where the real round stops could not
+    # warn. Every row the instance was asked about waits, as on an instance
+    # that did not answer, refusals included: the next round judges them all
+    # on its own day.
+    if (day_turned()) {
+      answer <- unreachable("TRASPORTO_GIORNO_CAMBIATO")
+      answer[["stato"]][["raggiunta"]] <- TRUE
+      answer[["stato"]][["ambito_leggibile"]] <- TRUE
+      return(answer)
+    }
+
     # 8. one batch per project, never across two
     batches <- c(
       lapply(round_batches(to_apply), function(b) c(b, list(op = "apply"))),
@@ -2116,7 +2145,27 @@ provisioning_reconcile <- function(register_url,
   )
   makers <- creatable[which(shares == seq_along(creatable))]
 
-  creations <- if (dry_run || unposted) {
+  # The last reading before a person is created, as before an instance is
+  # written to: the gate and the rehearsal that let the row through were
+  # asked of an instance, possibly before midnight. Only when somebody is to
+  # be born, so that a round with nobody to create does not stop on a day it
+  # never needed. The rows wait, under the code of the stop.
+  late_births <- if (length(creatable) > 0L && day_turned()) {
+    creatable
+  } else {
+    integer()
+  }
+  late_outcomes <- outcome_rows(
+    record_ids[late_births], "transport_error",
+    detail = "TRASPORTO_GIORNO_CAMBIATO"
+  )
+  day_stopped <- length(late_births) > 0L || any(vapply(
+    per_instance, function(a) {
+      identical(a[["stato"]][["errori"]], "TRASPORTO_GIORNO_CAMBIATO")
+    }, logical(1)
+  ))
+
+  creations <- if (dry_run || unposted || length(late_births) > 0L) {
     list()
   } else {
     lapply(makers, function(i) {
@@ -2195,7 +2244,7 @@ provisioning_reconcile <- function(register_url,
   outcomes <- do.call(rbind, c(
     list(stopped, late_held, form_errors),
     lapply(per_instance, function(answer) answer[["esiti"]]),
-    list(created_outcomes, unchecked_outcomes, waiting)
+    list(created_outcomes, unchecked_outcomes, late_outcomes, waiting)
   ))
   # One outcome per record, and the first one wins: the identity verdict comes
   # first because a row the gate stopped never entered anything below it, and a
@@ -2642,6 +2691,7 @@ provisioning_reconcile <- function(register_url,
       posta[["errori"]], owner_written[["errors"]], entra_written[["errors"]],
       seal_written[["errors"]],
       if (unposted) "TRASPORTO_CREAZIONE_SENZA_POSTA",
+      if (day_stopped) "TRASPORTO_GIORNO_CAMBIATO",
       if (any(unlogged)) "TRASPORTO_SIGILLO_NON_REGISTRATO"
     )
   )

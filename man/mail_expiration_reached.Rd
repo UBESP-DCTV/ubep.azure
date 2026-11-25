@@ -27,7 +27,9 @@ thing whenever it is read and the tests do not depend on the machine.
 The round takes the date it hands to \code{validate_request()}, the choice of
 \code{lapsed} and the gate from the same instant, \code{at}, so between 22:00 and
 24:00 UTC, when the date in Rome is already the next day, the message
-and the gate agree with REDCap, and a round that passes Rome's midnight
-says what it decided on the day it decided it.
+and the gate agree with REDCap. A round whose day in Rome turns before
+it writes to an instance acts on nothing there. One whose day turns
+after the write, while its messages leave, still tells them on the day
+of \code{at}, the day the access was granted.
 }
 \keyword{internal}
