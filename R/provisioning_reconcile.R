@@ -527,7 +527,7 @@ provisioning_reconcile <- function(register_url,
     ))
   }
 
-  # The sweep folded once for every row (`directory_folds()`, 0.28.0): what
+  # The sweep folded once for every row (`directory_folds()`, 0.29.0): what
   # the resolution and the check of the Entra account compute from the
   # directory alone, which once a row was most of the round.
   folds <- directory_folds(sweep[["users"]])
