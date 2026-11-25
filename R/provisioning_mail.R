@@ -503,6 +503,10 @@ mail_outcome_message <- function(row) {
   account <- if (identita_cambiata && indecisa) {
     trovato_it <- mail_said_or(row[["username"]], "nessuno")
     trovato_en <- mail_said_or(row[["username"]], "none")
+    # V4b and V4c stop the row before the round looks at the directory, also
+    # with the person still absent. Nobody found: revoked, the row closes
+    # again and holds no pair, and IT has no old row to delete.
+    trovato <- nzchar(mail_said_or(row[["username"]], ""))
     list(
       it = c(
         "",
@@ -519,12 +523,23 @@ mail_outcome_message <- function(row) {
           eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
         ),
         paste0("Account trovato ora: ", trovato_it),
-        paste0(
-          "IT verifica su Entra da quando l'account porta il nome (Audit ",
-          "logs). Non modificare la riga: revocala e compila una richiesta ",
-          "nuova."
-        ),
-        vecchio_login[["it"]]
+        if (trovato) {
+          paste0(
+            "IT verifica su Entra da quando l'account porta il nome (Audit ",
+            "logs). Non modificare la riga: revocala e compila una ",
+            "richiesta nuova."
+          )
+        } else {
+          paste0(
+            "Il canale non ha trovato su Entra un account per la persona ",
+            "della riga. IT verifica su Entra chi porta ora il nome utente ",
+            "eseguito, se qualcuno lo porta, e che la persona non sia ",
+            "tornata con un altro account. Non modificare la riga: revocala ",
+            "e compila una richiesta nuova. Revocata, la riga si chiude di ",
+            "nuovo e non tiene la coppia contro la richiesta nuova."
+          )
+        },
+        if (trovato) vecchio_login[["it"]]
       ),
       en = c(
         "",
@@ -541,11 +556,23 @@ mail_outcome_message <- function(row) {
           executed[["server"]], ", project ", executed[["project_id"]], "."
         ),
         paste0("Account found now: ", trovato_en),
-        paste0(
-          "IT checks on Entra since when the account holds the name (Audit ",
-          "logs). Do not edit the row: revoke it and file a new request."
-        ),
-        vecchio_login[["en"]]
+        if (trovato) {
+          paste0(
+            "IT checks on Entra since when the account holds the name ",
+            "(Audit logs). Do not edit the row: revoke it and file a new ",
+            "request."
+          )
+        } else {
+          paste0(
+            "The channel found no account on Entra for the person of the ",
+            "row. IT checks on Entra who holds the applied username now, if ",
+            "anybody does, and that the person has not come back with ",
+            "another account. Do not edit the row: revoke it and file a new ",
+            "request. Revoked, the row is closed again and does not hold the ",
+            "pair against the new request."
+          )
+        },
+        if (trovato) vecchio_login[["en"]]
       )
     )
   } else if (identita_cambiata) {

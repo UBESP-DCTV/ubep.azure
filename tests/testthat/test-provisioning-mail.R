@@ -2875,6 +2875,55 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare non
 })
 
 
+test_that("il messaggio della riga riattivata che il canale non sa giudicare, senza account trovato, non dice che la riga tiene la coppia (RV1)", { # nolint: line_length_linter.
+  # eval
+  # V4b and V4c stop the row before the round looks at the directory, also
+  # with the person still absent. Revoked, the row closes again and holds no
+  # pair: IT has no old row to delete before the new request.
+  corpo <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      username = "", reopened_undecided = "yes", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+
+  # test
+  expect_match(corpo, "Account trovato ora: nessuno", fixed = TRUE)
+  expect_match(corpo, "Account found now: none", fixed = TRUE)
+  expect_false(grepl("IT toglie a mano il vecchio login", corpo, fixed = TRUE))
+  expect_false(grepl("cancella la riga vecchia", corpo, fixed = TRUE))
+  expect_false(grepl("IT takes the old login off by hand", corpo, fixed = TRUE))
+  expect_false(grepl("deletes the old row", corpo, fixed = TRUE))
+  expect_false(grepl("l'account porta il nome", corpo, fixed = TRUE))
+  expect_false(grepl("the account holds the name", corpo, fixed = TRUE))
+  expect_match(
+    corpo, "Il canale non ha trovato su Entra un account per la persona",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    paste0(
+      "Revocata, la riga si chiude di nuovo e non tiene la coppia contro la ",
+      "richiesta nuova."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    corpo, "The channel found no account on Entra for the person",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    paste0(
+      "Revoked, the row is closed again and does not hold the pair against ",
+      "the new request."
+    ),
+    fixed = TRUE
+  )
+  expect_match(corpo, "revocala e compila una richiesta nuova", fixed = TRUE)
+})
+
+
 test_that("il messaggio dell'account rinominato su una riga chiusa e riattivata dice che il vecchio login lo toglie IT (E1)", { # nolint: line_length_linter.
   # eval
   # D4 of the design of the 0.29.0: revoked, a closed row revokes the name

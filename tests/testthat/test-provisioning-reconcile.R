@@ -11311,6 +11311,80 @@ test_that("una riga chiusa e riattivata con la persona ancora assente si ferma c
 })
 
 
+test_that("una riga chiusa e riattivata con l'id scritto senza autore e la persona assente si ferma, e la mail non dice che la riga tiene la coppia (RV1)", { # nolint: line_length_linter.
+  # eval
+  # V4c with nobody on Entra: the round stops the row before it looks at the
+  # directory. Revoked, the row closes again and holds no pair (the next
+  # test), so the message gives IT no old row to delete.
+  storia <- c(
+    list(cambio(anna, "request_status = 'active'",
+                timestamp = "2026-08-15 10:00")),
+    storia_chiusa_assente()[1:4],
+    list(id_del_canale(id_a, chi = "", timestamp = "2026-08-13 05:00")),
+    carried_out(sigillo_eseguito())
+  )
+  riga <- eseguita_row(
+    applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+    username = "", identity = "absent", applied_as = "absent",
+    request_status = "active"
+  )
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = mario
+    ),
+    directory = directory_vuota(), dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta[["mailer"]]
+  )
+  # The round after: Anna revoked row 1 and filed the new request 2.
+  secondo <- giro(
+    registro_con_log(
+      record_json(
+        utils::modifyList(riga, list(request_status = "revoked")),
+        list(record_id = "2", owned_by = "")
+      ),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'",
+                    timestamp = "2026-08-16 09:00")),
+        storia
+      ),
+      creazioni = creazioni_finte(
+        creata_da_anna(),
+        creata_da_anna(id = "2", timestamp = "2026-08-16 09:05")
+      )
+    ),
+    istanza_che_scrive(), directory = directory_vuota(), dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(creazioni(), 1L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, paragrafo_riattivata, fixed = TRUE)
+  expect_false(grepl("IT toglie a mano il vecchio login", corpo, fixed = TRUE))
+  expect_false(grepl("IT takes the old login off by hand", corpo, fixed = TRUE))
+  expect_match(corpo, "non tiene la coppia contro la richiesta nuova",
+               fixed = TRUE)
+  # What the message says: the old row holds no pair, and the new request
+  # creates the person.
+  expect_equal(esito_di(secondo, "1")[["detail"]], "")
+  expect_equal(esito_di(secondo, "2")[["outcome"]], "pending")
+  expect_false(identical(
+    esito_di(secondo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA"
+  ))
+})
+
+
 test_that("una riga nata revocata, chiusa su una persona assente e riattivata quando la persona esiste concede come prima (G6)", { # nolint: line_length_linter.
   # eval
   # Row 3 asked for Nadia, whom the tenant did not hold, and Anna revoked it
