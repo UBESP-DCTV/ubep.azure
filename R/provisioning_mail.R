@@ -548,7 +548,7 @@ mail_outcome_message <- function(row) {
             "eseguito, se qualcuno lo porta, e che la persona non sia ",
             "tornata con un altro account. Non modificare la riga: revocala ",
             "e compila una richiesta nuova. Revocata, la riga si chiude di ",
-            "nuovo e non tiene la coppia contro la richiesta nuova."
+            "nuovo, senza tenere la coppia contro la richiesta nuova."
           )
         },
         if (trovato) paste0("Revocata, la riga ", revoca_chiusa[["it"]])
@@ -581,7 +581,7 @@ mail_outcome_message <- function(row) {
             "row. IT checks on Entra who holds the applied username now, if ",
             "anybody does, and that the person has not come back with ",
             "another account. Do not edit the row: revoke it and file a new ",
-            "request. Revoked, the row is closed again and does not hold the ",
+            "request. Revoked, the row is closed again, without holding the ",
             "pair against the new request."
           )
         },

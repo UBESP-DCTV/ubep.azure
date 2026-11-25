@@ -11373,8 +11373,11 @@ test_that("una riga chiusa e riattivata con l'id scritto senza autore e la perso
   expect_match(corpo, paragrafo_riattivata, fixed = TRUE)
   expect_false(grepl("IT toglie a mano il vecchio login", corpo, fixed = TRUE))
   expect_false(grepl("IT takes the old login off by hand", corpo, fixed = TRUE))
-  expect_match(corpo, "non tiene la coppia contro la richiesta nuova",
+  expect_match(corpo, "senza tenere la coppia contro la richiesta nuova",
                fixed = TRUE)
+  expect_false(grepl(
+    "tiene la coppia contro la richiesta nuova", corpo, fixed = TRUE
+  ))
   # What the message says: the old row holds no pair, and the new request
   # creates the person.
   expect_equal(esito_di(secondo, "1")[["detail"]], "")

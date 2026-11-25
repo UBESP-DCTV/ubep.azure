@@ -2903,7 +2903,7 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare, se
   expect_match(
     corpo,
     paste0(
-      "Revocata, la riga si chiude di nuovo e non tiene la coppia contro la ",
+      "Revocata, la riga si chiude di nuovo, senza tenere la coppia contro la ",
       "richiesta nuova."
     ),
     fixed = TRUE
@@ -2915,11 +2915,18 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare, se
   expect_match(
     corpo,
     paste0(
-      "Revoked, the row is closed again and does not hold the pair against ",
+      "Revoked, the row is closed again, without holding the pair against ",
       "the new request."
     ),
     fixed = TRUE
   )
+  # The words of the old row that holds the pair are not in the message.
+  expect_false(grepl(
+    "tiene la coppia contro la richiesta nuova", corpo, fixed = TRUE
+  ))
+  expect_false(grepl(
+    "holds the pair against the new request", corpo, fixed = TRUE
+  ))
   expect_match(corpo, "revocala e compila una richiesta nuova", fixed = TRUE)
 })
 
