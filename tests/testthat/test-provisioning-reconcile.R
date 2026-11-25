@@ -13997,3 +13997,35 @@ test_that("la riga chiusa col nome del canale che chiede un accesso resta tratte
     expect_length(scritture(), 0L)
   }
 })
+
+
+test_that("la riga chiusa col nome del canale e un cambio di un altro referente rimesso com'era resta trattenuta", { # nolint: line_length_linter.
+  # eval
+  # Bruno changed the role and put it back: the fields are the closure's
+  # but for the channel's name, and the log does not hold the role the
+  # closure carried out, so his write is a change all the same.
+  g <- un_giro_sul_nome(chiusa_col_nome_del_canale(sopra = list(
+    cambio(bruno, "role_name = 'data entry'", timestamp = "2026-08-17 01:10"),
+    cambio(bruno, "role_name = 'read only'", timestamp = "2026-08-17 01:00")
+  )))
+
+  # test
+  expect_equal(dettaglio_uno(g[["esito"]]), "SIGILLO_DIVERSO:62562ba2c044")
+  expect_equal(esiti_del_giro(g), "held")
+  expect_length(g[["revocati"]], 0L)
+})
+
+
+test_that("la riga chiusa e revocata il cui nome non e' quello che il canale ha scritto resta trattenuta", { # nolint: line_length_linter.
+  # eval
+  # The log says the channel wrote Mario's name; the register holds another
+  # one, written by no event the log holds.
+  g <- un_giro_sul_nome(chiusa_col_nome_del_canale(
+    list(username = "mario.rossi.2@ubep.unipd.it")
+  ))
+
+  # test
+  expect_equal(esiti_del_giro(g), "held")
+  expect_match(dettaglio_uno(g[["esito"]]), "^SIGILLO_DIVERSO:")
+  expect_length(g[["revocati"]], 0L)
+})
