@@ -11420,6 +11420,174 @@ test_that("la mail della riga chiusa e rimasta revocata, ferma sull'istanza camb
 })
 
 
+test_that("una riga senza id chiusa su una persona assente e riattivata con la persona ancora assente si ferma col testo di sempre", { # nolint: line_length_linter.
+  # eval
+  # G4 without the identifier: nobody holds the name, and the guard of the
+  # fill has nothing to say, so the row is not one the round could not judge.
+  posta <- posta_raccolta()
+  esito <- giro_chiusa_senza_id(
+    directory_vuota(),
+    istanza = istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(creazioni(), 0L)
+  expect_length(scritture(), 0L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_false(grepl(paragrafo_riattivata, corpo, fixed = TRUE))
+  expect_match(
+    corpo, "La persona di questa richiesta non corrisponde piu'", fixed = TRUE
+  )
+})
+
+
+test_that("la riga chiusa e riattivata con l'id, ferma su un altro account trovato, dice che il vecchio login lo toglie IT (RV9)", { # nolint: line_length_linter.
+  # eval
+  # Nobody holds mario.rossi@ any more and the identifier of A is not in the
+  # sweep; the resolution finds Mario Rossi under another name.
+  posta <- posta_raccolta()
+  altro <- graph_user(
+    id = "00000000-0000-0000-0000-00000000000d",
+    userPrincipalName = "mario.rossi2@ubep.unipd.it",
+    createdDateTime = "2026-09-01T08:00:00Z"
+  )
+  esito <- giro_chiusa_assente(
+    directory_doppia(altro), istanza_che_scrive(), mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(scritture(), 0L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, "IT toglie a mano il vecchio login", fixed = TRUE)
+  expect_match(corpo, "IT takes the old login off by hand", fixed = TRUE)
+})
+
+
+test_that("la mail dell'account rinominato su una riga mai chiusa non dice la frase della riga chiusa (RV10)", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_entra(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_ACCOUNT_RINOMINATO")
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_false(grepl("IT toglie a mano il vecchio login", corpo, fixed = TRUE))
+  expect_match(corpo, "che toglie l'accesso al nome di allora", fixed = TRUE)
+})
+
+
+test_that("la riga chiusa revocata con la chiusura non verificata e la persona riscritta da un autore che il log non nomina non revoca la persona scritta (RV12)", { # nolint: line_length_linter.
+  # eval
+  # V2 with `rewritten` NA: the log does not say who wrote the person. The
+  # row stops on its pair as when the author is known.
+  storia <- c(
+    list(cambio("", giulia_scritta, timestamp = "2026-08-15 10:00")),
+    storia_chiusa_qc(carried_out(sigillo_eseguito()))[-1L]
+  )
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_chiusa_qc, applied_entra_id = "",
+        username = "", identity = "absent", applied_as = "absent",
+        request_status = "revoked", role_name = "data entry & qc",
+        first_name = "Giulia", last_name = "Verdi",
+        contact_email = "giulia.verdi@example.org"
+      ))),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_doppia(
+      list(username = anna, user_rights = 1L),
+      list(username = giulia_upn, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(giulia), dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "DATO_COPPIA_CAMBIATA")
+  expect_false(giulia_upn %in% revocati())
+})
+
+
+test_that("un giro con una riga chiusa mai concessa, riscritta su un'altra persona mentre e' revocata, non si rompe", { # nolint: line_length_linter.
+  # eval
+  # Born and closed on Nadia, revoked before any round served it: no name
+  # granted. Rewritten by Anna on Giulia and left revoked. What the row does
+  # is a decision still open (O1 of the review of the 0.29.0); the round
+  # judges it without an error, and grants nothing.
+  riga <- list(
+    record_id = "3", first_name = "Nadia", last_name = "Nuova",
+    contact_email = "nadia@example.org", request_status = "revoked",
+    username = ""
+  )
+  sigillo <- request_seal(do.call(riga_come_registro, riga))
+  del_canale <- function(details) {
+    list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 3", record = "3", details = details
+    )
+  }
+  registro <- registro_con_log(
+    do.call(record_json, list(utils::modifyList(riga, list(
+      identity = "absent", outcome = "applied", applied_as = "absent",
+      applied_seal = sigillo, seal_state = "intact", owned_by = anna,
+      first_name = "Giulia", last_name = "Verdi",
+      contact_email = "giulia.verdi@example.org"
+    )))),
+    storia = list(
+      cambio(anna, giulia_scritta, record = "3",
+             timestamp = "2026-10-21 10:00"),
+      del_canale(paste0(
+        "applied_seal = '", sigillo, "', seal_state = 'intact'"
+      )),
+      del_canale("owned_by = 'anna.bianchi@ubep.unipd.it'"),
+      del_canale("outcome = 'applied', applied_as = 'absent'"),
+      del_canale("identity = 'absent'"),
+      cambio(anna, "request_status = 'revoked'", record = "3",
+             timestamp = "2026-10-19 10:00")
+    ),
+    creazioni = creazioni_finte(creata_da_anna(
+      "3",
+      details = paste0(
+        "record_id = '3', server = 'edc10', project_id = '9003', ",
+        "first_name = 'Nadia', last_name = 'Nuova', ",
+        "contact_email = 'nadia@example.org', role_name = 'data entry', ",
+        "request_status = 'active'"
+      )
+    ))
+  )
+
+  # test
+  expect_no_error(esito <- giro(
+    registro,
+    istanza_doppia(
+      list(username = anna, user_rights = 1L),
+      list(username = giulia_upn, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(giulia), dry_run = FALSE,
+    mailer = posta_accesa, copy_to = "it@example.org",
+    at = "2026-10-22 05:00"
+  ))
+  expect_equal(as.character(esito[["esiti"]][["record_id"]]), "3")
+  expect_false(any(vapply(scritture(), function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, logical(1))))
+})
+
+
 test_that("una riga nata revocata, chiusa su una persona assente e riattivata quando la persona esiste concede come prima (G6)", { # nolint: line_length_linter.
   # eval
   # Row 3 asked for Nadia, whom the tenant did not hold, and Anna revoked it
