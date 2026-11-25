@@ -156,7 +156,9 @@
 #' where the log verifies no name granted on a row carried out more than
 #' once, or does not say who wrote the identifier, the row stops on
 #' `TRASPORTO_IDENTITA_CAMBIATA`, for IT, with a paragraph of its own in the
-#' message.
+#' message. Left revoked with the person rewritten, the rule of the pair
+#' reads the name granted too, and the row stops on `DATO_COPPIA_CAMBIATA`
+#' instead of revoking the person written, whom it never served.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -1177,14 +1179,27 @@ provisioning_reconcile <- function(register_url,
           identical(identity_normalize(resolved_names[[i]]), renamed_to)) {
       rewritten <- FALSE
     }
-    pair_change(
-      executed_pair[[i]], register[i, , drop = FALSE],
+    # A closed row left revoked, with the person rewritten: carried out for
+    # nobody, the rule of the pair saw no person, and the round revoked the
+    # person written, whom the row never served (V2 of the verification of
+    # the limits, option (a) of D1 of the design of the 0.29.0). The rule
+    # reads the name granted, and the row stops on its pair. Only with the
+    # person written: a closed row left as it was revokes as before, the
+    # account of its identifier renamed included (V1 of the review).
+    pair <- executed_pair[[i]]
+    if (closed[[i]] && revoked_rows[[i]] && !isFALSE(rewritten) &&
+          length(granted_closed[[i]]) > 0L) {
+      pair[["username"]] <- granted_closed[[i]][[1L]]
+    }
+    change <- pair_change(
+      pair, register[i, , drop = FALSE],
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
       creating = (creating[[i]] && !unheard[[i]]) || reborn[[i]],
       rewritten = rewritten,
       revoked = revoked_rows[[i]],
       account = entra[[i]][["code"]]
     )
+    c(change, list(pair = pair))
   })
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
   moved <- nzchar(shift_code)
@@ -2363,7 +2378,7 @@ provisioning_reconcile <- function(register_url,
   )
   carried_field <- function(field) {
     vapply(seq_along(record_ids), function(i) {
-      value <- if (moved[[i]]) executed_pair[[i]][[field]] else ""
+      value <- if (moved[[i]]) shifts[[i]][["pair"]][[field]] else ""
       if (is.na(value)) "" else value
     }, character(1))
   }

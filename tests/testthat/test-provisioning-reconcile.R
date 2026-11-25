@@ -10933,6 +10933,82 @@ test_that("la mail della riga riattivata sul nome ridato nomina il nome eseguito
 })
 
 
+test_that("la riga chiusa, riscritta su un'altra persona e riattivata resta ferma anche revocata senza riportare i campi (T7)", { # nolint: line_length_linter.
+  # eval
+  # V2 of the verification of the limits. First round: the stop on the
+  # pair, whose message has to say that a revocation with the fields not
+  # set back stays stopped. Second round, revoked that way: the name carried
+  # out was empty again, the rule of the pair saw no person, and the round
+  # revoked Giulia, whom the row never served.
+  posta <- posta_raccolta()
+  primo <- giro_chiusa_su_giulia(
+    directory_doppia(giulia), mailer = posta[["mailer"]]
+  )
+  scritte_primo <- scritture()
+  corpo_primo <- posta[["mandate"]]()[[1L]][["body"]]
+  posta2 <- posta_raccolta()
+  secondo <- giro_chiusa_su_giulia(
+    directory_doppia(giulia), stato = "revoked",
+    storia = list(
+      cambio(anna, "request_status = 'revoked'",
+             timestamp = "2026-08-16 09:00"),
+      cambio(anna, "request_status = 'active'",
+             timestamp = "2026-08-15 10:01")
+    ),
+    istanza = istanza_con_giulia(), mailer = posta2[["mailer"]],
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(primo), "DATO_COPPIA_CAMBIATA")
+  expect_length(scritte_primo, 0L)
+  expect_match(
+    corpo_primo, "Revocata senza riportare i campi, la riga resta ferma qui.",
+    fixed = TRUE
+  )
+  expect_match(
+    corpo_primo,
+    "Revoked without setting the fields back, the row stays stopped here.",
+    fixed = TRUE
+  )
+  expect_match(corpo_primo, paste0("per ", mario, "."), fixed = TRUE)
+  expect_equal(dettaglio_uno(secondo), "DATO_COPPIA_CAMBIATA")
+  expect_false(giulia_upn %in% revocati())
+  expect_length(scritture_per(giulia_upn), 0L)
+  expect_length(scritture(), 0L)
+  corpo_secondo <- posta2[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo_secondo, paste0("per ", mario, "."), fixed = TRUE)
+  expect_match(corpo_secondo, "la riga resta ferma qui", fixed = TRUE)
+})
+
+
+test_that("la riga chiusa e riscritta su un'altra persona mentre e' revocata non revoca la persona scritta (T8)", { # nolint: line_length_linter.
+  # eval
+  # V2 without the reopening, a defect of the 0.27.0 already: the person
+  # rewritten on the closed row while it stays revoked. The round revoked
+  # Giulia, whom the row never served.
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga_chiusa_su_giulia(stato = "revoked"))),
+      storia = storia_chiusa_su_giulia(stato = "revoked"),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_con_giulia(), directory = directory_doppia(giulia),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta[["mailer"]],
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "DATO_COPPIA_CAMBIATA")
+  expect_false(giulia_upn %in% revocati())
+  expect_length(scritture(), 0L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, paste0("per ", mario, "."), fixed = TRUE)
+  expect_match(corpo, "la riga resta ferma qui", fixed = TRUE)
+})
+
+
 # V4 of the verification: a version the log does not verify. `&amp;` for `&`
 # is a form `log_value_as_register()` does not read back, so a version that
 # goes through such a value is not rebuilt and its seal does not verify.
@@ -11182,6 +11258,21 @@ test_that("la riga chiusa riattivata con due concessioni nel log concede al nome
   expect_equal(dettaglio_uno(esito), "")
   expect_length(scritture_per(mario), 1L)
   expect_length(scritture_per(vecchio), 0L)
+})
+
+
+test_that("una riga chiusa su una persona assente e rimasta revocata col nome ridato revoca il nome risolto e non si ferma (G3)", { # nolint: line_length_linter.
+  # eval
+  # Already so on the 0.27.0, in the direction that takes away: the round
+  # revokes the name resolved, the login the new holder inherited.
+  esito <- giro_chiusa_assente(
+    directory_doppia(mario_b()), istanza_che_revoca(), stato = "revoked",
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "")
+  expect_equal(revocati(), mario)
 })
 
 
