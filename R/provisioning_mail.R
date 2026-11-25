@@ -2032,6 +2032,11 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' instruction 00.06 shows it (`Avanti`, `Fine`, `Metodo 2 di 2`), and the
 #' English label alone elsewhere.
 #'
+#' The sentence that says where the welcome is also says what to do if it is
+#' not there, whether it was lost, went to the junk folder or never arrived:
+#' write to the referent (decided on 2026-11-25). It is said once, where the
+#' welcome is named in full.
+#'
 #' Each text sits between two delimiter lines, because the line with the
 #' user name stands above it in the same message, and a referent copying by
 #' hand should know where to stop. The delimiters are not a bare `---`, the
@@ -2073,7 +2078,7 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       },
       "Nome utente e indirizzo di REDCap sono nella mail di benvenuto, ",
       "\"Il tuo account UBEP / Your UBEP account\" (guarda anche nella posta ",
-      "indesiderata)."
+      "indesiderata; se non la trovi, scrivimi)."
     ),
     "",
     paste0(
@@ -2144,7 +2149,7 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       },
       "Your user name and the REDCap address are in the welcome e-mail, ",
       "\"Il tuo account UBEP / Your UBEP account\" (look in your junk folder ",
-      "too)."
+      "too; if you cannot find it, write to me)."
     ),
     "",
     paste0(

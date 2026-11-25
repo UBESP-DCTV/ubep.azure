@@ -50,6 +50,11 @@ label with the English one in brackets where that test or the work
 instruction 00.06 shows it (\code{Avanti}, \code{Fine}, \verb{Metodo 2 di 2}), and the
 English label alone elsewhere.
 
+The sentence that says where the welcome is also says what to do if it is
+not there, whether it was lost, went to the junk folder or never arrived:
+write to the referent (decided on 2026-11-25). It is said once, where the
+welcome is named in full.
+
 Each text sits between two delimiter lines, because the line with the
 user name stands above it in the same message, and a referent copying by
 hand should know where to stop. The delimiters are not a bare \verb{---}, the

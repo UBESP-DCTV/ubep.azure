@@ -1290,6 +1290,25 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
   )) {
     expect_match(it, frase, fixed = TRUE, info = frase)
   }
+  # Decided on 2026-11-25: the sentence that says where the welcome is also
+  # says what to do if it is not there (lost, in the junk folder, or never
+  # arrived), once per language.
+  perso <- list(
+    it = paste0(
+      "Nome utente e indirizzo di REDCap sono nella mail di benvenuto, ",
+      "\"Il tuo account UBEP / Your UBEP account\" (guarda anche nella ",
+      "posta indesiderata; se non la trovi, scrivimi)."
+    ),
+    en = paste0(
+      "Your user name and the REDCap address are in the welcome e-mail, ",
+      "\"Il tuo account UBEP / Your UBEP account\" (look in your junk folder ",
+      "too; if you cannot find it, write to me)."
+    )
+  )
+  expect_match(it, perso[["it"]], fixed = TRUE)
+  expect_match(en, perso[["en"]], fixed = TRUE)
+  expect_length(gregexpr("se non la trovi", it, fixed = TRUE)[[1]], 1L)
+  expect_length(gregexpr("if you cannot find it", en, fixed = TRUE)[[1]], 1L)
   for (frase in c(
     "Your first sign-in must happen by 2026-12-21",
     "private (incognito) browser window",
