@@ -11913,12 +11913,15 @@ test_that("la riga chiusa revocata con la chiusura non verificata e la persona r
 })
 
 
-test_that("un giro con una riga chiusa mai concessa, riscritta su un'altra persona mentre e' revocata, non si rompe", { # nolint: line_length_linter.
+test_that("un giro con una riga chiusa mai concessa, riscritta su un'altra persona mentre e' revocata, non si rompe, non concede e revoca la persona scritta (O1)", { # nolint: line_length_linter.
   # eval
   # Born and closed on Nadia, revoked before any round served it: no name
-  # granted. Rewritten by Anna on Giulia and left revoked. What the row does
-  # is a decision still open (O1 of the review of the 0.29.0); the round
-  # judges it without an error, and grants nothing.
+  # granted. Rewritten by Anna on Giulia and left revoked. Decided by [cl] on
+  # 2026-11-25 (O1 of the review of the 0.29.0), as in the 0.28.0: the row
+  # counts as a request of the referent to revoke, so the round revokes the
+  # person written, and the door looks at the referent's rights on the project.
+  # It grants nothing, and it does not stop on the pair as a row that granted
+  # a name does.
   riga <- list(
     record_id = "3", first_name = "Nadia", last_name = "Nuova",
     contact_email = "nadia@example.org", request_status = "revoked",
@@ -11976,6 +11979,7 @@ test_that("un giro con una riga chiusa mai concessa, riscritta su un'altra perso
   expect_false(any(vapply(scritture(), function(req) {
     identical(req[["body"]][["data"]][["operation"]], "apply")
   }, logical(1))))
+  expect_equal(revocati(), giulia_upn)
 })
 
 
