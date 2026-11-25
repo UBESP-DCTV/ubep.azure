@@ -1041,7 +1041,9 @@ provisioning_reconcile <- function(register_url,
   # bring back to the value carried out is no change, the username included.
   #
   # `resolved_names` is what the register ends up with either way: written when
-  # it differs, already there when it does not.
+  # it differs, already there when it does not. Save a closed row revoked that
+  # the round does not carry to the instance (`door_later`, below): it keeps
+  # the name it holds until the round that carries it out.
   #
   # So a sealed row whose resolution names nobody keeps the name it holds
   # (RE1 of the review of the unit E of the 0.27.0): the identity door does
@@ -2468,7 +2470,10 @@ provisioning_reconcile <- function(register_url,
   }, character(1))
 
   # The same minutes the identity door wrote, so the message names what the
-  # round settled instead of what the referent left blank. And the owner, which
+  # round settled instead of what the referent left blank; on a closed row
+  # revoked that the round stopped before the instance (`door_later`), what
+  # the next round will write, while the register still holds the empty
+  # name. And the owner, which
   # is where the outcome and the key go: the owner the log names once this
   # round is over, the only one whose approval of a held row counts, where
   # `requested_by` and `owned_by` are what an import wrote. A row this round
