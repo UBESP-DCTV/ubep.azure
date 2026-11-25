@@ -10876,7 +10876,9 @@ test_that("una riga chiusa su una persona assente, riscritta su un'altra persona
   # eval
   # R2 of the review: a row carried out does not change its person (decided
   # on 2026-11-09), also when its last seal is the closure's.
-  con_id <- giro_chiusa_su_giulia(directory_doppia(giulia), mailer = posta_accesa)
+  con_id <- giro_chiusa_su_giulia(
+    directory_doppia(giulia), mailer = posta_accesa
+  )
   scritte_con_id <- scritture()
   senza_id <- giro_chiusa_su_giulia(
     directory_doppia(giulia), con_id = FALSE, mailer = posta_accesa
