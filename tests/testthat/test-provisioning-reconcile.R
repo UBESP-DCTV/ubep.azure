@@ -13120,3 +13120,365 @@ test_that("il giro con la directory piegata una volta fa quel che faceva main pi
   expect_identical(ramo[["posta"]], main[["posta"]])
   expect_identical(ramo[["creazioni"]], main[["creazioni"]])
 })
+
+
+# ---- The identity door across a round that does not act ----
+
+# The rows the identity door writes before the loop of the instances: a row
+# to grant, a closed row set back to active, a revocation that leaves by the
+# item 12. A round that does not act on the instance (Rome's day changed, an
+# instance that does not answer) leaves the name written, and the next round
+# converges on it. And a held row gets the name its message asks the seal of.
+
+# A register that remembers from one round to the next: the imports change
+# the rows the next round exports, and every import is an event signed by the
+# channel with the fields it moved, stamped `ora` (Rome's hour of the round,
+# set on the attribute `stato`).
+registro_che_ricorda <- function(records, storia = list(), creazioni = NULL,
+                                 canale = "svc-canale-ubep") {
+  base <- registro_doppio(records, creazioni = creazioni)
+  stato <- new.env()
+  stato$scritti <- list()
+  stato$ora <- "2026-08-14 05:00"
+  righe <- jsonlite::fromJSON(records, simplifyVector = FALSE)
+  names(righe) <- vapply(
+    righe, function(r) as.character(r[["record_id"]]), character(1)
+  )
+  stato$righe <- righe
+  completa <- function(e) {
+    utils::modifyList(
+      list(timestamp = "2026-08-14 02:45", username = "",
+           action = "Update record", details = "", record = "1"),
+      e
+    )
+  }
+  f <- function(data) {
+    azione <- form_field_value(data[["action"]] %||% "")
+    contenuto <- form_field_value(data[["content"]] %||% "")
+    if (identical(azione, "import")) {
+      sent <- jsonlite::fromJSON(
+        form_field_value(data[["data"]]), simplifyVector = FALSE
+      )
+      for (r in sent) {
+        id <- as.character(r[["record_id"]])
+        campi <- Filter(function(campo) {
+          !identical(
+            as.character(stato$righe[[id]][[campo]] %||% ""),
+            as.character(r[[campo]])
+          )
+        }, setdiff(names(r), "record_id"))
+        if (length(campi) == 0L) {
+          next
+        }
+        stato$righe[[id]][campi] <- r[campi]
+        stato$scritti <- c(list(list(
+          timestamp = stato$ora, username = canale,
+          action = paste0("Update record (API) ", id),
+          details = paste0(
+            campi, " = '", vapply(r[campi], as.character, ""), "'",
+            collapse = ", "
+          ),
+          record = id
+        )), stato$scritti)
+      }
+    }
+    if (identical(contenuto, "record") && identical(azione, "export")) {
+      return(as.character(jsonlite::toJSON(
+        unname(stato$righe), auto_unbox = TRUE
+      )))
+    }
+    if (identical(contenuto, "log") &&
+          identical(form_field_value(data[["logtype"]] %||% ""), "record")) {
+      nati <- jsonlite::fromJSON(
+        base(list(content = "log", logtype = "record_add")),
+        simplifyVector = FALSE
+      )
+      if (!is.null(names(nati))) {
+        nati <- list()
+      }
+      return(as.character(jsonlite::toJSON(
+        c(lapply(c(stato$scritti, storia), completa), nati), auto_unbox = TRUE
+      )))
+    }
+    if (identical(contenuto, "log") && is.null(data[["logtype"]])) {
+      inizio <- form_field_value(data[["beginTime"]] %||% "")
+      riga <- form_field_value(data[["record"]] %||% "")
+      eventi <- Filter(
+        function(e) {
+          (!nzchar(inizio) || e[["timestamp"]] >= inizio) &&
+            (!nzchar(riga) || identical(e[["record"]], riga))
+        },
+        lapply(c(stato$scritti, storia), completa)
+      )
+      return(as.character(jsonlite::toJSON(eventi, auto_unbox = TRUE)))
+    }
+    base(data)
+  }
+  attr(f, "stato") <- stato
+  f
+}
+
+# An instance the first round cannot reach and the next ones can.
+istanza_muta_poi <- function(istanza) {
+  stato <- new.env()
+  stato$accesa <- FALSE
+  f <- function(data) {
+    if (!stato$accesa) {
+      stop("Could not resolve host")
+    }
+    istanza(data)
+  }
+  attr(f, "stato") <- stato
+  f
+}
+
+# Three rounds on the same register. The first runs at 23:59 of Rome on the
+# 16th of August and does not act on the instance: Rome's day has changed
+# before it writes (`fermo = "giorno"`, TRASPORTO_GIORNO_CAMBIATO), or the
+# instance does not answer (`fermo = "muta"`, TRASPORTO_NON_RAGGIUNGIBILE).
+# The second runs on the 17th, the third four hours later. What each round
+# asked of the instance and told the register is read right after it.
+tre_giri <- function(reg, istanza, directory, fermo) {
+  ist <- if (identical(fermo, "muta")) istanza_muta_poi(istanza) else istanza
+  giro_ora <- function(ora, at, ...) {
+    attr(reg, "stato")$ora <- ora
+    posta <- posta_raccolta()
+    esito <- giro(
+      reg, ist, directory = directory, dry_run = FALSE,
+      copy_to = "it@example.org", mailer = posta[["mailer"]], at = at, ...
+    )
+    list(
+      esito = esito, posta = posta[["mandate"]](), revocati = revocati(),
+      scritture = length(scritture()), identita = identita_scritte()
+    )
+  }
+  primo <- giro_ora(
+    "2026-08-16 23:59", "2026-08-16 21:59",
+    oggi = if (identical(fermo, "giorno")) as.Date("2026-08-17")
+  )
+  if (identical(fermo, "muta")) {
+    attr(ist, "stato")$accesa <- TRUE
+  }
+  secondo <- giro_ora("2026-08-17 05:00", "2026-08-17 03:00")
+  terzo <- giro_ora("2026-08-17 09:00", "2026-08-17 07:00")
+  list(primo = primo, secondo = secondo, terzo = terzo, reg = reg)
+}
+
+codice_fermo <- c(
+  giorno = "TRASPORTO_GIORNO_CAMBIATO", muta = "TRASPORTO_NON_RAGGIUNGIBILE"
+)
+
+# The outcomes of one of the rounds of `tre_giri()`.
+esiti_del_giro <- function(giro_letto) {
+  as.character(giro_letto[["esito"]][["esiti"]][["outcome"]])
+}
+
+# What the three rounds of a row that grants must show: the first writes on
+# the instance nothing and the name `nome` on the register; the second
+# grants once, with one access message; the third sends no other.
+attesa_concessione <- function(giri, fermo, nome) {
+  primo <- giri[["primo"]]
+  secondo <- giri[["secondo"]]
+  terzo <- giri[["terzo"]]
+  accessi <- function(posta) {
+    Filter(function(m) grepl("^Accesso a REDCap", m[["subject"]]), posta)
+  }
+  testthat::expect_equal(
+    dettaglio_uno(primo[["esito"]]), codice_fermo[[fermo]]
+  )
+  testthat::expect_identical(primo[["scritture"]], 0L)
+  testthat::expect_equal(
+    as.character(primo[["identita"]][["username"]]), nome
+  )
+  testthat::expect_length(accessi(primo[["posta"]]), 0L)
+
+  testthat::expect_equal(esiti_del_giro(secondo), "applied")
+  testthat::expect_equal(dettaglio_uno(secondo[["esito"]]), "")
+  testthat::expect_identical(secondo[["scritture"]], 1L)
+  testthat::expect_length(accessi(secondo[["posta"]]), 1L)
+
+  testthat::expect_length(accessi(terzo[["posta"]]), 0L)
+  testthat::expect_false(any(esiti_del_giro(terzo) %in% "held"))
+}
+
+# The closed row without `applied_entra_id` set back to active by Anna, the
+# account of before still holding the name (T2 of the reopened row, I1 of
+# the final review of the interactions), with the role changed or not.
+chiusa_riattivata_senza_id <- function(riattivazione) {
+  cambi <- list()
+  if (grepl("role_name", riattivazione, fixed = TRUE)) {
+    cambi <- list(role_name = "read only")
+  }
+  registro_che_ricorda(
+    do.call(record_json, list(utils::modifyList(eseguita_row(
+      applied_seal = sigillo_chiusa_assente, applied_entra_id = "",
+      username = "", identity = "absent", applied_as = "absent",
+      request_status = "active"
+    ), cambi))),
+    storia = c(
+      list(cambio(anna, riattivazione, timestamp = "2026-08-15 10:00")),
+      storia_chiusa_assente()[1:4],
+      carried_out(sigillo_eseguito())
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+}
+
+# REx4b of the review of the unit E of the 0.27.0: the register holds the
+# new name, written by the door of the 0.25.0 above the seal, and the row is
+# revoked; the resolution is `ambiguous`. The row leaves by the item 12, and
+# the door writes the name carried out back before the instance is asked.
+giri_voce_12 <- function(fermo) {
+  tre_giri(
+    registro_che_ricorda(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), username = rinominato,
+        request_status = "revoked"
+      ))),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'")),
+        list(list(
+          username = "svc-canale-ubep", action = "Update record (API) 1",
+          record = "1",
+          details = paste0(
+            "username = '", rinominato, "', identity = 'existing'"
+          )
+        )),
+        carried_out(sigillo_eseguito())
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(),
+    directory_doppia(
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c1",
+        userPrincipalName = rinominato
+      ),
+      graph_user(
+        id = "00000000-0000-0000-0000-0000000000c2",
+        userPrincipalName = "mario.rossi.altro@ubep.unipd.it"
+      )
+    ),
+    fermo
+  )
+}
+
+attesa_voce_12 <- function(giri, fermo) {
+  primo <- giri[["primo"]]
+  testthat::expect_equal(
+    dettaglio_uno(primo[["esito"]]), codice_fermo[[fermo]]
+  )
+  testthat::expect_length(primo[["revocati"]], 0L)
+  testthat::expect_equal(
+    as.character(primo[["identita"]][["username"]]), mario
+  )
+  testthat::expect_equal(esiti_del_giro(giri[["secondo"]]), "applied")
+  testthat::expect_equal(giri[["secondo"]][["revocati"]], mario)
+  testthat::expect_false(any(esiti_del_giro(giri[["terzo"]]) %in% "held"))
+}
+
+
+test_that("la porta scrive il nome della riga nuova nel giro fermo sul giorno, e il giro dopo concede", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    registro_che_ricorda(
+      record_json(list()), creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory_doppia(), "giorno"
+  )
+
+  # test
+  attesa_concessione(giri, "giorno", mario)
+})
+
+
+test_that("la porta scrive il nome della riga nuova col giro sull'istanza muta, e il giro dopo concede", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    registro_che_ricorda(
+      record_json(list()), creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory_doppia(), "muta"
+  )
+
+  # test
+  attesa_concessione(giri, "muta", mario)
+})
+
+
+test_that("la porta scrive il nome della riga chiusa riattivata nel giro fermo, e il giro dopo concede una volta (I1)", { # nolint: line_length_linter.
+  # Both stops, with the role changed by the reopening and without.
+  for (fermo in names(codice_fermo)) {
+    for (riattivazione in c(
+      "request_status = 'active'",
+      "request_status = 'active', role_name = 'read only'"
+    )) {
+      # eval
+      giri <- tre_giri(
+        chiusa_riattivata_senza_id(riattivazione), istanza_che_scrive(),
+        directory_doppia(mario_a()), fermo
+      )
+
+      # test
+      attesa_concessione(giri, fermo, mario)
+      expect_equal(
+        attr(giri[["reg"]], "stato")$righe[["1"]][["applied_entra_id"]], id_a
+      )
+    }
+  }
+})
+
+
+test_that("la porta riporta il nome eseguito della revoca che esce dalla 12 nel giro fermo sul giorno, e il giro dopo lo revoca", { # nolint: line_length_linter.
+  # eval
+  giri <- giri_voce_12("giorno")
+
+  # test
+  attesa_voce_12(giri, "giorno")
+})
+
+
+test_that("la porta riporta il nome eseguito della revoca che esce dalla 12 col giro sull'istanza muta, e il giro dopo lo revoca", { # nolint: line_length_linter.
+  # eval
+  giri <- giri_voce_12("muta")
+
+  # test
+  attesa_voce_12(giri, "muta")
+})
+
+
+test_that("la riga chiusa e revocata trattenuta per la mano di un altro prende il nome come prima, e la mail chiede il sigillo di quel nome", { # nolint: line_length_linter.
+  # eval
+  # Bruno changed the role of Anna's closed row, revoked: held. The message
+  # asks Anna for the seal computed on the name resolved, so the register
+  # has to hold that name, as on any other held row.
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+        username = "", identity = "absent", applied_as = "absent",
+        request_status = "revoked", role_name = "read only"
+      ))),
+      storia = c(
+        list(cambio(bruno, "role_name = 'read only'",
+                    timestamp = "2026-08-16 09:00")),
+        storia_chiusa_assente()
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(), directory = directory_doppia(mario_b()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta[["mailer"]],
+    at = "2026-08-17 03:00"
+  )
+  sigillo <- sub("^SIGILLO_DIVERSO:", "", dettaglio_uno(esito))
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(revocati(), 0L)
+  expect_equal(as.character(identita_scritte()[["username"]]), mario)
+  expect_equal(sigillo, request_seal(riga_come_registro(
+    record_id = "1", username = mario, request_status = "revoked",
+    role_name = "read only"
+  )))
+})
