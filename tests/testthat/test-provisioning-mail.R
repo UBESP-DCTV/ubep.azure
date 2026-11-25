@@ -1372,6 +1372,10 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
       "Sign in."
     )
   )
+  expect_identical(
+    passi[["en"]][["due"]],
+    "2. Enter your user name and press Next, then the key and press Sign in."
+  )
 })
 
 
