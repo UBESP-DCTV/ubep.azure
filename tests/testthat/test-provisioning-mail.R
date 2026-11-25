@@ -454,6 +454,47 @@ test_that("un campo vuoto cambia la frase invece di lasciare un buco", {
 })
 
 
+test_that("una riga ferma sul giorno cambiato non dice che l'istanza non ha risposto", { # nolint: line_length_linter.
+  # eval
+  # The instance answered; the round stopped before writing to it, because
+  # the date in Rome had turned. Nothing is read back, as on an instance
+  # that did not answer, and the message, IT in copy, said so.
+  detto <- mail_outcome_message(riga_di_prova(
+    outcome = "transport_error",
+    outcome_detail = "TRASPORTO_GIORNO_CAMBIATO",
+    applied_as = ""
+  ))[["body"]]
+
+  # test
+  expect_false(grepl("l'istanza non ha risposto", detto, fixed = TRUE))
+  expect_false(grepl("the instance did not answer", detto, fixed = TRUE))
+  expect_match(
+    detto,
+    "Letto sull'istanza: niente, il giro si e' fermato prima di scrivere",
+    fixed = TRUE
+  )
+  expect_match(
+    detto,
+    paste0(
+      "La data di Roma e' cambiata mentre il giro girava, prima che ",
+      "scrivesse sull'istanza o creasse la persona: il canale non ha ",
+      "fatto niente, e il giro dopo giudica la riga sul suo giorno."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    detto,
+    "Read back on the instance: nothing, the round stopped before writing",
+    fixed = TRUE
+  )
+  expect_match(
+    detto,
+    "The date in Rome changed while the round was running",
+    fixed = TRUE
+  )
+})
+
+
 test_that("una revoca eseguita non dice che un accesso e' stato concesso", {
   # eval
   detto <- mail_outcome_message(riga_di_prova(

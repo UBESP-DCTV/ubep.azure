@@ -1024,6 +1024,44 @@ mail_outcome_message <- function(row) {
     )
   }
 
+  # A round stopped because the date in Rome turned before it acted
+  # (`TRASPORTO_GIORNO_CAMBIATO`) leaves the rows of the instance with
+  # nothing read back, as an instance that did not answer does. This one
+  # answered: the round stopped before writing to it or creating the person.
+  # Said as an instance that did not answer, the message sent the reader,
+  # IT in copy, after a fault that is not there.
+  giorno_cambiato <- "TRASPORTO_GIORNO_CAMBIATO" %in% nomi_codici
+  giorno <- if (giorno_cambiato) {
+    list(
+      it = c(
+        "",
+        paste0(
+          "La data di Roma e' cambiata mentre il giro girava, prima che ",
+          "scrivesse sull'istanza o creasse la persona: il canale non ha ",
+          "fatto niente, e il giro dopo giudica la riga sul suo giorno."
+        )
+      ),
+      en = c(
+        "",
+        paste0(
+          "The date in Rome changed while the round was running, before it ",
+          "wrote to the instance or created the person: the channel did ",
+          "nothing, and the next round judges the row on its own day."
+        )
+      )
+    )
+  } else {
+    list(it = NULL, en = NULL)
+  }
+  letto_vuoto <- if (giorno_cambiato) {
+    list(
+      it = "niente, il giro si e' fermato prima di scrivere",
+      en = "nothing, the round stopped before writing"
+    )
+  } else {
+    list(it = "l'istanza non ha risposto", en = "the instance did not answer")
+  }
+
   # A held row is the only outcome that asks the reader to do something whose
   # instructions are not in the work instruction, and the value it asks them to
   # paste is computed from the row: a referent who is not told it cannot
@@ -1155,8 +1193,9 @@ mail_outcome_message <- function(row) {
       row[["username"]], "non ancora stabilito dalla lavorazione"
     )),
     paste0("Letto sull'istanza: ", mail_said_or(
-      row[["applied_as"]], "l'istanza non ha risposto"
+      row[["applied_as"]], letto_vuoto[["it"]]
     )),
+    giorno[["it"]],
     trattenuta[["it"]],
     collisione[["it"]],
     coppia[["it"]],
@@ -1211,8 +1250,9 @@ mail_outcome_message <- function(row) {
       row[["username"]], "not established yet"
     )),
     paste0("Read back on the instance: ", mail_said_or(
-      row[["applied_as"]], "the instance did not answer"
+      row[["applied_as"]], letto_vuoto[["en"]]
     )),
+    giorno[["en"]],
     trattenuta[["en"]],
     collisione[["en"]],
     coppia[["en"]],

@@ -7257,6 +7257,56 @@ test_that("un giro che passa la mezzanotte di Roma non crea la persona di una ri
 })
 
 
+test_that("la mail di una riga ferma sul giorno cambiato dice che l'istanza ha risposto e il giro si e' fermato", { # nolint: line_length_linter.
+  # eval
+  # Two rounds that pass Rome's midnight: one stops before writing to the
+  # instance, which answered; the other before creating the person, after
+  # the instance had answered on 30 June.
+  corpi <- character()
+  tiene <- function(to, cc, subject, body) {
+    corpi <<- c(corpi, body) # nolint: assignment_linter.
+    list(ok = TRUE, errors = character())
+  }
+  all_istanza <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list(expiration = "2026-07-01")),
+    dry_run = FALSE,
+    mailer = tiene,
+    at = partito_alle_2359,
+    oggi = dopo_mezzanotte
+  )
+  dell_istanza <- corpi
+  corpi <- character()
+  alla_creazione <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list()),
+    directory_vuota(),
+    dry_run = FALSE,
+    mailer = tiene,
+    at = partito_alle_2359,
+    oggi = as.Date(c("2026-06-30", "2026-07-01"))
+  )
+  della_creazione <- corpi
+
+  # test
+  expect_true(all(all_istanza[["istanze"]][["raggiunta"]]))
+  expect_equal(
+    esito_di(all_istanza, "1")[["detail"]], "TRASPORTO_GIORNO_CAMBIATO"
+  )
+  expect_equal(
+    esito_di(alla_creazione, "1")[["detail"]], "TRASPORTO_GIORNO_CAMBIATO"
+  )
+  for (corpo in list(dell_istanza, della_creazione)) {
+    esito <- grep("TRASPORTO_GIORNO_CAMBIATO", corpo, value = TRUE)
+    expect_length(esito, 1L)
+    expect_false(grepl("l'istanza non ha risposto", esito, fixed = TRUE))
+    expect_false(grepl("the instance did not answer", esito, fixed = TRUE))
+    expect_match(esito, "La data di Roma e' cambiata", fixed = TRUE)
+    expect_match(esito, "The date in Rome changed", fixed = TRUE)
+  }
+})
+
+
 test_that("un giro il cui giorno cambia fra l'istanza e la creazione non crea", { # nolint: line_length_linter.
   # eval
   # The instance is asked on 30 June, and its gate and its rehearsal let
