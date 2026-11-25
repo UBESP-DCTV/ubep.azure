@@ -14003,7 +14003,10 @@ test_that("la riga chiusa col nome del canale e un cambio di un altro referente 
   # eval
   # Bruno changed the role and put it back: the fields are the closure's
   # but for the channel's name, and the log does not hold the role the
-  # closure carried out, so his write is a change all the same.
+  # closure carried out, so his write is a change all the same. It guards
+  # a field whose carried out value the log does not hold: with the
+  # creation in the log, as in the register, the role put back is no
+  # change, and the row goes on as the closure would (the test below).
   g <- un_giro_sul_nome(chiusa_col_nome_del_canale(sopra = list(
     cambio(bruno, "role_name = 'data entry'", timestamp = "2026-08-17 01:10"),
     cambio(bruno, "role_name = 'read only'", timestamp = "2026-08-17 01:00")
@@ -14013,6 +14016,32 @@ test_that("la riga chiusa col nome del canale e un cambio di un altro referente 
   expect_equal(dettaglio_uno(g[["esito"]]), "SIGILLO_DIVERSO:62562ba2c044")
   expect_equal(esiti_del_giro(g), "held")
   expect_length(g[["revocati"]], 0L)
+})
+
+
+test_that("la riga chiusa col nome del canale e un cambio di un altro referente rimesso com'era, col log che tiene la creazione, revoca come la chiusura", { # nolint: line_length_linter.
+  # eval
+  # The same two writes of Bruno, with the creation in the row's log: the
+  # role carried out is in the log, the role put back is no change (option
+  # (a) of 2026-10-17), and the row is the closure but for the name.
+  con_creazione <- c(
+    storia_chiusa_assente(),
+    list(creata_da_anna(timestamp = "2026-08-10 09:00"))
+  )
+  g <- un_giro_sul_nome(chiusa_col_nome_del_canale(
+    sopra = list(
+      cambio(bruno, "role_name = 'data entry'",
+             timestamp = "2026-08-17 01:10"),
+      cambio(bruno, "role_name = 'read only'", timestamp = "2026-08-17 01:00")
+    ),
+    chiusura = con_creazione
+  ))
+
+  # test
+  expect_equal(esito_e_dettaglio(g), "applied ")
+  expect_equal(g[["revocati"]], mario)
+  expect_false(chiede_approvazione(g))
+  expect_equal(g[["riga"]][["applied_entra_id"]], id_a)
 })
 
 
