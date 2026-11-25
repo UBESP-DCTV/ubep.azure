@@ -2011,15 +2011,11 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #'
 #' @keywords internal
 mail_credential_ready_text <- function(first_name, credential, deadline) {
-  nome <- trimws(gsub("[[:space:]]+", " ", mail_said_or(first_name, "")))
-  saluto <- function(parola) {
-    if (nzchar(nome)) paste0(parola, " ", nome, ",") else paste0(parola, ",")
-  }
   data <- mail_has_deadline(deadline)
 
   it <- c(
     "----- INIZIO DEL TESTO DA COPIARE -----",
-    saluto("Ciao"),
+    mail_greeting("Ciao", first_name),
     "",
     paste0(
       "ecco la chiave d'ingresso del tuo account UBEP, la password temporanea ",
@@ -2090,7 +2086,7 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
 
   en <- c(
     "----- START OF THE TEXT TO COPY -----",
-    saluto("Hello"),
+    mail_greeting("Hello", first_name),
     "",
     paste0(
       "here is the sign-in key of your UBEP account, the temporary password ",
