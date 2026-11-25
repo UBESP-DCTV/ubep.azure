@@ -7308,6 +7308,24 @@ test_that("un giro datato un altro giorno non agisce", {
 })
 
 
+test_that("un giro datato il giorno dopo non agisce", {
+  # eval
+  # The other way round: `at` says 15 August, the clock 14 August. Judged on
+  # the day after, every gate is stricter and nothing more is granted, but
+  # the outcomes and the messages carry a day that is not REDCap's.
+  esito <- giro(
+    registro_doppio(record_json(list())),
+    istanza_doppia(list()),
+    at = "2026-08-15 03:00",
+    oggi = as.Date("2026-08-14")
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "transport_error")
+  expect_equal(esito_di(esito, "1")[["detail"]], "TRASPORTO_GIORNO_CAMBIATO")
+})
+
+
 test_that("un giro che passa la mezzanotte di Roma non riporta sul progetto la persona di una riga scaduta", { # nolint: line_length_linter.
   # eval
   # Mario's row, carried out with last day 30 June; somebody removed him
