@@ -2404,6 +2404,28 @@ provisioning_reconcile <- function(register_url,
     identity_written[["errors"]], deferred_written[["errors"]]
   )
   name_lost <- deferred_door & !isTRUE(deferred_written[["ok"]])
+  # A write that failed may still have arrived: REDCap applied it and the
+  # answer was lost. Left unsealed, such a row would differ from the
+  # closure's seal by the channel's name alone, and the next round would
+  # hold it with no author (RF3 of the review of the correction of F1). So
+  # the register is read again, and a row that holds the name resolved is
+  # sealed. A reading that fails too leaves the rows unsealed: the next
+  # round finds them as they are.
+  if (any(name_lost)) {
+    reread <- register_records(register_url, register_token)
+    if (isTRUE(reread[["ok"]])) {
+      now <- reread[["records"]]
+      arrived <- as.character(now[["username"]] %||% character())[
+        match(record_ids, as.character(now[["record_id"]]))
+      ]
+      name_lost <- name_lost &
+        !(!is.na(arrived) & trimws(arrived) == resolved_names)
+    } else {
+      identity_written[["errors"]] <- c(
+        identity_written[["errors"]], reread[["errors"]]
+      )
+    }
+  }
 
   # Who each row belongs to once this round is over. The passage is decided
   # here and once: by the round that carries the change out, after the gate

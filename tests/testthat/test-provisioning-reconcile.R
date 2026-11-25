@@ -13749,3 +13749,45 @@ test_that("la riga chiusa e revocata il cui nome non arriva al registro non si s
   ))
   expect_length(terzo[["revocati"]], 0L)
 })
+
+
+test_that("la riga chiusa e revocata il cui nome arriva al registro senza risposta si sigilla, e il giro dopo non la trattiene", { # nolint: line_length_linter.
+  # eval
+  # The other half of the write that does not answer: REDCap applied the
+  # name and the answer was lost. Left unsealed, the register would hold
+  # the channel's name over the closure's seal, and the next round would
+  # hold the row with no author (RF3 of the review of the correction of
+  # F1). The round reads the name back and seals the row that holds it.
+  dentro <- chiusa_revocata_con_id()
+  reg <- registro_che_scade(dentro, "username", applica = TRUE)
+  ist <- istanza_che_revoca()
+  directory <- directory_doppia(mario_b())
+  giro_ora <- function(ora, at) {
+    attr(dentro, "stato")$ora <- ora
+    posta <- posta_raccolta()
+    esito <- giro(
+      reg, ist, directory = directory, dry_run = FALSE,
+      copy_to = "it@example.org", mailer = posta[["mailer"]], at = at
+    )
+    list(
+      esito = esito, revocati = revocati(), posta = posta[["mandate"]](),
+      riga = attr(dentro, "stato")$righe[["1"]]
+    )
+  }
+  primo <- giro_ora("2026-08-17 05:00", "2026-08-17 03:00")
+  secondo <- giro_ora("2026-08-17 09:00", "2026-08-17 07:00")
+
+  # test
+  expect_equal(primo[["revocati"]], mario)
+  expect_true(any(grepl("^TRASPORTO_", primo[["esito"]][["errori"]])))
+  expect_equal(primo[["riga"]][["username"]], mario)
+  expect_false(identical(
+    primo[["riga"]][["applied_seal"]], sigillo_chiusa_assente
+  ))
+  expect_false(any(
+    as.character(secondo[["esito"]][["esiti"]][["outcome"]]) %in% "held"
+  ))
+  expect_length(secondo[["revocati"]], 0L)
+  corpi <- vapply(secondo[["posta"]], function(m) m[["body"]], character(1))
+  expect_false(any(grepl("approved_seal", corpi, fixed = TRUE)))
+})
