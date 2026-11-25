@@ -4,7 +4,7 @@
 \alias{intake_request}
 \title{Take a request in, validated and normalized, or not at all}
 \usage{
-intake_request(request, executed = FALSE)
+intake_request(request, executed = FALSE, today = redcap_today())
 }
 \arguments{
 \item{request}{A named list, one request as described in the spec.}
@@ -12,6 +12,8 @@ intake_request(request, executed = FALSE)
 \item{executed}{Whether the round carried this request out and nobody
 changed it since, for \code{validate_request()}. The conversion is the same:
 the round compares the instance with the value REDCap stores.}
+
+\item{today}{REDCap's date, for \code{validate_request()}.}
 }
 \value{
 A list with \code{errors} and \code{request}; \code{request} is \code{NULL} when

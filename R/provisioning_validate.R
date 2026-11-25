@@ -73,12 +73,19 @@ redcap_today <- function(now = Sys.time()) {
 #' @param request A named list, one request as described in the spec.
 #' @param executed Whether the round carried this request out and nobody
 #'   changed it since: the channel's seal is there and has not moved.
+#' @param today REDCap's date, the one in Rome, `redcap_today()` by default.
+#'   The round computes it once, from the instant it started, and passes it
+#'   down, so that every row is judged on the same day.
 #'
 #' @return A character vector of error codes; empty when the request is valid.
 #'
 #' @keywords internal
-validate_request <- function(request, executed = FALSE) {
-  stopifnot(is.logical(executed), length(executed) == 1L, !is.na(executed))
+validate_request <- function(request, executed = FALSE,
+                             today = redcap_today()) {
+  stopifnot(
+    is.logical(executed), length(executed) == 1L, !is.na(executed),
+    inherits(today, "Date"), length(today) == 1L, !is.na(today)
+  )
 
   errors <- character()
 
@@ -109,7 +116,7 @@ validate_request <- function(request, executed = FALSE) {
     # would accept a last day REDCap has already closed. A request already
     # carried out keeps its last day once it has passed: the date is the one
     # the round wrote, not a new one.
-    if (is.na(parsed) || (!executed && parsed < redcap_today())) {
+    if (is.na(parsed) || (!executed && parsed < today)) {
       errors <- c(errors, "DATO_SCADENZA_NON_VALIDA")
     }
   }
@@ -154,13 +161,15 @@ to_redcap_expiration <- function(last_day) {
 #' @param executed Whether the round carried this request out and nobody
 #'   changed it since, for `validate_request()`. The conversion is the same:
 #'   the round compares the instance with the value REDCap stores.
+#' @param today REDCap's date, for `validate_request()`.
 #'
 #' @return A list with `errors` and `request`; `request` is `NULL` when
 #'   `errors` is not empty.
 #'
 #' @keywords internal
-intake_request <- function(request, executed = FALSE) {
-  errors <- validate_request(request, executed = executed)
+intake_request <- function(request, executed = FALSE,
+                           today = redcap_today()) {
+  errors <- validate_request(request, executed = executed, today = today)
   if (length(errors) > 0L) {
     return(list(errors = errors, request = NULL))
   }

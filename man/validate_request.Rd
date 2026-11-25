@@ -4,13 +4,17 @@
 \alias{validate_request}
 \title{Validate a provisioning request}
 \usage{
-validate_request(request, executed = FALSE)
+validate_request(request, executed = FALSE, today = redcap_today())
 }
 \arguments{
 \item{request}{A named list, one request as described in the spec.}
 
 \item{executed}{Whether the round carried this request out and nobody
 changed it since: the channel's seal is there and has not moved.}
+
+\item{today}{REDCap's date, the one in Rome, \code{redcap_today()} by default.
+The round computes it once, from the instant it started, and passes it
+down, so that every row is judged on the same day.}
 }
 \value{
 A character vector of error codes; empty when the request is valid.

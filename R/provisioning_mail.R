@@ -213,9 +213,11 @@ mail_status_words <- function(request_status, applied_as = "", at = "") {
 #' `redcap_today()`. The day is the one in Rome of the instant `at`, not the
 #' clock of whoever composes the message, so the same row says the same
 #' thing whenever it is read and the tests do not depend on the machine.
-#' `validate_request()` and the choice of `lapsed` read the same date of
-#' the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
-#' already the next day, the message and the gate agree with REDCap.
+#' The round takes the date it hands to `validate_request()`, the choice of
+#' `lapsed` and the gate from the same instant, `at`, so between 22:00 and
+#' 24:00 UTC, when the date in Rome is already the next day, the message
+#' and the gate agree with REDCap, and a round that passes Rome's midnight
+#' says what it decided on the day it decided it.
 #'
 #' @param applied_as The row's read-back, `role_name=...; dag_name=...;
 #'   expiration=...`.

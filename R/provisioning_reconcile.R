@@ -282,7 +282,13 @@
 #'   never asks. Empty by default, so every instance counts as a production:
 #'   in doubt an instance is asked, as the observer watches it. The runner
 #'   reads them from the inventory, `"banco": true`.
-#' @param at When the round ran, as `YYYY-MM-DD HH:MM`.
+#' @param at When the round ran, as `YYYY-MM-DD HH:MM` in UTC. It is the
+#'   round's one reading of the clock: the date REDCap judges expirations on,
+#'   the one in Rome, is taken from it once (`redcap_today()`) and passed to
+#'   the last day of each row, the choice of the rows lapsed and the gate on
+#'   the referent's permission, as the messages read it from the outcome. A
+#'   round that passes Rome's midnight judges every row on the day it
+#'   started. A value that does not read as an instant stops the round.
 #'
 #' @return A list with `at`, `fermato`, `schema`, `istanze`, `esiti`,
 #'   `credenziali`, `scritte` and `errori`. `scritte` counts the outcomes
@@ -334,6 +340,13 @@ provisioning_reconcile <- function(register_url,
     is.character(banchi),
     is.character(at), length(at) == 1L
   )
+  # The day of the round, read once: read again at each gate, a round that
+  # passes Rome's midnight judged a row on one day and wrote its outcome and
+  # its message, which carry `at`, on the other.
+  today <- redcap_today(as.POSIXct(at, format = "%Y-%m-%d %H:%M", tz = "UTC"))
+  if (is.na(today)) {
+    stop("`at` is not an instant `YYYY-MM-DD HH:MM`: ", at, call. = FALSE)
+  }
 
   # Send first, write after. A row whose message did not leave stays as the
   # register has it, so the next round finds it changed again and retries --
@@ -1319,7 +1332,7 @@ provisioning_reconcile <- function(register_url,
   # believes: with the channel's account configured, the channel's own in the
   # owners' log; without it, the field, as everywhere else in the round.
   intact <- record_ids[nzchar(sealed) & !tampered]
-  plan <- register_to_desired(resolved, executed = intact)
+  plan <- register_to_desired(resolved, executed = intact, today = today)
   asks <- scope_pairs(scope_expand(resolved, subjects[standing]))
 
   # The revocations the gate may leave alone when the instance no longer
@@ -1399,7 +1412,7 @@ provisioning_reconcile <- function(register_url,
   arriving <- creating[standing]
   arrivals <- resolved[arriving, , drop = FALSE]
   arrivals[["username"]] <- creation_names[standing][arriving]
-  arrivals <- register_to_desired(arrivals)
+  arrivals <- register_to_desired(arrivals, today = today)
 
   # A project_id the register accepted but that is not a number is a data
   # error, and it has to be named here. `validate_request()` catches the ones
@@ -1637,7 +1650,8 @@ provisioning_reconcile <- function(register_url,
         judged,
         subjects[match(as.character(judged[["record_id"]]), record_ids)]
       ),
-      rights
+      rights,
+      today = today
     ))
     refused <- refused[names(refused) %in% ids]
 
@@ -1649,7 +1663,8 @@ provisioning_reconcile <- function(register_url,
       i <- match(id, record_ids)
       verdict <- scope_withdrawal(
         rows[as.character(rows[["record_id"]]) == id, , drop = FALSE],
-        pending[[i]], owners_now[[i]], nzchar(sealed[[i]]), rights
+        pending[[i]], owners_now[[i]], nzchar(sealed[[i]]), rights,
+        today = today
       )
       if (identical(verdict, "held")) {
         waits <- c(waits, id)

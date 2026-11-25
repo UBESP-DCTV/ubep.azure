@@ -139,6 +139,9 @@ scope_pairs <- function(register) {
 #'   `expiration` (`YYYY-MM-DD`, empty or `NA` for none). The caller assembles
 #'   it from each instance's answer, because a `state` reply names its server
 #'   once at the top and not on every row.
+#' @param today REDCap's date, the one in Rome, `redcap_today()` by default.
+#'   The round computes it once, from the instant it started, and passes it
+#'   down, so that every row is judged on the same day.
 #'
 #' @return A named list, one entry per refused row, named by `record_id` and
 #'   holding `"DATO_AMBITO_NON_AUTORIZZATO"`, or
@@ -148,14 +151,15 @@ scope_pairs <- function(register) {
 #'   merge, and the caller reads the prefix rather than the whole string.
 #'
 #' @keywords internal
-scope_errors <- function(register, rights) {
+scope_errors <- function(register, rights, today = redcap_today()) {
   stopifnot(
     is.data.frame(register),
     all(
       c("record_id", "server", "project_id", "requested_by") %in%
         names(register)
     ),
-    is.data.frame(rights)
+    is.data.frame(rights),
+    inherits(today, "Date"), length(today) == 1L, !is.na(today)
   )
 
   # A rights table with no permission column is an instance answered by a
@@ -194,7 +198,7 @@ scope_errors <- function(register, rights) {
     dated <- !is.na(expiration) & nzchar(expiration)
     day <- suppressWarnings(as.Date(expiration, format = "%Y-%m-%d"))
     garbled <- dated & is.na(day)
-    expired <- dated & !is.na(day) & day <= redcap_today()
+    expired <- dated & !is.na(day) & day <= today
 
     grants <- !is.na(permission) & permission == scope_granting_value()
     granted <- held[grants & !expired & !garbled]
@@ -338,12 +342,14 @@ scope_merge <- function(refused) {
 #' @param sealed Whether the row carries the seal of an execution.
 #' @param rights The rights the instance reported, as `round_rights()` builds
 #'   them.
+#' @param today REDCap's date, for `scope_errors()`.
 #'
 #' @return `""` when the revocation stands; `"held"` when it waits for the
 #'   owner; otherwise the refusal code, as `scope_errors()` gives it.
 #'
 #' @keywords internal
-scope_withdrawal <- function(row, authors, owner, sealed, rights) {
+scope_withdrawal <- function(row, authors, owner, sealed, rights,
+                             today = redcap_today()) {
   stopifnot(
     is.data.frame(row), nrow(row) == 1L, is.character(authors),
     is.character(owner), length(owner) == 1L, is.data.frame(rights)
@@ -362,7 +368,7 @@ scope_withdrawal <- function(row, authors, owner, sealed, rights) {
     requested_by = subjects,
     stringsAsFactors = FALSE
   )
-  refused <- scope_errors(asked, rights)
+  refused <- scope_errors(asked, rights, today = today)
   if ("TRASPORTO_PERMESSO_NON_LEGGIBILE" %in% unlist(refused)) {
     return("TRASPORTO_PERMESSO_NON_LEGGIBILE")
   }

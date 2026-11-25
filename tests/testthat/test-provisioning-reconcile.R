@@ -14,6 +14,12 @@ form_field_value <- function(value) {
 # turn the tests red the day it does.
 scadenza_futura <- as.character(redcap_today() + 90L)
 
+# A round that runs today. The round judges every date on the day of its
+# `at`, so a test whose dates are relative to today runs its round today:
+# with the fixed `at` of `giro()` it would judge them months before. 03:00
+# UTC is on Rome's date, whatever the hour the tests run at.
+giro_di_oggi <- paste(redcap_today(), "03:00")
+
 
 # One mock stands in for all three adapters and dispatches on the URL: the
 # register speaks to /api/ with a token in the body, the instances to the
@@ -1317,7 +1323,8 @@ test_that("a revoked row is revoked even when its last day has passed", {
       expiration = as.character(redcap_today() - 1L)
     ))),
     istanza_che_revoca(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    at = giro_di_oggi
   )
 
   # test
@@ -1338,7 +1345,8 @@ test_that("a requester whose access to the project has expired is refused", {
   esito <- giro(
     registro_doppio(record_json(list())),
     istanza_doppia(list(expiration = as.character(redcap_today() - 1L))),
-    dry_run = FALSE
+    dry_run = FALSE,
+    at = giro_di_oggi
   )
 
   # test
@@ -1360,7 +1368,8 @@ test_that("an active row whose last day has passed is still refused", {
       expiration = as.character(redcap_today() - 1L)
     ))),
     istanza_che_revoca(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    at = giro_di_oggi
   )
 
   # test
@@ -6740,6 +6749,7 @@ giro_scaduta <- function(cambi = list(),
                          storia = list(),
                          istanza = istanza_scaduta(),
                          eseguita = carried_out(sigillo_scaduta()),
+                         at = giro_di_oggi,
                          ...) {
   riga <- utils::modifyList(
     scaduta_row(applied_seal = sigillo_scaduta()), cambi
@@ -6752,6 +6762,7 @@ giro_scaduta <- function(cambi = list(),
     ),
     istanza,
     dry_run = FALSE,
+    at = at,
     ...
   )
 }
@@ -6809,7 +6820,8 @@ test_that("una riga mai eseguita con l'ultimo giorno passato va in errore", {
       creazioni = creazioni_finte(creata_da_anna())
     ),
     istanza_scaduta(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    at = giro_di_oggi
   )
   # The same row with the seal of the execution imported by somebody else:
   # only the channel's seal says the row was carried out. The channel wrote
@@ -7017,7 +7029,8 @@ test_that("un giro simulato sulla persona tolta non scrive e non sigilla", { # n
       creazioni = creazioni_finte(creata_da_anna())
     ),
     istanza_senza_mario(),
-    dry_run = TRUE
+    dry_run = TRUE,
+    at = giro_di_oggi
   )
 
   # test
@@ -7049,7 +7062,8 @@ test_that("una riga scaduta cambiata dopo il sigillo resta in errore sulla data 
       creazioni = creazioni_finte(creata_da_anna())
     ),
     istanza_senza_mario(),
-    dry_run = FALSE
+    dry_run = FALSE,
+    at = giro_di_oggi
   )
   # The seal of the execution imported by somebody else.
   importato <- giro_scaduta(
@@ -7119,6 +7133,124 @@ test_that("una data che non e' una data e' rifiutata anche su una riga eseguita 
   expect_equal(esito_di(esito, "1")[["outcome"]], "data_error")
   expect_equal(esito_di(esito, "1")[["detail"]], "DATO_SCADENZA_NON_VALIDA")
   expect_length(scritture(), 0L)
+})
+
+
+# ---- One reading of the clock per round (0.29.0) ----
+
+# The clock of a round that starts at 23:59 in Rome on 30 June and is past
+# midnight by the time it judges the rows: read without an instant, it says
+# 1 July; the day of an instant is computed as ever.
+orologio_oltre_mezzanotte <- function(env = parent.frame()) {
+  vero <- redcap_today
+  testthat::local_mocked_bindings(
+    redcap_today = function(now) {
+      if (missing(now)) as.Date("2026-07-01") else vero(now)
+    },
+    .env = env
+  )
+}
+partito_alle_2359 <- "2026-06-30 21:59"
+
+
+test_that("un giro che passa la mezzanotte di Roma giudica ultimo giorno e permesso sul giorno di at", { # nolint: line_length_linter.
+  # eval
+  # Anna's permission to manage users expires on 1 July, so it holds through
+  # 30 June; the row asks access through 30 June.
+  orologio_oltre_mezzanotte()
+  esito <- giro(
+    registro_doppio(record_json(list(expiration = "2026-06-30"))),
+    istanza_doppia(list(expiration = "2026-07-01")),
+    at = partito_alle_2359
+  )
+
+  # test
+  # The record, the outcomes and the messages of the round carry `at`, and
+  # on that day both dates are still valid: the gates read the same day.
+  # Judged on the clock read later, the row was refused on its last day in
+  # a round dated the day before.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "simulated")
+  expect_equal(esito_di(esito, "1")[["detail"]], "")
+})
+
+
+test_that("un giro che passa la mezzanotte di Roma sceglie le righe scadute sul giorno di at", { # nolint: line_length_linter.
+  # eval
+  # Mario's row, carried out with last day 30 June; somebody removed him
+  # from the project by hand.
+  sigillo <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, expiration = "2026-06-30"
+  ))
+  riga <- eseguita_row(
+    expiration = "2026-06-30", applied_seal = sigillo,
+    applied_as = "role_name=data entry; dag_name=; expiration=2026-07-01"
+  )
+  orologio_oltre_mezzanotte()
+  esito <- giro(
+    registro_con_log(
+      record_json(riga),
+      storia = carried_out(sigillo),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_senza_mario(),
+    dry_run = TRUE,
+    at = partito_alle_2359
+  )
+  simulate <- Filter(function(req) {
+    identical(req[["body"]][["data"]][["operation"]], "apply")
+  }, inviate)
+
+  # test
+  # On 30 June the last day has not passed: the row is not lapsed, and the
+  # round brings the instance back to what it says, as on any other day of
+  # its access. Lapsed on the clock read later, it closed as a person removed
+  # after the last day, in a round dated the last day itself.
+  expect_equal(esito_di(esito, "1")[["outcome"]], "simulated")
+  expect_length(simulate, 1L)
+  expect_false(
+    identical(as.character(esito[["esiti"]][["applied_as"]]), "absent")
+  )
+})
+
+
+test_that("il giro passa il suo giorno a ogni cancello che giudica una data", { # nolint: line_length_linter.
+  # The two tests above reach the last day, the lapsed rows and the
+  # referent's permission. The rows whose person is to be created and the
+  # revocations made by somebody other than the owner reach the same gates
+  # on calls of their own, and a call there without `today` reads the clock
+  # again. So the body of the round is read: every call to a gate that
+  # judges a date names `today`, and the clock is read once, from `at`.
+  chiamate <- list()
+  cerca <- function(e) {
+    if (is.name(e[[1L]])) {
+      chiamate[[length(chiamate) + 1L]] <<- e # nolint: assignment_linter.
+    }
+    # By position: an empty argument, as in `x[, 1]`, cannot be held in a
+    # variable.
+    parti <- as.list(e)
+    for (i in seq_along(parti)[-1L]) {
+      if (is.call(parti[[i]])) cerca(parti[[i]])
+    }
+  }
+  cerca(body(provisioning_reconcile))
+  nomi <- vapply(chiamate, function(e) as.character(e[[1L]]), character(1))
+  cancelli <- c(
+    "register_to_desired", "intake_request", "validate_request",
+    "scope_errors", "scope_withdrawal"
+  )
+  giudicano <- chiamate[nomi %in% cancelli]
+
+  # test
+  expect_gte(length(giudicano), 4L)
+  for (e in giudicano) {
+    expect_true("today" %in% names(e), info = deparse1(e))
+  }
+  orologio <- chiamate[nomi == "redcap_today"]
+  expect_length(orologio, 1L)
+  expect_identical(
+    lapply(orologio, function(e) e[[2L]][[2L]]), list(as.name("at"))
+  )
+  expect_false(any(c("Sys.Date", "Sys.time") %in% nomi))
 })
 
 

@@ -82,7 +82,13 @@ never asks. Empty by default, so every instance counts as a production:
 in doubt an instance is asked, as the observer watches it. The runner
 reads them from the inventory, \code{"banco": true}.}
 
-\item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM}.}
+\item{at}{When the round ran, as \verb{YYYY-MM-DD HH:MM} in UTC. It is the
+round's one reading of the clock: the date REDCap judges expirations on,
+the one in Rome, is taken from it once (\code{redcap_today()}) and passed to
+the last day of each row, the choice of the rows lapsed and the gate on
+the referent's permission, as the messages read it from the outcome. A
+round that passes Rome's midnight judges every row on the day it
+started. A value that does not read as an instant stops the round.}
 }
 \value{
 A list with \code{at}, \code{fermato}, \code{schema}, \code{istanze}, \code{esiti},
