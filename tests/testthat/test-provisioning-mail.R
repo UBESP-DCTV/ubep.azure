@@ -3299,3 +3299,64 @@ test_that("il messaggio di un account rinominato su Entra nomina il nome nuovo",
   expect_match(senza, "Nome utente dell'account ora: non noto", fixed = TRUE)
   expect_match(senza, "Username of the account now: unknown", fixed = TRUE)
 })
+
+
+test_that("il benvenuto e la mail di accesso salutano anche senza nome", {
+  # eval
+  saluti <- function(nome) {
+    corpi <- list(
+      welcome = mail_welcome_message(
+        riga_di_prova(first_name = nome),
+        upn = "sara.collaudozeta@ubep.unipd.it"
+      )[["body"]],
+      access = mail_access_message(riga_di_prova(first_name = nome))[["body"]]
+    )
+    lapply(corpi, function(corpo) {
+      righe <- strsplit(corpo, "\n", fixed = TRUE)[[1L]]
+      c(
+        it = grep("^Ciao", righe, value = TRUE)[[1L]],
+        en = grep("^Hello", righe, value = TRUE)[[1L]]
+      )
+    })
+  }
+
+  # test
+  for (nome in list(NA_character_, "", "  ", "\n ")) {
+    for (messaggio in saluti(nome)) {
+      expect_identical(
+        messaggio, c(it = "Ciao,", en = "Hello,"), info = format(nome)
+      )
+    }
+  }
+})
+
+
+test_that("il benvenuto e la mail di accesso non spezzano il saluto", {
+  # eval
+  saluti <- function(nome) {
+    corpi <- list(
+      welcome = mail_welcome_message(
+        riga_di_prova(first_name = nome),
+        upn = "sara.collaudozeta@ubep.unipd.it"
+      )[["body"]],
+      access = mail_access_message(riga_di_prova(first_name = nome))[["body"]]
+    )
+    lapply(corpi, function(corpo) {
+      righe <- strsplit(corpo, "\n", fixed = TRUE)[[1L]]
+      c(
+        it = grep("^Ciao", righe, value = TRUE)[[1L]],
+        en = grep("^Hello", righe, value = TRUE)[[1L]]
+      )
+    })
+  }
+
+  # test
+  for (nome in c("Anna\nMaria", "Anna   Maria", " Anna\t\r\nMaria ")) {
+    for (messaggio in saluti(nome)) {
+      expect_identical(
+        messaggio, c(it = "Ciao Anna Maria,", en = "Hello Anna Maria,"),
+        info = format(nome)
+      )
+    }
+  }
+})
