@@ -244,6 +244,13 @@ report_executions <- function(events, record, channel_account = NULL) {
 #' @param username The name to date: the name executed of a stopped row,
 #'   read by `report_executed_register()`, which can differ from the newest
 #'   one written; `NULL` for the newest one written, the register's.
+#' @param across_closures Whether a seal carried out for the empty name, the
+#'   one of a revocation closed on a person gone from Entra, leaves the run
+#'   whole instead of ending it. For the guard of `entra_fill()` (item 14 of
+#'   the limits, 0.29.0): the account a row set back to active after such a
+#'   closure serves has to be born before the first execution of the name,
+#'   not before the reopening, and so does the account of a row granted
+#'   again after it. The report keeps the default.
 #'
 #' @return One stamp, `"%Y-%m-%d %H:%M"` in Rome; `character()` when the
 #'   newest execution did not carry out that name, so it was written and not
@@ -251,10 +258,12 @@ report_executions <- function(events, record, channel_account = NULL) {
 #'
 #' @keywords internal
 report_person_since <- function(events, record, channel_account = NULL,
-                                username = NULL) {
+                                username = NULL, across_closures = FALSE) {
   stopifnot(
     is.data.frame(events),
-    is.null(username) || (is.character(username) && length(username) == 1L)
+    is.null(username) || (is.character(username) && length(username) == 1L),
+    is.logical(across_closures), length(across_closures) == 1L,
+    !is.na(across_closures)
   )
 
   mine <- log_of_record(events, record)
@@ -290,6 +299,9 @@ report_person_since <- function(events, record, channel_account = NULL,
 
   run <- integer()
   for (k in which(sealed)) {
+    if (across_closures && !is.na(carried[[k]]) && !nzchar(carried[[k]])) {
+      next
+    }
     if (!same(carried[[k]])) {
       break
     }
