@@ -2958,6 +2958,65 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare man
 })
 
 
+test_that("i messaggi della riga chiusa e riattivata non ripetono la chiusura e introducono la revoca prima di dirne gli effetti", { # nolint: line_length_linter.
+  # eval
+  conta <- function(testo, pezzo) {
+    lengths(regmatches(testo, gregexpr(pezzo, testo, fixed = TRUE)))
+  }
+  indecisa <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      reopened_undecided = "yes", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+  trovato <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      username = "sara.nuova@ubep.unipd.it", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+
+  # test
+  expect_equal(
+    conta(indecisa, "era stata revocata e chiusa quando la persona"), 1L
+  )
+  expect_equal(conta(indecisa, "had been revoked and closed when the"), 1L)
+  expect_match(
+    indecisa, "Revocata, la riga puo' non togliere il vecchio login",
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "Revoked, the row may not take the old login off", fixed = TRUE
+  )
+  expect_match(
+    indecisa,
+    paste0(
+      "whether the account that now holds the applied username is the one ",
+      "it had given the access to"
+    ),
+    fixed = TRUE
+  )
+  # The paragraph of the identity changed says that the row needs no edit:
+  # the revocation and the new request come before what they do.
+  expect_match(
+    trovato,
+    paste0(
+      "Se IT conclude che l'account non e' quello di allora, revoca la riga ",
+      "e compila una richiesta nuova. Questa riga era stata revocata e chiusa"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    trovato,
+    paste0(
+      "If IT concludes that the account is not the one of then, revoke the ",
+      "row and file a new request. This row had been revoked and closed"
+    ),
+    fixed = TRUE
+  )
+})
+
+
 test_that("il messaggio dell'account rinominato su una riga chiusa e riattivata dice che il vecchio login lo toglie IT (E1)", { # nolint: line_length_linter.
   # eval
   # D4 of the design of the 0.29.0: revoked, a closed row revokes the name

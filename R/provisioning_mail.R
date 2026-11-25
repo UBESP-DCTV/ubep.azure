@@ -474,20 +474,31 @@ mail_outcome_message <- function(row) {
   # revocation and a new request says so.
   chiusa <- identical(mail_said_or(row[["closed_reopened"]], ""), "yes")
   indecisa <- identical(mail_said_or(row[["reopened_undecided"]], ""), "yes")
+  # What a revocation of the closed row does, said once: after the closure
+  # where the message has not told it yet, by itself in the paragraph of the
+  # row set back to active, which opens with the closure.
+  revoca_chiusa <- list(
+    it = paste0(
+      "puo' non togliere il vecchio login dal progetto, e tiene la coppia ",
+      "contro la richiesta nuova. IT toglie a mano il vecchio login, se c'e' ",
+      "ancora, e cancella la riga vecchia quando la revoca e' applicata; poi ",
+      "la richiesta nuova si esegue."
+    ),
+    en = paste0(
+      "may not take the old login off the project, and holds the pair ",
+      "against the new request. IT takes the old login off by hand, if it is ",
+      "still there, and deletes the old row once the revocation is applied; ",
+      "then the new request is carried out."
+    )
+  )
   vecchio_login <- list(
     it = paste0(
       "Questa riga era stata revocata e chiusa quando la persona non era ",
-      "piu' su Entra: revocata, puo' non togliere il vecchio login dal ",
-      "progetto, e tiene la coppia contro la richiesta nuova. IT toglie a ",
-      "mano il vecchio login, se c'e' ancora, e cancella la riga vecchia ",
-      "quando la revoca e' applicata; poi la richiesta nuova si esegue."
+      "piu' su Entra: revocata, ", revoca_chiusa[["it"]]
     ),
     en = paste0(
       "This row had been revoked and closed when the person was no longer on ",
-      "Entra: revoked, it may not take the old login off the project, and it ",
-      "holds the pair against the new request. IT takes the old login off by ",
-      "hand, if it is still there, and deletes the old row once the ",
-      "revocation is applied; then the new request is carried out."
+      "Entra: revoked, it ", revoca_chiusa[["en"]]
     )
   )
 
@@ -540,14 +551,14 @@ mail_outcome_message <- function(row) {
             "nuovo e non tiene la coppia contro la richiesta nuova."
           )
         },
-        if (trovato) vecchio_login[["it"]]
+        if (trovato) paste0("Revocata, la riga ", revoca_chiusa[["it"]])
       ),
       en = c(
         "",
         paste0(
           "This request had been revoked and closed when the person was no ",
           "longer on Entra, and was set back to active. The channel could not ",
-          "establish whether the account that holds the username applied now ",
+          "establish whether the account that now holds the applied username ",
           "is the one it had given the access to, and grants nothing until it ",
           "knows: nothing has changed on the instance, and the row stays ",
           "stopped."
@@ -574,7 +585,7 @@ mail_outcome_message <- function(row) {
             "pair against the new request."
           )
         },
-        if (trovato) vecchio_login[["en"]]
+        if (trovato) paste0("Revoked, the row ", revoca_chiusa[["en"]])
       )
     )
   } else if (identita_cambiata) {
@@ -603,7 +614,12 @@ mail_outcome_message <- function(row) {
         paste0(
           "IT verifica l'account su Entra; non serve modificare la riga."
         ),
-        if (altro) vecchio_login[["it"]]
+        if (altro) {
+          paste0(
+            "Se IT conclude che l'account non e' quello di allora, revoca la ",
+            "riga e compila una richiesta nuova. ", vecchio_login[["it"]]
+          )
+        }
       ),
       en = c(
         "",
@@ -622,7 +638,12 @@ mail_outcome_message <- function(row) {
         ),
         paste0("Account found now: ", trovato_en),
         "IT checks the account on Entra; the row needs no edit.",
-        if (altro) vecchio_login[["en"]]
+        if (altro) {
+          paste0(
+            "If IT concludes that the account is not the one of then, revoke ",
+            "the row and file a new request. ", vecchio_login[["en"]]
+          )
+        }
       )
     )
   } else {
