@@ -13484,6 +13484,42 @@ test_that("la riga chiusa e revocata trattenuta per la mano di un altro prende i
 })
 
 
+test_that("la riga chiusa e revocata trattenuta la cui risoluzione non nomina nessuno non riceve username ne' identity, nemmeno dopo l'istanza", { # nolint: line_length_linter.
+  # eval
+  # The same held row, with a namesake under another contact in the
+  # directory: `ambiguous`. The door stays shut on a sealed row that names
+  # nobody (RR1), the second write too: `username` and `identity` go
+  # together or not at all (L6), so no `identity = 'ambiguous'` beside the
+  # name carried out. RF7 of the review of the correction of F1.
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+        username = "", identity = "absent", applied_as = "absent",
+        request_status = "revoked", role_name = "read only"
+      ))),
+      storia = c(
+        list(cambio(bruno, "role_name = 'read only'",
+                    timestamp = "2026-08-16 09:00")),
+        storia_chiusa_assente()
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(),
+    directory = directory_doppia(graph_user(
+      id = id_b, officeLocation = "altro.rossi@example.org"
+    )),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-17 03:00"
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "held")
+  expect_length(revocati(), 0L)
+  expect_null(identita_scritte())
+})
+
+
 # ---- The closed and revoked row across a round that does not act (F1) ----
 
 # F1 of the final review of the interactions of the 0.29.0, way (a): a
