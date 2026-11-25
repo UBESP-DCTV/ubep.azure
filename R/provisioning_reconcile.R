@@ -139,9 +139,26 @@
 #' after `DATO_COPPIA_CAMBIATA` and before `TRASPORTO_IDENTITA_CAMBIATA`, and
 #' stop the row as the rule of the pair does. A sealed row with no
 #' identifier gets it from the sweep, if the account that holds the name was
-#' born before the first seal of the newest run of executions of that name
-#' (`entra_fill()`); born after, `TRASPORTO_NOME_RIASSEGNATO` on a row not
-#' revoked. The identifier only adds stops.
+#' born before the first seal of the newest run of executions of that name,
+#' across a closure on a person gone from Entra (`entra_fill()`); born
+#' after, `TRASPORTO_NOME_RIASSEGNATO` on a row not revoked. The identifier
+#' only adds stops.
+#'
+#' **A closed row is judged on the last name granted** (item 14 of the
+#' limits, 0.29.0). A revocation closed on a person gone from Entra is
+#' sealed under the empty name. Set back to active, such a row is judged on
+#' the newest name the channel granted on it (`log_granted_names()`), for the
+#' check of the account, the rule of the pair, the claims of the duplicates
+#' and the message, also when the log does not verify the version of the
+#' closure: with `applied_entra_id`, the check; without it, the guard of the
+#' fill, which writes the identifier of an account born before the first
+#' execution of the name in the same round. Where the guard cannot decide,
+#' where the log verifies no name granted on a row carried out more than
+#' once, or does not say who wrote the identifier, the row stops on
+#' `TRASPORTO_IDENTITA_CAMBIATA`, for IT, with a paragraph of its own in the
+#' message. Left revoked with the person rewritten, the rule of the pair
+#' reads the name granted too, and the row stops on `DATO_COPPIA_CAMBIATA`
+#' instead of revoking the person written, whom it never served.
 #'
 #' **The oldest row of a pair keeps it whether the round serves it or not.**
 #' A row the round stops (held, blind, on its identity, on a pair that moved)
@@ -904,6 +921,53 @@ provisioning_reconcile <- function(register_url,
     )
   })
 
+  # A closed row: the channel's last seal is the closure's, a revocation
+  # sealed under the empty name while its person was gone from Entra (item 14
+  # of the limits). Set back to active, its last seal names nobody, and the
+  # round judged it as carried out for nobody: no check of the account, no
+  # rule of the pair on the person, "unknown" in the message. Its name
+  # carried out is the last one the channel granted on the row,
+  # `log_granted_names()`, verified by its own seal: for the check of the
+  # account, the rule of the pair, the claims of the duplicates and the
+  # message, also when the version of the closure does not verify. Only on a
+  # row that asks for an access, `reopened`: a row left revoked keeps the
+  # closure, and its revocation and the identity door are as before. The
+  # pair as it was, `executed_plain`, is what a revocation would leave on.
+  executed_plain <- executed_pair
+  closed <- vapply(seq_along(record_ids), function(i) {
+    pair <- executed_pair[[i]]
+    !is.null(pair) && !is.null(channel_account) &&
+      !is.na(pair[["username"]]) && !nzchar(pair[["username"]])
+  }, logical(1))
+  granted_closed <- lapply(seq_along(record_ids), function(i) {
+    if (!closed[[i]]) {
+      return(character())
+    }
+    log_granted_names(owners_log, record_ids[[i]], channel_account)
+  })
+  reopened <- closed &
+    !(trimws(as.character(register[["request_status"]])) %in% "revoked")
+  granted_known <- reopened & lengths(granted_closed) > 0L
+  for (i in which(granted_known)) {
+    executed_pair[[i]][["username"]] <- granted_closed[[i]][[1L]]
+  }
+  # A closed row set back to active with no name granted that the log
+  # verifies, carried out more than once in its life: the closure and an
+  # execution below it, which granted somebody the log cannot name (V4b of
+  # the verification of the limits). A row closed at its only execution,
+  # revoked before any round served it, granted nothing, and set back to
+  # active is a request like the others.
+  granted_unknown <- vapply(seq_along(record_ids), function(i) {
+    if (!reopened[[i]] || granted_known[[i]]) {
+      return(FALSE)
+    }
+    mine <- log_of_record(owners_log, record_ids[[i]])
+    channel <- log_channel_accounts(
+      owners_log, record_ids[[i]], channel_account
+    )
+    length(log_executions(mine, channel, channel_account)) >= 2L
+  }, logical(1))
+
   # The way out of the register for a renamed account, decided on
   # 2026-11-12 (item 12): a revoked row the channel carried out, whose
   # version carried out is certain (the seal did not move, or the log
@@ -1035,33 +1099,43 @@ provisioning_reconcile <- function(register_url,
   # rights away from an account. With an identifier believed, the check
   # (`entra_account_change()`); without one, the fill from the sweep with
   # its guard (`entra_fill()`), whose identifier the round writes.
+  #
+  # On a closed row set back to active (`reopened`) without an identifier,
+  # the guard of the fill decides (V3 of the verification, way (a)): born
+  # before the first execution of the name granted, across the closure, the
+  # row is granted and the identifier written in the same round; born after,
+  # `TRASPORTO_NOME_RIASSEGNATO`; nobody holding the name, the rule of the
+  # pair. Where the guard cannot decide, or the log cannot say (no name
+  # granted verified, V4b; an identifier written by nobody the log names,
+  # V4c), the row stops for IT on `TRASPORTO_IDENTITA_CAMBIATA`, with a
+  # paragraph of its own in the message (`undecided`). The fill goes across
+  # the closures on every row: a row granted again after a closure by an
+  # earlier version is dated from the first execution too (R1b).
   revoked_rows <- trimws(as.character(register[["request_status"]])) %in%
     "revoked"
   entra <- lapply(seq_along(record_ids), function(i) {
-    none <- list(code = "", upn = "", id = "")
-    carried_name <- if (certain[[i]]) {
+    none <- list(code = "", upn = "", id = "", undecided = FALSE)
+    undecided <- list(
+      code = "TRASPORTO_IDENTITA_CAMBIATA", upn = "", id = "", undecided = TRUE
+    )
+    # On a closed row set back to active the name carried out is the last
+    # one granted (`granted_known`, above), verified by its own seal: it is
+    # checked also when the version of the closure is not certain (V4a of
+    # the verification of the limits).
+    carried_name <- if (certain[[i]] || granted_known[[i]]) {
       executed_pair[[i]][["username"]]
     } else {
       NA_character_
     }
-    # A row closed on a person gone from Entra was sealed revoked under the
-    # empty name, and set back to active its last seal names nobody (item 14
-    # of the limits, 0.28.0). Its account is still the one the identifier
-    # says, under the last name the channel granted on the row: without it
-    # the check is skipped and the name, given again to another account,
-    # would be granted. Only on a row that asks for an access, and with an
-    # identifier believed: a row left revoked asks nothing.
-    if (!is.na(carried_name) && !nzchar(carried_name) &&
-          !revoked_rows[[i]] && !is.na(entra_believed[[i]]) &&
-          nzchar(entra_believed[[i]]) && !is.null(owners_log) &&
-          !is.null(channel_account)) {
-      granted <- log_granted_names(owners_log, record_ids[[i]], channel_account)
-      if (length(granted) > 0L) {
-        carried_name <- granted[[1L]]
-      }
+    if (blind[[i]] || exiting[[i]]) {
+      return(none)
     }
-    if (blind[[i]] || exiting[[i]] || is.na(entra_believed[[i]]) ||
-          is.na(carried_name) || !nzchar(carried_name)) {
+    if (reopened[[i]] &&
+          (granted_unknown[[i]] || is.na(entra_believed[[i]]))) {
+      return(undecided)
+    }
+    if (is.na(entra_believed[[i]]) || is.na(carried_name) ||
+          !nzchar(carried_name)) {
       return(none)
     }
     if (nzchar(entra_believed[[i]])) {
@@ -1069,15 +1143,22 @@ provisioning_reconcile <- function(register_url,
         carried_name, entra_believed[[i]], sweep[["users"]],
         revoked = revoked_rows[[i]]
       )
-      return(list(code = change[["code"]], upn = change[["upn"]], id = ""))
+      return(list(
+        code = change[["code"]], upn = change[["upn"]], id = "",
+        undecided = FALSE
+      ))
     }
     since <- report_person_since(
-      owners_log, record_ids[[i]], channel_account, username = carried_name
+      owners_log, record_ids[[i]], channel_account, username = carried_name,
+      across_closures = TRUE
     )
     fill <- entra_fill(
       carried_name, sweep[["users"]], since, revoked = revoked_rows[[i]]
     )
-    list(code = fill[["code"]], upn = "", id = fill[["id"]])
+    if (reopened[[i]] && fill[["undecided"]]) {
+      return(undecided)
+    }
+    list(code = fill[["code"]], upn = "", id = fill[["id"]], undecided = FALSE)
   })
 
   # RN2 of the review of the 0.26.0: a row the channel sealed whose field an
@@ -1129,14 +1210,35 @@ provisioning_reconcile <- function(register_url,
           identical(identity_normalize(resolved_names[[i]]), renamed_to)) {
       rewritten <- FALSE
     }
-    pair_change(
-      executed_pair[[i]], register[i, , drop = FALSE],
+    # A closed row left revoked, with the person rewritten: carried out for
+    # nobody, the rule of the pair saw no person, and the round revoked the
+    # person written, whom the row never served (V2 of the verification of
+    # the limits, option (a) of D1 of the design of the 0.29.0). The rule
+    # reads the name granted, and the row stops on its pair. Only with the
+    # person written: a closed row left as it was revokes as before, the
+    # account of its identifier renamed included (V1 of the review).
+    pair <- executed_pair[[i]]
+    if (closed[[i]] && revoked_rows[[i]] && !isFALSE(rewritten) &&
+          length(granted_closed[[i]]) > 0L) {
+      pair[["username"]] <- granted_closed[[i]][[1L]]
+    }
+    change <- pair_change(
+      pair, register[i, , drop = FALSE],
       target = if (resolvable[[i]]) resolved_names[[i]] else "",
       creating = (creating[[i]] && !unheard[[i]]) || reborn[[i]],
       rewritten = rewritten,
       revoked = revoked_rows[[i]],
       account = entra[[i]][["code"]]
     )
+    # The pair the message names: on a closed row, the name granted on it in
+    # every stop (M1 of the design of the 0.29.0), where the closure left the
+    # empty name. Only for the message: the rule of the pair above, the
+    # revocation and the claims read the pair as it was.
+    if (closed[[i]] && length(granted_closed[[i]]) > 0L &&
+          !is.na(pair[["username"]]) && !nzchar(pair[["username"]])) {
+      pair[["username"]] <- granted_closed[[i]][[1L]]
+    }
+    c(change, list(pair = pair))
   })
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))
   moved <- nzchar(shift_code)
@@ -2349,7 +2451,7 @@ provisioning_reconcile <- function(register_url,
   )
   carried_field <- function(field) {
     vapply(seq_along(record_ids), function(i) {
-      value <- if (moved[[i]]) executed_pair[[i]][[field]] else ""
+      value <- if (moved[[i]]) shifts[[i]][["pair"]][[field]] else ""
       if (is.na(value)) "" else value
     }, character(1))
   }
@@ -2402,7 +2504,10 @@ provisioning_reconcile <- function(register_url,
       # of the review of the limits, 0.28.0): with the person alone the
       # revocation leaves on the name carried out, but not when the person
       # written would be created, nor with the version carried out not
-      # certain or the channel's account not configured.
+      # certain or the channel's account not configured. Asked on the pair
+      # as the log gives it, not on the name granted of a closed row: such a
+      # row revoked is closed again, and stays stopped (V2 of the
+      # verification of the limits).
       revocation_stays = vapply(seq_along(record_ids), function(i) {
         if (!identical(shift_code[[i]], "DATO_COPPIA_CAMBIATA")) {
           return("")
@@ -2410,7 +2515,7 @@ provisioning_reconcile <- function(register_url,
         as_revoked <- register[i, , drop = FALSE]
         as_revoked[["request_status"]] <- "revoked"
         leaves <- !is.null(channel_account) && revocation_exits(
-          executed_pair[[i]], as_revoked, certain = certain[[i]],
+          executed_plain[[i]], as_revoked, certain = certain[[i]],
           creating = creating[[i]] && !unheard[[i]],
           granted = log_granted_names(
             owners_log, record_ids[[i]], channel_account
@@ -2422,6 +2527,23 @@ provisioning_reconcile <- function(register_url,
       # stopped on `TRASPORTO_ACCOUNT_RINOMINATO` (item 11 of the 0.27.0).
       entra_now = vapply(seq_along(record_ids), function(i) {
         if (moved[[i]]) entra[[i]][["upn"]] else ""
+      }, character(1)),
+      # A closed row set back to active and stopped because the round could
+      # not judge its account (item 14 of the limits, 0.29.0): the message
+      # says what the round could not establish, and the way out.
+      reopened_undecided = vapply(seq_along(record_ids), function(i) {
+        stop_undecided <- moved[[i]] && isTRUE(entra[[i]][["undecided"]]) &&
+          identical(shift_code[[i]], "TRASPORTO_IDENTITA_CAMBIATA")
+        if (stop_undecided) "yes" else ""
+      }, character(1)),
+      # A closed row set back to active and stopped on its account: revoked,
+      # it is closed again, and the message says that IT takes the old login
+      # off and deletes the row (D4 of the design of the 0.29.0).
+      closed_reopened = vapply(seq_along(record_ids), function(i) {
+        on_account <- moved[[i]] && reopened[[i]] && shift_code[[i]] %in% c(
+          "TRASPORTO_ACCOUNT_RINOMINATO", "TRASPORTO_IDENTITA_CAMBIATA"
+        )
+        if (on_account) "yes" else ""
       }, character(1)),
       stringsAsFactors = FALSE
     )

@@ -4950,6 +4950,47 @@ test_that("the person is dated by the run of executions for that name", {
 })
 
 
+test_that("the guard of the fill dates the person across a closure on a person gone from Entra (T14)", { # nolint: line_length_linter.
+  # eval
+  # Executed for Carla in August, revoked while Carla was gone from Entra and
+  # closed by the channel under the empty name, set back to active and
+  # executed again for the same name in September (item 14 of the limits,
+  # 0.29.0).
+  chiusa <- log_eseguita("41", carla, sopra = rbind(
+    evento("2026-08-14 05:00", canale,
+           "applied_seal = 'bbbbbbbbbbbb', seal_state = 'intact'"),
+    evento("2026-08-14 05:00", canale, "username = '', identity = 'absent'"),
+    evento("2026-08-13 10:00", referente, "request_status = 'revoked'")
+  ))
+  ancora <- rbind(
+    evento("2026-09-10 05:00", canale,
+           "applied_seal = 'cccccccccccc', seal_state = 'intact'"),
+    evento("2026-09-10 05:00", canale,
+           paste0("username = '", carla, "', identity = 'existing'")),
+    evento("2026-09-09 10:00", referente, "request_status = 'active'"),
+    chiusa
+  )
+
+  # test
+  # The report keeps the default: the closure ends the run.
+  expect_equal(report_person_since(ancora, "41", canale), "2026-09-10 05:00")
+  expect_equal(
+    report_person_since(chiusa, "41", canale, username = carla), character()
+  )
+  # The guard goes across it, to the first execution of the name.
+  expect_equal(
+    report_person_since(ancora, "41", canale, across_closures = TRUE),
+    "2026-08-03 23:03"
+  )
+  expect_equal(
+    report_person_since(chiusa, "41", canale, username = carla,
+                        across_closures = TRUE),
+    "2026-08-03 23:03"
+  )
+  expect_error(report_person_since(ancora, "41", canale, across_closures = NA))
+})
+
+
 test_that("an expired row nobody revoked is counted and not judged", {
   # eval
   # Carla never entered edc10, and both rows expired in October: the one the

@@ -17,8 +17,9 @@ answers; \code{character()} or \code{NA} when the log does not say.}
 \item{revoked}{Whether the row asks for \code{revoked}.}
 }
 \value{
-A list with \code{id}, the identifier to write or \code{""}, and \code{code},
-\code{TRASPORTO_NOME_RIASSEGNATO} or \code{""}.
+A list with \code{id}, the identifier to write or \code{""}, \code{code},
+\code{TRASPORTO_NOME_RIASSEGNATO} or \code{""}, and \code{undecided}, \code{TRUE} when the
+guard cannot decide.
 }
 \description{
 Item 11 of the 0.27.0 (decided on 2026-11-12): the rows the channel
@@ -29,7 +30,11 @@ carried out under that name: \code{since} is the first seal of the newest run
 of executions of that name, \code{report_person_since()}, in Rome's civil time
 and to the minute as the log stamps it. The reference is the first seal
 of the run and not the last: with the last, a name given again and then
-an execution for a change of role would pass.
+an execution for a change of role would pass. The run goes across a
+closure on a person gone from Entra (\code{across_closures}, item 14 of the
+limits, 0.29.0): a row set back to active after it, or granted again
+after it by an earlier version, is dated from the first execution of the
+name, not from the reopening.
 }
 \details{
 \itemize{
@@ -37,10 +42,17 @@ an execution for a change of role would pass.
 (\code{report_graph_time()}): the identifier is written, with no message.
 \item Born after: on a row not revoked \code{TRASPORTO_NOME_RIASSEGNATO} and no
 identifier; on a revoked row neither.
-\item A date that does not read, no \code{since}, nobody or two accounts carrying
-the name, an identifier the door would refuse: neither, and the next
-round tries again.
+\item Nobody carrying the name, or no name: nothing to say.
+\item Two accounts carrying the name, no \code{since} or one that does not read, a
+date of creation that does not read, an identifier the door would
+refuse: the guard cannot decide, \code{undecided}.
 }
+
+The last two write nothing and stop nothing, and the next round tries
+again. The caller tells them apart on a row closed on a person gone from
+Entra and set back to active, which stops for IT when the guard cannot
+decide (item 14 of the limits, 0.29.0); on every other row both are
+nothing.
 
 An account born in the same minute as the first seal passes: the log has
 minutes and Graph seconds, and a creation precedes the first execution by

@@ -4,7 +4,13 @@
 \alias{report_person_since}
 \title{Since when the person a row names has had its access}
 \usage{
-report_person_since(events, record, channel_account = NULL, username = NULL)
+report_person_since(
+  events,
+  record,
+  channel_account = NULL,
+  username = NULL,
+  across_closures = FALSE
+)
 }
 \arguments{
 \item{events}{The event log, as \code{register_log()} returns it.}
@@ -18,6 +24,14 @@ token, one or more, or \code{NULL} when they are not configured, for
 \item{username}{The name to date: the name executed of a stopped row,
 read by \code{report_executed_register()}, which can differ from the newest
 one written; \code{NULL} for the newest one written, the register's.}
+
+\item{across_closures}{Whether a seal carried out for the empty name, the
+one of a revocation closed on a person gone from Entra, leaves the run
+whole instead of ending it. For the guard of \code{entra_fill()} (item 14 of
+the limits, 0.29.0): the account a row set back to active after such a
+closure serves has to be born before the first execution of the name,
+not before the reopening, and so does the account of a row granted
+again after it. The report keeps the default.}
 }
 \value{
 One stamp, \code{"\%Y-\%m-\%d \%H:\%M"} in Rome; \code{character()} when the

@@ -4083,15 +4083,15 @@ test_that("il riempimento prende l'account nato prima della fine del minuto del 
   # test
   expect_equal(
     entra_fill(nome_eseguito, prima, "2026-08-12 05:00"),
-    list(id = id_a, code = "")
+    list(id = id_a, code = "", undecided = FALSE)
   )
   expect_equal(
     entra_fill(nome_eseguito, dopo, "2026-08-12 05:00"),
-    list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO")
+    list(id = "", code = "TRASPORTO_NOME_RIASSEGNATO", undecided = FALSE)
   )
   expect_equal(
     entra_fill(nome_eseguito, dopo, "2026-08-12 05:00", revoked = TRUE),
-    list(id = "", code = "")
+    list(id = "", code = "", undecided = FALSE)
   )
   # Winter time: 05:00 in Rome is 04:00 in UTC.
   expect_equal(
@@ -4104,40 +4104,71 @@ test_that("il riempimento prende l'account nato prima della fine del minuto del 
 })
 
 
-test_that("il riempimento senza data, senza sigillo o senza titolare non fa niente", { # nolint: line_length_linter.
+test_that("il riempimento dice quando non sa decidere, e quando non ha niente da dire (T13)", { # nolint: line_length_linter.
   # eval
-  nessuno <- list(id = "", code = "")
+  # Item 14 of the limits, 0.29.0. Both write nothing and stop nothing on
+  # an ordinary row, and the next round tries again; on a row closed on a
+  # person gone from Entra and set back to active, "cannot decide" stops the
+  # row for IT, and "nothing to say" leaves it to the rule of the pair.
+  indeciso <- list(id = "", code = "", undecided = TRUE)
+  niente <- list(id = "", code = "", undecided = FALSE)
+  quando <- "2026-08-12 05:00"
 
   # test
-  expect_equal(
-    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "")),
-               "2026-08-12 05:00"),
-    nessuno
-  )
-  expect_equal(
-    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "ieri")),
-               "2026-08-12 05:00"),
-    nessuno
-  )
+  # No instant of the first execution, or one that does not read.
   expect_equal(entra_fill(nome_eseguito, spazzata(list()), character()),
-               nessuno)
+               indeciso)
   expect_equal(entra_fill(nome_eseguito, spazzata(list()), NA_character_),
-               nessuno)
+               indeciso)
+  expect_equal(entra_fill(nome_eseguito, spazzata(list()), NA), indeciso)
   expect_equal(entra_fill(nome_eseguito, spazzata(list()), "2026-08-12"),
-               nessuno)
+               indeciso)
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list()), "2026-02-30 05:00"), indeciso
+  )
+  # Two accounts holding the name: a sweep this package does not understand.
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(), list(id = id_b)), quando),
+    indeciso
+  )
+  # One holder whose creation does not read, or whose identifier the door
+  # would refuse.
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "")), quando),
+    indeciso
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(createdDateTime = "ieri")), quando),
+    indeciso
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(id = "o'brien")), quando),
+    indeciso
+  )
+  expect_equal(
+    entra_fill(nome_eseguito, spazzata(list(id = "")), quando), indeciso
+  )
+  # Nobody holds the name, whatever the log says, or there is no name.
+  expect_equal(
+    entra_fill(
+      nome_eseguito, spazzata(list(userPrincipalName = "altro@x.it")), quando
+    ),
+    niente
+  )
   expect_equal(
     entra_fill(
       nome_eseguito, spazzata(list(userPrincipalName = "altro@x.it")),
-      "2026-08-12 05:00"
+      character()
     ),
-    nessuno
+    niente
   )
-  expect_equal(
-    entra_fill(
-      nome_eseguito, spazzata(list(), list(id = id_b)), "2026-08-12 05:00"
-    ),
-    nessuno
-  )
+  expect_equal(entra_fill("", spazzata(list()), quando), niente)
+  expect_equal(entra_fill("", spazzata(list()), NA_character_), niente)
+  # On a revoked row the account born after is no stop either.
+  expect_false(entra_fill(
+    nome_eseguito, spazzata(list(createdDateTime = "2026-09-01T08:00:00Z")),
+    quando, revoked = TRUE
+  )[["undecided"]])
 })
 
 
@@ -4187,6 +4218,6 @@ test_that("il riempimento non rende un id con un apice, che la porta rifiuterebb
   # test
   expect_equal(
     entra_fill(nome_eseguito, storto, "2026-08-12 05:00"),
-    list(id = "", code = "")
+    list(id = "", code = "", undecided = TRUE)
   )
 })

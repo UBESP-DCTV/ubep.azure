@@ -489,12 +489,134 @@ mail_outcome_message <- function(row) {
     list(it = NULL, en = NULL)
   }
 
+  # A row revoked and closed on a person gone from Entra, and set back to
+  # active (item 14 of the limits, 0.29.0, D4 of its design). Revoked again,
+  # it is closed again: the revocation goes to the name the round finds now,
+  # not to the old login, and the row holds the pair against the new request.
+  # Left to IT's procedure: the message of the stops whose way out is a
+  # revocation and a new request says so.
+  chiusa <- identical(mail_said_or(row[["closed_reopened"]], ""), "yes")
+  indecisa <- identical(mail_said_or(row[["reopened_undecided"]], ""), "yes")
+  # What a revocation of the closed row does, said once: after the closure
+  # where the message has not told it yet, by itself in the paragraph of the
+  # row set back to active, which opens with the closure.
+  revoca_chiusa <- list(
+    it = paste0(
+      "puo' non togliere il vecchio login dal progetto, e tiene la coppia ",
+      "contro la richiesta nuova. IT toglie a mano il vecchio login, se c'e' ",
+      "ancora, e cancella la riga vecchia quando la revoca e' applicata; poi ",
+      "la richiesta nuova si esegue."
+    ),
+    en = paste0(
+      "may not take the old login off the project, and holds the pair ",
+      "against the new request. IT takes the old login off by hand, if it is ",
+      "still there, and deletes the old row once the revocation is applied; ",
+      "then the new request is carried out."
+    )
+  )
+  vecchio_login <- list(
+    it = paste0(
+      "Questa riga era stata revocata e chiusa quando la persona non era ",
+      "piu' su Entra: revocata, ", revoca_chiusa[["it"]]
+    ),
+    en = paste0(
+      "This row had been revoked and closed when the person was no longer on ",
+      "Entra: revoked, it ", revoca_chiusa[["en"]]
+    )
+  )
+
   # The account carried out changed on Entra and nobody wrote the person in
   # the row, decided on 2026-11-09: the referent has nothing to undo, and IT,
   # in copy, looks at the account.
-  account <- if (identita_cambiata) {
+  #
+  # On a closed row set back to active whose account the round could not
+  # judge (`reopened_undecided`, item 14 of the limits, 0.29.0) the account
+  # may be the one of then: the message says what the round could not
+  # establish, and the way out, a revocation and a new request once IT has
+  # looked at the account.
+  account <- if (identita_cambiata && indecisa) {
     trovato_it <- mail_said_or(row[["username"]], "nessuno")
     trovato_en <- mail_said_or(row[["username"]], "none")
+    # V4b and V4c stop the row before the round looks at the directory, also
+    # with the person still absent. Nobody found: revoked, the row closes
+    # again and holds no pair, and IT has no old row to delete.
+    trovato <- nzchar(mail_said_or(row[["username"]], ""))
+    list(
+      it = c(
+        "",
+        paste0(
+          "Questa richiesta era stata revocata e chiusa quando la persona non ",
+          "era piu' su Entra, ed e' stata riattivata. Il canale non e' ",
+          "riuscito a stabilire se l'account che porta ora il nome utente ",
+          "eseguito e' quello a cui aveva dato l'accesso, e non concede ",
+          "finche' non lo sa: sull'istanza non e' cambiato niente, e la riga ",
+          "resta ferma."
+        ),
+        paste0(
+          "Eseguita per: ", eseguita[["username"]], ", su ",
+          eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
+        ),
+        paste0("Account trovato ora: ", trovato_it),
+        if (trovato) {
+          paste0(
+            "IT verifica su Entra quando e' stato creato l'account che porta ",
+            "il nome (proprieta' dell'utente, Created date time) e, per un ",
+            "cambio recente, negli Audit logs, che tengono da 7 a 30 giorni. ",
+            "Non modificare la riga: revocala e compila una richiesta nuova."
+          )
+        } else {
+          paste0(
+            "Il canale non ha trovato su Entra un account per la persona ",
+            "della riga. IT verifica su Entra chi porta ora il nome utente ",
+            "eseguito, se qualcuno lo porta, e che la persona non sia ",
+            "tornata con un altro account. Non modificare la riga: revocala ",
+            "e compila una richiesta nuova. Revocata, la riga si chiude di ",
+            "nuovo, senza tenere la coppia contro la richiesta nuova."
+          )
+        },
+        if (trovato) paste0("Revocata, la riga ", revoca_chiusa[["it"]])
+      ),
+      en = c(
+        "",
+        paste0(
+          "This request had been revoked and closed when the person was no ",
+          "longer on Entra, and was set back to active. The channel could not ",
+          "establish whether the account that now holds the applied username ",
+          "is the one it had given the access to, and grants nothing until it ",
+          "knows: nothing has changed on the instance, and the row stays ",
+          "stopped."
+        ),
+        paste0(
+          "Applied for: ", executed[["username"]], ", on ",
+          executed[["server"]], ", project ", executed[["project_id"]], "."
+        ),
+        paste0("Account found now: ", trovato_en),
+        if (trovato) {
+          paste0(
+            "IT checks on Entra when the account holding the name was ",
+            "created (user properties, Created date time) and, for a recent ",
+            "change, the Audit logs, which keep 7 to 30 days. Do not edit the ",
+            "row: revoke it and file a new request."
+          )
+        } else {
+          paste0(
+            "The channel found no account on Entra for the person of the ",
+            "row. IT checks on Entra who holds the applied username now, if ",
+            "anybody does, and that the person has not come back with ",
+            "another account. Do not edit the row: revoke it and file a new ",
+            "request. Revoked, the row is closed again, without holding the ",
+            "pair against the new request."
+          )
+        },
+        if (trovato) paste0("Revoked, the row ", revoca_chiusa[["en"]])
+      )
+    )
+  } else if (identita_cambiata) {
+    trovato_it <- mail_said_or(row[["username"]], "nessuno")
+    trovato_en <- mail_said_or(row[["username"]], "none")
+    # Nobody found, a person to create: a revocation of the closed row closes
+    # again and holds no pair, and the new request creates the person.
+    altro <- chiusa && nzchar(mail_said_or(row[["username"]], ""))
     list(
       it = c(
         "",
@@ -514,7 +636,13 @@ mail_outcome_message <- function(row) {
         paste0("Account trovato ora: ", trovato_it),
         paste0(
           "IT verifica l'account su Entra; non serve modificare la riga."
-        )
+        ),
+        if (altro) {
+          paste0(
+            "Se IT conclude che l'account non e' quello di allora, revoca la ",
+            "riga e compila una richiesta nuova. ", vecchio_login[["it"]]
+          )
+        }
       ),
       en = c(
         "",
@@ -532,7 +660,13 @@ mail_outcome_message <- function(row) {
           executed[["server"]], ", project ", executed[["project_id"]], "."
         ),
         paste0("Account found now: ", trovato_en),
-        "IT checks the account on Entra; the row needs no edit."
+        "IT checks the account on Entra; the row needs no edit.",
+        if (altro) {
+          paste0(
+            "If IT concludes that the account is not the one of then, revoke ",
+            "the row and file a new request. ", vecchio_login[["en"]]
+          )
+        }
       )
     )
   } else {
@@ -620,11 +754,21 @@ mail_outcome_message <- function(row) {
           eseguita[["server"]], ", progetto ", eseguita[["project_id"]], "."
         ),
         paste0("Nome utente dell'account ora: ", nome_it),
-        paste0(
-          "Non serve modificare la riga: IT verifica l'account su Entra. Se ",
-          "il nome nuovo resta, revoca la riga, che toglie l'accesso al nome ",
-          "di allora, e compila una richiesta nuova, che trova il nome nuovo."
-        )
+        if (chiusa) {
+          paste0(
+            "Non serve modificare la riga: IT verifica l'account su Entra. Se ",
+            "il nome nuovo resta, revoca la riga e compila una richiesta ",
+            "nuova, che trova il nome nuovo."
+          )
+        } else {
+          paste0(
+            "Non serve modificare la riga: IT verifica l'account su Entra. Se ",
+            "il nome nuovo resta, revoca la riga, che toglie l'accesso al ",
+            "nome di allora, e compila una richiesta nuova, che trova il nome ",
+            "nuovo."
+          )
+        },
+        if (chiusa) vecchio_login[["it"]]
       ),
       en = c(
         "",
@@ -639,12 +783,21 @@ mail_outcome_message <- function(row) {
           executed[["server"]], ", project ", executed[["project_id"]], "."
         ),
         paste0("Username of the account now: ", nome_en),
-        paste0(
-          "The row needs no edit: IT checks the account on Entra. If the new ",
-          "name stays, revoke the row, which takes the access away from the ",
-          "username of then, and file a new request, which finds the new ",
-          "name."
-        )
+        if (chiusa) {
+          paste0(
+            "The row needs no edit: IT checks the account on Entra. If the ",
+            "new name stays, revoke the row and file a new request, which ",
+            "finds the new name."
+          )
+        } else {
+          paste0(
+            "The row needs no edit: IT checks the account on Entra. If the ",
+            "new name stays, revoke the row, which takes the access away from ",
+            "the username of then, and file a new request, which finds the ",
+            "new name."
+          )
+        },
+        if (chiusa) vecchio_login[["en"]]
       )
     )
   } else {
