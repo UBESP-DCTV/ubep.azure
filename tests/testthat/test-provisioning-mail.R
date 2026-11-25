@@ -2816,7 +2816,7 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare dic
     fixed = TRUE
   )
   expect_match(
-    indecisa, "IT verifica su Entra da quando l'account porta il nome",
+    indecisa, "IT verifica su Entra quando e' stato creato l'account",
     fixed = TRUE
   )
   expect_match(indecisa, "revocala e compila una richiesta nuova", fixed = TRUE)
@@ -2834,7 +2834,7 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare dic
     fixed = TRUE
   )
   expect_match(
-    indecisa, "IT checks on Entra since when the account holds the name",
+    indecisa, "IT checks on Entra when the account holding the name was",
     fixed = TRUE
   )
   expect_match(indecisa, "IT takes the old login off by hand", fixed = TRUE)
@@ -2921,6 +2921,40 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare, se
     fixed = TRUE
   )
   expect_match(corpo, "revocala e compila una richiesta nuova", fixed = TRUE)
+})
+
+
+test_that("il messaggio della riga riattivata che il canale non sa giudicare manda IT alla data di creazione dell'account, non ai soli Audit logs", { # nolint: line_length_linter.
+  # eval
+  # The Audit logs of Entra keep 7 days with Entra ID Free and 30 with P1
+  # or P2: a closure and a name given again months before are no longer
+  # there. The date of creation of the account stays.
+  corpo <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(reopened_undecided = "yes"))
+  ))[["body"]]
+
+  # test
+  expect_match(
+    corpo,
+    paste0(
+      "IT verifica su Entra quando e' stato creato l'account che porta il ",
+      "nome (proprieta' dell'utente, Created date time)"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    paste0(
+      "IT checks on Entra when the account holding the name was created ",
+      "(user properties, Created date time)"
+    ),
+    fixed = TRUE
+  )
+  expect_match(corpo, "che tengono da 7 a 30 giorni", fixed = TRUE)
+  expect_match(corpo, "which keep 7 to 30 days", fixed = TRUE)
+  expect_false(grepl("da quando l'account porta il nome", corpo, fixed = TRUE))
+  expect_false(grepl("since when the account holds", corpo, fixed = TRUE))
 })
 
 

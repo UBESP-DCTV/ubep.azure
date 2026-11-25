@@ -1198,9 +1198,11 @@ La regola è `pair_change()`, con quattro codici:
   porta rifiuterebbe), il log non verifica il nome concesso su una riga
   eseguita più volte, o non dice chi ha scritto l'`id`. Il messaggio ha un
   paragrafo suo (colonna `reopened_undecided` dell'identificazione): IT
-  verifica su Entra da quando l'account porta il nome, il proprietario revoca
-  la riga e compila una richiesta nuova, e IT toglie a mano il vecchio login
-  e cancella la riga vecchia quando la revoca è `applied`.
+  verifica su Entra quando è stato creato l'account che porta il nome
+  (*Created date time* fra le proprietà dell'utente; gli *Audit logs* tengono
+  da 7 a 30 giorni, e bastano solo per un cambio recente), il proprietario
+  revoca la riga e compila una richiesta nuova, e IT toglie a mano il vecchio
+  login e cancella la riga vecchia quando la revoca è `applied`.
 
 In tutti i casi sull'istanza non si scrive niente, nessuno nasce su
 Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta delle

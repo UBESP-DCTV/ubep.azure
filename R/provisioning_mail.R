@@ -525,9 +525,10 @@ mail_outcome_message <- function(row) {
         paste0("Account trovato ora: ", trovato_it),
         if (trovato) {
           paste0(
-            "IT verifica su Entra da quando l'account porta il nome (Audit ",
-            "logs). Non modificare la riga: revocala e compila una ",
-            "richiesta nuova."
+            "IT verifica su Entra quando e' stato creato l'account che porta ",
+            "il nome (proprieta' dell'utente, Created date time) e, per un ",
+            "cambio recente, negli Audit logs, che tengono da 7 a 30 giorni. ",
+            "Non modificare la riga: revocala e compila una richiesta nuova."
           )
         } else {
           paste0(
@@ -558,9 +559,10 @@ mail_outcome_message <- function(row) {
         paste0("Account found now: ", trovato_en),
         if (trovato) {
           paste0(
-            "IT checks on Entra since when the account holds the name ",
-            "(Audit logs). Do not edit the row: revoke it and file a new ",
-            "request."
+            "IT checks on Entra when the account holding the name was ",
+            "created (user properties, Created date time) and, for a recent ",
+            "change, the Audit logs, which keep 7 to 30 days. Do not edit the ",
+            "row: revoke it and file a new request."
           )
         } else {
           paste0(
