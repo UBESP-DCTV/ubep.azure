@@ -1,3 +1,150 @@
+# ubep.azure 0.29.0
+
+A row closed on a person gone from Entra and set back to active is judged
+on the last name the channel granted on it, also without its account `id`.
+The observer counts expired pairs on the date in Rome, and a round takes
+its day once, from `at`, and acts on nothing where the date in Rome has
+turned before it acts. The ready text closes the two methods as Entra
+does, says what to do when the welcome is lost and opens step 4 with the
+ban on `Skip for now`; the welcome names the recovery address, and every
+greeting stays one line. The round folds the directory once instead of
+once for every row.
+
+* **A row closed on a person gone from Entra and set back to active is
+  judged on the last name the channel granted on it, also without
+  `applied_entra_id`.** Item 14 of the limits, the part the 0.28.0 left
+  out. The last seal of such a row is the closure's, under the empty name:
+  without the identifier the round granted the name given again to another
+  account, and at the next round wrote that account's identifier; a person
+  written in the row passed the rule of the pair; the message said
+  "unknown". On a row that is not revoked the name carried out is now the
+  newest of `log_granted_names()`, for the check of the account, the rule of
+  the pair, the claims of the duplicates and the message, also when the log
+  does not verify the version of the closure. With `applied_entra_id` the
+  account is checked as on any row carried out. Without it the guard of
+  `entra_fill()` decides, dating the account from the first execution of
+  the name across the closure (`report_person_since(across_closures =
+  TRUE)`, on every row filled): born before, the row is granted and the
+  identifier written in the same round; born after,
+  `TRASPORTO_NOME_RIASSEGNATO`. Where the guard cannot decide
+  (`entra_fill()` now answers `undecided`), or the log does not verify the
+  name granted on a row carried out more than once, or does not say who
+  wrote the identifier, the row stops on `TRASPORTO_IDENTITA_CAMBIATA`, with
+  IT in copy and a paragraph of its own in the message (column
+  `reopened_undecided`). A person written in a closed row with a name the
+  channel granted on it stops it on `DATO_COPPIA_CAMBIATA`, revoked or not:
+  revoked with the fields not set back, the round revoked the person
+  written, whom the row never served, and the message now says that such a
+  revocation stays stopped. A closed row that never granted a name does
+  not stop there: revoked with the person rewritten, it revokes the person
+  written, as in the 0.28.0, as a request of the referent to revoke. The
+  message of every stop of a closed row, also one left revoked, names the
+  name granted on it instead of "unknown".
+  Revoked with an account found, a closed row is closed again on the name
+  found now and keeps the pair against the new request: the messages of its
+  stops on the account (column `closed_reopened`) say that IT takes the old
+  login off by hand and deletes the old row once the revocation is applied.
+  With nobody found it closes and holds no pair, and the message of the
+  undecided stop says so.
+
+* **The observer counts expired pairs on REDCap's date, the one in Rome.**
+  Item D1 of the review of the 0.28.0. `dev/runner-osservatore.R` passed the
+  machine's date, in UTC, to `observe_instance()`: between 22:00 and 24:00
+  UTC (23:00 in winter) a pair expiring on Rome's date, which REDCap already
+  refuses, was left out of `coppie_scadute`. The runner and the default of
+  `today` read `redcap_today()`. The runs of the timer, at 03:00 UTC, do not
+  change; the runner installed in `/opt` does.
+
+* **A round judges every row on one day.** Item D4 of the review of the
+  0.28.0. The round took Rome's date at each gate, reading the clock again,
+  while its outcomes and messages carry `at`: a round that passed Rome's
+  midnight judged a row on one day and dated its outcome on the other. The
+  date is now taken once from `at` and passed to `validate_request()`, the
+  choice of the rows lapsed and the gate on the referent's permission,
+  withdrawals included, through a new `today` argument that defaults to
+  `redcap_today()`. Before it writes to an instance and before it creates a
+  person the round reads the clock again: if Rome's date is no longer the
+  one of `at`, as in a round that passes Rome's midnight, it acts on nothing
+  there and the rows wait under `TRASPORTO_GIORNO_CAMBIATO`, which the
+  round's `errori` carry too. Each of those rows gets a message, which says
+  that the round stopped before writing, and another when the next round
+  acts on it. An `at` that does not read as `YYYY-MM-DD HH:MM` stops the
+  round.
+
+* **A closed row revoked waits for the instance like the others.** F1 of
+  the final review of the interactions. On a row closed on a person gone
+  from Entra and then revoked by its owner, the identity door wrote the name
+  the round resolved before the round asked the instance. A round that then
+  did not act there, on an instance that did not answer or, from this
+  release, after Rome's date changed, left the row differing from its seal
+  by the channel's hand alone: the next round held it (`SIGILLO_DIVERSO`,
+  with no author) and asked the owner to approve the channel's own write,
+  and the old login stayed on the project. On such a row the door now
+  writes the name once the round has carried the revocation out, before its
+  outcome and its seal, or once the row is held; a round that does not act
+  leaves the row as it was, and the next one revokes. A name that does not
+  reach the register leaves the row unsealed, and the next round does it
+  again. Every other row gets its name before the instance is asked, as
+  before. The name still reached a closed row by other ways: a round on the
+  row set back to active that wrote it and did not seal the row (stopped,
+  or held because somebody else reopened it), then the owner put it back
+  to revoked; a round of the 0.28.0 that did not act; a write whose answer
+  was lost. So a closed row that asks for its revocation, where nobody has
+  a hand in the change and the only intent field away from the closure is
+  the name the log says the channel wrote, is no longer held: its
+  revocation goes on, and its owner is not asked to approve the channel's
+  own write. Rows the 0.28.0 left in that state are revoked at the first
+  round. A row that asks for an access, any other difference from the
+  closure, or a name written by another account is held as before.
+
+* **The ready text closes the two methods as Entra does.** Seen on a test
+  account on 2026-11-24: Authenticator, method 1 of 2, closes with `Done`,
+  then method 2 of 2, the recovery address, with `Next`. The ready text
+  said "Next and Done" at the end of the recovery address. The Italian text
+  gives the Italian labels with the English one in brackets where that test
+  or the work instruction 00.06 shows them (`Avanti (Next)`, also on the
+  user name page, `Fine (Done)`, `"Metodo 2 di 2" ("Method 2 of 2")`), the
+  others in English alone. White space inside the first name, a line break
+  included, becomes one space in the greeting, which stays one line
+  (`mail_credential_ready_text()`).
+
+* **The ready text says what to do when the welcome is lost, and the
+  welcome names the recovery address.** Decided on 2026-11-25. The sentence
+  of the ready text that says where the welcome is, in the first
+  paragraph, adds "if you cannot find it, write to me" after the junk
+  folder: the welcome may be lost, in the junk folder or never arrived, and
+  the person is sent to the referent. The ban on `Skip for now` opens step
+  4, before the instructions of the step, instead of closing it. The first
+  item of the welcome adds the e-mail address of the person's own that
+  Entra asks for after Authenticator, to recover the password; the items
+  stay three (`mail_credential_ready_text()`, `mail_welcome_message()`).
+
+* **The welcome and the access e-mail greet the person as the ready text
+  does.** They printed the first name as the row holds it: a missing name
+  gave "Ciao NA,", a line break inside it broke the greeting, and repeated
+  spaces stayed in it. A name that is missing, empty or only white space
+  now leaves "Ciao," and "Hello,", and white space inside it becomes one
+  space. The three messages share `mail_greeting()`.
+
+* **The round folds the directory once, not once for every row.** Each
+  resolution folded the surnames, the given names and the contacts of the
+  whole directory again, and the check of the Entra account normalized its
+  usernames and ids again, so a round cost about a quarter of a second for
+  each row of the register on a directory of thousands of accounts.
+  `directory_folds()` computes those values once, from the same functions,
+  when they are first read, and the round hands them to every resolution
+  and every check. On a synthetic register a quiet round is about three
+  times faster, with the same outcomes, writes, questions to the instances
+  and messages, tested against the fold for every row.
+
+* **Shape of the release.** No dictionary, module or record changes.
+  First the package, then the observer's job (`dev/runner-osservatore.R`)
+  in `/opt`: the old job with the new package passes `today` itself, the
+  new one needs `redcap_today()`, there since the 0.28.0. Back, the job
+  first. Back on the 0.28.0, rows the 0.29.0 stops on
+  `TRASPORTO_NOME_RIASSEGNATO`, `TRASPORTO_IDENTITA_CAMBIATA` or
+  `DATO_COPPIA_CAMBIATA` may be granted at the next round.
+
 # ubep.azure 0.28.0
 
 The e-mail that brings the key to the referent closes with a text to copy
