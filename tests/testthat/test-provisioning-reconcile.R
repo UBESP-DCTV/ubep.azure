@@ -7345,6 +7345,23 @@ test_that("il giorno del giro e' quello di Roma dell'istante at, letto in UTC", 
 })
 
 
+test_that("un at che non si legge come istante ferma il giro e dice perche'", { # nolint: line_length_linter.
+  # A date alone, which the round took before `at` gave it its day, a date
+  # in another order, nothing. Without the stop the round went on and fell,
+  # later and only with a row to judge, on a message that does not name `at`.
+  for (at in c("2026-06-30", "30/06/2026 21:59", "")) {
+    expect_error(
+      giro(
+        registro_doppio(record_json(list(expiration = "2027-01-31"))),
+        istanza_doppia(list()),
+        at = at
+      ),
+      "`at` is not an instant", fixed = TRUE, info = at
+    )
+  }
+})
+
+
 test_that("il giro passa il suo giorno a ogni cancello che giudica una data", { # nolint: line_length_linter.
   # The tests above reach the last day, the lapsed rows and the referent's
   # permission. The rows whose person is to be created and the revocations
