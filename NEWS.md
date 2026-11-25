@@ -95,7 +95,8 @@ once for every row.
   revocation goes on, and its owner is not asked to approve the channel's
   own write. Rows the 0.28.0 left in that state are revoked at the first
   round. A row that asks for an access, any other difference from the
-  closure, or a name written by another account is held as before.
+  closure, or a name written by another account is held, or stopped on
+  its pair, as before.
 
 * **The ready text closes the two methods as Entra does.** Seen on a test
   account on 2026-11-24: Authenticator, method 1 of 2, closes with `Done`,
@@ -110,8 +111,7 @@ once for every row.
 
 * **The ready text says what to do when the welcome is lost, and the
   welcome names the recovery address.** Decided on 2026-11-25. The sentence
-  of the ready text that says where the welcome is, in the first
-  paragraph, adds "if you cannot find it, write to me" after the junk
+  of the ready text that says where the welcome is, under the key, adds "if you cannot find it, write to me" after the junk
   folder: the welcome may be lost, in the junk folder or never arrived, and
   the person is sent to the referent. The ban on `Skip for now` opens step
   4, before the instructions of the step, instead of closing it. The first
