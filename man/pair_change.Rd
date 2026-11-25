@@ -34,7 +34,10 @@ the log does not say who wrote it, which counts as a write.}
 \item{revoked}{Whether the row asks for \code{revoked}.}
 
 \item{account}{What the identifier on Entra says, \code{""} when it says
-nothing: \code{TRASPORTO_NOME_RIASSEGNATO} or \code{TRASPORTO_ACCOUNT_RINOMINATO}.}
+nothing: \code{TRASPORTO_NOME_RIASSEGNATO} or \code{TRASPORTO_ACCOUNT_RINOMINATO};
+or \code{TRASPORTO_IDENTITA_CAMBIATA} for a row closed on a person gone from
+Entra and set back to active, whose account the round cannot judge
+(item 14 of the limits, 0.29.0).}
 }
 \value{
 A list with \code{code}, one of the four codes or \code{""}, and \code{changed},

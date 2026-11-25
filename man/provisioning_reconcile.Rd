@@ -248,9 +248,26 @@ the account under another name, \code{TRASPORTO_ACCOUNT_RINOMINATO}. Both come
 after \code{DATO_COPPIA_CAMBIATA} and before \code{TRASPORTO_IDENTITA_CAMBIATA}, and
 stop the row as the rule of the pair does. A sealed row with no
 identifier gets it from the sweep, if the account that holds the name was
-born before the first seal of the newest run of executions of that name
-(\code{entra_fill()}); born after, \code{TRASPORTO_NOME_RIASSEGNATO} on a row not
-revoked. The identifier only adds stops.
+born before the first seal of the newest run of executions of that name,
+across a closure on a person gone from Entra (\code{entra_fill()}); born
+after, \code{TRASPORTO_NOME_RIASSEGNATO} on a row not revoked. The identifier
+only adds stops.
+
+\strong{A closed row is judged on the last name granted} (item 14 of the
+limits, 0.29.0). A revocation closed on a person gone from Entra is
+sealed under the empty name. Set back to active, such a row is judged on
+the newest name the channel granted on it (\code{log_granted_names()}), for the
+check of the account, the rule of the pair, the claims of the duplicates
+and the message, also when the log does not verify the version of the
+closure: with \code{applied_entra_id}, the check; without it, the guard of the
+fill, which writes the identifier of an account born before the first
+execution of the name in the same round. Where the guard cannot decide,
+where the log verifies no name granted on a row carried out more than
+once, or does not say who wrote the identifier, the row stops on
+\code{TRASPORTO_IDENTITA_CAMBIATA}, for IT, with a paragraph of its own in the
+message. Left revoked with the person rewritten, the rule of the pair
+reads the name granted too, and the row stops on \code{DATO_COPPIA_CAMBIATA}
+instead of revoking the person written, whom it never served.
 
 \strong{The oldest row of a pair keeps it whether the round serves it or not.}
 A row the round stops (held, blind, on its identity, on a pair that moved)
