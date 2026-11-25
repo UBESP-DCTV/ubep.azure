@@ -2440,6 +2440,23 @@ provisioning_reconcile <- function(register_url,
       entra_now = vapply(seq_along(record_ids), function(i) {
         if (moved[[i]]) entra[[i]][["upn"]] else ""
       }, character(1)),
+      # A closed row set back to active and stopped because the round could
+      # not judge its account (item 14 of the limits, 0.29.0): the message
+      # says what the round could not establish, and the way out.
+      reopened_undecided = vapply(seq_along(record_ids), function(i) {
+        stop_undecided <- moved[[i]] && isTRUE(entra[[i]][["undecided"]]) &&
+          identical(shift_code[[i]], "TRASPORTO_IDENTITA_CAMBIATA")
+        if (stop_undecided) "yes" else ""
+      }, character(1)),
+      # A closed row set back to active and stopped on its account: revoked,
+      # it is closed again, and the message says that IT takes the old login
+      # off and deletes the row (D4 of the design of the 0.29.0).
+      closed_reopened = vapply(seq_along(record_ids), function(i) {
+        on_account <- moved[[i]] && reopened[[i]] && shift_code[[i]] %in% c(
+          "TRASPORTO_ACCOUNT_RINOMINATO", "TRASPORTO_IDENTITA_CAMBIATA"
+        )
+        if (on_account) "yes" else ""
+      }, character(1)),
       stringsAsFactors = FALSE
     )
   )

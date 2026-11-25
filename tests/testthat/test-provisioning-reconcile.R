@@ -11066,6 +11066,8 @@ test_that("una riga chiusa e riattivata con la concessione non verificata si fer
   mandate <- posta[["mandate"]]()
   expect_length(mandate, 1L)
   expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+  expect_match(mandate[[1L]][["body"]], paragrafo_riattivata, fixed = TRUE)
+  expect_match(mandate[[1L]][["body"]], paragraph_reopened, fixed = TRUE)
 })
 
 
@@ -11101,6 +11103,7 @@ test_that("una riga chiusa e riattivata con l'id scritto senza autore si ferma p
   expect_length(scritture(), 0L)
   expect_null(entra_scritti())
   corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, paragrafo_riattivata, fixed = TRUE)
   expect_match(corpo, paste0("Eseguita per: ", mario), fixed = TRUE)
 })
 
@@ -11125,6 +11128,8 @@ test_that("una riga senza id riattivata col titolare del nome nato in una data i
   expect_length(mandate, 1L)
   expect_equal(mandate[[1L]][["to"]], anna)
   expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+  expect_match(mandate[[1L]][["body"]], paragrafo_riattivata, fixed = TRUE)
+  expect_false(grepl("non serve modificare", mandate[[1L]][["body"]]))
 })
 
 
@@ -11317,6 +11322,64 @@ test_that("una riga chiusa riattivata da un altro referente e approvata dal prop
   expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
   expect_equal(dettaglio_uno(esito), "")
   expect_length(scritture_per(mario), 1L)
+})
+
+
+test_that("la riga chiusa con l'account rinominato, revocata, lascia il vecchio login e la coppia a IT (E1)", { # nolint: line_length_linter.
+  # eval
+  # D4 of the design of the 0.29.0. The closed row with the identifier, set
+  # back to active with the account of the identifier renamed, stops on the
+  # renaming. Revoked, it is closed again: the name carried out is empty,
+  # the revocation goes to the name resolved, the new one, which is not on
+  # the project, and the row is sealed under it. The new request for the new
+  # name is its duplicate, and the old login stays on the project. Left to
+  # IT's procedure for the 0.29.0, and the message of the first round says
+  # so.
+  posta <- posta_raccolta()
+  primo <- giro_chiusa_assente(
+    directory_doppia(mario_a(userPrincipalName = rinominato)),
+    istanza_che_scrive(), mailer = posta[["mailer"]]
+  )
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  riga1 <- eseguita_row(
+    applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+    username = "", identity = "absent", applied_as = "absent",
+    request_status = "revoked"
+  )
+  storia <- c(
+    list(
+      cambio(anna, "request_status = 'revoked'",
+             timestamp = "2026-08-16 09:00"),
+      cambio(anna, "request_status = 'active'",
+             timestamp = "2026-08-15 10:00")
+    ),
+    storia_chiusa_assente()
+  )
+  secondo <- giro(
+    registro_con_log(
+      record_json(riga1, list(record_id = "2", owned_by = "")),
+      storia = storia,
+      creazioni = creazioni_finte(
+        creata_da_anna(),
+        creata_da_anna(id = "2", timestamp = "2026-08-16 09:05")
+      )
+    ),
+    istanza_doppia(
+      list(username = anna, user_rights = 1L),
+      list(username = mario, role_name = "data entry", user_rights = 0L)
+    ),
+    directory = directory_doppia(mario_a(userPrincipalName = rinominato)),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(primo), "TRASPORTO_ACCOUNT_RINOMINATO")
+  expect_match(corpo, "IT toglie a mano il vecchio login", fixed = TRUE)
+  expect_match(corpo, "IT takes the old login off by hand", fixed = TRUE)
+  # The limit, as the 0.29.0 leaves it.
+  expect_equal(esito_di(secondo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_false(mario %in% revocati())
 })
 
 

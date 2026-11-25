@@ -2766,6 +2766,139 @@ test_that("il messaggio di un account cambiato su Entra va a IT e non chiede nie
 })
 
 
+# A row closed on a person gone from Entra and set back to active, stopped
+# because the channel could not establish whether the account holding the
+# name granted is the one of then (item 14 of the limits, 0.29.0).
+riattivata_indecisa <- list(
+  outcome = "transport_error",
+  outcome_detail = "TRASPORTO_IDENTITA_CAMBIATA",
+  username = "sara.collaudozeta@ubep.unipd.it",
+  executed_server = "edc10", executed_project_id = "9029",
+  executed_username = "sara.collaudozeta@ubep.unipd.it",
+  pair_changed = "account"
+)
+
+
+test_that("il messaggio della riga riattivata che il canale non sa giudicare dice il suo paragrafo (T15)", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(...) {
+    mail_outcome_message(do.call(
+      riga_di_prova, utils::modifyList(riattivata_indecisa, list(...))
+    ))[["body"]]
+  }
+  indecisa <- corpo(reopened_undecided = "yes")
+  di_sempre <- corpo()
+  vuota <- corpo(reopened_undecided = "")
+
+  # test
+  expect_match(
+    indecisa,
+    paste0(
+      "Questa richiesta era stata revocata e chiusa quando la persona non ",
+      "era piu' su Entra, ed e' stata riattivata."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "Il canale non e' riuscito a stabilire se l'account",
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa,
+    paste0(
+      "Eseguita per: sara.collaudozeta@ubep.unipd.it, su edc10, progetto ",
+      "9029."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "Account trovato ora: sara.collaudozeta@ubep.unipd.it",
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "IT verifica su Entra da quando l'account porta il nome",
+    fixed = TRUE
+  )
+  expect_match(indecisa, "revocala e compila una richiesta nuova", fixed = TRUE)
+  expect_match(indecisa, "IT toglie a mano il vecchio login", fixed = TRUE)
+  expect_match(
+    indecisa,
+    paste0(
+      "This request had been revoked and closed when the person was no ",
+      "longer on Entra, and was set back to active."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "The channel could not establish whether the account",
+    fixed = TRUE
+  )
+  expect_match(
+    indecisa, "IT checks on Entra since when the account holds the name",
+    fixed = TRUE
+  )
+  expect_match(indecisa, "IT takes the old login off by hand", fixed = TRUE)
+  expect_false(grepl("non serve modificare la riga", indecisa, fixed = TRUE))
+  expect_false(grepl("the row needs no edit", indecisa, fixed = TRUE))
+  expect_false(grepl(
+    "La persona di questa richiesta non corrisponde piu'", indecisa,
+    fixed = TRUE
+  ))
+  # Without the column, or with it empty, the text of every other row.
+  for (testo in list(di_sempre, vuota)) {
+    expect_match(
+      testo, "La persona di questa richiesta non corrisponde piu'",
+      fixed = TRUE
+    )
+    expect_match(testo, "non serve modificare la riga", fixed = TRUE)
+    expect_false(grepl("era stata revocata e chiusa", testo, fixed = TRUE))
+  }
+})
+
+
+test_that("il messaggio dell'account rinominato su una riga chiusa e riattivata dice che il vecchio login lo toglie IT (E1)", { # nolint: line_length_linter.
+  # eval
+  # D4 of the design of the 0.29.0: revoked, a closed row revokes the name
+  # the round finds now and keeps the pair against the new request.
+  corpo <- function(...) {
+    mail_outcome_message(riga_di_prova(
+      outcome = "transport_error",
+      outcome_detail = "TRASPORTO_ACCOUNT_RINOMINATO",
+      executed_server = "edc10", executed_project_id = "9029",
+      executed_username = "sara.collaudozeta@ubep.unipd.it",
+      entra_now = "sara.nuova@ubep.unipd.it", pair_changed = "account", ...
+    ))[["body"]]
+  }
+  chiusa <- corpo(closed_reopened = "yes")
+  di_sempre <- corpo()
+
+  # test
+  expect_match(chiusa, "IT toglie a mano il vecchio login", fixed = TRUE)
+  expect_match(chiusa, "IT takes the old login off by hand", fixed = TRUE)
+  expect_false(grepl("IT toglie a mano il vecchio login", di_sempre,
+                     fixed = TRUE))
+  # The same on the code of the identity changed with an account found.
+  trovato <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      username = "sara.nuova@ubep.unipd.it", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+  expect_match(trovato, "IT toglie a mano il vecchio login", fixed = TRUE)
+  expect_match(trovato, "La persona di questa richiesta", fixed = TRUE)
+  # Nobody found, a person to create: the revocation closes and holds no
+  # pair, and the request filed then creates the person.
+  assente <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      username = "", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+  expect_false(grepl("IT toglie a mano il vecchio login", assente,
+                     fixed = TRUE))
+})
+
+
 # The access message of a row whose contact is the person's UBEP address, the
 # UPN by decision 12. `identified` carries what the sweep read on the account
 # the row resolved to: `mailbox`, its `mail`, and `external`, its first
