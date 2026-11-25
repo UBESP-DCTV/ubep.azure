@@ -1318,7 +1318,7 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
     "Microsoft Authenticator",
     "tocca Verified IDs in basso a destra, poi Scan QR code",
     "Il secondo fattore si registra solo con l'app.",
-    "Non scegliere Skip for now.",
+    "Non scegliere Skip for now:",
     "A \"Stay signed in?\" rispondi Yes.",
     "In My Projects apri il progetto. Se non c'e' ancora, aspetta la mail",
     "\"Il tuo account UBEP / Your UBEP account\""
@@ -1350,7 +1350,7 @@ test_that("il testo pronto porta nome, chiave, data e i passi del primo accesso"
     "Microsoft Authenticator",
     "tap Verified IDs in the bottom right corner, then Scan QR code",
     "The second factor is registered only with the app.",
-    "Do not choose Skip for now.",
+    "Do not choose Skip for now:",
     "At \"Stay signed in?\" answer Yes.",
     "In My Projects, open the project. If it is not there yet, wait for",
     "\"Il tuo account UBEP / Your UBEP account\""
@@ -1427,9 +1427,15 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
   attese <- list(
     it = list(
       quattro = c(
-        "premi Avanti (Next) finche' compare un codice QR",
+        paste0(
+          "4. Microsoft ti chiede di proteggere l'account. Non scegliere Skip ",
+          "for now: premi Avanti (Next) finche' compare un codice QR"
+        ),
         "Sul computer premi Avanti (Next) e approva la notifica",
-        "Chiudi questa parte con Fine (Done). Non scegliere Skip for now."
+        paste0(
+          "Chiudi questa parte con Fine (Done). Il secondo fattore si ",
+          "registra solo con l'app."
+        )
       ),
       cinque = c(
         "\"Metodo 2 di 2\" (\"Method 2 of 2\")", "premi Avanti (Next)."
@@ -1437,9 +1443,15 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
     ),
     en = list(
       quattro = c(
-        "press Next until a QR code appears",
+        paste0(
+          "4. Microsoft asks you to protect your account. Do not choose Skip ",
+          "for now: press Next until a QR code appears"
+        ),
         "On the computer, press Next and approve the notification",
-        "Finish this part with Done. Do not choose Skip for now."
+        paste0(
+          "Finish this part with Done. The second factor is registered only ",
+          "with the app."
+        )
       ),
       cinque = c("\"Method 2 of 2\"", "and press Next.")
     )
@@ -1458,6 +1470,11 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
       }
     }
     expect_false(grepl("Done", passi[[lingua]][["cinque"]], fixed = TRUE))
+    # The ban on Skip for now stands at the head of step 4, once.
+    expect_length(
+      gregexpr("Skip for now", passi[[lingua]][["quattro"]], fixed = TRUE)[[1]],
+      1L
+    )
   }
   # Avanti on the sign-in page, as in WI_004b 00.06, step 2.
   expect_identical(

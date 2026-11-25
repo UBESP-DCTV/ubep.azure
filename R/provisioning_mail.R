@@ -2045,6 +2045,10 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' write to the referent (decided on 2026-11-25). It is said once, where the
 #' welcome is named in full.
 #'
+#' The ban on `Skip for now` opens step 4, before the instructions of the
+#' step (decided on 2026-11-25): the first page of the step is the one that
+#' offers it, and the ban comes before the person reads on.
+#'
 #' Each text sits between two delimiter lines, because the line with the
 #' user name stands above it in the same message, and a referent copying by
 #' hand should know where to stop. The delimiters are not a bare `---`, the
@@ -2107,13 +2111,13 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "la chiave, poi scegli la tua password e confermala."
     ),
     paste0(
-      "4. Microsoft ti chiede di proteggere l'account: premi Avanti (Next) ",
-      "finche' compare un codice QR. Sul telefono apri Microsoft ",
-      "Authenticator, tocca Verified IDs in basso a destra, poi Scan QR code, ",
-      "e inquadra il codice. Sul computer premi Avanti (Next) e approva la ",
-      "notifica sul telefono; se l'app chiede un numero, scrivi quello che ",
-      "vedi sul computer. Chiudi questa parte con Fine (Done). Non scegliere ",
-      "Skip for now. Il secondo fattore si registra solo con l'app."
+      "4. Microsoft ti chiede di proteggere l'account. Non scegliere Skip for ",
+      "now: premi Avanti (Next) finche' compare un codice QR. Sul telefono ",
+      "apri Microsoft Authenticator, tocca Verified IDs in basso a destra, ",
+      "poi Scan QR code, e inquadra il codice. Sul computer premi Avanti ",
+      "(Next) e approva la notifica sul telefono; se l'app chiede un numero, ",
+      "scrivi quello che vedi sul computer. Chiudi questa parte con Fine ",
+      "(Done). Il secondo fattore si registra solo con l'app."
     ),
     paste0(
       "5. Poi Microsoft passa a \"Metodo 2 di 2\" (\"Method 2 of 2\") e, per ",
@@ -2177,12 +2181,12 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "the key, then choose your password and confirm it."
     ),
     paste0(
-      "4. Microsoft asks you to protect your account: press Next until a QR ",
-      "code appears. On your phone, open Microsoft Authenticator, tap ",
-      "Verified IDs in the bottom right corner, then Scan QR code, and scan ",
-      "the code. On the computer, press Next and approve the notification on ",
-      "your phone; if the app asks for a number, enter the one you see on the ",
-      "computer. Finish this part with Done. Do not choose Skip for now. The ",
+      "4. Microsoft asks you to protect your account. Do not choose Skip for ",
+      "now: press Next until a QR code appears. On your phone, open Microsoft ",
+      "Authenticator, tap Verified IDs in the bottom right corner, then Scan ",
+      "QR code, and scan the code. On the computer, press Next and approve ",
+      "the notification on your phone; if the app asks for a number, enter ",
+      "the one you see on the computer. Finish this part with Done. The ",
       "second factor is registered only with the app."
     ),
     paste0(

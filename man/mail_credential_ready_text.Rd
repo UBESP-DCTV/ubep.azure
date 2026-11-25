@@ -55,6 +55,10 @@ not there, whether it was lost, went to the junk folder or never arrived:
 write to the referent (decided on 2026-11-25). It is said once, where the
 welcome is named in full.
 
+The ban on \verb{Skip for now} opens step 4, before the instructions of the
+step (decided on 2026-11-25): the first page of the step is the one that
+offers it, and the ban comes before the person reads on.
+
 Each text sits between two delimiter lines, because the line with the
 user name stands above it in the same message, and a referent copying by
 hand should know where to stop. The delimiters are not a bare \verb{---}, the
