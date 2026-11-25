@@ -1199,6 +1199,14 @@ provisioning_reconcile <- function(register_url,
       revoked = revoked_rows[[i]],
       account = entra[[i]][["code"]]
     )
+    # The pair the message names: on a closed row, the name granted on it in
+    # every stop (M1 of the design of the 0.29.0), where the closure left the
+    # empty name. Only for the message: the rule of the pair above, the
+    # revocation and the claims read the pair as it was.
+    if (closed[[i]] && length(granted_closed[[i]]) > 0L &&
+          !is.na(pair[["username"]]) && !nzchar(pair[["username"]])) {
+      pair[["username"]] <- granted_closed[[i]][[1L]]
+    }
     c(change, list(pair = pair))
   })
   shift_code <- vapply(shifts, function(s) s[["code"]], character(1))

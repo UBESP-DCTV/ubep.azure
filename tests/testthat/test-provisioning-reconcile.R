@@ -11385,6 +11385,41 @@ test_that("una riga chiusa e riattivata con l'id scritto senza autore e la perso
 })
 
 
+test_that("la mail della riga chiusa e rimasta revocata, ferma sull'istanza cambiata, nomina il nome concesso (RV2)", { # nolint: line_length_linter.
+  # eval
+  # M1 of the design: the message of every stop of the closed row names the
+  # name the channel granted on it, not "unknown". The rule of the pair is
+  # as before: the row stops on its pair and revokes nobody.
+  posta <- posta_raccolta()
+  riga <- eseguita_row(
+    applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+    username = "", identity = "absent", applied_as = "absent",
+    request_status = "revoked", server = "edc12"
+  )
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(riga)),
+      storia = c(
+        list(cambio(anna, "server = 'edc12'", timestamp = "2026-08-16 09:00")),
+        storia_chiusa_assente()
+      ),
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_revoca(), directory = directory_vuota(), dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta[["mailer"]],
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "DATO_COPPIA_CAMBIATA")
+  expect_length(revocati(), 0L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, paste0("per ", mario, "."), fixed = TRUE)
+  expect_match(corpo, paste0("for ", mario, "."), fixed = TRUE)
+  expect_false(grepl("per non noto", corpo, fixed = TRUE))
+})
+
+
 test_that("una riga nata revocata, chiusa su una persona assente e riattivata quando la persona esiste concede come prima (G6)", { # nolint: line_length_linter.
   # eval
   # Row 3 asked for Nadia, whom the tenant did not hold, and Anna revoked it
