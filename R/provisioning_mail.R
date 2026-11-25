@@ -512,8 +512,7 @@ mail_outcome_message <- function(row) {
           "riuscito a stabilire se l'account che porta ora il nome utente ",
           "eseguito e' quello a cui aveva dato l'accesso, e non concede ",
           "finche' non lo sa: sull'istanza non e' cambiato niente, e la riga ",
-          "resta ferma. Se a un giro successivo ci riesce, la riga riparte da ",
-          "sola."
+          "resta ferma."
         ),
         paste0(
           "Eseguita per: ", eseguita[["username"]], ", su ",
@@ -535,8 +534,7 @@ mail_outcome_message <- function(row) {
           "establish whether the account that holds the username applied now ",
           "is the one it had given the access to, and grants nothing until it ",
           "knows: nothing has changed on the instance, and the row stays ",
-          "stopped. If a later round can establish it, the row starts again ",
-          "by itself."
+          "stopped."
         ),
         paste0(
           "Applied for: ", executed[["username"]], ", on ",

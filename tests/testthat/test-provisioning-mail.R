@@ -2856,6 +2856,25 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare dic
 })
 
 
+test_that("il messaggio della riga riattivata che il canale non sa giudicare non dice che la riga riparte da sola (RV11)", { # nolint: line_length_linter.
+  # eval
+  # On V4b and V4c the log does not change from one round to the next, and
+  # the round does not write the identifier: the row stays stopped until it
+  # is revoked. The line on the TRASPORTO_ codes says so, and the paragraph
+  # does not say the opposite.
+  corpo <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(reopened_undecided = "yes"))
+  ))[["body"]]
+
+  # test
+  expect_false(grepl("riparte da sola", corpo, fixed = TRUE))
+  expect_false(grepl("starts again by itself", corpo, fixed = TRUE))
+  expect_match(corpo, "questo non si risolve da solo", fixed = TRUE)
+  expect_match(corpo, "this one does not clear by itself", fixed = TRUE)
+})
+
+
 test_that("il messaggio dell'account rinominato su una riga chiusa e riattivata dice che il vecchio login lo toglie IT (E1)", { # nolint: line_length_linter.
   # eval
   # D4 of the design of the 0.29.0: revoked, a closed row revokes the name

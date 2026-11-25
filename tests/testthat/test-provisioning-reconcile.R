@@ -11208,6 +11208,11 @@ test_that("una riga senza id riattivata col titolare del nome nato in una data i
   expect_equal(mandate[[1L]][["cc"]], "it@example.org")
   expect_match(mandate[[1L]][["body"]], paragrafo_riattivata, fixed = TRUE)
   expect_false(grepl("non serve modificare", mandate[[1L]][["body"]]))
+  # One way out, the one of the line on the TRASPORTO_ codes (RV11).
+  expect_false(grepl("riparte da sola", mandate[[1L]][["body"]], fixed = TRUE))
+  expect_match(
+    mandate[[1L]][["body"]], "questo non si risolve da solo", fixed = TRUE
+  )
 })
 
 
