@@ -13791,3 +13791,209 @@ test_that("la riga chiusa e revocata il cui nome arriva al registro senza rispos
   corpi <- vapply(secondo[["posta"]], function(m) m[["body"]], character(1))
   expect_false(any(grepl("approved_seal", corpi, fixed = TRUE)))
 })
+
+
+# ---- A closed row with the name of the channel and something more ----
+
+# The closed row (the channel's last seal is the closure's, under the empty
+# name) whose name the channel wrote over the closure in a round that did
+# not seal it (RF1 and RF4 of the review of the correction of F1). Guards
+# of what a round does with it when something else differs from the
+# closure too: another field, a human author, a name written by an account
+# that is not the channel, a row that asks for an access. Each stops as it
+# did when the review was made.
+
+# One round on a register that remembers, at Rome's hour `ora`.
+giro_che_ricorda <- function(reg, ist, directory, ora, at, ...) {
+  attr(reg, "stato")$ora <- ora
+  posta <- posta_raccolta()
+  esito <- giro(
+    reg, ist, directory = directory, dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta[["mailer"]], at = at, ...
+  )
+  list(
+    esito = esito, posta = posta[["mandate"]](), revocati = revocati(),
+    identita = identita_scritte(), riga = attr(reg, "stato")$righe[["1"]]
+  )
+}
+
+# A write by `chi` on that register, above every other event.
+scrive_nel_registro <- function(reg, chi, campi, ora) {
+  stato <- attr(reg, "stato")
+  stato$righe[["1"]][names(campi)] <- campi
+  stato$scritti <- c(list(list(
+    timestamp = ora, username = chi, action = "Update record 1",
+    details = paste0(
+      names(campi), " = '", unlist(campi), "'", collapse = ", "
+    ),
+    record = "1"
+  )), stato$scritti)
+  invisible(reg)
+}
+
+# Whether any message of a round asks for an approval.
+chiede_approvazione <- function(giro_letto) {
+  corpi <- vapply(giro_letto[["posta"]], function(m) m[["body"]], character(1))
+  any(grepl("approved_seal", corpi, fixed = TRUE))
+}
+
+# The closed row with the identifier, left revoked, whose name the channel
+# wrote over the closure's seal at 23:59 of the 16th in a round that did not
+# act (the state a round of the 0.28.0 left, RF4). `cambi` are fields the
+# register holds beyond that; `chi` is who wrote the name; `sopra` are
+# events above it, newest first; `sigillo` and `chiusura` the seal and the
+# events of the closure.
+chiusa_col_nome_del_canale <- function(cambi = list(),
+                                       chi = "svc-canale-ubep",
+                                       sopra = list(),
+                                       sigillo = sigillo_chiusa_assente,
+                                       chiusura = storia_chiusa_assente()) {
+  riga <- utils::modifyList(eseguita_row(
+    applied_seal = sigillo, applied_entra_id = id_a, username = mario,
+    identity = "existing", applied_as = "absent", request_status = "revoked",
+    outcome = "transport_error", outcome_detail = "TRASPORTO_NON_RAGGIUNGIBILE"
+  ), cambi)
+  nome <- if (identical(chi, "svc-canale-ubep")) {
+    paste0("username = '", mario, "', identity = 'existing'")
+  } else {
+    paste0("username = '", mario, "'")
+  }
+  registro_che_ricorda(
+    do.call(record_json, list(riga)),
+    storia = c(
+      sopra,
+      list(
+        list(
+          timestamp = "2026-08-16 23:59", username = "svc-canale-ubep",
+          action = "Update record (API) 1", record = "1",
+          details = paste0(
+            "outcome = 'transport_error', ",
+            "outcome_detail = 'TRASPORTO_NON_RAGGIUNGIBILE'"
+          )
+        ),
+        list(
+          timestamp = "2026-08-16 23:59", username = chi,
+          action = "Update record (API) 1", record = "1", details = nome
+        )
+      ),
+      chiusura
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+}
+
+# One round on the row of RF4 with something more than the name: what it
+# answers, for the guards.
+un_giro_sul_nome <- function(reg, istanza = istanza_che_revoca()) {
+  giro_che_ricorda(
+    reg, istanza, directory_doppia(mario_b()),
+    "2026-08-17 05:00", "2026-08-17 03:00"
+  )
+}
+
+esito_e_dettaglio <- function(giro_letto) {
+  paste(
+    esiti_del_giro(giro_letto),
+    sub(":.*$", "", dettaglio_uno(giro_letto[["esito"]]))
+  )
+}
+
+
+test_that("la riga chiusa e revocata col nome del canale e un'altra differenza dal sigillo resta ferma come prima", { # nolint: line_length_linter.
+  # Written in the register with no event in the log: no author, as the
+  # name. The seal of the closure with the name emptied does not give it.
+  casi <- list(
+    list(list(role_name = "read only"), "held SIGILLO_DIVERSO"),
+    list(list(dag_name = "gruppo_a"), "held SIGILLO_DIVERSO"),
+    list(list(expiration = "2026-12-31"), "held SIGILLO_DIVERSO"),
+    list(list(first_name = "Marco"), "data_error DATO_COPPIA_CAMBIATA"),
+    list(list(server = "edc12"), "data_error DATO_COPPIA_CAMBIATA"),
+    list(list(project_id = "9004"), "data_error DATO_COPPIA_CAMBIATA")
+  )
+  for (caso in casi) {
+    # eval
+    g <- un_giro_sul_nome(chiusa_col_nome_del_canale(caso[[1L]]))
+
+    # test
+    expect_equal(esito_e_dettaglio(g), caso[[2L]], label = names(caso[[1L]]))
+    expect_length(g[["revocati"]], 0L)
+  }
+})
+
+
+test_that("la riga chiusa e revocata col nome del canale e un cambio di un altro referente resta trattenuta", { # nolint: line_length_linter.
+  # eval
+  g <- un_giro_sul_nome(chiusa_col_nome_del_canale(
+    list(role_name = "read only"),
+    sopra = list(cambio(bruno, "role_name = 'read only'",
+                        timestamp = "2026-08-17 01:00"))
+  ))
+
+  # test
+  expect_equal(esito_e_dettaglio(g), "held SIGILLO_DIVERSO")
+  expect_length(g[["revocati"]], 0L)
+  expect_true(chiede_approvazione(g))
+})
+
+
+test_that("la riga chiusa e revocata il cui nome ha scritto un'utenza che non e' il canale resta trattenuta", { # nolint: line_length_linter.
+  for (chi in c(bruno, "svc-vecchio-canale")) {
+    # eval
+    g <- un_giro_sul_nome(chiusa_col_nome_del_canale(chi = chi))
+
+    # test
+    expect_equal(dettaglio_uno(g[["esito"]]), "SIGILLO_DIVERSO:62562ba2c044")
+    expect_equal(esiti_del_giro(g), "held")
+    expect_length(g[["revocati"]], 0L)
+  }
+})
+
+
+# A closure sealed on the active row under the empty name, to keep the
+# requested state out of what the seal alone would answer.
+sigillo_chiusa_attiva <- request_seal(riga_come_registro(
+  record_id = "1", username = "", identity = "absent"
+))
+storia_chiusa_attiva <- function() {
+  c(
+    list(
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = paste0(
+             "applied_seal = '", sigillo_chiusa_attiva,
+             "', seal_state = 'intact'"
+           )),
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = "applied_as = 'absent'"),
+      list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+           action = "Update record (API) 1", record = "1",
+           details = "username = '', identity = 'absent'")
+    ),
+    eseguita_con_id(sigillo_eseguito())
+  )
+}
+
+
+test_that("la riga chiusa col nome del canale che chiede un accesso resta trattenuta e non concede", { # nolint: line_length_linter.
+  # The account of before holds the name: a row let through would grant.
+  casi <- list(
+    chiusa_col_nome_del_canale(list(request_status = "active")),
+    chiusa_col_nome_del_canale(
+      list(request_status = "active"),
+      sigillo = sigillo_chiusa_attiva, chiusura = storia_chiusa_attiva()
+    )
+  )
+  for (reg in casi) {
+    # eval
+    g <- giro_che_ricorda(
+      reg, istanza_che_scrive(), directory_doppia(mario_a()),
+      "2026-08-17 05:00", "2026-08-17 03:00"
+    )
+
+    # test
+    expect_equal(dettaglio_uno(g[["esito"]]), "SIGILLO_DIVERSO:ae079ddd2c78")
+    expect_equal(esiti_del_giro(g), "held")
+    expect_length(scritture(), 0L)
+  }
+})
