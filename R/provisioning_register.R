@@ -1763,7 +1763,10 @@ log_value_as_register <- function(value, field) {
 #'   the log does not say who wrote it, which counts as a write.
 #' @param revoked Whether the row asks for `revoked`.
 #' @param account What the identifier on Entra says, `""` when it says
-#'   nothing: `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`.
+#'   nothing: `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`;
+#'   or `TRASPORTO_IDENTITA_CAMBIATA` for a row closed on a person gone from
+#'   Entra and set back to active, whose account the round cannot judge
+#'   (item 14 of the limits, 0.29.0).
 #'
 #' @return A list with `code`, one of the four codes or `""`, and `changed`,
 #'   which of `"server"`, `"project_id"` and `"person"` moved, or `"account"`
@@ -1781,7 +1784,8 @@ pair_change <- function(executed, current, target, creating, rewritten,
     is.logical(revoked), length(revoked) == 1L, !is.na(revoked),
     is.character(account), length(account) == 1L,
     account %in% c(
-      "", "TRASPORTO_NOME_RIASSEGNATO", "TRASPORTO_ACCOUNT_RINOMINATO"
+      "", "TRASPORTO_NOME_RIASSEGNATO", "TRASPORTO_ACCOUNT_RINOMINATO",
+      "TRASPORTO_IDENTITA_CAMBIATA"
     )
   )
 

@@ -10779,6 +10779,99 @@ paragrafo_riattivata <- "era stata revocata e chiusa quando la persona"
 paragraph_reopened <- "had been revoked and closed when the person"
 
 
+test_that("una riga senza id chiusa su una persona assente e riattivata non concede al nome ridato (T1)", { # nolint: line_length_linter.
+  # eval
+  # R1 of the review of the limits. The last seal names nobody, and the
+  # 0.28.0 skipped the check and granted the name now held by an account
+  # born after its first execution. The name granted goes to the guard of
+  # the fill, which dates the account from that execution.
+  posta <- posta_raccolta()
+  esito <- giro_chiusa_senza_id(
+    directory_doppia(mario_b()), mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_null(identita_scritte())
+  expect_null(entra_scritti())
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+  expect_match(
+    mandate[[1L]][["body"]], paste0("Eseguita per: ", mario), fixed = TRUE
+  )
+})
+
+
+test_that("una riga senza id chiusa su una persona assente e riattivata con l'account di prima concede e scrive l'id (T2)", { # nolint: line_length_linter.
+  # eval
+  # The cost of R1, V3 of the verification of the limits: the account of
+  # then, born before the first execution, passes the guard, with a change
+  # of role written together with the reopening. The identifier is written
+  # in the same round, not at the next one with a guard dated from the
+  # reopening.
+  esito <- giro_chiusa_senza_id(
+    directory_doppia(mario_a()),
+    cambi = list(role_name = "read only"),
+    riattivazione = "request_status = 'active', role_name = 'read only'",
+    mailer = posta_accesa
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "applied")
+  expect_equal(dettaglio_uno(esito), "")
+  expect_length(scritture_per(mario), 1L)
+  expect_equal(entra_scritti()[["applied_entra_id"]], id_a)
+})
+
+
+test_that("una riga senza id concessa di nuovo dopo una chiusura su una persona assente non prende l'id del nuovo titolare (T3)", { # nolint: line_length_linter.
+  # eval
+  # R1b of the review: the row granted again to the name by a version
+  # before this one, and sealed under it. The guard of the fill dated the
+  # account from the reopening, since the closure ended the run of
+  # executions of the name, and wrote id_b as the account of the row.
+  canale <- function(ts, details) {
+    list(timestamp = ts, username = "svc-canale-ubep",
+         action = "Update record (API) 1", record = "1", details = details)
+  }
+  storia <- c(
+    list(
+      canale("2026-09-10 05:00", paste0(
+        "applied_seal = '", sigillo_eseguito(), "', seal_state = 'intact'"
+      )),
+      canale("2026-09-10 05:00", paste0(
+        "username = '", mario, "', identity = 'existing'"
+      )),
+      cambio(anna, "request_status = 'active'",
+             timestamp = "2026-09-09 10:00")
+    ),
+    storia_chiusa_assente()[1:4],
+    carried_out(sigillo_eseguito())
+  )
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_eseguito(), applied_entra_id = ""
+      ))),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(mario_b()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-09-10 09:00"
+  )
+
+  # test
+  expect_null(entra_scritti())
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+})
+
+
 test_that("una riga chiusa su una persona assente, riscritta su un'altra persona e riattivata non concede, con l'id e senza (T4)", { # nolint: line_length_linter.
   # eval
   # R2 of the review: a row carried out does not change its person (decided
@@ -10900,6 +10993,141 @@ test_that("una riga chiusa con la chiusura non verificata e riattivata non conce
 })
 
 
+test_that("una riga chiusa con la chiusura non verificata e riattivata non concede al nome ridato, senza id (T9)", { # nolint: line_length_linter.
+  # eval
+  # V4a without the identifier: the name granted goes to the guard of the
+  # fill, as on a closure verified.
+  esito <- giro_chiusa_qc("", carried_out(sigillo_eseguito()))
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_length(scritture(), 0L)
+  expect_null(entra_scritti())
+})
+
+
+test_that("una riga chiusa e riattivata con la concessione non verificata si ferma per IT (T10)", { # nolint: line_length_linter.
+  # eval
+  # V4b: the closure verifies, the version granted does not (the role of the
+  # creation is in the log as "data entry &amp; qc"). No name granted, two
+  # executions in the row's life: the row granted somebody, and the log does
+  # not say whom.
+  sigillo_qc <- request_seal(riga_come_registro(
+    record_id = "1", username = mario, role_name = "data entry & qc"
+  ))
+  sigillo_chiusa_ro <- request_seal(riga_come_registro(
+    record_id = "1", username = "", identity = "absent",
+    request_status = "revoked", role_name = "read only"
+  ))
+  canale <- function(details) {
+    list(timestamp = "2026-08-14 05:00", username = "svc-canale-ubep",
+         action = "Update record (API) 1", record = "1", details = details)
+  }
+  storia <- c(
+    list(
+      cambio(anna, "request_status = 'active'",
+             timestamp = "2026-08-15 10:00"),
+      canale(paste0(
+        "applied_seal = '", sigillo_chiusa_ro, "', seal_state = 'intact'"
+      )),
+      canale("applied_as = 'absent'"),
+      canale("username = '', identity = 'absent'"),
+      cambio(anna, "request_status = 'revoked', role_name = 'read only'",
+             timestamp = "2026-08-14 02:45")
+    ),
+    eseguita_con_id(sigillo_qc)
+  )
+  creazione <- creata_da_anna(details = paste0(
+    "record_id = '1', server = 'edc10', project_id = '9003', ",
+    "first_name = 'Mario', last_name = 'Rossi', ",
+    "contact_email = 'mario.rossi@example.org', ",
+    "role_name = 'data entry &amp; qc', request_status = 'active'"
+  ))
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_chiusa_ro, applied_entra_id = id_a,
+        username = "", identity = "absent", applied_as = "absent",
+        request_status = "active", role_name = "read only"
+      ))),
+      storia = storia,
+      creazioni = creazioni_finte(creazione)
+    ),
+    istanza_che_scrive(), directory = directory_doppia(mario_b()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(scritture(), 0L)
+  expect_length(creazioni(), 0L)
+  expect_null(identita_scritte())
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+})
+
+
+test_that("una riga chiusa e riattivata con l'id scritto senza autore si ferma per IT (T11)", { # nolint: line_length_linter.
+  # eval
+  # V4c: the log does not say who wrote `applied_entra_id`
+  # (`log_channel_entra_id()` gives NA), and the round left the check
+  # before the stop.
+  storia <- c(
+    list(cambio(anna, "request_status = 'active'",
+                timestamp = "2026-08-15 10:00")),
+    storia_chiusa_assente()[1:4],
+    list(id_del_canale(id_a, chi = "", timestamp = "2026-08-13 05:00")),
+    carried_out(sigillo_eseguito())
+  )
+  posta <- posta_raccolta()
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(eseguita_row(
+        applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+        username = "", identity = "absent", applied_as = "absent",
+        request_status = "active"
+      ))),
+      storia = storia,
+      creazioni = creazioni_finte(creata_da_anna())
+    ),
+    istanza_che_scrive(), directory = directory_doppia(mario_b()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(scritture(), 0L)
+  expect_null(entra_scritti())
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(corpo, paste0("Eseguita per: ", mario), fixed = TRUE)
+})
+
+
+test_that("una riga senza id riattivata col titolare del nome nato in una data illeggibile si ferma per IT (T12)", { # nolint: line_length_linter.
+  # eval
+  # The guard cannot decide: one account holds the name, and its
+  # `createdDateTime` does not read. The 0.28.0 granted it.
+  posta <- posta_raccolta()
+  esito <- giro_chiusa_senza_id(
+    directory_doppia(graph_user(id = id_b, createdDateTime = "ieri")),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(as.character(esito[["esiti"]][["outcome"]]), "transport_error")
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(scritture(), 0L)
+  expect_null(entra_scritti())
+  expect_null(identita_scritte())
+  mandate <- posta[["mandate"]]()
+  expect_length(mandate, 1L)
+  expect_equal(mandate[[1L]][["to"]], anna)
+  expect_equal(mandate[[1L]][["cc"]], "it@example.org")
+})
+
+
 test_that("la riga chiusa riattivata con due concessioni nel log concede al nome concesso piu' recente (G1)", { # nolint: line_length_linter.
   # eval
   # V1 of the verification: the row carried out first for mario.vecchio
@@ -10949,6 +11177,103 @@ test_that("la riga chiusa riattivata con due concessioni nel log concede al nome
   expect_equal(dettaglio_uno(esito), "")
   expect_length(scritture_per(mario), 1L)
   expect_length(scritture_per(vecchio), 0L)
+})
+
+
+test_that("una riga chiusa e riattivata con la persona ancora assente si ferma col testo di sempre (G4)", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_chiusa_assente(
+    directory_vuota(),
+    istanza_doppia(
+      list(username = anna, project_id = 9003L, user_rights = 1L),
+      list(username = mario, project_id = 9003L, role_name = "data entry",
+           user_rights = 0L),
+      noti = mario
+    ),
+    mailer = posta[["mailer"]]
+  )
+
+  # test
+  # Nobody holds the name: the guard has nothing to say, and the rule of the
+  # pair sees a person to create on a row carried out.
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA")
+  expect_length(creazioni(), 0L)
+  expect_length(scritture(), 0L)
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_false(grepl(paragrafo_riattivata, corpo, fixed = TRUE))
+  expect_match(
+    corpo, "La persona di questa richiesta non corrisponde piu'", fixed = TRUE
+  )
+})
+
+
+test_that("una riga nata revocata, chiusa su una persona assente e riattivata quando la persona esiste concede come prima (G6)", { # nolint: line_length_linter.
+  # eval
+  # Row 3 asked for Nadia, whom the tenant did not hold, and Anna revoked it
+  # before any round served it: one execution, the closure, which granted
+  # nothing. Set back to active, it is a request like the others, and the
+  # stop of V4b, for a row whose name granted the log cannot say, is not
+  # for it.
+  riga <- list(
+    record_id = "3", first_name = "Nadia", last_name = "Nuova",
+    contact_email = "nadia@example.org", request_status = "revoked",
+    username = ""
+  )
+  sigillo <- request_seal(do.call(riga_come_registro, riga))
+  del_canale <- function(details) {
+    list(
+      timestamp = "2026-10-20 05:00", username = "svc-canale-ubep",
+      action = "Update record (API) 3", record = "3", details = details
+    )
+  }
+  nadia_upn <- "nadia.nuova@ubep.unipd.it"
+  esito <- giro(
+    registro_con_log(
+      do.call(record_json, list(utils::modifyList(riga, list(
+        identity = "absent", outcome = "applied", applied_as = "absent",
+        applied_seal = sigillo, seal_state = "intact", owned_by = anna,
+        request_status = "active"
+      )))),
+      storia = list(
+        cambio(
+          anna, "request_status = 'active'", record = "3",
+          timestamp = "2026-10-21 10:00"
+        ),
+        del_canale(paste0(
+          "applied_seal = '", sigillo, "', seal_state = 'intact'"
+        )),
+        del_canale("owned_by = 'anna.bianchi@ubep.unipd.it'"),
+        del_canale("outcome = 'applied', applied_as = 'absent'"),
+        del_canale("identity = 'absent'"),
+        cambio(
+          anna, "request_status = 'revoked'", record = "3",
+          timestamp = "2026-10-19 10:00"
+        )
+      ),
+      creazioni = creazioni_finte(creata_da_anna(
+        "3",
+        details = paste0(
+          "record_id = '3', server = 'edc10', project_id = '9003', ",
+          "first_name = 'Nadia', last_name = 'Nuova', ",
+          "contact_email = 'nadia@example.org', role_name = 'data entry', ",
+          "request_status = 'active'"
+        )
+      ))
+    ),
+    istanza_che_scrive(),
+    directory = directory_doppia(graph_user(
+      id = "00000000-0000-0000-0000-000000000004",
+      userPrincipalName = nadia_upn, givenName = "Nadia",
+      surname = "Nuova", officeLocation = "nadia@example.org"
+    )),
+    dry_run = FALSE, mailer = posta_accesa, copy_to = "it@example.org",
+    at = "2026-10-22 05:00"
+  )
+
+  # test
+  expect_false(identical(dettaglio_uno(esito), "TRASPORTO_IDENTITA_CAMBIATA"))
+  expect_length(scritture_per(nadia_upn), 1L)
 })
 
 
