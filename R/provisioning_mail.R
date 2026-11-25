@@ -137,6 +137,25 @@ mail_said_or <- function(value, absent) {
 }
 
 
+#' Greet a person by first name, or without one
+#'
+#' A greeting that prints the field as it comes writes "Ciao NA," for a missing
+#' name and breaks the line when the name carries a newline. Whitespace inside
+#' the name collapses to one space, and a name that is missing, empty or only
+#' whitespace leaves the bare greeting, without a stray space before the comma.
+#'
+#' @param word The greeting word, in the language of the message.
+#' @param first_name The person's first name, from the row.
+#'
+#' @return One string: the word, the cleaned name when there is one, a comma.
+#'
+#' @keywords internal
+mail_greeting <- function(word, first_name) {
+  nome <- trimws(gsub("[[:space:]]+", " ", mail_said_or(first_name, "")))
+  if (nzchar(nome)) paste0(word, " ", nome, ",") else paste0(word, ",")
+}
+
+
 #' Say what `applied` did, which is not the same thing twice
 #'
 #' `applied` is one word for two opposite facts and the module has no second
@@ -1407,7 +1426,7 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
   }
 
   it <- c(
-    paste0("Ciao ", row[["first_name"]], ","),
+    mail_greeting("Ciao", row[["first_name"]]),
     "",
     paste0(
       "e' stato creato per te un account UBEP. Il nome con cui ti autentichi ",
@@ -1431,7 +1450,7 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
   )
 
   en <- c(
-    paste0("Hello ", row[["first_name"]], ","),
+    mail_greeting("Hello", row[["first_name"]]),
     "",
     paste0(
       "a UBEP account has been created for you. The name you sign in with ",
@@ -1574,7 +1593,7 @@ mail_access_message <- function(row, url = NULL, relay = NULL) {
 
   it <- c(
     inoltro[["it"]],
-    paste0("Ciao ", row[["first_name"]], ","),
+    mail_greeting("Ciao", row[["first_name"]]),
     "",
     paste0("ora hai accesso in REDCap al progetto ", pid, " su ", server, "."),
     if (indirizzo) paste0("REDCap si apre da: ", url),
@@ -1599,7 +1618,7 @@ mail_access_message <- function(row, url = NULL, relay = NULL) {
 
   en <- c(
     inoltro[["en"]],
-    paste0("Hello ", row[["first_name"]], ","),
+    mail_greeting("Hello", row[["first_name"]]),
     "",
     paste0(
       "you now have access in REDCap to project ", pid, " on ", server, "."
