@@ -3211,6 +3211,9 @@ request_from_row <- function(row) {
 #'   least `record_id` and `request_status`.
 #' @param executed The `record_id`s of the rows the round carried out and
 #'   nobody changed since: the channel's seal is there and has not moved.
+#' @param today REDCap's date, the one in Rome, `redcap_today()` by default.
+#'   The round computes it once, from the instant it started, and passes it
+#'   down, so that every row is judged on the same day.
 #'
 #' @return A list with `desired`, `revoked`, `errors` and `lapsed`. The first
 #'   two hold requests that already went through `intake_request()`, each
@@ -3220,7 +3223,8 @@ request_from_row <- function(row) {
 #'   `executed`.
 #'
 #' @keywords internal
-register_to_desired <- function(register, executed = character()) {
+register_to_desired <- function(register, executed = character(),
+                                today = redcap_today()) {
   stopifnot(
     is.data.frame(register),
     all(c("record_id", "request_status") %in% names(register)),
@@ -3328,7 +3332,7 @@ register_to_desired <- function(register, executed = character()) {
     # with, passed or not. The question asked twice, so that the round knows
     # which rows passed only because of it.
     carried <- ids[[i]] %in% executed
-    taken <- intake_request(request, executed = carried)
+    taken <- intake_request(request, executed = carried, today = today)
     if (length(taken[["errors"]]) > 0L) {
       errors[[ids[[i]]]] <- taken[["errors"]]
       next
@@ -3340,7 +3344,7 @@ register_to_desired <- function(register, executed = character()) {
       revoked[[length(revoked) + 1L]] <- entry
     } else {
       desired[[length(desired) + 1L]] <- entry
-      if (carried && length(validate_request(request)) > 0L) {
+      if (carried && length(validate_request(request, today = today)) > 0L) {
         lapsed <- c(lapsed, ids[[i]])
       }
     }

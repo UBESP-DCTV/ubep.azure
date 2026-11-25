@@ -4,7 +4,7 @@
 \alias{scope_errors}
 \title{Refuse the rows whose requester does not manage the project they ask about}
 \usage{
-scope_errors(register, rights)
+scope_errors(register, rights, today = redcap_today())
 }
 \arguments{
 \item{register}{The register as a data frame, carrying at least \code{record_id},
@@ -15,6 +15,10 @@ scope_errors(register, rights)
 \code{expiration} (\code{YYYY-MM-DD}, empty or \code{NA} for none). The caller assembles
 it from each instance's answer, because a \code{state} reply names its server
 once at the top and not on every row.}
+
+\item{today}{REDCap's date, the one in Rome, \code{redcap_today()} by default.
+The round computes it once, from the instant it started, and passes it
+down, so that every row is judged on the same day.}
 }
 \value{
 A named list, one entry per refused row, named by \code{record_id} and

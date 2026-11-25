@@ -4,7 +4,7 @@
 \alias{register_to_desired}
 \title{Turn the register into the desired state}
 \usage{
-register_to_desired(register, executed = character())
+register_to_desired(register, executed = character(), today = redcap_today())
 }
 \arguments{
 \item{register}{The register as a data frame, one row per pair, carrying at
@@ -12,6 +12,10 @@ least \code{record_id} and \code{request_status}.}
 
 \item{executed}{The \code{record_id}s of the rows the round carried out and
 nobody changed since: the channel's seal is there and has not moved.}
+
+\item{today}{REDCap's date, the one in Rome, \code{redcap_today()} by default.
+The round computes it once, from the instant it started, and passes it
+down, so that every row is judged on the same day.}
 }
 \value{
 A list with \code{desired}, \code{revoked}, \code{errors} and \code{lapsed}. The first

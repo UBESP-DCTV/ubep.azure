@@ -24,8 +24,12 @@ access when \code{expiration <= TODAY}, and its TODAY is the date in Rome,
 \code{redcap_today()}. The day is the one in Rome of the instant \code{at}, not the
 clock of whoever composes the message, so the same row says the same
 thing whenever it is read and the tests do not depend on the machine.
-\code{validate_request()} and the choice of \code{lapsed} read the same date of
-the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
-already the next day, the message and the gate agree with REDCap.
+The round takes the date it hands to \code{validate_request()}, the choice of
+\code{lapsed} and the gate from the same instant, \code{at}, so between 22:00 and
+24:00 UTC, when the date in Rome is already the next day, the message
+and the gate agree with REDCap. A round whose day in Rome turns before
+it writes to an instance acts on nothing there. One whose day turns
+after the write, while its messages leave, still tells them on the day
+of \code{at}, the day the access was granted.
 }
 \keyword{internal}

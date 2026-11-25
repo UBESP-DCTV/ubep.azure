@@ -110,7 +110,11 @@ banchi <- vapply(
 # --- la passata larga -------------------------------------------------------
 
 token <- token_imds("https://vault.azure.net")
-oggi <- Sys.Date()
+# Il giorno su cui REDCap giudica le scadenze e' quello di Roma, non quello
+# della macchina, che gira in UTC: fra le 22 e le 24 UTC (23 d'inverno) la
+# data della macchina e' il giorno prima, e una coppia che scade oggi a Roma,
+# che REDCap gia' rifiuta, mancherebbe da `scadute`.
+oggi <- ubep.azure:::redcap_today()
 
 osservazioni <- do.call(rbind, lapply(con_modulo, function(istanza) {
   nome <- istanza[["nome"]]

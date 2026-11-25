@@ -260,6 +260,52 @@ test_that("la lavorazione del canale legge i banchi come l'osservatore e li pass
 })
 
 
+test_that("l'osservatore conta le scadute sul giorno di REDCap, quello di Roma", { # nolint: line_length_linter.
+  # Same limit as the guards above. At 22:30 UTC on 30 June Rome is on
+  # 1 July, and REDCap already refuses a pair expiring on 1 July; the round
+  # treats it as expired. The reading of `oggi` is taken out of the observer
+  # and run with the clock at that instant, the machine's date in UTC, and
+  # what it gives goes to `observe_instance()` as the runner passes it.
+  dev <- testthat::test_path("..", "..", "dev")
+  skip_if_not(dir.exists(dev), "dev/ is not in the built package")
+  istante <- as.POSIXct("2026-06-30 22:30", tz = "UTC")
+  vero <- redcap_today
+  local_mocked_bindings(redcap_today = function(now = istante) vero(now))
+  codice <- as.list(parse(
+    file.path(dev, "runner-osservatore.R"), keep.source = FALSE
+  ))
+  lettura <- Filter(function(e) {
+    is.call(e) && identical(e[[1L]], as.name("<-")) &&
+      identical(e[[2L]], as.name("oggi"))
+  }, codice)
+  ambiente <- new.env(parent = baseenv())
+  ambiente[["Sys.time"]] <- function() istante
+  ambiente[["Sys.Date"]] <- function() {
+    as.Date(format(istante, "%Y-%m-%d", tz = "UTC"))
+  }
+  for (e in lettura) {
+    eval(e, ambiente)
+  }
+  stato <- list(
+    ok = TRUE, errors = character(), gate = "collaudata",
+    payload = list(
+      redcap_version = "17.3.3", redcap_major = 17L,
+      version_gate = "collaudata", surface_fingerprint = "16faf46d5ab1",
+      allowlist_fingerprint = "aabbccddeeff",
+      results = list(
+        list(username = "a", project_id = 9001L, expiration = "2026-07-01")
+      )
+    )
+  )
+
+  riga <- observe_instance("edcNN", stato, today = ambiente[["oggi"]])
+
+  expect_length(lettura, 1L)
+  expect_equal(ambiente[["oggi"]], as.Date("2026-07-01"))
+  expect_equal(riga[["scadute"]], 1L)
+})
+
+
 test_that("con la posta accesa il giro pretende la copia a IT", {
   # Same limit as the guards above. The outcome of a row whose owner is not
   # established goes to IT alone: without the copy it would leave for nobody,

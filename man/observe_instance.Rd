@@ -4,7 +4,7 @@
 \alias{observe_instance}
 \title{Turn one instance's \code{state} reply into a single observation row}
 \usage{
-observe_instance(server, state, today = Sys.Date())
+observe_instance(server, state, today = redcap_today())
 }
 \arguments{
 \item{server}{The instance name.}
@@ -14,7 +14,10 @@ observe_instance(server, state, today = Sys.Date())
 
 \item{today}{The date expirations are compared against. Injected rather than
 read from the clock so a fixture cannot turn red on a calendar date for a
-reason unrelated to the code.}
+reason unrelated to the code. By default REDCap's date, the one in Rome
+(\code{redcap_today()}): the observer runs on a machine in UTC, and between
+22:00 and 24:00 UTC (23:00 in winter) its date would leave out of
+\code{scadute} a pair expiring on Rome's date, which REDCap already refuses.}
 }
 \value{
 A one-row data frame.

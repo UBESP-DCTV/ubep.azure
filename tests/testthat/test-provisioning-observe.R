@@ -49,6 +49,33 @@ test_that("the expiration boundary is inclusive, as REDCap applies it", {
 })
 
 
+test_that("without a date, expirations are counted on REDCap's, the one in Rome", { # nolint: line_length_linter.
+  # The default of `today` is the date REDCap judges on, `redcap_today()`,
+  # not the machine's: between 22:00 and 24:00 UTC the observer, on a
+  # machine in UTC, would count a pair REDCap already refuses among the
+  # valid ones. The date is far from any real today, so the machine's own
+  # date cannot decide the test.
+  local_mocked_bindings(redcap_today = function(now = Sys.time()) {
+    as.Date("2099-01-02")
+  })
+  state <- list(
+    ok = TRUE, errors = character(), gate = "collaudata",
+    payload = list(
+      redcap_version = "17.3.3", redcap_major = 17L,
+      surface_fingerprint = "16faf46d5ab1",
+      results = list(
+        list(username = "a", project_id = 9001L, expiration = "2099-01-02"),
+        list(username = "b", project_id = 9001L, expiration = "2099-01-03")
+      )
+    )
+  )
+
+  row <- observe_instance("edcNN", state)
+
+  expect_equal(row[["scadute"]], 1L)
+})
+
+
 test_that("an unreachable instance becomes a row, not an exception", {
   state <- list(
     ok = FALSE, errors = "TRASPORTO_MODULO_ASSENTE",

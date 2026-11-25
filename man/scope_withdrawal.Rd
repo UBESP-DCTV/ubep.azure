@@ -4,7 +4,7 @@
 \alias{scope_withdrawal}
 \title{Judge at the gate a revocation somebody other than its owner made}
 \usage{
-scope_withdrawal(row, authors, owner, sealed, rights)
+scope_withdrawal(row, authors, owner, sealed, rights, today = redcap_today())
 }
 \arguments{
 \item{row}{The row, one line of the register as the gate reads it.}
@@ -19,6 +19,8 @@ to.}
 
 \item{rights}{The rights the instance reported, as \code{round_rights()} builds
 them.}
+
+\item{today}{REDCap's date, for \code{scope_errors()}.}
 }
 \value{
 \code{""} when the revocation stands; \code{"held"} when it waits for the
