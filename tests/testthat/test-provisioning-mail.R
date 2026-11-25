@@ -1307,7 +1307,7 @@ test_that("il testo pronto chiede l'indirizzo per recuperare la password", {
     expect_equal(dove("6\\. "), which(testo == passo[[lingua]]) + 1L)
     expect_false(grepl("telefono|phone|SMS", passo[[lingua]]))
   }
-  # Done closes the registration once, at the end of it.
+  # Done once per language, closing Authenticator, method 1 of 2.
   expect_equal(sum(grepl("Done", righe, fixed = TRUE)), 2L)
 })
 
@@ -1351,8 +1351,8 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
   )
 
   # test
-  # As in Entra: Authenticator, method 1 of 2, closes with Done; the
-  # recovery address, method 2 of 2, with Next, and no Done after it.
+  # As in WI_004b 00.06, step 5. Whether a last page with Done follows the
+  # recovery address was not in the test of 2026-11-24.
   for (lingua in names(attese)) {
     for (passo in names(attese[[lingua]])) {
       for (frase in attese[[lingua]][[passo]]) {
