@@ -111,13 +111,16 @@ once for every row.
 
 * **The ready text says what to do when the welcome is lost, and the
   welcome names the recovery address.** Decided on 2026-11-25. The sentence
-  of the ready text that says where the welcome is, under the key, adds "if you cannot find it, write to me" after the junk
-  folder: the welcome may be lost, in the junk folder or never arrived, and
-  the person is sent to the referent. The ban on `Skip for now` opens step
-  4, before the instructions of the step, instead of closing it. The first
-  item of the welcome adds the e-mail address of the person's own that
-  Entra asks for after Authenticator, to recover the password; the items
-  stay three (`mail_credential_ready_text()`, `mail_welcome_message()`).
+  of the ready text that says where the welcome is, under the key, adds
+  "if you cannot find it, write to me" after the junk folder: the welcome
+  may be lost, in the junk folder or never arrived, and the person is sent
+  to the referent. The ban on `Skip for now` opens step 4, before the
+  instructions of the step, instead of closing it. The first item of the
+  welcome adds the e-mail address of the person's own that Entra asks for
+  after Authenticator, to recover the password; the items stay three, and
+  the third says that the address confirmed by a link is REDCap's, since
+  Entra confirms the recovery address with a code
+  (`mail_credential_ready_text()`, `mail_welcome_message()`).
 
 * **The welcome and the access e-mail greet the person as the ready text
   does.** They printed the first name as the row holds it: a missing name

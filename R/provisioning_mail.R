@@ -1648,7 +1648,7 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
     "  dispositivo, e un tuo indirizzo di posta per recuperare la",
     "  password. Si fa una volta sola.",
     "- compilare il modulo con i tuoi dati di base.",
-    "- confermare il tuo indirizzo di posta seguendo un link.",
+    "- confermare in REDCap il tuo indirizzo di posta seguendo un link.",
     "",
     contatto[["it"]]
   )
@@ -1673,7 +1673,7 @@ mail_welcome_message <- function(row, upn, url = NULL, deadline = NULL) {
     "  own, and an e-mail address of your own to recover your password.",
     "  This is done once.",
     "- fill in the basic user information form.",
-    "- confirm your e-mail address by following a link.",
+    "- confirm your e-mail address in REDCap by following a link.",
     "",
     contatto[["en"]]
   )

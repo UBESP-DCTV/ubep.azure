@@ -700,6 +700,16 @@ test_that("la prima voce del benvenuto dice anche l'indirizzo di recupero, e le 
       "is done once."
     )
   )
+  # With two addresses in the list, the one confirmed by a link is said to
+  # be REDCap's, not the recovery address, which Entra confirms with a code.
+  expect_identical(
+    voci[[3L]],
+    "- confermare in REDCap il tuo indirizzo di posta seguendo un link."
+  )
+  expect_identical(
+    voci[[6L]],
+    "- confirm your e-mail address in REDCap by following a link."
+  )
   expect_match(detto, "ti verranno chieste tre cose", fixed = TRUE)
   expect_match(detto, "you will be asked three things", fixed = TRUE)
 })
