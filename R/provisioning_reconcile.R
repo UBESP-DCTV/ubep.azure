@@ -917,8 +917,8 @@ provisioning_reconcile <- function(register_url,
   })
   reopened <- closed &
     !(trimws(as.character(register[["request_status"]])) %in% "revoked")
-  named <- reopened & lengths(granted_closed) > 0L
-  for (i in which(named)) {
+  granted_known <- reopened & lengths(granted_closed) > 0L
+  for (i in which(granted_known)) {
     executed_pair[[i]][["username"]] <- granted_closed[[i]][[1L]]
   }
   # A closed row set back to active with no name granted that the log
@@ -927,8 +927,8 @@ provisioning_reconcile <- function(register_url,
   # the verification of the limits). A row closed at its only execution,
   # revoked before any round served it, granted nothing, and set back to
   # active is a request like the others.
-  unnamed <- vapply(seq_along(record_ids), function(i) {
-    if (!reopened[[i]] || named[[i]]) {
+  granted_unknown <- vapply(seq_along(record_ids), function(i) {
+    if (!reopened[[i]] || granted_known[[i]]) {
       return(FALSE)
     }
     mine <- log_of_record(owners_log, record_ids[[i]])
@@ -1089,10 +1089,10 @@ provisioning_reconcile <- function(register_url,
       code = "TRASPORTO_IDENTITA_CAMBIATA", upn = "", id = "", undecided = TRUE
     )
     # On a closed row set back to active the name carried out is the last
-    # one granted (`named`, above), verified by its own seal: it is checked
-    # also when the version of the closure is not certain (V4a of the
-    # verification of the limits).
-    carried_name <- if (certain[[i]] || named[[i]]) {
+    # one granted (`granted_known`, above), verified by its own seal: it is
+    # checked also when the version of the closure is not certain (V4a of
+    # the verification of the limits).
+    carried_name <- if (certain[[i]] || granted_known[[i]]) {
       executed_pair[[i]][["username"]]
     } else {
       NA_character_
@@ -1100,7 +1100,8 @@ provisioning_reconcile <- function(register_url,
     if (blind[[i]] || exiting[[i]]) {
       return(none)
     }
-    if (reopened[[i]] && (unnamed[[i]] || is.na(entra_believed[[i]]))) {
+    if (reopened[[i]] &&
+          (granted_unknown[[i]] || is.na(entra_believed[[i]]))) {
       return(undecided)
     }
     if (is.na(entra_believed[[i]]) || is.na(carried_name) ||
