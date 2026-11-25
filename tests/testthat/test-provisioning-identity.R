@@ -308,6 +308,24 @@ test_that("a guest carrying the same address is not a candidate", {
 })
 
 
+test_that("a UPN held by a guest is taken: the proposal skips it", {
+  # eval
+  # A guest is not a candidate, so it is no homonym and no match, but the
+  # uniqueness of a UPN is tenant-wide. Looked for among the candidates
+  # alone, the name the guest holds would be proposed for Mario.
+  answer <- resolve_identity(
+    a_request(),
+    dir_frame(dir_user(
+      officeLocation = "someone.else@example.org", userType = "Guest"
+    ))
+  )
+
+  # test
+  expect_equal(answer[["identity"]], "collision")
+  expect_equal(answer[["username"]], "mario.rossi.2@ubep.unipd.it")
+})
+
+
 test_that("a contact address on a differently named account is irrelevant", {
   # eval
   # Two hundred accounts may carry one address -- a shared mailbox, a lab whose
