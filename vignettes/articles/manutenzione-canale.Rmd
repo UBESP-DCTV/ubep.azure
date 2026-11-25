@@ -1119,9 +1119,10 @@ La regola è `pair_change()`, con quattro codici:
   riscritta su un account che esiste toglie il nome eseguito (la regola della
   revoca, sotto). Dalla 0.28.0 il messaggio dice che la revoca resta ferma
   solo quando resta ferma. Dalla 0.29.0 resta ferma anche su una riga chiusa
-  su una persona assente, riattivata o no, con la persona riscritta: la regola
-  della coppia legge il nome concesso (sotto, «La riga chiusa»), e la riga non
-  revoca la persona scritta, che non ha mai servito.
+  su una persona assente, riattivata o no, con la persona riscritta e un nome
+  che il canale le ha concesso: la regola della coppia legge il nome concesso
+  (sotto, «La riga chiusa»), e la riga non revoca la persona scritta, che non
+  ha mai servito.
 - **`TRASPORTO_NOME_RIASSEGNATO`**, `transport_error`, dalla 0.27.0: il nome
   utente eseguito è ora di un altro account su Entra, con un altro `id`
   (cancellato e ridato, o ricreato a mano). La risoluzione può non vederlo:
@@ -1191,19 +1192,20 @@ La regola è `pair_change()`, con quattro codici:
   configurata: limiti accettati, nel verso che revoca meno. La riga attiva
   riparte da sola quando la risoluzione ritrova l'account eseguito, per
   esempio un account cancellato e ripristinato, e dalla 0.29.0 anche la riga
-  chiusa e riattivata senza `id`. Dalla 0.29.0 si ferma su questo codice
-  anche la riga chiusa e riattivata il cui account il giro non sa giudicare:
-  la guardia del riempimento non decide (data di creazione illeggibile, due
-  titolari del nome, nessun istante della prima esecuzione, un `id` che la
-  porta rifiuterebbe), il log non verifica il nome concesso su una riga
-  eseguita più volte, o non dice chi ha scritto l'`id`. Il messaggio ha un
+  chiusa e riattivata senza `id`, se il ripristino conserva la data di
+  creazione dell'account (atteso, non provato). Dalla 0.29.0 si ferma su questo
+  codice anche la riga chiusa e riattivata il cui account il giro non sa
+  giudicare: la guardia del riempimento non decide (data di creazione
+  illeggibile, due titolari del nome, nessun istante della prima esecuzione, un
+  `id` che la porta rifiuterebbe), il log non verifica il nome concesso su una
+  riga eseguita più volte, o non dice chi ha scritto l'`id`. Il messaggio ha un
   paragrafo suo (colonna `reopened_undecided` dell'identificazione): IT
   verifica su Entra quando è stato creato l'account che porta il nome
   (*Created date time* fra le proprietà dell'utente; gli *Audit logs* tengono
   da 7 a 30 giorni, e bastano solo per un cambio recente), il proprietario
   revoca la riga e compila una richiesta nuova; con un account trovato IT
   toglie a mano il vecchio login e cancella la riga vecchia quando la revoca è
-  `applied`, senza la riga revocata si chiude e non tiene la coppia contro la
+  `applied`; senza, la riga revocata si chiude e non tiene la coppia contro la
   richiesta nuova.
 
 In tutti i casi sull'istanza non si scrive niente, nessuno nasce su
