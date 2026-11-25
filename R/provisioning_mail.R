@@ -1812,9 +1812,9 @@ mail_credential_message <- function(row, upn, credential, deadline = NULL) {
 #' The two methods close as Entra closes them, seen on a test account on
 #' 2026-11-24: Authenticator, method 1 of 2, with `Done`, then method 2 of 2,
 #' the recovery address, with `Next`. The Italian text gives the Italian
-#' label with the English one in brackets where that test showed it
-#' (`Avanti`, `Fine`, `Metodo 2 di 2`), and the English label alone
-#' elsewhere, the labels the test did not show.
+#' label with the English one in brackets where that test or the work
+#' instruction 00.06 shows it (`Avanti`, `Fine`, `Metodo 2 di 2`), and the
+#' English label alone elsewhere.
 #'
 #' Each text sits between two delimiter lines, because the line with the
 #' user name stands above it in the same message, and a referent copying by
@@ -1874,7 +1874,8 @@ mail_credential_ready_text <- function(first_name, credential, deadline) {
       "l'indirizzo di REDCap della mail di benvenuto."
     ),
     paste0(
-      "2. Scrivi il nome utente e premi Next, poi la chiave e premi Sign in."
+      "2. Scrivi il nome utente e premi Avanti (Next), poi la chiave e premi ",
+      "Sign in."
     ),
     paste0(
       "3. Microsoft ti chiede una password nuova: in Current password scrivi ",

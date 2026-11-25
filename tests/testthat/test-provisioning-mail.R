@@ -1326,8 +1326,9 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
       cinque = grep("^5\\. ", testo, value = TRUE)
     )
   })
-  # Italian labels seen by [cl] on the test account on 2026-11-24, with the
-  # English one in brackets; the others stay in English alone.
+  # Italian labels where the test of [cl] on 2026-11-24 or WI_004b 00.06
+  # shows them, with the English one in brackets; the others stay in English
+  # alone.
   attese <- list(
     it = list(
       quattro = c(
@@ -1363,10 +1364,13 @@ test_that("il testo pronto chiude Authenticator con Done e la mail con Next", { 
     }
     expect_false(grepl("Done", passi[[lingua]][["cinque"]], fixed = TRUE))
   }
-  # Avanti on the sign-in page was not in the test of [cl]: Next alone.
+  # Avanti on the sign-in page, as in WI_004b 00.06, step 2.
   expect_identical(
     passi[["it"]][["due"]],
-    "2. Scrivi il nome utente e premi Next, poi la chiave e premi Sign in."
+    paste0(
+      "2. Scrivi il nome utente e premi Avanti (Next), poi la chiave e premi ",
+      "Sign in."
+    )
   )
 })
 
