@@ -2401,7 +2401,7 @@ provisioning_reconcile <- function(register_url,
   identity_written[["errors"]] <- c(
     identity_written[["errors"]], deferred_written[["errors"]]
   )
-  unnamed <- deferred_door & !isTRUE(deferred_written[["ok"]])
+  name_lost <- deferred_door & !isTRUE(deferred_written[["ok"]])
 
   # Who each row belongs to once this round is over. The passage is decided
   # here and once: by the round that carries the change out, after the gate
@@ -2775,7 +2775,7 @@ provisioning_reconcile <- function(register_url,
 
   sealing <- do.call(rbind, c(
     list(seal_payload("", "", "intact")[0, , drop = FALSE]),
-    lapply(which(applied & !unnamed), function(i) {
+    lapply(which(applied & !name_lost), function(i) {
       seal_payload(
         record_ids[[i]],
         seal_after[[i]],
