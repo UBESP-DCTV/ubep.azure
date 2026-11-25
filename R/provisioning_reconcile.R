@@ -1279,10 +1279,21 @@ provisioning_reconcile <- function(register_url,
   # revocation closed on a person the tenant no longer holds, and a row that
   # leaves by the item 12 are written as before.
   nobody <- !resolvable & !(creating & !unheard) & !exiting
+  door_open <- !moved & !(sealed_row & (unjudged | nobody))
+  door_verdicts <- ifelse(exiting, verdict_read, verdicts)
+  # Nor, yet, on a closed row revoked (F1 of the final review of the 0.29.0,
+  # way (a)): its seal is the closure's, under the empty name, and the
+  # revocation brings the row back to that version. Written here, the name
+  # would be the only difference from the seal, by the channel's hand; a
+  # round that then does not act on the instance (Rome's day changed, an
+  # instance that does not answer) leaves it there, and the next round holds
+  # the row with no author. Its name enters with the seal of the revocation,
+  # once the outcome is known: `deferred_door`, below.
+  door_later <- door_open & closed & revoked_rows
   identity_written <- write_identities(
-    !moved & !(sealed_row & (unjudged | nobody)),
+    door_open & !door_later,
     names = resolved_names,
-    verdicts_of = ifelse(exiting, verdict_read, verdicts)
+    verdicts_of = door_verdicts
   )
 
   # A row whose name carried out the door had to write back, and could not
@@ -2373,6 +2384,25 @@ provisioning_reconcile <- function(register_url,
     as.character(outcomes[["outcome"]]) == "applied"
   ]
 
+  # The identity door for the closed rows revoked it left for later (F1):
+  # only on the rows the round carried out, whose seal below covers the
+  # name, and on the held ones, whose message asks for the seal computed on
+  # it. Before the outcome, as the door stands in the log on any other row.
+  # A row whose name did not reach the register is not sealed: the seal
+  # would cover a name the register does not hold, and the next round finds
+  # the closure intact and does it again.
+  held_now <- record_ids %in% as.character(outcomes[["record_id"]])[
+    as.character(outcomes[["outcome"]]) == "held"
+  ]
+  deferred_door <- door_later & (applied | held_now)
+  deferred_written <- write_identities(
+    deferred_door, names = resolved_names, verdicts_of = door_verdicts
+  )
+  identity_written[["errors"]] <- c(
+    identity_written[["errors"]], deferred_written[["errors"]]
+  )
+  unnamed <- deferred_door & !isTRUE(deferred_written[["ok"]])
+
   # Who each row belongs to once this round is over. The passage is decided
   # here and once: by the round that carries the change out, after the gate
   # has let it through, on the row's log the round read before acting. The
@@ -2745,7 +2775,7 @@ provisioning_reconcile <- function(register_url,
 
   sealing <- do.call(rbind, c(
     list(seal_payload("", "", "intact")[0, , drop = FALSE]),
-    lapply(which(applied), function(i) {
+    lapply(which(applied & !unnamed), function(i) {
       seal_payload(
         record_ids[[i]],
         seal_after[[i]],

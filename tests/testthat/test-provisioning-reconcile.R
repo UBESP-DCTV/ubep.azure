@@ -13482,3 +13482,234 @@ test_that("la riga chiusa e revocata trattenuta per la mano di un altro prende i
     role_name = "read only"
   )))
 })
+
+
+# ---- The closed and revoked row across a round that does not act (F1) ----
+
+# F1 of the final review of the interactions of the 0.29.0, way (a): a
+# closed row (the channel's last seal is the closure's, under the empty
+# name) revoked by its owner. The identity door used to write the resolved
+# name on it before the loop of the instances; a round that then did not act
+# there (Rome's day changed, an instance that does not answer) left the row
+# differing from its seal by the channel's hand alone, and the next round
+# held it on SIGILLO_DIVERSO with no author. The name enters with the seal of
+# the revocation, once the instance has acted.
+
+# What the three rounds of a closed and revoked row must show: the first
+# revokes nothing and writes no name; the second revokes `nome`, `applied`,
+# with no held outcome and no message asking for an approval; the third
+# finds the row intact and does nothing more.
+attesa_revoca_chiusa <- function(giri, fermo, nome) {
+  primo <- giri[["primo"]]
+  secondo <- giri[["secondo"]]
+  terzo <- giri[["terzo"]]
+  testthat::expect_equal(
+    dettaglio_uno(primo[["esito"]]), codice_fermo[[fermo]]
+  )
+  testthat::expect_length(primo[["revocati"]], 0L)
+  testthat::expect_null(primo[["identita"]])
+
+  testthat::expect_equal(esiti_del_giro(secondo), "applied")
+  testthat::expect_equal(dettaglio_uno(secondo[["esito"]]), "")
+  testthat::expect_equal(secondo[["revocati"]], nome)
+  testthat::expect_false(
+    any(grepl("^TRASPORTO_", secondo[["esito"]][["errori"]]))
+  )
+  corpi <- vapply(secondo[["posta"]], function(m) m[["body"]], character(1))
+  testthat::expect_false(any(grepl("approved_seal", corpi, fixed = TRUE)))
+
+  testthat::expect_false(any(esiti_del_giro(terzo) %in% "held"))
+  testthat::expect_length(terzo[["revocati"]], 0L)
+}
+
+# The closed row without `applied_entra_id`, set back to active, stopped for
+# IT and revoked by Anna as the message asks (X1 of the adversarial tests of
+# the reopened row): I5 of the final review of the interactions.
+chiusa_revocata_senza_id <- function() {
+  registro_che_ricorda(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_chiusa_assente, applied_entra_id = "",
+      username = "", identity = "absent", applied_as = "absent",
+      request_status = "revoked"
+    ))),
+    storia = c(
+      list(
+        cambio(anna, "request_status = 'revoked'",
+               timestamp = "2026-08-16 09:00"),
+        cambio(anna, "request_status = 'active'",
+               timestamp = "2026-08-15 10:00")
+      ),
+      storia_chiusa_assente()[1:4],
+      carried_out(sigillo_eseguito())
+    ),
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+}
+
+# The closed row with the identifier, left revoked or set back to active and
+# revoked again (`riattivata`).
+chiusa_revocata_con_id <- function(riattivata = FALSE) {
+  storia <- storia_chiusa_assente()
+  if (riattivata) {
+    storia <- c(
+      list(
+        cambio(anna, "request_status = 'revoked'",
+               timestamp = "2026-08-16 09:00"),
+        cambio(anna, "request_status = 'active'",
+               timestamp = "2026-08-15 10:00")
+      ),
+      storia
+    )
+  }
+  registro_che_ricorda(
+    do.call(record_json, list(eseguita_row(
+      applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+      username = "", identity = "absent", applied_as = "absent",
+      request_status = "revoked"
+    ))),
+    storia = storia,
+    creazioni = creazioni_finte(creata_da_anna())
+  )
+}
+
+# E1 of the design of the 0.29.0: the closed row with the identifier, set
+# back to active with the account renamed and revoked again. Its revocation
+# goes to the name resolved, the new one, not on the project: the old login
+# stays, as D4 (a) leaves it. Across a round that does not act it must do
+# what it does in one round. `solo` is that round.
+giri_e1 <- function(fermo) {
+  istanza <- function() {
+    istanza_doppia(
+      list(username = anna, user_rights = 1L),
+      list(username = mario, role_name = "data entry", user_rights = 0L)
+    )
+  }
+  directory <- directory_doppia(mario_a(userPrincipalName = rinominato))
+  solo <- giro(
+    chiusa_revocata_con_id(riattivata = TRUE), istanza(),
+    directory = directory, dry_run = FALSE, copy_to = "it@example.org",
+    mailer = posta_accesa, at = "2026-08-17 03:00"
+  )
+  revocati_solo <- revocati()
+  c(
+    tre_giri(
+      chiusa_revocata_con_id(riattivata = TRUE), istanza(), directory, fermo
+    ),
+    list(solo = solo, revocati_solo = revocati_solo)
+  )
+}
+
+
+test_that("la revoca della riga chiusa e riattivata senza id passa il giro fermo sul giorno e revoca il nome eseguito al giro dopo (I5)", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    chiusa_revocata_senza_id(), istanza_che_revoca(),
+    directory_doppia(graph_user(id = id_b, createdDateTime = "ieri")),
+    "giorno"
+  )
+
+  # test
+  attesa_revoca_chiusa(giri, "giorno", mario)
+})
+
+
+test_that("la revoca della riga chiusa e riattivata senza id passa l'istanza muta e revoca il nome eseguito al giro dopo (I5)", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    chiusa_revocata_senza_id(), istanza_che_revoca(),
+    directory_doppia(graph_user(id = id_b, createdDateTime = "ieri")),
+    "muta"
+  )
+
+  # test
+  attesa_revoca_chiusa(giri, "muta", mario)
+})
+
+
+test_that("la riga chiusa e rimasta revocata col nome ridato passa il giro fermo sul giorno e revoca il nome risolto al giro dopo (G3)", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    chiusa_revocata_con_id(), istanza_che_revoca(),
+    directory_doppia(mario_b()), "giorno"
+  )
+
+  # test
+  attesa_revoca_chiusa(giri, "giorno", mario)
+})
+
+
+test_that("la riga chiusa e rimasta revocata col nome ridato passa l'istanza muta e revoca il nome risolto al giro dopo (G3)", { # nolint: line_length_linter.
+  # eval
+  giri <- tre_giri(
+    chiusa_revocata_con_id(), istanza_che_revoca(),
+    directory_doppia(mario_b()), "muta"
+  )
+
+  # test
+  attesa_revoca_chiusa(giri, "muta", mario)
+})
+
+
+test_that("la riga chiusa con l'account rinominato, revocata, passa il giro fermo sul giorno e al giro dopo fa quel che fa in un giro (E1)", { # nolint: line_length_linter.
+  # eval
+  giri <- giri_e1("giorno")
+
+  # test
+  expect_equal(as.character(giri[["solo"]][["esiti"]][["outcome"]]), "applied")
+  expect_false(mario %in% giri[["revocati_solo"]])
+  attesa_revoca_chiusa(giri, "giorno", giri[["revocati_solo"]])
+})
+
+
+test_that("la riga chiusa con l'account rinominato, revocata, passa l'istanza muta e al giro dopo fa quel che fa in un giro (E1)", { # nolint: line_length_linter.
+  # eval
+  giri <- giri_e1("muta")
+
+  # test
+  expect_equal(as.character(giri[["solo"]][["esiti"]][["outcome"]]), "applied")
+  expect_false(mario %in% giri[["revocati_solo"]])
+  attesa_revoca_chiusa(giri, "muta", giri[["revocati_solo"]])
+})
+
+
+test_that("la riga chiusa e revocata il cui nome non arriva al registro non si sigilla, e il giro dopo la chiude", { # nolint: line_length_linter.
+  # eval
+  # The name left for later is written after the instance has acted; if
+  # that write does not arrive, a seal covering the name would leave the
+  # register on another version than the seal, and the next round would
+  # hold the row.
+  dentro <- chiusa_revocata_con_id()
+  reg <- registro_che_scade(dentro, "username", applica = FALSE)
+  ist <- istanza_che_revoca()
+  directory <- directory_doppia(mario_b())
+  giro_ora <- function(ora, at) {
+    attr(dentro, "stato")$ora <- ora
+    esito <- giro(
+      reg, ist, directory = directory, dry_run = FALSE,
+      copy_to = "it@example.org", mailer = posta_accesa, at = at
+    )
+    list(
+      esito = esito, revocati = revocati(),
+      riga = attr(dentro, "stato")$righe[["1"]]
+    )
+  }
+  primo <- giro_ora("2026-08-17 05:00", "2026-08-17 03:00")
+  secondo <- giro_ora("2026-08-17 09:00", "2026-08-17 07:00")
+  terzo <- giro_ora("2026-08-17 13:00", "2026-08-17 11:00")
+
+  # test
+  expect_equal(primo[["revocati"]], mario)
+  expect_true(any(grepl("^TRASPORTO_", primo[["esito"]][["errori"]])))
+  expect_equal(primo[["riga"]][["username"]], "")
+  expect_equal(primo[["riga"]][["applied_seal"]], sigillo_chiusa_assente)
+  expect_equal(as.character(secondo[["esito"]][["esiti"]][["outcome"]]),
+               "applied")
+  expect_equal(secondo[["riga"]][["username"]], mario)
+  expect_false(identical(
+    secondo[["riga"]][["applied_seal"]], sigillo_chiusa_assente
+  ))
+  expect_false(any(
+    as.character(terzo[["esito"]][["esiti"]][["outcome"]]) %in% "held"
+  ))
+  expect_length(terzo[["revocati"]], 0L)
+})
