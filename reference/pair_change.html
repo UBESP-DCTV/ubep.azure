@@ -21,7 +21,7 @@ instance, nobody is created, and the row keeps its seal and its owner."></head><
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,7 +110,10 @@ the log does not say who wrote it, which counts as a write.</p></dd>
 
 <dt id="arg-account">account<a class="anchor" aria-label="anchor" href="#arg-account"></a></dt>
 <dd><p>What the identifier on Entra says, <code>""</code> when it says
-nothing: <code>TRASPORTO_NOME_RIASSEGNATO</code> or <code>TRASPORTO_ACCOUNT_RINOMINATO</code>.</p></dd>
+nothing: <code>TRASPORTO_NOME_RIASSEGNATO</code> or <code>TRASPORTO_ACCOUNT_RINOMINATO</code>;
+or <code>TRASPORTO_IDENTITA_CAMBIATA</code> for a row closed on a person gone from
+Entra and set back to active, whose account the round cannot judge
+(item 14 of the limits, 0.29.0).</p></dd>
 
 </dl></div>
     <div class="section level2">

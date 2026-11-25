@@ -19,7 +19,7 @@ of reality alone, and stay available without that comparison."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,7 @@ of reality alone, and stay available without that comparison.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">observe_instance</span><span class="op">(</span><span class="va">server</span>, <span class="va">state</span>, today <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.time.html" class="external-link">Sys.Date</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">observe_instance</span><span class="op">(</span><span class="va">server</span>, <span class="va">state</span>, today <span class="op">=</span> <span class="fu"><a href="redcap_today.html">redcap_today</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -79,7 +79,10 @@ of reality alone, and stay available without that comparison.</p>
 <dt id="arg-today">today<a class="anchor" aria-label="anchor" href="#arg-today"></a></dt>
 <dd><p>The date expirations are compared against. Injected rather than
 read from the clock so a fixture cannot turn red on a calendar date for a
-reason unrelated to the code.</p></dd>
+reason unrelated to the code. By default REDCap's date, the one in Rome
+(<code><a href="redcap_today.html">redcap_today()</a></code>): the observer runs on a machine in UTC, and between
+22:00 and 24:00 UTC (23:00 in winter) its date would leave out of
+<code>scadute</code> a pair expiring on Rome's date, which REDCap already refuses.</p></dd>
 
 </dl></div>
     <div class="section level2">

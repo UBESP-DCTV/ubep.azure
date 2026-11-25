@@ -13,7 +13,7 @@ dropping it would let a homonym through unseen."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,12 @@ dropping it would let a homonym through unseen.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">directory_named</span><span class="op">(</span><span class="va">directory</span>, <span class="va">first_name</span>, <span class="va">last_name</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">directory_named</span><span class="op">(</span></span>
+<span>  <span class="va">directory</span>,</span>
+<span>  <span class="va">first_name</span>,</span>
+<span>  <span class="va">last_name</span>,</span>
+<span>  folds <span class="op">=</span> <span class="fu"><a href="directory_folds.html">directory_folds</a></span><span class="op">(</span><span class="va">directory</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -64,6 +69,11 @@ dropping it would let a homonym through unseen.</p>
 
 <dt id="arg-first-name-last-name">first_name, last_name<a class="anchor" aria-label="anchor" href="#arg-first-name-last-name"></a></dt>
 <dd><p>The names the register row declares.</p></dd>
+
+
+<dt id="arg-folds">folds<a class="anchor" aria-label="anchor" href="#arg-folds"></a></dt>
+<dd><p>The directory folded, <code><a href="directory_folds.html">directory_folds()</a></code>, made from
+<code>directory</code>; by default folded here.</p></dd>
 
 </dl></div>
     <div class="section level2">

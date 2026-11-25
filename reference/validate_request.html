@@ -11,7 +11,7 @@ badly filled in, not badly transported."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@ badly filled in, not badly transported.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_request</span><span class="op">(</span><span class="va">request</span>, executed <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_request</span><span class="op">(</span><span class="va">request</span>, executed <span class="op">=</span> <span class="cn">FALSE</span>, today <span class="op">=</span> <span class="fu"><a href="redcap_today.html">redcap_today</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,6 +62,12 @@ badly filled in, not badly transported.</p>
 <dt id="arg-executed">executed<a class="anchor" aria-label="anchor" href="#arg-executed"></a></dt>
 <dd><p>Whether the round carried this request out and nobody
 changed it since: the channel's seal is there and has not moved.</p></dd>
+
+
+<dt id="arg-today">today<a class="anchor" aria-label="anchor" href="#arg-today"></a></dt>
+<dd><p>REDCap's date, the one in Rome, <code><a href="redcap_today.html">redcap_today()</a></code> by default.
+The round computes it once, from the instant it started, and passes it
+down, so that every row is judged on the same day.</p></dd>
 
 </dl></div>
     <div class="section level2">

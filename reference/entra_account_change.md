@@ -13,7 +13,8 @@ entra_account_change(
   executed_username,
   believed_id,
   directory,
-  revoked = FALSE
+  revoked = FALSE,
+  folds = directory_folds(directory)
 )
 ```
 
@@ -36,6 +37,12 @@ entra_account_change(
 - revoked:
 
   Whether the row asks for `revoked`.
+
+- folds:
+
+  The sweep folded,
+  [`directory_folds()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_folds.md),
+  made from `directory`; by default folded here.
 
 ## Value
 

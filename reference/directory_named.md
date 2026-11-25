@@ -8,7 +8,12 @@ about, and dropping it would let a homonym through unseen.
 ## Usage
 
 ``` r
-directory_named(directory, first_name, last_name)
+directory_named(
+  directory,
+  first_name,
+  last_name,
+  folds = directory_folds(directory)
+)
 ```
 
 ## Arguments
@@ -22,6 +27,12 @@ directory_named(directory, first_name, last_name)
 - first_name, last_name:
 
   The names the register row declares.
+
+- folds:
+
+  The directory folded,
+  [`directory_folds()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_folds.md),
+  made from `directory`; by default folded here.
 
 ## Value
 

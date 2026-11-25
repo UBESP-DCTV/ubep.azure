@@ -7,7 +7,7 @@ them is badly filled in, not badly transported.
 ## Usage
 
 ``` r
-validate_request(request, executed = FALSE)
+validate_request(request, executed = FALSE, today = redcap_today())
 ```
 
 ## Arguments
@@ -20,6 +20,13 @@ validate_request(request, executed = FALSE)
 
   Whether the round carried this request out and nobody changed it
   since: the channel's seal is there and has not moved.
+
+- today:
+
+  REDCap's date, the one in Rome,
+  [`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md)
+  by default. The round computes it once, from the instant it started,
+  and passes it down, so that every row is judged on the same day.
 
 ## Value
 

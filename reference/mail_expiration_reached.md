@@ -6,11 +6,15 @@ access when `expiration <= TODAY`, and its TODAY is the date in Rome,
 [`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md).
 The day is the one in Rome of the instant `at`, not the clock of whoever
 composes the message, so the same row says the same thing whenever it is
-read and the tests do not depend on the machine.
-[`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md)
-and the choice of `lapsed` read the same date of the same clock, so
+read and the tests do not depend on the machine. The round takes the
+date it hands to
+[`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md),
+the choice of `lapsed` and the gate from the same instant, `at`, so
 between 22:00 and 24:00 UTC, when the date in Rome is already the next
-day, the message and the gate agree with REDCap.
+day, the message and the gate agree with REDCap. A round whose day in
+Rome turns before it writes to an instance acts on nothing there. One
+whose day turns after the write, while its messages leave, still tells
+them on the day of `at`, the day the access was granted.
 
 ## Usage
 

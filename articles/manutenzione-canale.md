@@ -1169,6 +1169,16 @@ regola dedicata: è voluto, e non è un errore della sottoscrizione.
 `TRASPORTO_REGISTRO_CANALE_ASSENTE` ferma il giro, e lo si vede anche
 dal giro fermato prima di agire.
 
+Dalla 0.29.0 sta negli `errori`, con il giro non fermato, anche
+`TRASPORTO_GIORNO_CAMBIATO`: la data di Roma è cambiata dopo l’inizio
+del giro, prima che scrivesse su un’istanza o creasse una persona, e su
+quell’istanza non si è scritto niente, o nessuno è nato. La regola sugli
+esiti non scritti suona anche su questo codice, benché gli esiti siano
+scritti, e quella sulle irraggiungibili no, perché l’istanza ha
+risposto; il runner esce con 1, come per ogni errore. Lo incontra un
+giro che passa la mezzanotte di Roma prima di agire, o uno lanciato con
+un `at` che non è oggi: i giri del timer, alle 03:00 UTC, no.
+
 Sugli accessi persi la 0.21.0 porta `ubep-canale-accesso-perso`, sulla
 colonna `accessi_persi > 0`, a gravità 2.
 
@@ -1237,7 +1247,11 @@ con quattro codici:
   nuova, e quando la persona nuova andrebbe creata; con la sola persona
   riscritta su un account che esiste toglie il nome eseguito (la regola
   della revoca, sotto). Dalla 0.28.0 il messaggio dice che la revoca
-  resta ferma solo quando resta ferma.
+  resta ferma solo quando resta ferma. Dalla 0.29.0 resta ferma anche su
+  una riga chiusa su una persona assente, riattivata o no, con la
+  persona riscritta e un nome che il canale le ha concesso: la regola
+  della coppia legge il nome concesso (sotto, «La riga chiusa»), e la
+  riga non revoca la persona scritta, che non ha mai servito.
 - **`TRASPORTO_NOME_RIASSEGNATO`**, `transport_error`, dalla 0.27.0: il
   nome utente eseguito è ora di un altro account su Entra, con un altro
   `id` (cancellato e ridato, o ricreato a mano). La risoluzione può non
@@ -1245,10 +1259,12 @@ con quattro codici:
   restava `applied`. Mai su una riga revocata, che governa la sua
   coppia. Dalla 0.28.0 anche su una riga con l’`id` chiusa su una
   persona assente e riattivata, il cui ultimo sigillo, quello della
-  chiusura, non nomina nessuno. L’esito va al proprietario con IT in
-  copia, e dice che la riga non va modificata. Il proprietario la revoca
-  in ogni caso, perché il nome eseguito, con l’accesso, è ora di un
-  altro account, e la revoca toglie il nome eseguito (la regola della
+  chiusura, non nomina nessuno; dalla 0.29.0 anche senza `id`, quando
+  l’account che porta il nome concesso è nato dopo la sua prima
+  esecuzione (sotto, «La riga chiusa»). L’esito va al proprietario con
+  IT in copia, e dice che la riga non va modificata. Il proprietario la
+  revoca in ogni caso, perché il nome eseguito, con l’accesso, è ora di
+  un altro account, e la revoca toglie il nome eseguito (la regola della
   revoca, sotto); se alla persona l’accesso serve ancora, compila poi
   una richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima
   chiedeva la revoca solo se l’accesso non serviva più. IT verifica su
@@ -1310,7 +1326,23 @@ con quattro codici:
   l’utenza del canale non è configurata: limiti accettati, nel verso che
   revoca meno. La riga attiva riparte da sola quando la risoluzione
   ritrova l’account eseguito, per esempio un account cancellato e
-  ripristinato.
+  ripristinato, e dalla 0.29.0 anche la riga chiusa e riattivata senza
+  `id`, se il ripristino conserva la data di creazione dell’account
+  (atteso, non provato). Dalla 0.29.0 si ferma su questo codice anche la
+  riga chiusa e riattivata il cui account il giro non sa giudicare: la
+  guardia del riempimento non decide (data di creazione illeggibile, due
+  titolari del nome, nessun istante della prima esecuzione, un `id` che
+  la porta rifiuterebbe), il log non verifica il nome concesso su una
+  riga eseguita più volte, o non dice chi ha scritto l’`id`. Il
+  messaggio ha un paragrafo suo (colonna `reopened_undecided`
+  dell’identificazione): IT verifica su Entra quando è stato creato
+  l’account che porta il nome (*Created date time* fra le proprietà
+  dell’utente; gli *Audit logs* tengono da 7 a 30 giorni, e bastano solo
+  per un cambio recente), il proprietario revoca la riga e compila una
+  richiesta nuova; con un account trovato IT toglie a mano il vecchio
+  login e cancella la riga vecchia quando la revoca è `applied`; senza,
+  la riga revocata si chiude e non tiene la coppia contro la richiesta
+  nuova.
 
 In tutti i casi sull’istanza non si scrive niente, nessuno nasce su
 Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta
@@ -1347,6 +1379,35 @@ un’altra persona: `TRASPORTO_IDENTITA_CAMBIATA`, come nella 0.25.0. La
 riga continua a far chiedere alle produzioni a ogni giro finché qualcuno
 non la sistema. Le righe mai eseguite cambiano come prima.
 
+**La riga chiusa** (dalla 0.29.0, voce 14 dei limiti). È la riga il cui
+ultimo sigillo del canale ha il nome vuoto: la revoca chiusa su una
+persona non più nel tenant. Riattivata, il suo nome eseguito è il più
+recente di
+[`log_granted_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_granted_names.md),
+verificato dal suo sigillo, per tutto il giro: il controllo
+dell’account, la regola della coppia, le rivendicazioni dei doppioni e
+il messaggio, anche quando il log non verifica la versione della
+chiusura. Con l’`id` creduto il controllo è quello di ogni riga
+eseguita; senza, decide la guardia del riempimento, datata dalla prima
+esecuzione del nome oltre la chiusura: nato prima, la riga concede e il
+giro scrive l’`id` nello stesso giro; nato dopo,
+`TRASPORTO_NOME_RIASSEGNATO`; nessun titolare, la regola della coppia
+come prima. Rimasta revocata, la riga chiusa revoca come prima, salvo
+con la persona riscritta su una riga a cui il canale ha concesso un
+nome, che la ferma su `DATO_COPPIA_CAMBIATA`: la riga chiusa che non ha
+mai concesso niente, riscritta mentre è revocata, revoca la persona
+scritta come prima. Il messaggio di ogni fermata della riga chiusa,
+anche rimasta revocata, nomina il nome concesso, dove la coppia del log
+ha il nome vuoto. Dove serve la coppia senza la sostituzione, la si usa:
+`revocation_stays` si calcola sulla coppia del log, e su una riga chiusa
+vale `"yes"`, il che è vero. Un limite resta, nel verso che non concede:
+revocata con un account trovato, la riga chiusa si chiude di nuovo sul
+nome che il giro trova ora, non sul vecchio login, e tiene la coppia
+contro la richiesta nuova (senza account trovato si chiude e non la
+tiene); i messaggi delle sue fermate sull’account (colonna
+`closed_reopened`) dicono che il vecchio login lo toglie IT e che IT
+cancella la riga vecchia quando la revoca è `applied`.
+
 Che una persona sia stata scritta si legge dalla versione eseguita:
 nome, cognome o indirizzo di contatto del registro letto diversi da
 quelli eseguiti, chiunque li abbia scritti e anche sotto il sigillo,
@@ -1376,17 +1437,26 @@ dalla spazzata, una volta
 ([`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md)),
 se un solo account porta il nome eseguito ed è nato prima del primo
 sigillo del tratto più recente di esecuzioni di quel nome
-([`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md)).
-Il confronto si fa fino alla fine di quel minuto, il log essendo in ora
-di Roma e Graph in UTC. Nato dopo, è un nome ridato,
-`TRASPORTO_NOME_RIASSEGNATO`. Il primo sigillo del tratto e non
-l’ultimo: un nome ridato e poi una riesecuzione per un cambio di ruolo
-passerebbero. Un `id` che la porta rifiuterebbe, con un apice, non si
-scrive. Il riempimento scrive l’`id` anche su una riga ferma per
-un’altra ragione: descrive l’account eseguito, non ciò che la riga
-chiede ora, e aggiunge solo fermate. Limiti noti: la guardia non vede un
-account più vecchio rinominato sul nome liberato, e una riga col sigillo
-mosso e non verificata resta senza il controllo.
+([`report_person_since()`](https://ubesp-dctv.github.io/ubep.azure/reference/report_person_since.md)),
+attraverso le chiusure su una persona assente (dalla 0.29.0,
+`across_closures`): datato dalla riattivazione, un account nato dopo la
+prima esecuzione e prima della riattivazione passava, e una riga
+concessa di nuovo da una versione precedente prendeva l’`id` del nuovo
+titolare. Il rapporto mensile tiene il tratto come prima. Il confronto
+si fa fino alla fine di quel minuto, il log essendo in ora di Roma e
+Graph in UTC. Nato dopo, è un nome ridato, `TRASPORTO_NOME_RIASSEGNATO`.
+Il primo sigillo del tratto e non l’ultimo: un nome ridato e poi una
+riesecuzione per un cambio di ruolo passerebbero. Un `id` che la porta
+rifiuterebbe, con un apice, non si scrive. Dalla 0.29.0
+[`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md)
+distingue il non saper decidere (`undecided`) dal non avere niente da
+dire (nessun titolare, nessun nome): sulla riga chiusa e riattivata il
+primo ferma la riga, su ogni altra riga sono la stessa cosa. Il
+riempimento scrive l’`id` anche su una riga ferma per un’altra ragione:
+descrive l’account eseguito, non ciò che la riga chiede ora, e aggiunge
+solo fermate. Limiti noti: la guardia non vede un account più vecchio
+rinominato sul nome liberato, e una riga col sigillo mosso e non
+verificata resta senza il controllo.
 
 **Il doppione guarda anche le righe che il giro non serve.** La riga più
 vecchia di una coppia la tiene anche quando il giro la ferma:
@@ -3271,28 +3341,31 @@ secondo giro non ne scrive nessuno. L’allarme
   a mano. Dalla 0.24.0 un permesso con la scadenza dell’utente sul
   progetto già raggiunta vale come nessun permesso: la scadenza di
   REDCap è il primo giorno senza accesso, quindi chi scade oggi è già
-  fuori, e la data è quella del client, come nella validazione della
-  scadenza di una richiesta. Fa eccezione, dalla 0.25.0, la revoca di
-  una riga eseguita su una coppia che l’istanza non ha più: si chiude
-  senza il cancello (§4, «La scadenza naturale e la revoca di una coppia
-  già tolta»). **È in catena**: il giro lo interroga per ogni istanza
-  che ha risposto, e una guardia nega qualunque funzione del pacchetto
-  che sappia scrivere su un’istanza senza nominarlo. Il cancello si
-  interroga sulle risposte e mai sulle assenze, e la distinzione ha una
-  grana precisa. Un’istanza irraggiungibile torna con il proprio codice
-  di trasporto — quello che riporta
+  fuori, e la data è quella di Roma del giro, presa una volta da `at`,
+  come nella validazione della scadenza di una richiesta. Fa eccezione,
+  dalla 0.25.0, la revoca di una riga eseguita su una coppia che
+  l’istanza non ha più: si chiude senza il cancello (§4, «La scadenza
+  naturale e la revoca di una coppia già tolta»). **È in catena**: il
+  giro lo interroga per ogni istanza che ha risposto, e una guardia nega
+  qualunque funzione del pacchetto che sappia scrivere su un’istanza
+  senza nominarlo. Il cancello si interroga sulle risposte e mai sulle
+  assenze, e la distinzione ha una grana precisa. Un’istanza
+  irraggiungibile torna con il proprio codice di trasporto — quello che
+  riporta
   [`module_state()`](https://ubesp-dctv.github.io/ubep.azure/reference/module_state.md),
   oppure `TRASPORTO_ISTANZA_SENZA_MODULO` o
   `TRASPORTO_SEGRETO_NON_LEGGIBILE` se non è nemmeno stata interrogata;
   una che risponde ma il cui modulo è troppo vecchio per riportare il
   permesso su qualunque riga torna invece
-  `TRASPORTO_AMBITO_NON_LEGGIBILE`. In entrambi i casi rimettono in coda
-  le sole righe già risolte in una coppia, mai una dichiarazione di
-  fuori ambito — dire «non sei autorizzato» quando la verità è «non ho
-  potuto chiedere» manda a correggere la persona sbagliata. **La stessa
-  regola vale una grana più sotto**: una singola riga la cui
-  autorizzazione non si lascia risolvere — un ruolo cancellato sotto di
-  lei, su un’istanza che altrove risponde — torna
+  `TRASPORTO_AMBITO_NON_LEGGIBILE`; dalla 0.29.0 una che ha risposto, ma
+  sulla quale il giro non scrive perché la data di Roma è cambiata dopo
+  l’inizio, torna `TRASPORTO_GIORNO_CAMBIATO`. In tutti e tre i casi
+  rimettono in coda le sole righe già risolte in una coppia, mai una
+  dichiarazione di fuori ambito — dire «non sei autorizzato» quando la
+  verità è «non ho potuto chiedere» manda a correggere la persona
+  sbagliata. **La stessa regola vale una grana più sotto**: una singola
+  riga la cui autorizzazione non si lascia risolvere — un ruolo
+  cancellato sotto di lei, su un’istanza che altrove risponde — torna
   `TRASPORTO_PERMESSO_NON_LEGGIBILE` e rientra in coda. È rifiutata
   comunque, perché l’alternativa sarebbe allargare l’accesso proprio nel
   momento in cui il canale ha smesso di poterlo vedere; ma il rifiuto è

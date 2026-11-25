@@ -8,7 +8,7 @@ function never produces a revocation that a person did not ask for: only
 ## Usage
 
 ``` r
-register_to_desired(register, executed = character())
+register_to_desired(register, executed = character(), today = redcap_today())
 ```
 
 ## Arguments
@@ -22,6 +22,13 @@ register_to_desired(register, executed = character())
 
   The `record_id`s of the rows the round carried out and nobody changed
   since: the channel's seal is there and has not moved.
+
+- today:
+
+  REDCap's date, the one in Rome,
+  [`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md)
+  by default. The round computes it once, from the instant it started,
+  and passes it down, so that every row is judged on the same day.
 
 ## Value
 

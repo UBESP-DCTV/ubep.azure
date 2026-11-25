@@ -9,7 +9,7 @@ this is where it finds out.
 ## Usage
 
 ``` r
-scope_withdrawal(row, authors, owner, sealed, rights)
+scope_withdrawal(row, authors, owner, sealed, rights, today = redcap_today())
 ```
 
 ## Arguments
@@ -37,6 +37,11 @@ scope_withdrawal(row, authors, owner, sealed, rights)
   The rights the instance reported, as
   [`round_rights()`](https://ubesp-dctv.github.io/ubep.azure/reference/round_rights.md)
   builds them.
+
+- today:
+
+  REDCap's date, for
+  [`scope_errors()`](https://ubesp-dctv.github.io/ubep.azure/reference/scope_errors.md).
 
 ## Value
 

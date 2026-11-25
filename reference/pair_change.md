@@ -62,7 +62,10 @@ pair_change(
 - account:
 
   What the identifier on Entra says, `""` when it says nothing:
-  `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`.
+  `TRASPORTO_NOME_RIASSEGNATO` or `TRASPORTO_ACCOUNT_RINOMINATO`; or
+  `TRASPORTO_IDENTITA_CAMBIATA` for a row closed on a person gone from
+  Entra and set back to active, whose account the round cannot judge
+  (item 14 of the limits, 0.29.0).
 
 ## Value
 

@@ -117,7 +117,19 @@ provisioning_reconcile(
 
 - at:
 
-  When the round ran, as `YYYY-MM-DD HH:MM`.
+  When the round ran, as `YYYY-MM-DD HH:MM` in UTC. It gives the round
+  its one day: the date REDCap judges expirations on, the one in Rome,
+  is taken from it once
+  ([`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md))
+  and passed to the last day of each row, the choice of the rows lapsed
+  and the gate on the referent's permission, as the messages read it
+  from the outcome. It has to be the instant the round starts: before it
+  writes to an instance and before it creates a person the round reads
+  the clock again, and a day in Rome other than the one of `at` (a round
+  that passes Rome's midnight, or an `at` that is not now) keeps it from
+  acting, with `TRASPORTO_GIORNO_CAMBIATO` on the rows it would have
+  acted on and in `errori`. A value that does not read as an instant
+  stops the round.
 
 ## Value
 
@@ -304,10 +316,29 @@ come after `DATO_COPPIA_CAMBIATA` and before
 `TRASPORTO_IDENTITA_CAMBIATA`, and stop the row as the rule of the pair
 does. A sealed row with no identifier gets it from the sweep, if the
 account that holds the name was born before the first seal of the newest
-run of executions of that name
+run of executions of that name, across a closure on a person gone from
+Entra
 ([`entra_fill()`](https://ubesp-dctv.github.io/ubep.azure/reference/entra_fill.md));
 born after, `TRASPORTO_NOME_RIASSEGNATO` on a row not revoked. The
 identifier only adds stops.
+
+**A closed row is judged on the last name granted** (item 14 of the
+limits, 0.29.0). A revocation closed on a person gone from Entra is
+sealed under the empty name. Set back to active, such a row is judged on
+the newest name the channel granted on it
+([`log_granted_names()`](https://ubesp-dctv.github.io/ubep.azure/reference/log_granted_names.md)),
+for the check of the account, the rule of the pair, the claims of the
+duplicates and the message, also when the log does not verify the
+version of the closure: with `applied_entra_id`, the check; without it,
+the guard of the fill, which writes the identifier of an account born
+before the first execution of the name in the same round. Where the
+guard cannot decide, where the log verifies no name granted on a row
+carried out more than once, or does not say who wrote the identifier,
+the row stops on `TRASPORTO_IDENTITA_CAMBIATA`, for IT, with a paragraph
+of its own in the message. Left revoked with the person rewritten, the
+rule of the pair reads the name granted too, and the row stops on
+`DATO_COPPIA_CAMBIATA` instead of revoking the person written, whom it
+never served.
 
 **The oldest row of a pair keeps it whether the round serves it or
 not.** A row the round stops (held, blind, on its identity, on a pair

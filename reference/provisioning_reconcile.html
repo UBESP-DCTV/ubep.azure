@@ -13,7 +13,7 @@ and the order is the design:"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -160,7 +160,17 @@ reads them from the inventory, <code>"banco": true</code>.</p></dd>
 
 
 <dt id="arg-at">at<a class="anchor" aria-label="anchor" href="#arg-at"></a></dt>
-<dd><p>When the round ran, as <code>YYYY-MM-DD HH:MM</code>.</p></dd>
+<dd><p>When the round ran, as <code>YYYY-MM-DD HH:MM</code> in UTC. It gives the
+round its one day: the date REDCap judges expirations on,
+the one in Rome, is taken from it once (<code><a href="redcap_today.html">redcap_today()</a></code>) and passed to
+the last day of each row, the choice of the rows lapsed and the gate on
+the referent's permission, as the messages read it from the outcome. It
+has to be the instant the round starts: before it writes to an instance
+and before it creates a person the round reads the clock again, and a
+day in Rome other than the one of <code>at</code> (a round that passes Rome's
+midnight, or an <code>at</code> that is not now) keeps it from acting, with
+<code>TRASPORTO_GIORNO_CAMBIATO</code> on the rows it would have acted on and in
+<code>errori</code>. A value that does not read as an instant stops the round.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -314,9 +324,25 @@ the account under another name, <code>TRASPORTO_ACCOUNT_RINOMINATO</code>. Both 
 after <code>DATO_COPPIA_CAMBIATA</code> and before <code>TRASPORTO_IDENTITA_CAMBIATA</code>, and
 stop the row as the rule of the pair does. A sealed row with no
 identifier gets it from the sweep, if the account that holds the name was
-born before the first seal of the newest run of executions of that name
-(<code><a href="entra_fill.html">entra_fill()</a></code>); born after, <code>TRASPORTO_NOME_RIASSEGNATO</code> on a row not
-revoked. The identifier only adds stops.</p>
+born before the first seal of the newest run of executions of that name,
+across a closure on a person gone from Entra (<code><a href="entra_fill.html">entra_fill()</a></code>); born
+after, <code>TRASPORTO_NOME_RIASSEGNATO</code> on a row not revoked. The identifier
+only adds stops.</p>
+<p><strong>A closed row is judged on the last name granted</strong> (item 14 of the
+limits, 0.29.0). A revocation closed on a person gone from Entra is
+sealed under the empty name. Set back to active, such a row is judged on
+the newest name the channel granted on it (<code><a href="log_granted_names.html">log_granted_names()</a></code>), for the
+check of the account, the rule of the pair, the claims of the duplicates
+and the message, also when the log does not verify the version of the
+closure: with <code>applied_entra_id</code>, the check; without it, the guard of the
+fill, which writes the identifier of an account born before the first
+execution of the name in the same round. Where the guard cannot decide,
+where the log verifies no name granted on a row carried out more than
+once, or does not say who wrote the identifier, the row stops on
+<code>TRASPORTO_IDENTITA_CAMBIATA</code>, for IT, with a paragraph of its own in the
+message. Left revoked with the person rewritten, the rule of the pair
+reads the name granted too, and the row stops on <code>DATO_COPPIA_CAMBIATA</code>
+instead of revoking the person written, whom it never served.</p>
 <p><strong>The oldest row of a pair keeps it whether the round serves it or not.</strong>
 A row the round stops (held, blind, on its identity, on a pair that moved)
 still holds its pair, the one carried out when it is known, and a

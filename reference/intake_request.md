@@ -8,7 +8,7 @@ conversion wrong is to forget it.
 ## Usage
 
 ``` r
-intake_request(request, executed = FALSE)
+intake_request(request, executed = FALSE, today = redcap_today())
 ```
 
 ## Arguments
@@ -24,6 +24,11 @@ intake_request(request, executed = FALSE)
   [`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md).
   The conversion is the same: the round compares the instance with the
   value REDCap stores.
+
+- today:
+
+  REDCap's date, for
+  [`validate_request()`](https://ubesp-dctv.github.io/ubep.azure/reference/validate_request.md).
 
 ## Value
 

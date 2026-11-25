@@ -7,7 +7,13 @@ username it wrote itself and keeps the one it did not.**
 ## Usage
 
 ``` r
-resolve_identity(request, directory, domain = "ubep.unipd.it", redcap = NULL)
+resolve_identity(
+  request,
+  directory,
+  domain = "ubep.unipd.it",
+  redcap = NULL,
+  folds = directory_folds(directory)
+)
 ```
 
 ## Arguments
@@ -54,6 +60,13 @@ resolve_identity(request, directory, domain = "ubep.unipd.it", redcap = NULL)
   a window not asked whole, or known whole, is no verdict at all,
   `TRASPORTO_NOME_NON_VERIFICATO`: the round creates no name it has not
   found unknown in this pass.
+
+- folds:
+
+  The directory folded,
+  [`directory_folds()`](https://ubesp-dctv.github.io/ubep.azure/reference/directory_folds.md),
+  made from `directory`. By default folded here; the round folds it once
+  and passes it for every row.
 
 ## Value
 

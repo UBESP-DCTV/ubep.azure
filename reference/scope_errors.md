@@ -12,7 +12,7 @@ instead of adding one.
 ## Usage
 
 ``` r
-scope_errors(register, rights)
+scope_errors(register, rights, today = redcap_today())
 ```
 
 ## Arguments
@@ -29,6 +29,13 @@ scope_errors(register, rights)
   (`YYYY-MM-DD`, empty or `NA` for none). The caller assembles it from
   each instance's answer, because a `state` reply names its server once
   at the top and not on every row.
+
+- today:
+
+  REDCap's date, the one in Rome,
+  [`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md)
+  by default. The round computes it once, from the instant it started,
+  and passes it down, so that every row is judged on the same day.
 
 ## Value
 

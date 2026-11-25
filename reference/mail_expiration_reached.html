@@ -5,17 +5,25 @@ access when expiration &amp;lt;= TODAY, and its TODAY is the date in Rome,
 redcap_today(). The day is the one in Rome of the instant at, not the
 clock of whoever composes the message, so the same row says the same
 thing whenever it is read and the tests do not depend on the machine.
-validate_request() and the choice of lapsed read the same date of
-the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
-already the next day, the message and the gate agree with REDCap."><meta property="og:description" content="The stored expiration is the day after the last day of access, so it is
+The round takes the date it hands to validate_request(), the choice of
+lapsed and the gate from the same instant, at, so between 22:00 and
+24:00 UTC, when the date in Rome is already the next day, the message
+and the gate agree with REDCap. A round whose day in Rome turns before
+it writes to an instance acts on nothing there. One whose day turns
+after the write, while its messages leave, still tells them on the day
+of at, the day the access was granted."><meta property="og:description" content="The stored expiration is the day after the last day of access, so it is
 reached when it is not later than the day of the round: REDCap denies
 access when expiration &amp;lt;= TODAY, and its TODAY is the date in Rome,
 redcap_today(). The day is the one in Rome of the instant at, not the
 clock of whoever composes the message, so the same row says the same
 thing whenever it is read and the tests do not depend on the machine.
-validate_request() and the choice of lapsed read the same date of
-the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
-already the next day, the message and the gate agree with REDCap."></head><body>
+The round takes the date it hands to validate_request(), the choice of
+lapsed and the gate from the same instant, at, so between 22:00 and
+24:00 UTC, when the date in Rome is already the next day, the message
+and the gate agree with REDCap. A round whose day in Rome turns before
+it writes to an instance acts on nothing there. One whose day turns
+after the write, while its messages leave, still tells them on the day
+of at, the day the access was granted."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -23,7 +31,7 @@ already the next day, the message and the gate agree with REDCap."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,9 +67,13 @@ access when <code>expiration &lt;= TODAY</code>, and its TODAY is the date in Ro
 <code><a href="redcap_today.html">redcap_today()</a></code>. The day is the one in Rome of the instant <code>at</code>, not the
 clock of whoever composes the message, so the same row says the same
 thing whenever it is read and the tests do not depend on the machine.
-<code><a href="validate_request.html">validate_request()</a></code> and the choice of <code>lapsed</code> read the same date of
-the same clock, so between 22:00 and 24:00 UTC, when the date in Rome is
-already the next day, the message and the gate agree with REDCap.</p>
+The round takes the date it hands to <code><a href="validate_request.html">validate_request()</a></code>, the choice of
+<code>lapsed</code> and the gate from the same instant, <code>at</code>, so between 22:00 and
+24:00 UTC, when the date in Rome is already the next day, the message
+and the gate agree with REDCap. A round whose day in Rome turns before
+it writes to an instance acts on nothing there. One whose day turns
+after the write, while its messages leave, still tells them on the day
+of <code>at</code>, the day the access was granted.</p>
     </div>
 
     <div class="section level2">

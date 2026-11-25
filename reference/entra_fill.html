@@ -7,7 +7,11 @@ carried out under that name: since is the first seal of the newest run
 of executions of that name, report_person_since(), in Rome's civil time
 and to the minute as the log stamps it. The reference is the first seal
 of the run and not the last: with the last, a name given again and then
-an execution for a change of role would pass."><meta property="og:description" content="Item 11 of the 0.27.0 (decided on 2026-11-12): the rows the channel
+an execution for a change of role would pass. The run goes across a
+closure on a person gone from Entra (across_closures, item 14 of the
+limits, 0.29.0): a row set back to active after it, or granted again
+after it by an earlier version, is dated from the first execution of the
+name, not from the reopening."><meta property="og:description" content="Item 11 of the 0.27.0 (decided on 2026-11-12): the rows the channel
 carried out before applied_entra_id existed have none, and get it from
 the sweep, with a guard. The account that carries the username carried
 out now is the one served only if it was born before the row was first
@@ -15,7 +19,11 @@ carried out under that name: since is the first seal of the newest run
 of executions of that name, report_person_since(), in Rome's civil time
 and to the minute as the log stamps it. The reference is the first seal
 of the run and not the last: with the last, a name given again and then
-an execution for a change of role would pass."></head><body>
+an execution for a change of role would pass. The run goes across a
+closure on a person gone from Entra (across_closures, item 14 of the
+limits, 0.29.0): a row set back to active after it, or granted again
+after it by an earlier version, is dated from the first execution of the
+name, not from the reopening."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -23,7 +31,7 @@ an execution for a change of role would pass."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,12 +69,22 @@ carried out under that name: <code>since</code> is the first seal of the newest 
 of executions of that name, <code><a href="report_person_since.html">report_person_since()</a></code>, in Rome's civil time
 and to the minute as the log stamps it. The reference is the first seal
 of the run and not the last: with the last, a name given again and then
-an execution for a change of role would pass.</p>
+an execution for a change of role would pass. The run goes across a
+closure on a person gone from Entra (<code>across_closures</code>, item 14 of the
+limits, 0.29.0): a row set back to active after it, or granted again
+after it by an earlier version, is dated from the first execution of the
+name, not from the reopening.</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">entra_fill</span><span class="op">(</span><span class="va">executed_username</span>, <span class="va">directory</span>, <span class="va">since</span>, revoked <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">entra_fill</span><span class="op">(</span></span>
+<span>  <span class="va">executed_username</span>,</span>
+<span>  <span class="va">directory</span>,</span>
+<span>  <span class="va">since</span>,</span>
+<span>  revoked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  folds <span class="op">=</span> <span class="fu"><a href="directory_folds.html">directory_folds</a></span><span class="op">(</span><span class="va">directory</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -89,11 +107,17 @@ answers; <code><a href="https://rdrr.io/r/base/character.html" class="external-l
 <dt id="arg-revoked">revoked<a class="anchor" aria-label="anchor" href="#arg-revoked"></a></dt>
 <dd><p>Whether the row asks for <code>revoked</code>.</p></dd>
 
+
+<dt id="arg-folds">folds<a class="anchor" aria-label="anchor" href="#arg-folds"></a></dt>
+<dd><p>The sweep folded, <code><a href="directory_folds.html">directory_folds()</a></code>, made from
+<code>directory</code>; by default folded here.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>id</code>, the identifier to write or <code>""</code>, and <code>code</code>,
-<code>TRASPORTO_NOME_RIASSEGNATO</code> or <code>""</code>.</p>
+    <p>A list with <code>id</code>, the identifier to write or <code>""</code>, <code>code</code>,
+<code>TRASPORTO_NOME_RIASSEGNATO</code> or <code>""</code>, and <code>undecided</code>, <code>TRUE</code> when the
+guard cannot decide.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -102,10 +126,16 @@ answers; <code><a href="https://rdrr.io/r/base/character.html" class="external-l
 (<code><a href="report_graph_time.html">report_graph_time()</a></code>): the identifier is written, with no message.</p></li>
 <li><p>Born after: on a row not revoked <code>TRASPORTO_NOME_RIASSEGNATO</code> and no
 identifier; on a revoked row neither.</p></li>
-<li><p>A date that does not read, no <code>since</code>, nobody or two accounts carrying
-the name, an identifier the door would refuse: neither, and the next
-round tries again.</p></li>
-</ul><p>An account born in the same minute as the first seal passes: the log has
+<li><p>Nobody carrying the name, or no name: nothing to say.</p></li>
+<li><p>Two accounts carrying the name, no <code>since</code> or one that does not read, a
+date of creation that does not read, an identifier the door would
+refuse: the guard cannot decide, <code>undecided</code>.</p></li>
+</ul><p>The last two write nothing and stop nothing, and the next round tries
+again. The caller tells them apart on a row closed on a person gone from
+Entra and set back to active, which stops for IT when the guard cannot
+decide (item 14 of the limits, 0.29.0); on every other row both are
+nothing.</p>
+<p>An account born in the same minute as the first seal passes: the log has
 minutes and Graph seconds, and a creation precedes the first execution by
 a round. An older account renamed onto the name freed by a deleted one
 passes too, the one case the guard does not see.</p>

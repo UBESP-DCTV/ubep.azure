@@ -13,7 +13,7 @@ that comparison.
 ## Usage
 
 ``` r
-observe_instance(server, state, today = Sys.Date())
+observe_instance(server, state, today = redcap_today())
 ```
 
 ## Arguments
@@ -32,7 +32,12 @@ observe_instance(server, state, today = Sys.Date())
 
   The date expirations are compared against. Injected rather than read
   from the clock so a fixture cannot turn red on a calendar date for a
-  reason unrelated to the code.
+  reason unrelated to the code. By default REDCap's date, the one in
+  Rome
+  ([`redcap_today()`](https://ubesp-dctv.github.io/ubep.azure/reference/redcap_today.md)):
+  the observer runs on a machine in UTC, and between 22:00 and 24:00 UTC
+  (23:00 in winter) its date would leave out of `scadute` a pair
+  expiring on Rome's date, which REDCap already refuses.
 
 ## Value
 

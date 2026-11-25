@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -1268,6 +1268,16 @@ notifiche sono quindi due, quella della regola sugli esiti non scritti e
 quella della regola dedicata: è voluto, e non è un errore della
 sottoscrizione. <code>TRASPORTO_REGISTRO_CANALE_ASSENTE</code> ferma il
 giro, e lo si vede anche dal giro fermato prima di agire.</p>
+<p>Dalla 0.29.0 sta negli <code>errori</code>, con il giro non fermato,
+anche <code>TRASPORTO_GIORNO_CAMBIATO</code>: la data di Roma è cambiata
+dopo l’inizio del giro, prima che scrivesse su un’istanza o creasse una
+persona, e su quell’istanza non si è scritto niente, o nessuno è nato.
+La regola sugli esiti non scritti suona anche su questo codice, benché
+gli esiti siano scritti, e quella sulle irraggiungibili no, perché
+l’istanza ha risposto; il runner esce con 1, come per ogni errore. Lo
+incontra un giro che passa la mezzanotte di Roma prima di agire, o uno
+lanciato con un <code>at</code> che non è oggi: i giri del timer, alle
+03:00 UTC, no.</p>
 <p>Sugli accessi persi la 0.21.0 porta
 <code>ubep-canale-accesso-perso</code>, sulla colonna
 <code>accessi_persi &gt; 0</code>, a gravità 2.</p>
@@ -1333,7 +1343,11 @@ mossi istanza o progetto, perché colpirebbe la coppia nuova, e quando la
 persona nuova andrebbe creata; con la sola persona riscritta su un
 account che esiste toglie il nome eseguito (la regola della revoca,
 sotto). Dalla 0.28.0 il messaggio dice che la revoca resta ferma solo
-quando resta ferma.</li>
+quando resta ferma. Dalla 0.29.0 resta ferma anche su una riga chiusa su
+una persona assente, riattivata o no, con la persona riscritta e un nome
+che il canale le ha concesso: la regola della coppia legge il nome
+concesso (sotto, «La riga chiusa»), e la riga non revoca la persona
+scritta, che non ha mai servito.</li>
 <li>
 <strong><code>TRASPORTO_NOME_RIASSEGNATO</code></strong>,
 <code>transport_error</code>, dalla 0.27.0: il nome utente eseguito è
@@ -1343,11 +1357,13 @@ vederlo: con il recapito interno e gli stessi nome e cognome la riga
 restava <code>applied</code>. Mai su una riga revocata, che governa la
 sua coppia. Dalla 0.28.0 anche su una riga con l’<code>id</code> chiusa
 su una persona assente e riattivata, il cui ultimo sigillo, quello della
-chiusura, non nomina nessuno. L’esito va al proprietario con IT in
-copia, e dice che la riga non va modificata. Il proprietario la revoca
-in ogni caso, perché il nome eseguito, con l’accesso, è ora di un altro
-account, e la revoca toglie il nome eseguito (la regola della revoca,
-sotto); se alla persona l’accesso serve ancora, compila poi una
+chiusura, non nomina nessuno; dalla 0.29.0 anche senza <code>id</code>,
+quando l’account che porta il nome concesso è nato dopo la sua prima
+esecuzione (sotto, «La riga chiusa»). L’esito va al proprietario con IT
+in copia, e dice che la riga non va modificata. Il proprietario la
+revoca in ogni caso, perché il nome eseguito, con l’accesso, è ora di un
+altro account, e la revoca toglie il nome eseguito (la regola della
+revoca, sotto); se alla persona l’accesso serve ancora, compila poi una
 richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima chiedeva
 la revoca solo se l’accesso non serviva più. IT verifica su Entra chi
 porta il nome e da quando (<em>Audit logs</em>), e sulle istanze i
@@ -1411,7 +1427,23 @@ stato rinominato, su <code>TRASPORTO_ACCOUNT_RINOMINATO</code>), e ogni
 riga se l’utenza del canale non è configurata: limiti accettati, nel
 verso che revoca meno. La riga attiva riparte da sola quando la
 risoluzione ritrova l’account eseguito, per esempio un account
-cancellato e ripristinato.</li>
+cancellato e ripristinato, e dalla 0.29.0 anche la riga chiusa e
+riattivata senza <code>id</code>, se il ripristino conserva la data di
+creazione dell’account (atteso, non provato). Dalla 0.29.0 si ferma su
+questo codice anche la riga chiusa e riattivata il cui account il giro
+non sa giudicare: la guardia del riempimento non decide (data di
+creazione illeggibile, due titolari del nome, nessun istante della prima
+esecuzione, un <code>id</code> che la porta rifiuterebbe), il log non
+verifica il nome concesso su una riga eseguita più volte, o non dice chi
+ha scritto l’<code>id</code>. Il messaggio ha un paragrafo suo (colonna
+<code>reopened_undecided</code> dell’identificazione): IT verifica su
+Entra quando è stato creato l’account che porta il nome (<em>Created
+date time</em> fra le proprietà dell’utente; gli <em>Audit logs</em>
+tengono da 7 a 30 giorni, e bastano solo per un cambio recente), il
+proprietario revoca la riga e compila una richiesta nuova; con un
+account trovato IT toglie a mano il vecchio login e cancella la riga
+vecchia quando la revoca è <code>applied</code>; senza, la riga revocata
+si chiude e non tiene la coppia contro la richiesta nuova.</li>
 </ul>
 <p>In tutti i casi sull’istanza non si scrive niente, nessuno nasce su
 Entra, il sigillo e il proprietario restano, e dalla 0.26.0 la porta
@@ -1447,6 +1479,34 @@ riga eseguita è un’altra persona:
 <code>TRASPORTO_IDENTITA_CAMBIATA</code>, come nella 0.25.0. La riga
 continua a far chiedere alle produzioni a ogni giro finché qualcuno non
 la sistema. Le righe mai eseguite cambiano come prima.</p>
+<p><strong>La riga chiusa</strong> (dalla 0.29.0, voce 14 dei limiti). È
+la riga il cui ultimo sigillo del canale ha il nome vuoto: la revoca
+chiusa su una persona non più nel tenant. Riattivata, il suo nome
+eseguito è il più recente di <code><a href="../reference/log_granted_names.html">log_granted_names()</a></code>,
+verificato dal suo sigillo, per tutto il giro: il controllo
+dell’account, la regola della coppia, le rivendicazioni dei doppioni e
+il messaggio, anche quando il log non verifica la versione della
+chiusura. Con l’<code>id</code> creduto il controllo è quello di ogni
+riga eseguita; senza, decide la guardia del riempimento, datata dalla
+prima esecuzione del nome oltre la chiusura: nato prima, la riga concede
+e il giro scrive l’<code>id</code> nello stesso giro; nato dopo,
+<code>TRASPORTO_NOME_RIASSEGNATO</code>; nessun titolare, la regola
+della coppia come prima. Rimasta revocata, la riga chiusa revoca come
+prima, salvo con la persona riscritta su una riga a cui il canale ha
+concesso un nome, che la ferma su <code>DATO_COPPIA_CAMBIATA</code>: la
+riga chiusa che non ha mai concesso niente, riscritta mentre è revocata,
+revoca la persona scritta come prima. Il messaggio di ogni fermata della
+riga chiusa, anche rimasta revocata, nomina il nome concesso, dove la
+coppia del log ha il nome vuoto. Dove serve la coppia senza la
+sostituzione, la si usa: <code>revocation_stays</code> si calcola sulla
+coppia del log, e su una riga chiusa vale <code>"yes"</code>, il che è
+vero. Un limite resta, nel verso che non concede: revocata con un
+account trovato, la riga chiusa si chiude di nuovo sul nome che il giro
+trova ora, non sul vecchio login, e tiene la coppia contro la richiesta
+nuova (senza account trovato si chiude e non la tiene); i messaggi delle
+sue fermate sull’account (colonna <code>closed_reopened</code>) dicono
+che il vecchio login lo toglie IT e che IT cancella la riga vecchia
+quando la revoca è <code>applied</code>.</p>
 <p>Che una persona sia stata scritta si legge dalla versione eseguita:
 nome, cognome o indirizzo di contatto del registro letto diversi da
 quelli eseguiti, chiunque li abbia scritti e anche sotto il sigillo,
@@ -1475,12 +1535,21 @@ dà niente.</p>
 prendono dalla spazzata, una volta (<code><a href="../reference/entra_fill.html">entra_fill()</a></code>), se un
 solo account porta il nome eseguito ed è nato prima del primo sigillo
 del tratto più recente di esecuzioni di quel nome
-(<code><a href="../reference/report_person_since.html">report_person_since()</a></code>). Il confronto si fa fino alla fine
-di quel minuto, il log essendo in ora di Roma e Graph in UTC. Nato dopo,
-è un nome ridato, <code>TRASPORTO_NOME_RIASSEGNATO</code>. Il primo
-sigillo del tratto e non l’ultimo: un nome ridato e poi una riesecuzione
-per un cambio di ruolo passerebbero. Un <code>id</code> che la porta
-rifiuterebbe, con un apice, non si scrive. Il riempimento scrive
+(<code><a href="../reference/report_person_since.html">report_person_since()</a></code>), attraverso le chiusure su una
+persona assente (dalla 0.29.0, <code>across_closures</code>): datato
+dalla riattivazione, un account nato dopo la prima esecuzione e prima
+della riattivazione passava, e una riga concessa di nuovo da una
+versione precedente prendeva l’<code>id</code> del nuovo titolare. Il
+rapporto mensile tiene il tratto come prima. Il confronto si fa fino
+alla fine di quel minuto, il log essendo in ora di Roma e Graph in UTC.
+Nato dopo, è un nome ridato, <code>TRASPORTO_NOME_RIASSEGNATO</code>. Il
+primo sigillo del tratto e non l’ultimo: un nome ridato e poi una
+riesecuzione per un cambio di ruolo passerebbero. Un <code>id</code> che
+la porta rifiuterebbe, con un apice, non si scrive. Dalla 0.29.0
+<code><a href="../reference/entra_fill.html">entra_fill()</a></code> distingue il non saper decidere
+(<code>undecided</code>) dal non avere niente da dire (nessun titolare,
+nessun nome): sulla riga chiusa e riattivata il primo ferma la riga, su
+ogni altra riga sono la stessa cosa. Il riempimento scrive
 l’<code>id</code> anche su una riga ferma per un’altra ragione: descrive
 l’account eseguito, non ciò che la riga chiede ora, e aggiunge solo
 fermate. Limiti noti: la guardia non vede un account più vecchio
@@ -3575,35 +3644,37 @@ progetto che la richiesta nomina — la regola è che il canale non deve
 permettere a nessuno ciò che non potrebbe già fare a mano. Dalla 0.24.0
 un permesso con la scadenza dell’utente sul progetto già raggiunta vale
 come nessun permesso: la scadenza di REDCap è il primo giorno senza
-accesso, quindi chi scade oggi è già fuori, e la data è quella del
-client, come nella validazione della scadenza di una richiesta. Fa
-eccezione, dalla 0.25.0, la revoca di una riga eseguita su una coppia
-che l’istanza non ha più: si chiude senza il cancello (§4, «La scadenza
-naturale e la revoca di una coppia già tolta»). <strong>È in
-catena</strong>: il giro lo interroga per ogni istanza che ha risposto,
-e una guardia nega qualunque funzione del pacchetto che sappia scrivere
-su un’istanza senza nominarlo. Il cancello si interroga sulle risposte e
-mai sulle assenze, e la distinzione ha una grana precisa. Un’istanza
-irraggiungibile torna con il proprio codice di trasporto — quello che
-riporta <code><a href="../reference/module_state.html">module_state()</a></code>, oppure
+accesso, quindi chi scade oggi è già fuori, e la data è quella di Roma
+del giro, presa una volta da <code>at</code>, come nella validazione
+della scadenza di una richiesta. Fa eccezione, dalla 0.25.0, la revoca
+di una riga eseguita su una coppia che l’istanza non ha più: si chiude
+senza il cancello (§4, «La scadenza naturale e la revoca di una coppia
+già tolta»). <strong>È in catena</strong>: il giro lo interroga per ogni
+istanza che ha risposto, e una guardia nega qualunque funzione del
+pacchetto che sappia scrivere su un’istanza senza nominarlo. Il cancello
+si interroga sulle risposte e mai sulle assenze, e la distinzione ha una
+grana precisa. Un’istanza irraggiungibile torna con il proprio codice di
+trasporto — quello che riporta <code><a href="../reference/module_state.html">module_state()</a></code>, oppure
 <code>TRASPORTO_ISTANZA_SENZA_MODULO</code> o
 <code>TRASPORTO_SEGRETO_NON_LEGGIBILE</code> se non è nemmeno stata
 interrogata; una che risponde ma il cui modulo è troppo vecchio per
 riportare il permesso su qualunque riga torna invece
-<code>TRASPORTO_AMBITO_NON_LEGGIBILE</code>. In entrambi i casi
-rimettono in coda le sole righe già risolte in una coppia, mai una
-dichiarazione di fuori ambito — dire «non sei autorizzato» quando la
-verità è «non ho potuto chiedere» manda a correggere la persona
-sbagliata. <strong>La stessa regola vale una grana più sotto</strong>:
-una singola riga la cui autorizzazione non si lascia risolvere — un
-ruolo cancellato sotto di lei, su un’istanza che altrove risponde —
-torna <code>TRASPORTO_PERMESSO_NON_LEGGIBILE</code> e rientra in coda. È
-rifiutata comunque, perché l’alternativa sarebbe allargare l’accesso
-proprio nel momento in cui il canale ha smesso di poterlo vedere; ma il
-rifiuto è indirizzato a chi può ripararlo. Chi ha compilato quella
-richiesta l’ha compilata bene e potrebbe benissimo detenere il permesso:
-ciò che è rotto sta nella tabella dei diritti di REDCap, dove arriva IT
-e non lui.</p>
+<code>TRASPORTO_AMBITO_NON_LEGGIBILE</code>; dalla 0.29.0 una che ha
+risposto, ma sulla quale il giro non scrive perché la data di Roma è
+cambiata dopo l’inizio, torna <code>TRASPORTO_GIORNO_CAMBIATO</code>. In
+tutti e tre i casi rimettono in coda le sole righe già risolte in una
+coppia, mai una dichiarazione di fuori ambito — dire «non sei
+autorizzato» quando la verità è «non ho potuto chiedere» manda a
+correggere la persona sbagliata. <strong>La stessa regola vale una grana
+più sotto</strong>: una singola riga la cui autorizzazione non si lascia
+risolvere — un ruolo cancellato sotto di lei, su un’istanza che altrove
+risponde — torna <code>TRASPORTO_PERMESSO_NON_LEGGIBILE</code> e rientra
+in coda. È rifiutata comunque, perché l’alternativa sarebbe allargare
+l’accesso proprio nel momento in cui il canale ha smesso di poterlo
+vedere; ma il rifiuto è indirizzato a chi può ripararlo. Chi ha
+compilato quella richiesta l’ha compilata bene e potrebbe benissimo
+detenere il permesso: ciò che è rotto sta nella tabella dei diritti di
+REDCap, dove arriva IT e non lui.</p>
 <p>La guardia ha un’eccezione dichiarata: lo strumento di conformità
 (<code><a href="../reference/run_conformance_check.html">run_conformance_check()</a></code>), che non legge il registro e non
 ha un richiedente su cui interrogare il cancello — la regola che il

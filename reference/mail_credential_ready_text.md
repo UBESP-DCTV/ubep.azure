@@ -21,7 +21,9 @@ mail_credential_ready_text(first_name, credential, deadline)
 - first_name:
 
   The person's first name, from the row; missing or empty leaves the
-  greeting without it.
+  greeting without it. The referent fills the field, so white space
+  inside it, a line break included, becomes one space: the greeting
+  stays one line.
 
 - credential:
 
@@ -49,6 +51,22 @@ configuration of Entra: the self-service reset asks for two methods,
 Authenticator and an e-mail address confirmed with a code, and no longer
 accepts a phone, so after Authenticator the person gives an address of
 their own.
+
+The two methods close as Entra closes them, seen on a test account on
+2026-11-24: Authenticator, method 1 of 2, with `Done`, then method 2 of
+2, the recovery address, with `Next`. The Italian text gives the Italian
+label with the English one in brackets where that test or the work
+instruction 00.06 shows it (`Avanti`, `Fine`, `Metodo 2 di 2`), and the
+English label alone elsewhere.
+
+The sentence that says where the welcome is also says what to do if it
+is not there, whether it was lost, went to the junk folder or never
+arrived: write to the referent (decided on 2026-11-25). It is said once,
+where the welcome is named in full.
+
+The ban on `Skip for now` opens step 4, before the instructions of the
+step (decided on 2026-11-25): the first page of the step is the one that
+offers it, and the ban comes before the person reads on.
 
 Each text sits between two delimiter lines, because the line with the
 user name stands above it in the same message, and a referent copying by

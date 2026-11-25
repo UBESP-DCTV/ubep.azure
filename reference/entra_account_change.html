@@ -15,7 +15,7 @@ among its members."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,8 @@ among its members.</p>
 <span>  <span class="va">executed_username</span>,</span>
 <span>  <span class="va">believed_id</span>,</span>
 <span>  <span class="va">directory</span>,</span>
-<span>  revoked <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  revoked <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  folds <span class="op">=</span> <span class="fu"><a href="directory_folds.html">directory_folds</a></span><span class="op">(</span><span class="va">directory</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -80,6 +81,11 @@ among its members.</p>
 
 <dt id="arg-revoked">revoked<a class="anchor" aria-label="anchor" href="#arg-revoked"></a></dt>
 <dd><p>Whether the row asks for <code>revoked</code>.</p></dd>
+
+
+<dt id="arg-folds">folds<a class="anchor" aria-label="anchor" href="#arg-folds"></a></dt>
+<dd><p>The sweep folded, <code><a href="directory_folds.html">directory_folds()</a></code>, made from
+<code>directory</code>; by default folded here.</p></dd>
 
 </dl></div>
     <div class="section level2">
