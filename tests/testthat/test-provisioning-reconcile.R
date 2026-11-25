@@ -505,6 +505,13 @@ giro <- function(registro,
                  oggi = NULL,
                  ...) {
   inviate <<- list() # nolint: assignment_linter.
+  # The doubles are built on the real clock, before it is faked: a date a
+  # test writes relative to today, `redcap_today() - 1L` in a fixture, would
+  # otherwise be computed on `oggi` when the round first reads the fixture.
+  force(registro)
+  force(istanza)
+  force(directory)
+  force(creazione)
   if (is.null(oggi)) {
     oggi <- as.Date(format(
       as.POSIXct(at, format = "%Y-%m-%d %H:%M", tz = "UTC"),
