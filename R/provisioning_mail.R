@@ -533,7 +533,10 @@ mail_outcome_message <- function(row) {
   # judge (`reopened_undecided`, item 14 of the limits, 0.29.0) the account
   # may be the one of then: the message says what the round could not
   # establish, and the way out, a revocation and a new request once IT has
-  # looked at the account.
+  # looked at the account. An account born after the first execution of the
+  # row holds a name given again, and IT looks at the rights of the login as
+  # for `TRASPORTO_NOME_RIASSEGNATO` (decision 23 of the 0.29.0, WI_004c
+  # 00.07).
   account <- if (identita_cambiata && indecisa) {
     trovato_it <- mail_said_or(row[["username"]], "nessuno")
     trovato_en <- mail_said_or(row[["username"]], "none")
@@ -562,7 +565,10 @@ mail_outcome_message <- function(row) {
             "IT verifica su Entra quando e' stato creato l'account che porta ",
             "il nome (proprieta' dell'utente, Created date time) e, per un ",
             "cambio recente, negli Audit logs, che tengono da 7 a 30 giorni. ",
-            "Non modificare la riga: revocala e compila una richiesta nuova."
+            "Se l'account e' nato dopo la prima esecuzione della riga, il ",
+            "nome e' stato ridato: IT guarda i diritti del login sulle ",
+            "istanze come per TRASPORTO_NOME_RIASSEGNATO. Non modificare la ",
+            "riga: revocala e compila una richiesta nuova."
           )
         } else {
           paste0(
@@ -595,7 +601,10 @@ mail_outcome_message <- function(row) {
           paste0(
             "IT checks on Entra when the account holding the name was ",
             "created (user properties, Created date time) and, for a recent ",
-            "change, the Audit logs, which keep 7 to 30 days. Do not edit the ",
+            "change, the Audit logs, which keep 7 to 30 days. If the account ",
+            "was born after the first execution of the row, the name was ",
+            "given again: IT looks at the rights of the login on the ",
+            "instances as for TRASPORTO_NOME_RIASSEGNATO. Do not edit the ",
             "row: revoke it and file a new request."
           )
         } else {

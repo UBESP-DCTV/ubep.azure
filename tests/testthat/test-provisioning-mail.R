@@ -3179,6 +3179,44 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare man
 })
 
 
+test_that("il messaggio della riga riattivata che il canale non sa giudicare dice che cosa guarda IT se l'account e' nato dopo la prima esecuzione (D4)", { # nolint: line_length_linter.
+  # eval
+  # WI_004c 00.07, sentence 40 of the documents 00.07, decision 23 of the
+  # 0.29.0: an account born after the first execution of the row holds a
+  # name given again, and its holder inherited the rights of the old login.
+  corpo <- mail_outcome_message(do.call(
+    riga_di_prova,
+    utils::modifyList(riattivata_indecisa, list(
+      reopened_undecided = "yes", closed_reopened = "yes"
+    ))
+  ))[["body"]]
+
+  # test
+  # Between the date of creation, which IT looks up, and the way out.
+  expect_match(
+    corpo,
+    paste0(
+      "che tengono da 7 a 30 giorni. Se l'account e' nato dopo la prima ",
+      "esecuzione della riga, il nome e' stato ridato: IT guarda i diritti ",
+      "del login sulle istanze come per TRASPORTO_NOME_RIASSEGNATO. Non ",
+      "modificare la riga: revocala e compila una richiesta nuova."
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    corpo,
+    paste0(
+      "which keep 7 to 30 days. If the account was born after the first ",
+      "execution of the row, the name was given again: IT looks at the ",
+      "rights of the login on the instances as for ",
+      "TRASPORTO_NOME_RIASSEGNATO. Do not edit the row: revoke it and file a ",
+      "new request."
+    ),
+    fixed = TRUE
+  )
+})
+
+
 test_that("i messaggi della riga chiusa e riattivata non ripetono la chiusura e introducono la revoca prima di dirne gli effetti", { # nolint: line_length_linter.
   # eval
   conta <- function(testo, pezzo) {
