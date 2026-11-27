@@ -3776,6 +3776,102 @@ test_that("il messaggio di un nome riassegnato su Entra dice che cosa fare, nell
 })
 
 
+# The row of the name given again, carried out on edc10, project 9029.
+nome_ridato <- list(
+  outcome = "transport_error",
+  outcome_detail = "TRASPORTO_NOME_RIASSEGNATO",
+  executed_server = "edc10", executed_project_id = "9029",
+  executed_username = "sara.collaudozeta@ubep.unipd.it",
+  pair_changed = "account"
+)
+
+# What the message says of the revocation on a row never closed, and on the
+# row closed on a person gone from Entra and set back to active (decision 23
+# of the 0.29.0, the documents 00.07).
+revoca_toglie <- list(
+  it = paste0(
+    "Non modificare la riga: revocala in ogni caso, perche' il nome ",
+    "eseguito, con l'accesso, ora e' di un altro account, e la revoca ",
+    "toglie l'accesso a quel nome. Se alla persona l'accesso serve ancora, ",
+    "compila poi una richiesta nuova."
+  ),
+  en = paste0(
+    "Do not edit the row: revoke it in any case, because the username ",
+    "applied, with the access, belongs now to another account, and the ",
+    "revocation takes the access away from that name. If the person still ",
+    "needs the access, then fill in a new request."
+  )
+)
+revoca_riattivata <- list(
+  it = paste0(
+    "Non modificare la riga: revocala in ogni caso, perche' il nome ",
+    "eseguito, con l'accesso, ora e' di un altro account. Questa riga era ",
+    "stata revocata e chiusa quando la persona non era piu' su Entra, ed e' ",
+    "stata riattivata: la revoca puo' non togliere l'accesso a quel nome, e ",
+    "l'accesso rimasto sul progetto lo toglie IT. Se alla persona l'accesso ",
+    "serve ancora, compila poi una richiesta nuova."
+  ),
+  en = paste0(
+    "Do not edit the row: revoke it in any case, because the username ",
+    "applied, with the access, belongs now to another account. This row had ",
+    "been revoked and closed when the person was no longer on Entra, and was ",
+    "set back to active: the revocation may not take the access away from ",
+    "that name, and IT removes the access left on the project. If the person ",
+    "still needs the access, then fill in a new request."
+  )
+)
+
+
+test_that("il messaggio del nome riassegnato sulla riga chiusa e riattivata dice che la revoca puo' non togliere l'accesso, nelle due lingue", { # nolint: line_length_linter.
+  # eval
+  # SOP 00.07, section 4.5, and WI_004a 00.07: on the reactivated row the
+  # revocation goes back to the empty name of the closure, and may not take
+  # the access off; IT removes what the old login left on the project.
+  corpo <- disteso(mail_outcome_message(do.call(
+    riga_di_prova, utils::modifyList(nome_ridato, list(closed_reopened = "yes"))
+  ))[["body"]])
+
+  # test
+  expect_match(corpo, revoca_riattivata[["it"]], fixed = TRUE)
+  expect_match(corpo, revoca_riattivata[["en"]], fixed = TRUE)
+  expect_false(grepl(
+    "e la revoca toglie l'accesso a quel nome", corpo, fixed = TRUE
+  ))
+  expect_false(grepl(
+    "and the revocation takes the access away from that name", corpo,
+    fixed = TRUE
+  ))
+  # Said once, in the paragraph of the name given again.
+  expect_equal(
+    lengths(regmatches(
+      corpo, gregexpr("era stata revocata e chiusa", corpo, fixed = TRUE)
+    )),
+    1L
+  )
+})
+
+
+test_that("il messaggio del nome riassegnato su una riga mai chiusa dice la revoca come prima", { # nolint: line_length_linter.
+  # eval
+  corpo <- function(...) {
+    disteso(mail_outcome_message(do.call(
+      riga_di_prova, utils::modifyList(nome_ridato, list(...))
+    ))[["body"]])
+  }
+  testi <- list(corpo(), corpo(closed_reopened = ""))
+
+  # test
+  for (testo in testi) {
+    expect_match(testo, revoca_toglie[["it"]], fixed = TRUE)
+    expect_match(testo, revoca_toglie[["en"]], fixed = TRUE)
+    expect_false(grepl("era stata revocata e chiusa", testo, fixed = TRUE))
+    expect_false(grepl("had been revoked and closed", testo, fixed = TRUE))
+    expect_false(grepl("puo' non togliere", testo, fixed = TRUE))
+    expect_false(grepl("may not take the access", testo, fixed = TRUE))
+  }
+})
+
+
 test_that("il messaggio di un account rinominato su Entra nomina il nome nuovo", { # nolint: line_length_linter.
   # eval
   corpo <- disteso(mail_outcome_message(riga_di_prova(

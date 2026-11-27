@@ -11323,6 +11323,68 @@ test_that("la mail della riga riattivata sul nome ridato nomina il nome eseguito
 })
 
 
+test_that("la mail della riga riattivata sul nome ridato dice che la revoca puo' non togliere l'accesso, con l'id e senza (decisione 23)", { # nolint: line_length_linter.
+  # eval
+  # Revoked, the reactivated row goes back to the empty name of the closure
+  # and may not take the access off (SOP 00.07, section 4.5): the round says
+  # to the message that the row is the closed one set back to active.
+  corpi <- lapply(
+    list(
+      function(mailer) {
+        giro_chiusa_assente(
+          directory_doppia(mario_b()), istanza_che_scrive(), mailer = mailer
+        )
+      },
+      function(mailer) {
+        giro_chiusa_senza_id(directory_doppia(mario_b()), mailer = mailer)
+      }
+    ),
+    function(un_giro) {
+      posta <- posta_raccolta()
+      esito <- un_giro(posta[["mailer"]])
+      expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+      posta[["mandate"]]()[[1L]][["body"]]
+    }
+  )
+
+  # test
+  for (corpo in corpi) {
+    expect_match(
+      corpo, "la revoca puo' non togliere l'accesso a quel nome", fixed = TRUE
+    )
+    expect_match(
+      corpo, "the revocation may not take the access away from that name",
+      fixed = TRUE
+    )
+    expect_false(grepl(
+      "e la revoca toglie l'accesso a quel nome", corpo, fixed = TRUE
+    ))
+  }
+})
+
+
+test_that("la mail del nome ridato su una riga mai chiusa dice che la revoca toglie l'accesso (decisione 23)", { # nolint: line_length_linter.
+  # eval
+  posta <- posta_raccolta()
+  esito <- giro_entra_interna(
+    directory_doppia(mario_b()), mailer = posta[["mailer"]]
+  )
+
+  # test
+  expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+  corpo <- posta[["mandate"]]()[[1L]][["body"]]
+  expect_match(
+    corpo, "e la revoca toglie l'accesso a quel nome", fixed = TRUE
+  )
+  expect_match(
+    corpo, "and the revocation takes the access away from that name",
+    fixed = TRUE
+  )
+  expect_false(grepl("puo' non togliere", corpo, fixed = TRUE))
+  expect_false(grepl("era stata revocata e chiusa", corpo, fixed = TRUE))
+})
+
+
 test_that("la riga chiusa, riscritta su un'altra persona e riattivata resta ferma anche revocata senza riportare i campi (T7)", { # nolint: line_length_linter.
   # eval
   # V2 of the verification of the limits. First round: the stop on the

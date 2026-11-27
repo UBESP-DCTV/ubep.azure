@@ -680,7 +680,33 @@ mail_outcome_message <- function(row) {
   # with the documents 00.05: the name carried out, with the access, belongs
   # now to another account, and the revocation takes the access away from it.
   # A person who still needs the access gets a new request.
+  #
+  # On a closed row set back to active the revocation may not take the
+  # access off (decision 23 of the 0.29.0, SOP 00.07 section 4.5 and WI_004a
+  # 00.07): revoked, the row goes back to the empty name of the closure, and
+  # IT removes the access left on the project.
   nome_riassegnato <- if (riassegnato) {
+    revoca <- if (chiusa) {
+      list(
+        it = paste0(
+          ". Questa riga era stata revocata e chiusa quando la persona non ",
+          "era piu' su Entra, ed e' stata riattivata: la revoca puo' non ",
+          "togliere l'accesso a quel nome, e l'accesso rimasto sul progetto ",
+          "lo toglie IT."
+        ),
+        en = paste0(
+          ". This row had been revoked and closed when the person was no ",
+          "longer on Entra, and was set back to active: the revocation may ",
+          "not take the access away from that name, and IT removes the ",
+          "access left on the project."
+        )
+      )
+    } else {
+      list(
+        it = ", e la revoca toglie l'accesso a quel nome.",
+        en = ", and the revocation takes the access away from that name."
+      )
+    }
     list(
       it = c(
         "",
@@ -700,8 +726,8 @@ mail_outcome_message <- function(row) {
           "IT verifica su Entra chi porta ora il nome, e i diritti di quel ",
           "nome sulle istanze. Non modificare la riga: revocala in ogni caso, ",
           "perche' il nome eseguito, con l'accesso, ora e' di un altro ",
-          "account, e la revoca toglie l'accesso a quel nome. Se alla persona ",
-          "l'accesso serve ancora, compila poi una richiesta nuova."
+          "account", revoca[["it"]], " Se alla persona l'accesso serve ",
+          "ancora, compila poi una richiesta nuova."
         )
       ),
       en = c(
@@ -722,9 +748,8 @@ mail_outcome_message <- function(row) {
           "IT checks on Entra who holds the name now, and the rights of that ",
           "name on the instances. Do not edit the row: revoke it in any case, ",
           "because the username applied, with the access, belongs now to ",
-          "another account, and the revocation takes the access away from ",
-          "that name. If the person still needs the access, then fill in a ",
-          "new request."
+          "another account", revoca[["en"]], " If the person still needs the ",
+          "access, then fill in a new request."
         )
       )
     )
