@@ -1,17 +1,26 @@
 # ubep.azure 0.29.1
 
-Two texts of the outcome message, on a row closed on a person gone from
-Entra and set back to active, now say what the documents 00.07 say.
+Three texts of the outcome message, on a name given again and on a row
+closed on a person gone from Entra and set back to active, now say what the
+documents 00.07 say.
 
 * **The message of a name given again on the reactivated row says that the
   revocation may not take the access off.** The paragraph of
   `TRASPORTO_NOME_RIASSEGNATO` said on every row that the revocation takes
   the access away from the name carried out. On the reactivated row it may
   not: revoked, the row goes back to the empty name of the closure, and
-  with the person still out of the tenant it is closed again without
-  asking the instance. There the message says so, and that IT removes the
-  access left on the project. The column `closed_reopened` now holds on
-  this code too; on every other row the sentence is the one of before.
+  when the name went to somebody else the revocation asks the instance
+  nothing. There the message says so, and that IT removes the access left
+  on the project. The column `closed_reopened` now holds on this code too;
+  on every other row the sentence is the one of before.
+
+* **The message of a name given again says that the revoked row may hold
+  the pair against the new request.** When the new holder is the person of
+  then, with the account made again by hand, the new request resolves the
+  same name, and the revoked row holds the pair against it, reactivated or
+  never closed, until IT deletes it once the revocation is applied. The
+  message says so on both rows; a name given to somebody else makes the new
+  request a collision under another name, which no pair stops.
 
 * **The message of the reactivated row the channel cannot judge says what
   IT looks at when the account was born after the first execution.** With
@@ -19,7 +28,8 @@ Entra and set back to active, now say what the documents 00.07 say.
   date of creation of the account holding the name, and said nothing of
   what follows from it. Born after the first execution of the row, the
   account holds a name given again, and IT looks at the rights of the
-  login on the instances as for `TRASPORTO_NOME_RIASSEGNATO`.
+  login on the instances as for a username given again: the code stays
+  out of the sentence, as in the rest of the message.
 
 # ubep.azure 0.29.0
 
