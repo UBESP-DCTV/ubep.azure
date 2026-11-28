@@ -3198,7 +3198,7 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare dic
     paste0(
       "che tengono da 7 a 30 giorni. Se l'account e' nato dopo la prima ",
       "esecuzione della riga, il nome e' stato ridato: IT guarda i diritti ",
-      "del login sulle istanze come per TRASPORTO_NOME_RIASSEGNATO. Non ",
+      "del login sulle istanze come per un nome utente dato di nuovo. Non ",
       "modificare la riga: revocala e compila una richiesta nuova."
     ),
     fixed = TRUE
@@ -3208,9 +3208,8 @@ test_that("il messaggio della riga riattivata che il canale non sa giudicare dic
     paste0(
       "which keep 7 to 30 days. If the account was born after the first ",
       "execution of the row, the name was given again: IT looks at the ",
-      "rights of the login on the instances as for ",
-      "TRASPORTO_NOME_RIASSEGNATO. Do not edit the row: revoke it and file a ",
-      "new request."
+      "rights of the login on the instances as for a username given again. ",
+      "Do not edit the row: revoke it and file a new request."
     ),
     fixed = TRUE
   )

@@ -535,8 +535,9 @@ mail_outcome_message <- function(row) {
   # establish, and the way out, a revocation and a new request once IT has
   # looked at the account. An account born after the first execution of the
   # row holds a name given again, and IT looks at the rights of the login as
-  # for `TRASPORTO_NOME_RIASSEGNATO` (decision 23 of the 0.29.0, WI_004c
-  # 00.07).
+  # for a username given again, `TRASPORTO_NOME_RIASSEGNATO` (decision 23 of
+  # the 0.29.0, WI_004c 00.07). The codes stay out of the sentences of the
+  # paragraphs, as in the rest of the message (0.29.1).
   account <- if (identita_cambiata && indecisa) {
     trovato_it <- mail_said_or(row[["username"]], "nessuno")
     trovato_en <- mail_said_or(row[["username"]], "none")
@@ -567,8 +568,8 @@ mail_outcome_message <- function(row) {
             "cambio recente, negli Audit logs, che tengono da 7 a 30 giorni. ",
             "Se l'account e' nato dopo la prima esecuzione della riga, il ",
             "nome e' stato ridato: IT guarda i diritti del login sulle ",
-            "istanze come per TRASPORTO_NOME_RIASSEGNATO. Non modificare la ",
-            "riga: revocala e compila una richiesta nuova."
+            "istanze come per un nome utente dato di nuovo. Non modificare ",
+            "la riga: revocala e compila una richiesta nuova."
           )
         } else {
           paste0(
@@ -604,8 +605,8 @@ mail_outcome_message <- function(row) {
             "change, the Audit logs, which keep 7 to 30 days. If the account ",
             "was born after the first execution of the row, the name was ",
             "given again: IT looks at the rights of the login on the ",
-            "instances as for TRASPORTO_NOME_RIASSEGNATO. Do not edit the ",
-            "row: revoke it and file a new request."
+            "instances as for a username given again. Do not edit the row: ",
+            "revoke it and file a new request."
           )
         } else {
           paste0(
