@@ -11,8 +11,9 @@ documents 00.07 say.
   not: revoked, the row is judged again on the empty name of the closure,
   by the person it names, and when the name went to somebody else the
   revocation asks the instance nothing. There the message says so, and that
-  IT removes the access left on the project. The column `closed_reopened` now holds on this code too;
-  on every other row the sentence is the one of before.
+  IT removes the access left on the project. The column `closed_reopened`
+  now holds on this code too; on every other row the sentence is the one of
+  before.
 
 * **The message of a name given again says that the revoked row may hold
   the pair against the new request.** When the new holder is the person of

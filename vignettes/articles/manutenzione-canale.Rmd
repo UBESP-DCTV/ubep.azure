@@ -1144,7 +1144,8 @@ La regola è `pair_change()`, con quattro codici:
   L'esito va al proprietario con IT in copia, e dice che la riga non
   va modificata. Il proprietario la revoca in ogni caso, perché il nome
   eseguito, con l'accesso, è ora di un altro account, e la revoca toglie il
-  nome eseguito (la regola della revoca, sotto); se alla persona l'accesso
+  nome eseguito (la regola della revoca, sotto; sulla riga chiusa e
+  riattivata non sempre, «La riga chiusa»); se alla persona l'accesso
   serve ancora, compila poi una richiesta nuova. Dalla 0.28.0 il messaggio lo
   dice così; prima chiedeva la revoca solo se l'accesso non serviva più. IT
   verifica su Entra chi
