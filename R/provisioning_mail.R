@@ -695,6 +695,13 @@ mail_outcome_message <- function(row) {
   # access off (decision 23 of the 0.29.0, SOP 00.07 section 4.5 and WI_004a
   # 00.07): revoked, the row goes back to the empty name of the closure, and
   # IT removes the access left on the project.
+  #
+  # When the new holder is the person of then, the account made again by
+  # hand, the new request resolves the same name, and the revoked row holds
+  # the pair against it, closed or not (measured in the 0.29.1, WI_004c
+  # 00.07): IT deletes the old row once the revocation is applied. A name
+  # given to somebody else makes the new request a collision under another
+  # name, which no pair stops.
   nome_riassegnato <- if (riassegnato) {
     revoca <- if (chiusa) {
       list(
@@ -737,7 +744,11 @@ mail_outcome_message <- function(row) {
           "nome sulle istanze. Non modificare la riga: revocala in ogni caso, ",
           "perche' il nome eseguito, con l'accesso, ora e' di un altro ",
           "account", revoca[["it"]], " Se alla persona l'accesso serve ",
-          "ancora, compila poi una richiesta nuova."
+          "ancora, compila poi una richiesta nuova. Se il nuovo titolare e' ",
+          "la persona di prima, con l'account ricreato a mano, la riga ",
+          "revocata tiene la coppia contro la richiesta nuova: IT la cancella ",
+          "quando la revoca e' applicata, e al giro dopo la richiesta nuova ",
+          "si esegue."
         )
       ),
       en = c(
@@ -759,7 +770,11 @@ mail_outcome_message <- function(row) {
           "name on the instances. Do not edit the row: revoke it in any case, ",
           "because the username applied, with the access, belongs now to ",
           "another account", revoca[["en"]], " If the person still needs the ",
-          "access, then fill in a new request."
+          "access, then fill in a new request. If the new holder is the ",
+          "person of then, with the account made again by hand, the revoked ",
+          "row holds the pair against the new request: IT deletes it once the ",
+          "revocation is applied, and at the next round the new request is ",
+          "carried out."
         )
       )
     )

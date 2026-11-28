@@ -12215,6 +12215,211 @@ test_that("la riga chiusa con l'account rinominato, revocata, lascia il vecchio 
 })
 
 
+# Mario's closed row set back to active, stopped on the name given again,
+# then revoked by Anna, beside row 2, her new request for Mario filed after
+# the revocation (0.29.1). `directory` holds the account under Mario's name
+# now.
+storia_chiusa_revocata <- function() {
+  c(
+    list(
+      cambio(anna, "request_status = 'revoked'",
+             timestamp = "2026-08-16 09:00"),
+      cambio(anna, "request_status = 'active'",
+             timestamp = "2026-08-15 10:00")
+    ),
+    storia_chiusa_assente()
+  )
+}
+giro_chiusa_revocata <- function(directory, ...) {
+  giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(
+          applied_seal = sigillo_chiusa_assente, applied_entra_id = id_a,
+          username = "", identity = "absent", applied_as = "absent",
+          request_status = "revoked"
+        ),
+        list(record_id = "2", owned_by = "")
+      ),
+      storia = storia_chiusa_revocata(),
+      creazioni = creazioni_finte(
+        creata_da_anna(),
+        creata_da_anna(id = "2", timestamp = "2026-08-16 09:05")
+      )
+    ),
+    istanza_che_revoca(), directory = directory, dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-16 11:00", ...
+  )
+}
+
+
+test_that("la riga riattivata sul nome ridato alla persona di prima, revocata, toglie l'accesso al nome e tiene la coppia contro la richiesta nuova (0.29.1)", { # nolint: line_length_linter.
+  # eval
+  # Point 3 of the report on the texts of the 0.29.1. The account made
+  # again by hand for Mario: the new request resolves the same name, and the
+  # revoked row holds the pair against it until IT deletes it, the round of
+  # the revocation and the one after.
+  primo <- giro_chiusa_assente(
+    directory_doppia(mario_b()), istanza_che_scrive(), mailer = posta_accesa
+  )
+  secondo <- giro_chiusa_revocata(directory_doppia(mario_b()))
+  revocati_secondo <- revocati()
+  sigillo <- as.character(sigilli_scritti()[["applied_seal"]])
+  svc <- function(details, record) {
+    list(timestamp = "2026-08-16 11:00", username = "svc-canale-ubep",
+         action = paste("Update record (API)", record), record = record,
+         details = details)
+  }
+  terzo <- giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(
+          applied_seal = sigillo, seal_state = "intact",
+          applied_entra_id = id_a, username = mario, identity = "created",
+          applied_as = "absent", request_status = "revoked"
+        ),
+        list(record_id = "2", owned_by = anna, username = mario,
+             identity = "existing", outcome = "data_error",
+             outcome_detail = "DATO_COPPIA_DUPLICATA")
+      ),
+      storia = c(
+        list(
+          svc(paste0("applied_seal = '", sigillo, "', seal_state = 'intact'"),
+              "1"),
+          svc(paste0("owned_by = '", anna, "'"), "2"),
+          svc(paste0("username = '", mario, "', identity = 'created'"), "1"),
+          svc(paste0("username = '", mario, "', identity = 'existing'"), "2")
+        ),
+        storia_chiusa_revocata()
+      ),
+      creazioni = creazioni_finte(
+        creata_da_anna(),
+        creata_da_anna(id = "2", timestamp = "2026-08-16 09:05")
+      )
+    ),
+    istanza_doppia(list(username = anna, user_rights = 1L)),
+    directory = directory_doppia(mario_b()), dry_run = FALSE,
+    copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-17 05:00"
+  )
+
+  # test
+  expect_equal(dettaglio_uno(primo), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_equal(esito_di(secondo, "1")[["outcome"]], "applied")
+  expect_equal(revocati_secondo, mario)
+  expect_length(sigillo, 1L)
+  expect_equal(esito_di(secondo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA")
+  expect_equal(esito_di(terzo, "1")[["outcome"]], "applied")
+  expect_equal(esito_di(terzo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("la riga riattivata sul nome dato a un'altra persona, revocata, non toglie l'accesso al nome e non tiene la coppia (0.29.1)", { # nolint: line_length_linter.
+  # eval
+  # The name given to Luca Neri: Mario's person resolves to no account
+  # holding the name, the revocation asks the instance nothing, and the new
+  # request takes a collision under another name, which no pair stops. The
+  # access left on the old login IT removes, as the message says.
+  luca <- mario_b(
+    givenName = "Luca", surname = "Neri",
+    officeLocation = "luca.neri@example.org"
+  )
+  primo <- giro_chiusa_assente(
+    directory_doppia(luca), istanza_che_scrive(), mailer = posta_accesa
+  )
+  secondo <- giro_chiusa_revocata(directory_doppia(luca))
+
+  # test
+  expect_equal(dettaglio_uno(primo), "TRASPORTO_NOME_RIASSEGNATO")
+  expect_false(mario %in% revocati())
+  expect_false(identical(esito_di(secondo, "1")[["outcome"]], "applied"))
+  expect_false(identical(
+    esito_di(secondo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA"
+  ))
+})
+
+
+test_that("la riga mai chiusa sul nome ridato alla persona di prima, revocata, toglie l'accesso e tiene la coppia contro la richiesta nuova (0.29.1)", { # nolint: line_length_linter.
+  # eval
+  # The same pair on a row never closed: the message says it on both.
+  esito <- giro(
+    registro_con_log(
+      record_json(
+        eseguita_row(
+          applied_seal = sigillo_interna(), contact_email = mario,
+          applied_entra_id = id_a, request_status = "revoked"
+        ),
+        list(record_id = "2", owned_by = "")
+      ),
+      storia = c(
+        list(cambio(anna, "request_status = 'revoked'",
+                    timestamp = "2026-08-16 09:00")),
+        eseguita_con_id(sigillo_interna())
+      ),
+      creazioni = creazioni_finte(
+        creata_interna(),
+        creata_da_anna(id = "2", timestamp = "2026-08-16 09:05")
+      )
+    ),
+    istanza_che_revoca(), directory = directory_doppia(mario_b()),
+    dry_run = FALSE, copy_to = "it@example.org", mailer = posta_accesa,
+    at = "2026-08-16 11:00"
+  )
+
+  # test
+  expect_equal(esito_di(esito, "1")[["outcome"]], "applied")
+  expect_equal(revocati(), mario)
+  expect_equal(esito_di(esito, "2")[["detail"]], "DATO_COPPIA_DUPLICATA")
+})
+
+
+test_that("la mail del nome ridato dice che la riga revocata tiene la coppia se il titolare e' la persona di prima, riattivata o no (0.29.1)", { # nolint: line_length_linter.
+  # eval
+  corpi <- lapply(
+    list(
+      function(mailer) {
+        giro_chiusa_assente(
+          directory_doppia(mario_b()), istanza_che_scrive(), mailer = mailer
+        )
+      },
+      function(mailer) {
+        giro_entra_interna(directory_doppia(mario_b()), mailer = mailer)
+      }
+    ),
+    function(un_giro) {
+      posta <- posta_raccolta()
+      esito <- un_giro(posta[["mailer"]])
+      expect_equal(dettaglio_uno(esito), "TRASPORTO_NOME_RIASSEGNATO")
+      gsub("\\s+", " ", posta[["mandate"]]()[[1L]][["body"]])
+    }
+  )
+
+  # test
+  for (corpo in corpi) {
+    expect_match(
+      corpo,
+      paste0(
+        "Se il nuovo titolare e' la persona di prima, con l'account ",
+        "ricreato a mano, la riga revocata tiene la coppia contro la ",
+        "richiesta nuova: IT la cancella quando la revoca e' applicata"
+      ),
+      fixed = TRUE
+    )
+    expect_match(
+      corpo,
+      paste0(
+        "If the new holder is the person of then, with the account made ",
+        "again by hand, the revoked row holds the pair against the new ",
+        "request: IT deletes it once the revocation is applied"
+      ),
+      fixed = TRUE
+    )
+  }
+})
+
+
+
 # Mario's row carried out, rewritten by Anna on a person Entra does not
 # hold, to create (C1 of the review of the limits).
 nadia <- list(

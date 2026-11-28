@@ -3830,13 +3830,20 @@ revoca_toglie <- list(
     "Non modificare la riga: revocala in ogni caso, perche' il nome ",
     "eseguito, con l'accesso, ora e' di un altro account, e la revoca ",
     "toglie l'accesso a quel nome. Se alla persona l'accesso serve ancora, ",
-    "compila poi una richiesta nuova."
+    "compila poi una richiesta nuova. Se il nuovo titolare e' la persona di ",
+    "prima, con l'account ricreato a mano, la riga revocata tiene la coppia ",
+    "contro la richiesta nuova: IT la cancella quando la revoca e' ",
+    "applicata, e al giro dopo la richiesta nuova si esegue."
   ),
   en = paste0(
     "Do not edit the row: revoke it in any case, because the username ",
     "applied, with the access, belongs now to another account, and the ",
     "revocation takes the access away from that name. If the person still ",
-    "needs the access, then fill in a new request."
+    "needs the access, then fill in a new request. If the new holder is the ",
+    "person of then, with the account made again by hand, the revoked row ",
+    "holds the pair against the new request: IT deletes it once the ",
+    "revocation is applied, and at the next round the new request is ",
+    "carried out."
   )
 )
 revoca_riattivata <- list(
@@ -3846,7 +3853,10 @@ revoca_riattivata <- list(
     "stata revocata e chiusa quando la persona non era piu' su Entra, ed e' ",
     "stata riattivata: la revoca puo' non togliere l'accesso a quel nome, e ",
     "l'accesso rimasto sul progetto lo toglie IT. Se alla persona l'accesso ",
-    "serve ancora, compila poi una richiesta nuova."
+    "serve ancora, compila poi una richiesta nuova. Se il nuovo titolare e' ",
+    "la persona di prima, con l'account ricreato a mano, la riga revocata ",
+    "tiene la coppia contro la richiesta nuova: IT la cancella quando la ",
+    "revoca e' applicata, e al giro dopo la richiesta nuova si esegue."
   ),
   en = paste0(
     "Do not edit the row: revoke it in any case, because the username ",
@@ -3854,7 +3864,11 @@ revoca_riattivata <- list(
     "been revoked and closed when the person was no longer on Entra, and was ",
     "set back to active: the revocation may not take the access away from ",
     "that name, and IT removes the access left on the project. If the person ",
-    "still needs the access, then fill in a new request."
+    "still needs the access, then fill in a new request. If the new holder ",
+    "is the person of then, with the account made again by hand, the ",
+    "revoked row holds the pair against the new request: IT deletes it once ",
+    "the revocation is applied, and at the next round the new request is ",
+    "carried out."
   )
 )
 
