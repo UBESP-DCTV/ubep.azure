@@ -2626,8 +2626,9 @@ provisioning_reconcile <- function(register_url,
       # A closed row set back to active and stopped on its account: revoked,
       # it is closed again, and the message says that IT takes the old login
       # off and deletes the row (D4 of the design of the 0.29.0). On the name
-      # given again, that the revocation may not take the access off, and IT
-      # does (decision 23 of the 0.29.0, the documents 00.07).
+      # given again, that with the name gone to somebody else the revocation
+      # does not take the access off, and IT does (decision 23 of the 0.29.0,
+      # the documents 00.07, measured in the 0.29.1).
       closed_reopened = vapply(seq_along(record_ids), function(i) {
         on_account <- moved[[i]] && reopened[[i]] && shift_code[[i]] %in% c(
           "TRASPORTO_ACCOUNT_RINOMINATO", "TRASPORTO_IDENTITA_CAMBIATA",

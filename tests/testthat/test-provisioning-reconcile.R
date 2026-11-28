@@ -11350,10 +11350,19 @@ test_that("la mail della riga riattivata sul nome ridato dice che la revoca puo'
   # test
   for (corpo in corpi) {
     expect_match(
-      corpo, "la revoca puo' non togliere l'accesso a quel nome", fixed = TRUE
+      corpo,
+      paste0(
+        "se il nome e' passato a un'altra persona, la revoca non toglie ",
+        "l'accesso a quel nome"
+      ),
+      fixed = TRUE
     )
     expect_match(
-      corpo, "the revocation may not take the access away from that name",
+      corpo,
+      paste0(
+        "if the name went to somebody else, the revocation does not take the ",
+        "access away from that name"
+      ),
       fixed = TRUE
     )
     expect_false(grepl(
@@ -11380,7 +11389,7 @@ test_that("la mail del nome ridato su una riga mai chiusa dice che la revoca tog
     corpo, "and the revocation takes the access away from that name",
     fixed = TRUE
   )
-  expect_false(grepl("puo' non togliere", corpo, fixed = TRUE))
+  expect_false(grepl("passato a un'altra persona", corpo, fixed = TRUE))
   expect_false(grepl("era stata revocata e chiusa", corpo, fixed = TRUE))
 })
 
@@ -12331,12 +12340,19 @@ test_that("la riga riattivata sul nome dato a un'altra persona, revocata, non to
   secondo <- giro_chiusa_revocata(directory_doppia(luca))
 
   # test
+  # Measured on the 0.29.1: the revoked row stops on the collision of the
+  # name composed for Mario, as the new request does, and neither touches
+  # the instance. Pinned, so that a change in how the revoked row is judged
+  # shows up here.
+  collisione <- "DATO_IDENTITA_IN_COLLISIONE:mario.rossi.2@ubep.unipd.it"
   expect_equal(dettaglio_uno(primo), "TRASPORTO_NOME_RIASSEGNATO")
-  expect_false(mario %in% revocati())
-  expect_false(identical(esito_di(secondo, "1")[["outcome"]], "applied"))
-  expect_false(identical(
-    esito_di(secondo, "2")[["detail"]], "DATO_COPPIA_DUPLICATA"
-  ))
+  expect_null(revocati())
+  expect_equal(
+    esito_di(secondo, "1"), list(outcome = "data_error", detail = collisione)
+  )
+  expect_equal(
+    esito_di(secondo, "2"), list(outcome = "data_error", detail = collisione)
+  )
 })
 
 

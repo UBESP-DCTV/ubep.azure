@@ -8,10 +8,10 @@ documents 00.07 say.
   revocation may not take the access off.** The paragraph of
   `TRASPORTO_NOME_RIASSEGNATO` said on every row that the revocation takes
   the access away from the name carried out. On the reactivated row it may
-  not: revoked, the row goes back to the empty name of the closure, and
-  when the name went to somebody else the revocation asks the instance
-  nothing. There the message says so, and that IT removes the access left
-  on the project. The column `closed_reopened` now holds on this code too;
+  not: revoked, the row is judged again on the empty name of the closure,
+  by the person it names, and when the name went to somebody else the
+  revocation asks the instance nothing. There the message says so, and that
+  IT removes the access left on the project. The column `closed_reopened` now holds on this code too;
   on every other row the sentence is the one of before.
 
 * **The message of a name given again says that the revoked row may hold

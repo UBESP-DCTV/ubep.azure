@@ -693,29 +693,33 @@ mail_outcome_message <- function(row) {
   #
   # On a closed row set back to active the revocation may not take the
   # access off (decision 23 of the 0.29.0, SOP 00.07 section 4.5 and WI_004a
-  # 00.07): revoked, the row goes back to the empty name of the closure, and
-  # IT removes the access left on the project.
+  # 00.07): revoked, the row is judged again on the empty name of the
+  # closure, by the person it names. Measured in the 0.29.1: with the name
+  # given to somebody else the person does not resolve to the account that
+  # holds it, the revocation asks the instance nothing (on the test register
+  # the row stops on a collision), and IT removes the access left on the
+  # project; with the account made again by hand for the person of then the
+  # revocation takes the access off the name.
   #
-  # When the new holder is the person of then, the account made again by
-  # hand, the new request resolves the same name, and the revoked row holds
-  # the pair against it, closed or not (measured in the 0.29.1, WI_004c
-  # 00.07): IT deletes the old row once the revocation is applied. A name
-  # given to somebody else makes the new request a collision under another
-  # name, which no pair stops.
+  # In that second case the new request resolves the same name, and the
+  # revoked row holds the pair against it, closed or not (WI_004c 00.07): IT
+  # deletes the old row once the revocation is applied. A name given to
+  # somebody else makes the new request a collision under another name,
+  # which no pair stops.
   nome_riassegnato <- if (riassegnato) {
     revoca <- if (chiusa) {
       list(
         it = paste0(
           ". Questa riga era stata revocata e chiusa quando la persona non ",
-          "era piu' su Entra, ed e' stata riattivata: la revoca puo' non ",
-          "togliere l'accesso a quel nome, e l'accesso rimasto sul progetto ",
-          "lo toglie IT."
+          "era piu' su Entra, ed e' stata riattivata: se il nome e' passato a ",
+          "un'altra persona, la revoca non toglie l'accesso a quel nome, e ",
+          "l'accesso rimasto sul progetto lo toglie IT."
         ),
         en = paste0(
           ". This row had been revoked and closed when the person was no ",
-          "longer on Entra, and was set back to active: the revocation may ",
-          "not take the access away from that name, and IT removes the ",
-          "access left on the project."
+          "longer on Entra, and was set back to active: if the name went to ",
+          "somebody else, the revocation does not take the access away from ",
+          "that name, and IT removes the access left on the project."
         )
       )
     } else {
