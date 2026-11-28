@@ -1265,12 +1265,19 @@ con quattro codici:
   IT in copia, e dice che la riga non va modificata. Il proprietario la
   revoca in ogni caso, perché il nome eseguito, con l’accesso, è ora di
   un altro account, e la revoca toglie il nome eseguito (la regola della
-  revoca, sotto); se alla persona l’accesso serve ancora, compila poi
-  una richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima
+  revoca, sotto; sulla riga chiusa e riattivata non sempre, «La riga
+  chiusa»); se alla persona l’accesso serve ancora, compila poi una
+  richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima
   chiedeva la revoca solo se l’accesso non serviva più. IT verifica su
   Entra chi porta il nome e da quando (*Audit logs*), e sulle istanze i
   diritti del login con quel nome, che il nuovo titolare può avere
-  ereditato anche su altri progetti.
+  ereditato anche su altri progetti. Dalla 0.29.1 il messaggio dice
+  anche che, se il nuovo titolare è la persona di prima con l’account
+  ricreato a mano, la riga revocata tiene la coppia contro la richiesta
+  nuova finché IT non la cancella, a revoca `applied`: la richiesta
+  nuova risolve lo stesso nome. Con il nome passato a un’altra persona
+  la richiesta nuova prende una collisione e un altro nome, e nessuna
+  coppia la ferma (misurato sul registro di prova).
 - **`TRASPORTO_ACCOUNT_RINOMINATO`**, `transport_error`, dalla 0.27.0:
   nessuno porta il nome eseguito, e l’account dell’`id` è su Entra sotto
   un altro nome, che il messaggio dice. Prima era
@@ -1406,7 +1413,13 @@ nome che il giro trova ora, non sul vecchio login, e tiene la coppia
 contro la richiesta nuova (senza account trovato si chiude e non la
 tiene); i messaggi delle sue fermate sull’account (colonna
 `closed_reopened`) dicono che il vecchio login lo toglie IT e che IT
-cancella la riga vecchia quando la revoca è `applied`.
+cancella la riga vecchia quando la revoca è `applied`. Dalla 0.29.1 la
+colonna vale anche su `TRASPORTO_NOME_RIASSEGNATO`, con un testo suo: se
+il nome è passato a un’altra persona, la revoca non tocca l’istanza (sul
+registro di prova la riga revocata si ferma sulla collisione del nome
+composto) e l’accesso rimasto lo toglie IT; con l’account ricreato a
+mano per la persona di prima la revoca toglie l’accesso al nome, e la
+riga revocata tiene la coppia come sopra.
 
 Che una persona sia stata scritta si legge dalla versione eseguita:
 nome, cognome o indirizzo di contatto del registro letto diversi da

@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ubep.azure</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.29.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -1363,12 +1363,19 @@ esecuzione (sotto, «La riga chiusa»). L’esito va al proprietario con IT
 in copia, e dice che la riga non va modificata. Il proprietario la
 revoca in ogni caso, perché il nome eseguito, con l’accesso, è ora di un
 altro account, e la revoca toglie il nome eseguito (la regola della
-revoca, sotto); se alla persona l’accesso serve ancora, compila poi una
+revoca, sotto; sulla riga chiusa e riattivata non sempre, «La riga
+chiusa»); se alla persona l’accesso serve ancora, compila poi una
 richiesta nuova. Dalla 0.28.0 il messaggio lo dice così; prima chiedeva
 la revoca solo se l’accesso non serviva più. IT verifica su Entra chi
 porta il nome e da quando (<em>Audit logs</em>), e sulle istanze i
 diritti del login con quel nome, che il nuovo titolare può avere
-ereditato anche su altri progetti.</li>
+ereditato anche su altri progetti. Dalla 0.29.1 il messaggio dice anche
+che, se il nuovo titolare è la persona di prima con l’account ricreato a
+mano, la riga revocata tiene la coppia contro la richiesta nuova finché
+IT non la cancella, a revoca <code>applied</code>: la richiesta nuova
+risolve lo stesso nome. Con il nome passato a un’altra persona la
+richiesta nuova prende una collisione e un altro nome, e nessuna coppia
+la ferma (misurato sul registro di prova).</li>
 <li>
 <strong><code>TRASPORTO_ACCOUNT_RINOMINATO</code></strong>,
 <code>transport_error</code>, dalla 0.27.0: nessuno porta il nome
@@ -1506,7 +1513,13 @@ trova ora, non sul vecchio login, e tiene la coppia contro la richiesta
 nuova (senza account trovato si chiude e non la tiene); i messaggi delle
 sue fermate sull’account (colonna <code>closed_reopened</code>) dicono
 che il vecchio login lo toglie IT e che IT cancella la riga vecchia
-quando la revoca è <code>applied</code>.</p>
+quando la revoca è <code>applied</code>. Dalla 0.29.1 la colonna vale
+anche su <code>TRASPORTO_NOME_RIASSEGNATO</code>, con un testo suo: se
+il nome è passato a un’altra persona, la revoca non tocca l’istanza (sul
+registro di prova la riga revocata si ferma sulla collisione del nome
+composto) e l’accesso rimasto lo toglie IT; con l’account ricreato a
+mano per la persona di prima la revoca toglie l’accesso al nome, e la
+riga revocata tiene la coppia come sopra.</p>
 <p>Che una persona sia stata scritta si legge dalla versione eseguita:
 nome, cognome o indirizzo di contatto del registro letto diversi da
 quelli eseguiti, chiunque li abbia scritti e anche sotto il sigillo,
